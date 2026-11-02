@@ -55,6 +55,21 @@ public sealed record GameMissionPay(
     /// one a pilot means by "what it pays". The second line is still in
     /// <see cref="Rep"/> for anything that wants it.
     /// </remarks>
+    /// <summary>
+    /// What finishing it pays on one ladder, or null when it pays nothing there.
+    /// </summary>
+    /// <remarks>
+    /// The Rep app gives some organisations two progressions. Headhunters have
+    /// Standing and Ship Combat, and every contract of theirs this install logged
+    /// pays +100 on Standing; only the three Hijacked Ship contracts pay Ship
+    /// Combat (+500). Reading a Ship Combat screenshot against those +100s is
+    /// counting one ladder's rep against another's bar.
+    /// </remarks>
+    public int? On(string scope) =>
+        Rep.Where(r => r.Scope == scope && r.When.HasFlag(MissionOutcomes.Completed) && r.Amount > 0)
+            .Select(r => (int?)r.Amount)
+            .Max();
+
     [System.Text.Json.Serialization.JsonIgnore]
     public int? OnCompletion =>
         Rep.Count == 0

@@ -85,6 +85,20 @@ public class GameRepFiguresTests
         Assert.Equal("What a Member contract of theirs pays, by the installed game’s own contracts. Type over it if a delivery pays differently.", said);
     }
 
+    /// <summary>Headhunters have two progressions; the run says which one their work moves.</summary>
+    [Fact]
+    public void The_rep_run_says_when_a_figure_is_for_a_ladder_moved_by_other_contracts()
+    {
+        var page = new Page();
+
+        Assert.StartsWith("What their contracts that move this ladder pay, by the installed game.",
+            page.Text("repRunPaySource({ place: { rank: 'Rank I' }, pay: { rep: 500, source: 'game-open', contract: 'Rank I' } })"));
+        Assert.StartsWith("What most of their contracts that move this ladder pay, by the installed game: 25 contracts, from 10 to 1,000.",
+            page.Text("repRunPaySource({ place: { rank: 'New Customer' }, pay: { rep: 100, source: 'game-open', contract: 'New Customer', low: 10, high: 1000, contracts: 25 } })"));
+        Assert.Equal("By the installed game, none of their contracts moves this ladder: their work moves Standing. Type what one pays here if you know.",
+            page.Text("repRunPaySource({ place: { rank: 'Rank I' }, pay: { rep: 0, source: 'elsewhere', contract: 'Standing' } })"));
+    }
+
     [Fact]
     public void In_french_the_new_sentences_are_translated()
     {

@@ -182,6 +182,115 @@ public class MissionPayTests
         Assert.Equal(1, work.RepTagged);
     }
 
+    // ----- Two progressions for one organisation -----
+
+    private const string Headhunters = "FactionReputation_Unlawful_HeadHunters";
+    private const string StandingScope = "FactionReputationScope";
+    private const string ShipCombatScope = "ReputationScope_ShipCombat_HeadHunters";
+
+    private static readonly GameRepScope Standing = new(StandingScope, "Standing", "@RepScope_Standing_Name", 95250,
+    [
+        R("Neutral", 0), R("Jr. Contractor", 800), R("Contractor", 2200), R("Sr. Contractor", 5800),
+        R("Veteran Contractor", 15000), R("Head Contractor", 38000), R("Elite Contractor", 95250),
+    ]);
+
+    private static readonly GameRepScope ShipCombat = new(ShipCombatScope, null, "@RepScope_ShipCombat_HeadHunters_Name", 480001,
+    [
+        R("Not Eligible", -1000), R("Applicant", 0), R("Rank I", 1), R("Rank II", 3000), R("Rank III", 10000),
+        R("Rank IV", 30000), R("Rank V", 100000), R("Rank VI", 480000),
+    ]);
+
+    private const string Ambush = "1f0b2c34-0000-4000-8000-0000000000a1";
+    private const string Hijacked = "1f0b2c34-0000-4000-8000-0000000000a2";
+
+    /// <summary>
+    /// 4.10.2's Headhunters: every contract this install logged for them pays
+    /// +100 on Standing, gated by Standing rank; only Hijacked Ship pays Ship
+    /// Combat, +500, open at every rank.
+    /// </summary>
+    private static GameReputationCatalogue HeadhuntersCatalogue(bool hijacked) => new(
+        [Standing, ShipCombat], [new GameRepOrganisation(Headhunters, "Headhunters", null)])
+    {
+        Missions = new Dictionary<string, GameMissionPay>(StringComparer.OrdinalIgnoreCase)
+        {
+            [Ambush] = new("HeadHunters_ShipAmbush_VE", [Line(Headhunters, StandingScope, 100)],
+                RankScope: StandingScope, MinRank: 0, MaxRank: 6),
+        }
+        .Concat(hijacked
+            ? [new(Hijacked, new GameMissionPay("HeadHunters_HijackedShip_Caterpillar_Stanton", [Line(Headhunters, ShipCombatScope, 500)]))]
+            : Array.Empty<KeyValuePair<string, GameMissionPay>>())
+        .ToDictionary(StringComparer.OrdinalIgnoreCase),
+    };
+
+    /// <summary>The Ship Combat page as read on 24 October: Rank I, 68% of the way to Rank II.</summary>
+    private static RepSighting ShipCombatPage() => new("hh.jpg", DateTimeOffset.UnixEpoch,
+        new ReputationReading("HEADHUNTERS", "NEUTRAL", null, [], null, null)
+            .WithBars([.. ShipCombat.Ranks.Select((r, i) =>
+                new RepRankCard(r.Name.ToUpperInvariant(), null, i < 2 ? 1 : i == 2 ? 0.678 : 0))]));
+
+    private static ContractRecord AmbushFlown() => Contract(Ambush, "Surprise Party [100 Rep]: ", "Head Hunters");
+
+    [Fact]
+    public void A_ship_combat_climb_is_priced_by_what_moves_ship_combat_not_by_standings_figure()
+    {
+        var board = ReputationBoards.Build([ShipCombatPage()], HeadhuntersCatalogue(hijacked: true), [AmbushFlown()]);
+        var org = Assert.Single(board.Organisations);
+
+        Assert.Equal(ShipCombatScope, org.Place!.Scope);
+        Assert.Equal((500, ReputationBoards.OpenSource), (org.Pay!.Rep, org.Pay.Source));
+
+        // The ambush was finished, and pays nothing on the ladder this page shows.
+        Assert.Equal(1, org.Work!.Completed);
+        Assert.Equal(0, org.Work.Rep);
+        Assert.Equal(0, org.Work.RepFrom);
+    }
+
+    /// <summary>
+    /// The tag on the ambush says 100, and it is Standing's 100: read against a
+    /// Ship Combat bar it is the wrong ladder's figure, so it is not read at all.
+    /// </summary>
+    [Fact]
+    public void When_none_of_their_contracts_moves_the_ladder_shown_the_page_says_which_one_they_move()
+    {
+        var board = ReputationBoards.Build([ShipCombatPage()], HeadhuntersCatalogue(hijacked: false), [AmbushFlown()]);
+        var pay = Assert.Single(board.Organisations).Pay!;
+
+        Assert.Equal(ReputationBoards.ElsewhereSource, pay.Source);
+        Assert.Equal(0, pay.Rep);
+        Assert.Equal("Standing", pay.Contract);
+    }
+
+    /// <summary>
+    /// Open contracts are a spread, not a ladder step: Wikelo's run 10 to 1,000.
+    /// The figure is what most pay, and the range goes with it.
+    /// </summary>
+    [Fact]
+    public void Contracts_open_at_every_rank_give_the_common_figure_and_the_range()
+    {
+        var catalogue = HeadhuntersCatalogue(hijacked: true) with
+        {
+            Missions = new[] { 500, 500, 100, 1000 }
+                .Select((rep, i) => new KeyValuePair<string, GameMissionPay>(
+                    $"00000000-0000-4000-8000-0000000001{i:D2}",
+                    new GameMissionPay($"HeadHunters_Open_{i}", [Line(Headhunters, ShipCombatScope, rep)])))
+                .ToDictionary(StringComparer.OrdinalIgnoreCase),
+        };
+
+        var pay = Assert.Single(ReputationBoards.Build([ShipCombatPage()], catalogue, []).Organisations).Pay!;
+
+        Assert.Equal((500, 100, 1000, 4), (pay.Rep, pay.Low!.Value, pay.High!.Value, pay.Contracts!.Value));
+    }
+
+    [Fact]
+    public void A_contract_pays_one_ladder_and_not_the_other()
+    {
+        var pay = HeadhuntersCatalogue(hijacked: true).Mission(Ambush)!;
+
+        Assert.Equal(100, pay.On(StandingScope));
+        Assert.Null(pay.On(ShipCombatScope));
+        Assert.Equal(100, pay.OnCompletion);
+    }
+
     /// <summary>The marker's contractDefinitionId reaches the contract, which is the whole join.</summary>
     [Fact]
     public void A_contract_keeps_the_markers_definition_id()

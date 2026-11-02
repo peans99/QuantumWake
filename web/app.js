@@ -16119,6 +16119,22 @@ function repRunPaySource(org) {
       rank: pay.contract,
     });
   }
+  // Some organisations have two progressions in the Rep app, and their
+  // contracts can move one and not the other: Headhunters' work pays Standing,
+  // and only their Hijacked Ship contracts pay Ship Combat.
+  if (pay.source === 'game-open') {
+    if (pay.low != null && pay.high != null && pay.low !== pay.high) {
+      return tx('What most of their contracts that move this ladder pay, by the installed game: {count} contracts, from {low} to {high}. None is offered by rank. Type over it if a delivery pays differently.', {
+        count: pay.contracts, low: pay.low.toLocaleString(), high: pay.high.toLocaleString(),
+      });
+    }
+    return tx('What their contracts that move this ladder pay, by the installed game. None is offered by rank, so it is the same at every rank. Type over it if a delivery pays differently.');
+  }
+  if (pay.source === 'elsewhere') {
+    return tx('By the installed game, none of their contracts moves this ladder: their work moves {ladder}. Type what one pays here if you know.', {
+      ladder: pay.contract,
+    });
+  }
   return pay.source === 'ladder'
     ? tx('The {rank} figure on the rep tag of “{contract}” — StarStrings’ research, not the game’s. Type over it if a delivery pays differently.', {
       rank: org.place.rank, contract: pay.contract,

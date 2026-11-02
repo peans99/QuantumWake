@@ -17,7 +17,12 @@ public sealed record RepWork(string Issuer, int Completed, int Abandoned, int Fa
 /// <summary>What one more contract of theirs pays at the rank held.</summary>
 /// <param name="Source">
 /// <c>game</c> when the installed game names it: the most a contract offered at
-/// the held rank pays on this ladder. <c>ladder</c> when it is the held rank's
+/// the held rank pays on this ladder. <c>game-open</c> when no contract is
+/// offered by rank on it but some still pay onto it, whatever the rank.
+/// <c>elsewhere</c>, with a zero figure, when the install knows their contracts
+/// and none lands on this ladder - <paramref name="Contract"/> then names the
+/// ladder they do move, and no tag is read, since it would be that ladder's
+/// figure. <c>ladder</c> when it is the held rank's
 /// figure on a StarStrings rep ladder (<c>[50/200/250/500/1000/2000/4000 Rep]</c>),
 /// and <c>tag</c> when a title carried one figure for itself - both only when
 /// the install has no word.
@@ -27,7 +32,9 @@ public sealed record RepWork(string Issuer, int Completed, int Abandoned, int Fa
 /// rank the figure is for.
 /// </param>
 /// <param name="At">When the tagged contract was flown; for the game, null.</param>
-public sealed record RepPay(int Rep, string Source, string Contract, DateTimeOffset? At);
+/// <param name="Low">For <c>game-open</c>, the least and most those contracts pay, and how many there are.</param>
+public sealed record RepPay(
+    int Rep, string Source, string Contract, DateTimeOffset? At, int? Low = null, int? High = null, int? Contracts = null);
 
 /// <summary>What changed between the two newest measured photographs.</summary>
 /// <param name="Ranks">How many ranks up, or down when negative.</param>
@@ -137,7 +144,7 @@ public static class ReputationBoards
                 (to.Point.RankIndex ?? 0) - (from.Point.RankIndex ?? 0),
                 from.Point.RankIndex == to.Point.RankIndex ? to.Point.Progress - from.Point.Progress : null,
                 from.Place is { } a && to.Place is { } b && a.Scope == b.Scope ? b.Estimate - a.Estimate : null,
-                Work(showing.Reading.Organisation!, contracts, from.Point.At, to.Point.At, catalogue));
+                Work(showing.Reading.Organisation!, contracts, from.Point.At, to.Point.At, catalogue, to.Place?.Scope));
         }
 
         var scope = ReputationLadders.Match(showing.Reading, catalogue);
@@ -162,7 +169,7 @@ public static class ReputationBoards
             latest.Point.Shot,
             [.. points.Select(p => p.Point)],
             change,
-            Work(showing.Reading.Organisation!, contracts, DateTimeOffset.MinValue, DateTimeOffset.MaxValue, catalogue),
+            Work(showing.Reading.Organisation!, contracts, DateTimeOffset.MinValue, DateTimeOffset.MaxValue, catalogue, described.Place?.Scope),
             LogoOf(showing.Reading.Organisation!, catalogue),
             Pay(showing.Reading.Organisation!, contracts, described.Place, catalogue));
     }
@@ -192,6 +199,12 @@ public static class ReputationBoards
     {
         if (place is not null && catalogue is not null && FromGame(organisation, place, catalogue) is { } game)
             return game;
+
+        // The install knows their contracts and none of them lands on this
+        // ladder: a tag would be the other ladder's figure, which is how a
+        // Headhunters Ship Combat climb came to be priced at Standing's +100.
+        if (place is not null && catalogue is not null && Elsewhere(organisation, place, catalogue) is { } other)
+            return other;
 
         var theirs = Theirs(organisation, contracts)
             .OrderByDescending(c => c.CompletedAt ?? c.FirstSeen)
@@ -243,13 +256,79 @@ public static class ReputationBoards
             .Where(m => m.Pays is not null)
             .ToList();
 
-        if (offered.Count == 0) return null;
+        if (offered.Count > 0)
+        {
+            var top = offered.Max(m => m.MinRank ?? 0);
 
-        var top = offered.Max(m => m.MinRank ?? 0);
+            return new RepPay(
+                offered.Where(m => (m.MinRank ?? 0) == top).Max(m => m.Pays!.Value),
+                ContractPay.Game, place.Rank, null);
+        }
 
-        return new RepPay(
-            offered.Where(m => (m.MinRank ?? 0) == top).Max(m => m.Pays!.Value),
-            ContractPay.Game, place.Rank, null);
+        // None offered by rank at this rank, but some still pay onto the ladder
+        // whatever the rank - Headhunters' Ship Combat moves only on the three
+        // Hijacked Ship contracts, +500 each. Only contracts this ladder does
+        // not gate: one gated above the held rank is not on offer, and taking
+        // it priced Red Wind's Not Eligible at Master's 4000.
+        var open = missions.Values
+            .Where(m => m.RankScope != place.Scope)
+            .Select(m => m.Rep
+                .Where(r => r.Faction == org.Id && r.Scope == place.Scope
+                    && r.When.HasFlag(MissionOutcomes.Completed) && r.Amount > 0)
+                .Select(r => (int?)r.Amount)
+                .Max())
+            .Where(p => p is not null)
+            .ToList();
+
+        if (open.Count == 0) return null;
+
+        // The figure most of them pay, the smaller on a tie: open contracts are
+        // not one step of a ladder but a spread - Wikelo's run from 10 to 1,000 -
+        // and the largest would price every delivery as the rarest one.
+        var common = open.GroupBy(p => p!.Value)
+            .OrderByDescending(g => g.Count())
+            .ThenBy(g => g.Key)
+            .First().Key;
+
+        return new RepPay(common, OpenSource, place.Rank, null, open.Min(), open.Max(), open.Count);
+    }
+
+    /// <summary>Paid by the game's contracts that move this ladder whatever the rank.</summary>
+    public const string OpenSource = "game-open";
+
+    /// <summary>The install knows their contracts, and every one pays another ladder.</summary>
+    public const string ElsewhereSource = "elsewhere";
+
+    /// <summary>
+    /// A zero-figure pay naming the ladder their contracts do move, when the
+    /// install knows them and none lands on this one; null when it knows none.
+    /// </summary>
+    private static RepPay? Elsewhere(string organisation, ReputationPlace place, GameReputationCatalogue catalogue)
+    {
+        if (catalogue.Missions is not { Count: > 0 } missions) return null;
+
+        var letters = Letters(organisation);
+        if (catalogue.Organisations?.FirstOrDefault(o => Letters(o.Name) == letters) is not { } org) return null;
+
+        var theirs = missions.Values
+            .SelectMany(m => m.Rep)
+            .Where(r => r.Faction == org.Id && r.Amount > 0 && r.When.HasFlag(MissionOutcomes.Completed))
+            .ToList();
+
+        // Something of theirs does pay this ladder, just nothing on offer at
+        // this rank: that is not "another ladder", and the tag may still say.
+        if (theirs.Any(r => r.Scope == place.Scope)) return null;
+
+        var ladder = theirs
+            .GroupBy(r => r.Scope)
+            .OrderByDescending(g => g.Count())
+            .Select(g => g.Key)
+            .FirstOrDefault();
+
+        if (ladder is null) return null;
+
+        var name = catalogue.Scopes.FirstOrDefault(s => s.Id == ladder)?.Name ?? ladder;
+        return new RepPay(0, ElsewhereSource, name, null);
     }
 
     /// <summary>The contracts whose issuer is the front of the organisation's name.</summary>
@@ -296,7 +375,7 @@ public static class ReputationBoards
     /// </remarks>
     internal static RepWork? Work(
         string organisation, IReadOnlyList<ContractRecord> contracts, DateTimeOffset after, DateTimeOffset until,
-        GameReputationCatalogue? catalogue = null)
+        GameReputationCatalogue? catalogue = null, string? ladder = null)
     {
         catalogue ??= GameReputationCatalogue.Empty;
         var theirs = Theirs(organisation, contracts);
@@ -309,7 +388,7 @@ public static class ReputationBoards
 
         var rep = ended
             .Where(c => c.Outcome == ContractOutcome.Completed)
-            .Select(c => (Rep: ContractPay.Rep(c, catalogue), Source: ContractPay.RepSource(c, catalogue)))
+            .Select(c => (Rep: ContractPay.Rep(c, catalogue, ladder), Source: ContractPay.RepSource(c, catalogue, ladder)))
             .Where(r => r.Rep is not null)
             .ToList();
 

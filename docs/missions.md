@@ -80,6 +80,28 @@ at the highest rank at or below yours pays (`ReputationBoards.Pay`, source `game
 Intro contracts carry no rank range and are left out, because they are open once
 to everybody.
 
+### Two progressions for one organisation
+
+The Rep app can show an organisation on more than one ladder, and its
+contracts need not move both. Headhunters are the case here:
+
+- Their page has Standing (`FactionReputationScope`) and Ship Combat (`ReputationScope_ShipCombat_HeadHunters`).
+- Every Headhunters contract this install logged (Surprise Party, Setting a Trap, Ambush Op and the rest; 13, 9 of them finished) pays +100 on **Standing**, and is gated by Standing rank.
+- In the whole install, **3 contracts pay Ship Combat**: `HeadHunters_HijackedShip_*`, +500 each. None is gated by it.
+- The Ship Combat screenshots read about 2,006 on 9 September and about 2,035 on 24 October, which is unchanged within the ±18 reading margin. All 9 finished contracts came after the second shot, so a new Ship Combat screenshot is the test: the files say it should still read about 2,035.
+
+So reputation is counted per ladder (`GameMissionPay.On(scope)`). The rep run's
+figure, and the rep a stretch of work is credited with, only count amounts that
+land on the ladder the screenshot shows. The rep run's figure follows these rules:
+
+1. A contract gated on this ladder and open at the held rank: as above (`game`).
+2. Otherwise, contracts that pay onto this ladder but are not gated by it (`game-open`): the figure most of them pay, smaller on a tie, with the range. Wikelo: 61 contracts, 10 to 1,000, so 10. Headhunters' Ship Combat: 3 contracts, all 500.
+3. If the install knows their contracts and none pays this ladder (`elsewhere`): no figure, the page names the ladder their work does move, and **no tag is read**, because a tag would be that other ladder's figure. This is how a Ship Combat climb had come to be priced at Standing's +100.
+4. Otherwise a StarStrings tag, as before.
+
+A gated contract that opens above the held rank is never used. Taking it once
+priced Red Wind's Not Eligible at Master's 4000.
+
 ### What pays none
 
 Of the 751 logged contracts, 426 pay rep on completion. The rest are mostly

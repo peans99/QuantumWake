@@ -39,14 +39,19 @@ public static class ContractPay
     /// The reputation finishing it pays the organisation offering it, or null
     /// when nothing says - which is not the same as zero.
     /// </summary>
-    public static int? Rep(ContractRecord contract, GameReputationCatalogue catalogue) =>
+    /// <param name="ladder">
+    /// Only what lands on this ladder - a <see cref="GameRepScope.Id"/> - when the
+    /// question is about one bar in the Rep app. A tag names no ladder, so it
+    /// answers either way.
+    /// </param>
+    public static int? Rep(ContractRecord contract, GameReputationCatalogue catalogue, string? ladder = null) =>
         Known(contract, catalogue) is { } pay
-            ? pay.OnCompletion is > 0 and var rep ? rep : null
+            ? (ladder is null ? pay.OnCompletion : pay.On(ladder)) is > 0 and var rep ? rep : null
             : ContractTags.RepFrom(contract.Name);
 
     /// <summary><see cref="Game"/> or <see cref="Tag"/> for a contract <see cref="Rep"/> has a figure for, else null.</summary>
-    public static string? RepSource(ContractRecord contract, GameReputationCatalogue catalogue) =>
-        Rep(contract, catalogue) is null ? null : Known(contract, catalogue) is not null ? Game : Tag;
+    public static string? RepSource(ContractRecord contract, GameReputationCatalogue catalogue, string? ladder = null) =>
+        Rep(contract, catalogue, ladder) is null ? null : Known(contract, catalogue) is not null ? Game : Tag;
 
     /// <summary>Whether it can award a blueprint.</summary>
     public static bool Blueprint(ContractRecord contract, GameReputationCatalogue catalogue) =>
