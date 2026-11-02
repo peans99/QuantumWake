@@ -2268,6 +2268,7 @@ public static partial class ServerHost
         // ---- data - what the community digest describes, priced by UEX ----
 
         MapReference(app);
+        MapMissions(app);
 
         // Manufacturer codes to full names, for every page that shows a maker.
         app.MapGet("/api/manufacturers", (LogLibrary lib) => lib.Community.Manufacturers);

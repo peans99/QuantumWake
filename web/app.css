@@ -6720,6 +6720,12 @@ body:not(.overlay) #now-server-star::after { display: none; }
 .encounter-scripts li { font: 11px var(--mono); overflow-wrap: anywhere; }
 .encounter-unused { columns: 2; column-gap: 28px; font-size: 12px; }
 @media (max-width: 900px) { .encounter-unused { columns: 1; } }
+#missions-table tbody tr.mission-row { cursor: pointer; }
+#missions-table td:first-child { max-width: 360px; }
+#missions-table .armoury-kind { overflow-wrap: anywhere; }
+#missions-table tbody tr.mission-row:hover { background: rgba(53, 200, 240, .06); }
+.mission-brief { white-space: pre-line; margin: 0 0 10px; line-height: 1.55; }
+.ref-debug { margin-top: 14px; font: 11px var(--mono); overflow-wrap: anywhere; }
 .armoury-modes { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; }
 .armoury-modes .armoury-when { color: var(--dim); }
 .armoury-kind { color: var(--muted); font-size: 11px; }

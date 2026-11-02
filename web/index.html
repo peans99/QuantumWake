@@ -74,6 +74,7 @@
         <button data-view="parts">Items</button>
         <button data-view="loot">Loot</button>
         <button data-view="encounters">Encounters</button>
+        <button data-view="missions">Missions</button>
         <button data-view="mining">Mining</button>
         <button data-view="crafting">Crafting</button>
       </div>
@@ -2121,7 +2122,7 @@
       <table id="contracts-table">
         <thead>
           <tr>
-            <th>When</th><th>Issuer</th><th>Type</th><th>Difficulty</th>
+            <th>When</th><th>Contract</th><th>Issuer</th><th>Type</th><th>Difficulty</th>
             <th>System</th><th>Outcome</th><th>Pays</th>
             <th class="num">Steps</th><th class="num">Took</th>
           </tr>
@@ -2428,6 +2429,55 @@
         <tbody></tbody>
       </table>
     </div>
+    </div>
+  </section>
+
+  <!-- REFERENCE: every contract the installed game defines -->
+  <section id="view-missions" class="view">
+    <div class="section-bar reference-toolbar-bar">
+      <div class="reference-title">
+        <span class="page-kicker">Reference</span>
+        <h2>Missions</h2>
+      </div>
+      <div class="controls reference-toolbar">
+        <select id="missions-contractor" class="select" title="Filter by contractor"></select>
+        <select id="missions-type" class="select" title="Filter by mission type"></select>
+        <select id="missions-system" class="select" title="Filter by system"></select>
+        <label class="toggle" title="Only contracts your logs show you taking">
+          <input type="checkbox" id="missions-flown">
+          <span>Flown by me</span>
+        </label>
+        <input type="search" id="missions-search" class="search" placeholder="Search missions…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p>Every contract your installed game defines, read from its own files: who offers
+        it, its title and briefing, what kind of work it is, the systems and places it is
+        offered in, the CrimeStat and ranks it needs, the game's estimate of how long it
+        takes, and what it pays in rep and blueprints. The ones your logs show you taking
+        come first, with how many you finished. Open one for its briefing, its difficulty
+        ratings, every time you took it and its other versions. The aUEC a generated
+        contract pays is worked out by the game server, so it is not here; the older
+        Covalex hauls have a fixed sum, and the logs print what some contracts paid.</p>
+    </details>
+    <div class="reference-results">
+      <div class="reference-results-head">
+        <span>Matching missions</span>
+        <span class="muted" id="missions-count" aria-live="polite"></span>
+      </div>
+      <div class="table-wrap reference-table-wrap">
+        <table id="missions-table">
+          <thead>
+            <tr>
+              <th>Mission</th><th>Offered by</th><th>Type</th><th>Where</th><th>Rank</th>
+              <th>Pays</th><th class="num" title="Completed / taken, from your logs">Yours</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
   </section>
 

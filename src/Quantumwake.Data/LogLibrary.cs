@@ -184,7 +184,11 @@ public sealed record ContractLine(
     string? Event = null,
     IReadOnlyList<string>? EventTracks = null,
     string? RepSource = null,
-    double? BlueprintChance = null);
+    double? BlueprintChance = null,
+    // Which contract of the installed game this was, so a page can open its
+    // mission window: the marker's id, and the debug name for one without.
+    string? DefinitionId = null,
+    string? Contract = null);
 
 /// <summary>
 /// How much work this install has done for one faction.
@@ -1630,7 +1634,9 @@ public sealed class LogLibrary : IDisposable
                     events.Pay(c.Raw)?.Event,
                     events.Pay(c.Raw)?.Tracks,
                     ContractPay.RepSource(c, reputation),
-                    ContractPay.BlueprintChance(c, reputation));
+                    ContractPay.BlueprintChance(c, reputation),
+                    c.DefinitionId,
+                    c.Raw);
                 })
         ];
     }

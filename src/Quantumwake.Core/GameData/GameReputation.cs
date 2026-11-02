@@ -52,6 +52,14 @@ public sealed record GameReputationCatalogue(
     /// </summary>
     public IReadOnlyDictionary<string, string>? HaulTitles { get; init; }
 
+    /// <summary>
+    /// Every contract's details besides its pay - who offers it, its title and
+    /// briefing, where, at what CrimeStat and rank, how long - for the Missions
+    /// page and the mission window; see <see cref="GameMissionDetails"/>. Null in
+    /// a cache written before they were read.
+    /// </summary>
+    public GameMissionCatalogue? Details { get; init; }
+
     /// <summary>What the install says a logged contract pays, or null when it does not know it.</summary>
     public GameMissionPay? Mission(string? definitionId) =>
         definitionId is { Length: > 0 } && Missions is { } missions && missions.TryGetValue(definitionId, out var pay)
@@ -170,6 +178,7 @@ public static class GameReputation
         {
             Missions = GameMissions.Read(core, byId, standings),
             HaulTitles = GameMissions.HaulTitles(core, byId, text.Keys),
+            Details = GameMissionDetails.Read(core, byId, standings, text),
         };
     }
 

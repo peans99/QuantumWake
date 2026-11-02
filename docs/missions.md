@@ -122,6 +122,65 @@ The ground truth is the `Received Blueprint:` toast:
 - The mod's `[BP]` tag was on 10 of them. It missed every FTL courier.
 - 51 completed contracts carry `[BP]*` where the install has no blueprint result. All are Covalex hauls, and none was followed by a blueprint. The tag sits on the shared `Covalex_HaulCargo_*_title` templates, so it marks every contract using one.
 
+## The catalogue: what a contract is, besides what it pays
+
+The Missions page and the mission window read every contract's details too,
+reprinted by:
+
+```powershell
+dotnet run --project src\Quantumwake.Cli -c Release -- --mission-catalogue --data <scratch folder>
+```
+
+A contract is assembled from four layers, each overriding the one before: its
+handler's `contractParams` and `defaultAvailability`, its template's
+`contractDisplayInfo` (the mission type and the illegal flag), its own
+`paramOverrides` and `additionalPrerequisites`, and for a sub-contract its
+parent. A legacy contract names a `MissionBrokerEntry`, which carries all of it
+as fields of its own (`title`, `missionGiver`, `type`, `locationMissionAvailable`,
+`reputationPrerequisites.wantedLevel`).
+
+On 4.10.2: **5,171** contracts with their sub-contracts, **878** marked not for
+release or work in progress on themselves, their handler or their template, so
+**4,293** that the game offers. Of those:
+
+| Read | Share | From |
+| --- | ---: | --- |
+| Contractor | 99% | `Contractor` string parameter, else the handler's |
+| Mission type | 100% | `missionTypeOverride`, else the template's `MissionType.LocalisedTypeName` |
+| Title | 91% | `Title` string parameter |
+| Briefing | 86% | `Description` string parameter |
+| System | 81% | `ContractPrerequisite_Locality` |
+| Game's time estimate | 88% | `contractResults.timeToComplete`, minutes |
+| Difficulty ratings | 86% | `contractResults.difficulty`: mechanical skill, mental load, risk of loss, game knowledge |
+| CrimeStat range | 57% | `ContractPrerequisite_CrimeStat` |
+| Rank gates | 44% | `minStanding`/`maxStanding` and `ContractPrerequisite_Reputation` |
+| Series | 53% | `ContractPrerequisite_CompletedContractTags.requiredCountValue` |
+| Location | 26% | `ContractPrerequisite_Location`, a star-map object |
+
+117 are marked illegal and 166 have a buy-in. A title whose English is a lone
+run-time placeholder (`~mission(Title)`, the Covalex random hauls) is read as
+none.
+
+The difficulty ratings are not out of five: a Red Wind bulk haul's mental load
+is `Insane_complexity_NOT_soloable_7`. The page shows the number and the
+game's words beside it.
+
+A `MissionLocality` is a list of star-map objects, so it is named by the
+planets it holds, by the star map's own names: `Stanton1` is Hurston,
+`RegionA` is Pyro I and Monox, `RegionC` is Pyro IV and Pyro V. A locality that
+holds a system's star (`PyroStar`, `NyxSolarSystem`) is the whole system.
+
+Checked against the logs: all **751** logged contracts are found by their
+`contractDefinitionId`, the debug name agrees on all 751, and the files give a
+title for **737** of them. Where the files' title is a template the game fills
+in ("~mission(ReputationRank) Hauler Needed for ~mission(CargoGradeToken)
+Shipment"), the page shows the title the logs saw instead.
+
+The window's runs come from the logs, under the same wipe rule as every other
+page; a payout is shown against a run when the award toast landed within five
+seconds of that run's completion under the same title.
+
+
 ## Money
 
 A generator contract's payout is `ContractResult_CalculatedReward`, and that

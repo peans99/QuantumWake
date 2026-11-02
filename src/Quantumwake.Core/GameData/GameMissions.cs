@@ -432,7 +432,7 @@ public static partial class GameMissions
     /// takes the same unscrambling as <see cref="DataRecord.Hash"/>; read
     /// straight it matched none of the 734 logged ids, read this way all of them.
     /// </remarks>
-    private static string ReadId(DataCore core, long at) => core.GuidAt(at).ToString();
+    internal static string ReadId(DataCore core, long at) => core.GuidAt(at).ToString();
 
     private static string Bare(string name) => name.Contains('.') ? name[(name.LastIndexOf('.') + 1)..] : name;
 }

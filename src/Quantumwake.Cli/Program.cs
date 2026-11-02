@@ -384,6 +384,54 @@ if (args.Contains("--climate", StringComparer.OrdinalIgnoreCase))
     return 0;
 }
 
+// Every contract's details as the Missions page shows them - contractor,
+// title, type, where, CrimeStat, gates - and how many of the logged contracts
+// they cover. The numbers behind docs/missions.md's catalogue section.
+if (args.Contains("--mission-catalogue", StringComparer.OrdinalIgnoreCase))
+{
+    var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
+    var details = GameCommodities.Load(install.RootPath, Path.Combine(data, "commodities.json")).Reputation.Details ?? GameMissionCatalogue.Empty;
+    var all = details.Missions;
+    var released = all.Where(m => !m.Unreleased).ToList();
+    string Pct(int n) => released.Count == 0 ? "0%" : $"{100.0 * n / released.Count:F0}%";
+
+    Console.WriteLine($"{all.Count} contracts; {all.Count - released.Count} unreleased; {released.Count} released; {details.Texts.Count} text keys");
+    Console.WriteLine($"of the released: title {Pct(released.Count(m => m.TitleKey is not null))}, briefing {Pct(released.Count(m => m.DescriptionKey is not null))}, "
+        + $"contractor {Pct(released.Count(m => m.ContractorKey is not null))}, type {Pct(released.Count(m => m.TypeKey is not null))}, "
+        + $"system {Pct(released.Count(m => m.Systems.Count > 0))}, location {Pct(released.Count(m => m.Locations.Count > 0))}, "
+        + $"CrimeStat {Pct(released.Count(m => m.MaxCrimeStat is not null))}, gates {Pct(released.Count(m => m.Gates.Count > 0))}, "
+        + $"series {Pct(released.Count(m => m.RequiresCompleted is not null))}, minutes {Pct(released.Count(m => m.Minutes is not null))}, "
+        + $"difficulty {Pct(released.Count(m => m.Difficulty is not null))}, illegal {released.Count(m => m.Illegal)}, buy-in {released.Count(m => m.BuyIn is not null)}");
+
+    Console.WriteLine("types: " + string.Join(", ", released.GroupBy(m => details.Text(m.TypeKey) ?? "(none)").OrderByDescending(g => g.Count()).Take(20).Select(g => $"{g.Key} {g.Count()}")));
+    Console.WriteLine("areas: " + string.Join("; ", details.Areas.OrderBy(a => a.Key).Select(a => $"{a.Key} = {a.Value.Name}")));
+    Console.WriteLine("systems: " + string.Join(", ", released.SelectMany(m => m.Systems.DefaultIfEmpty("(none)")).GroupBy(s => s).OrderByDescending(g => g.Count()).Take(20).Select(g => $"{g.Key} {g.Count()}")));
+    Console.WriteLine("contractors: " + string.Join(", ", released.GroupBy(m => details.Text(m.ContractorKey) ?? "(none)").OrderByDescending(g => g.Count()).Take(25).Select(g => $"{g.Key} {g.Count()}")));
+
+    var contracts = new List<ContractRecord>();
+    foreach (var file in install.BackupLogs().Concat(install.HasGameLog ? [install.GameLogPath] : []))
+    {
+        var builder = new SessionBuilder(Path.GetFileName(file));
+        foreach (var ev in LogFileReader.ReadEvents(file, new LogEventParser())) builder.Add(ev);
+        contracts.AddRange(builder.Build().Contracts);
+    }
+    var byId = all.ToDictionary(m => m.Id, StringComparer.OrdinalIgnoreCase);
+    var withId = contracts.Where(c => c.DefinitionId is not null).ToList();
+    var found = withId.Where(c => byId.ContainsKey(c.DefinitionId!)).ToList();
+    var sameName = found.Count(c => string.Equals(byId[c.DefinitionId!].Name, c.Raw, StringComparison.OrdinalIgnoreCase));
+    Console.WriteLine($"\n{contracts.Count} logged contracts; {withId.Count} with a definition id; {found.Count} found; debug name agrees on {sameName}");
+    Console.WriteLine($"logged contracts the files give a title for: {found.Count(c => byId[c.DefinitionId!].TitleKey is not null)}; distinct definitions flown {found.Select(c => c.DefinitionId).Distinct().Count()}");
+    foreach (var c in found.GroupBy(c => c.DefinitionId).Take(6).Select(g => g.First()))
+    {
+        var m = byId[c.DefinitionId!];
+        Console.WriteLine($"  {m.Name,-50} {details.Text(m.ContractorKey) ?? "-",-28} {details.Text(m.TypeKey) ?? "-",-12} [{string.Join(",", m.Systems)}] crime {m.MinCrimeStat}-{m.MaxCrimeStat} {m.Minutes} min");
+        Console.WriteLine($"     files: {details.Text(m.TitleKey)}");
+        Console.WriteLine($"     log:   {c.Title}");
+    }
+
+    return 0;
+}
+
 // The NPC encounters the install describes: which mission scripts name them,
 // how the game files the rest, and what their ships carry at the hold sizes
 // the install gives. The numbers behind docs/encounters.md.

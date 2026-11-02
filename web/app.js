@@ -34,7 +34,7 @@ const PAGE_GLYPHS = Object.freeze({
   jobs: '◆', routes: '↝', contracts: '◈', reputation: '▲', checklists: '☑', blueprints: '▧', wikelo: '✦', events: '✧',
   logbook: '≡', sessions: '◷', servers: '⌘', places: '⌖', points: '✣', crew: '◌', casualties: '╳',
   spending: '¤', ledger: '▥', commodities: '▰', market: '◫',
-  ships: '◁', components: '⊛', parts: '⊞', mining: '⬡', crafting: '⌬', encounters: '⊗',
+  ships: '◁', components: '⊛', parts: '⊞', mining: '⬡', crafting: '⌬', encounters: '⊗', missions: '❖',
   fleet: '◍', hangar: '⌂', loadout: '⊠', stash: '▣', loot: '✪', garage: '⌁', armoury: '✛',
   settings: '✥', overlay: '◱', controls: '⊹', labels: '▦', imports: '↥', data: '⊟', about: 'ⓘ',
   // Reached from another page rather than the menu, but titled like the rest.
@@ -495,6 +495,7 @@ function showView(name) {
   if (name === 'garage') loadGarage().catch(() => {});
   if (name === 'armoury') loadArmoury().catch(() => {});
   if (name === 'encounters') loadEncounters().catch(() => {});
+  if (name === 'missions') loadMissionsRef().catch(() => {});
   if (name === 'points') loadPoints().catch(() => {});
   if (name === 'wikelo') loadWikelo().catch(() => {});
   if (name === 'reputation') loadReputation().catch(() => {});
@@ -2944,7 +2945,7 @@ async function loadContractList() {
     setWorkspaceState('#contracts-state', 'offline', tx('Contract history is unavailable. Refresh after the local server reconnects.'));
     const tr = el('tr');
     const td = el('td', 'muted', tx('Contract history is unavailable.'));
-    td.colSpan = 9;
+    td.colSpan = 10;
     tr.append(td);
     body.append(tr);
     return;
@@ -2954,7 +2955,7 @@ async function loadContractList() {
     setWorkspaceState('#contracts-state', 'empty', tx('No contracts match this range.'));
     const tr = el('tr');
     const td = el('td', 'muted', tx('No contracts in that range.'));
-    td.colSpan = 9;
+    td.colSpan = 10;
     tr.append(td);
     body.append(tr);
     return;
@@ -2978,13 +2979,15 @@ async function loadContractList() {
     const tr = el('tr');
     tr.append(el('td', 'route-point', dateOf(row.at)));
 
-    // The composed name repeats issuer, type and difficulty, so the columns
-    // carry those and the full name rides the row's tooltip.
+    // The title is what the mobiGlas showed, and it opens the mission window:
+    // what the contract is, what it pays and every other time you took it.
+    const contract = el('td');
+    contract.append(missionLink(row.name, row.definitionId, row.contract));
+    tr.append(contract);
     tr.append(el('td', null, row.issuer || '—'));
     tr.append(el('td', 'muted', row.type || '—'));
     tr.append(el('td', 'muted', row.difficulty ? tx(row.difficulty) : '—'));
     tr.append(el('td', 'muted', row.system || '—'));
-    tr.title = row.name;
 
     const [cls, label] = OUTCOMES[row.outcome] || OUTCOMES.Unknown;
     const outcome = el('td', cls === 'done' ? 'inward' : cls, label);
@@ -3383,7 +3386,9 @@ function renderSessionDebrief(summary) {
   contracts.slice(0, 8).forEach((contract) => {
     const item = el('li');
     item.append(el('span', contract.outcome === 'Completed' ? 'inward' : 'muted', sessionOutcome(contract.outcome)));
-    item.append(el('span', null, contract.displayName || contract.raw || tx('Unnamed contract')));
+    const name = el('span');
+    name.append(missionLink(contract.displayName || contract.raw || tx('Unnamed contract'), contract.definitionId, contract.raw));
+    item.append(name);
     if (contract.steps > 0) item.append(el('span', 'muted', tx('{done} / {total} steps', { done: contract.stepsDone, total: contract.steps })));
     contractList.append(item);
   });
@@ -5835,8 +5840,26 @@ let refTicket = 0;
 function refLink(kind, id, label, extraClass = '') {
   const link = el('button', `place-link ref-link${extraClass ? ` ${extraClass}` : ''}`, label || prettyItem(id || ''));
   link.type = 'button';
-  link.title = kind === 'ship' ? tx('Open this ship') : kind === 'blueprint' ? tx('Open this blueprint') : tx('Open this item');
+  link.title = kind === 'ship' ? tx('Open this ship') : kind === 'blueprint' ? tx('Open this blueprint')
+    : kind === 'mission' ? tx('Open this mission') : tx('Open this item');
   link.addEventListener('click', () => openRefDetail(kind, id));
+  return link;
+}
+
+/**
+ * A logged contract's name as a link to its mission window, or plain words
+ * when nothing names which contract of the game it was. The marker's id wins;
+ * the debug name is what a contract from before the id was read carries.
+ */
+function missionLink(label, definitionId, contract) {
+  const id = definitionId || contract;
+  return id ? refLink('mission', id, label) : document.createTextNode(label);
+}
+
+/** The same inside a row that opens something itself: the name's click stays on the name. */
+function rowMissionLink(label, definitionId, contract) {
+  const link = missionLink(label, definitionId, contract);
+  link.addEventListener?.('click', (event) => event.stopPropagation());
   return link;
 }
 
@@ -5855,15 +5878,17 @@ async function openRefDetail(kind, id, { push = true } = {}) {
   modal.hidden = false;
   document.body.classList.add('ref-modal-open');
   $('#ref-modal-back').hidden = refTrail.length < 2;
-  $('#ref-modal-kicker').textContent = kind === 'ship' ? tx('Ship') : kind === 'blueprint' ? tx('Blueprint') : tx('Item');
-  $('#ref-modal-title').textContent = prettyItem(id);
+  $('#ref-modal-kicker').textContent = kind === 'ship' ? tx('Ship') : kind === 'blueprint' ? tx('Blueprint')
+    : kind === 'mission' ? tx('Mission') : tx('Item');
+  // A mission's id is a guid until its title arrives; a guid in the heading reads as an error.
+  $('#ref-modal-title').textContent = kind === 'mission' ? (/^[0-9a-f-]{36}$/i.test(id) ? '…' : id.replaceAll('_', ' ')) : prettyItem(id);
   $('#ref-modal-sub').textContent = '';
   const body = $('#ref-modal-body');
   body.replaceChildren(el('p', 'muted', tx('Reading what is known…')));
 
   let data;
   try {
-    data = await getJson(`/api/reference/${kind === 'ship' || kind === 'blueprint' ? kind : 'item'}?id=${encodeURIComponent(id)}`);
+    data = await getJson(`/api/reference/${['ship', 'blueprint', 'mission'].includes(kind) ? kind : 'item'}?id=${encodeURIComponent(id)}`);
   } catch {
     if (ticket === refTicket) body.replaceChildren(el('p', 'muted', tx('Nothing is known about that.')));
     return false;
@@ -5873,6 +5898,7 @@ async function openRefDetail(kind, id, { push = true } = {}) {
   if (ticket !== refTicket) return false;
   if (kind === 'ship') renderShipDetail(body, data);
   else if (kind === 'blueprint') renderBlueprintDetail(body, data);
+  else if (kind === 'mission') renderMissionDetail(body, data);
   else renderItemDetail(body, data);
   body.scrollTop = 0;
   return true;
@@ -6151,9 +6177,10 @@ function renderBlueprintDetail(body, data) {
       for (const way of sources) {
         const tr = el('tr');
         tr.append(el('td', null, way.issuer || '—'));
-        const title = el('td', null, way.kind === 'event'
-          ? tx('{bar}, at {points} points', { bar: way.title, points: way.points.toLocaleString() })
-          : way.title);
+        const title = el('td');
+        // A contract opens its mission window; an event tier has none to open.
+        if (way.kind === 'event') title.textContent = tx('{bar}, at {points} points', { bar: way.title, points: way.points.toLocaleString() });
+        else title.append(missionLink(way.title, null, way.mission));
         if (way.variants > 1) title.append(el('span', 'muted', ` · ${txn(way.variants, '{count} version', '{count} versions')}`));
         tr.append(title);
         tr.append(el('td', 'muted', (way.systems || []).join(', ') || '—'));
@@ -6308,6 +6335,301 @@ function renderShipDetail(body, data) {
     }));
     body.append(npcs);
   }
+}
+
+/* ---------- Reference: missions ---------- */
+
+/**
+ * A contract's text as a pilot reads it. The game fills `~mission(Location|name)`
+ * when it shows the contract, so here the slot is named instead - ‹Location› -
+ * and its markup tags (`<EM4>`) go, keeping the words they wrap.
+ */
+function missionText(text) {
+  return String(text || '')
+    // The text table stores a line break as the two characters \n.
+    .replace(/\\n/g, '\n')
+    .replace(/~mission\(([^)|]+)(?:\|[^)]*)?\)/g, (_, slot) => `‹${slot.replace(/([a-z])([A-Z])/g, '$1 $2')}›`)
+    .replace(/<\/?EM\d*>/gi, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+/**
+ * A mission's heading: the game's title, else the one your logs saw, else its
+ * debug name. A files title the game fills in at run time - Red Wind's
+ * "‹Reputation Rank› Hauler Needed for ‹Cargo Grade Token› Shipment" - gives way
+ * to the words your logs saw it shown with, when there are some.
+ */
+function missionTitle(m) {
+  if (m.loggedTitle && String(m.title || '').includes('~mission(')) return missionText(m.loggedTitle);
+  return missionText(m.title || m.loggedTitle) || String(m.name || '').replaceAll('_', ' ');
+}
+
+/** "Normal_PvE_only_action_4" as a rating and its words: [4, "Normal PvE only action"]. */
+function missionRating(value) {
+  const match = /^(.*?)_?(\d)$/.exec(String(value || ''));
+  if (!match) return null;
+  return [Number(match[2]), match[1].replaceAll('_', ' ')];
+}
+
+/** "0 to 2", "up to 2", "from 3" - a CrimeStat range as the files bound it. */
+function missionCrime(crime) {
+  if (!crime) return null;
+  const { min, max } = crime;
+  if (min != null && max != null) return min === max ? String(min) : tx('{min} to {max}', { min, max });
+  if (max != null) return tx('up to {max}', { max });
+  return tx('from {min}', { min });
+}
+
+/** "Hauling: Trainee to Senior" - a rank gate, open ends left open. */
+function missionGate(g) {
+  const ranks = g.min && g.max ? tx('{min} to {max}', { min: g.min, max: g.max })
+    : g.min ? tx('{rank} and up', { rank: g.min })
+      : g.max ? tx('up to {rank}', { rank: g.max }) : null;
+  if (!ranks) return null;
+  return `${g.organisation} · ${g.ladder}: ${ranks}`;
+}
+
+const MISSION_OUTCOMES = {
+  Completed: () => tx('completed'),
+  Failed: () => tx('failed'),
+  Abandoned: () => tx('abandoned'),
+  Withdrawn: () => tx('withdrawn'),
+  InProgress: () => tx('in progress'),
+};
+
+function renderMissionDetail(body, data) {
+  $('#ref-modal-title').textContent = missionTitle(data);
+  $('#ref-modal-sub').textContent = [data.contractor, data.type, (data.areas || []).join(', ')].filter(Boolean).join(' · ');
+  body.textContent = '';
+
+  const top = el('div', 'ref-top');
+  const record = el('p', 'ref-holding');
+  const s = data.summary || {};
+  if (s.taken) {
+    record.append(el('strong', 'ref-owned', txn(s.taken, 'taken once in your logs', 'taken {count} times in your logs')));
+    const parts = [
+      s.completed ? tx('{count} completed', { count: s.completed }) : null,
+      s.failed ? tx('{count} failed', { count: s.failed }) : null,
+      s.abandoned ? tx('{count} abandoned', { count: s.abandoned }) : null,
+    ].filter(Boolean);
+    if (parts.length) record.append(el('span', 'muted', ` · ${parts.join(' · ')}`));
+  } else {
+    record.append(el('strong', null, tx('not in your logs')));
+  }
+  top.append(record);
+  if (data.unreleased) top.append(el('p', 'muted small', tx('The game files mark this contract not for release; it is listed because your logs show it.')));
+  body.append(top);
+
+  const minutes = data.minutes ? tx('{minutes} min, the game’s own estimate', { minutes: fmtInt(data.minutes) }) : null;
+  const retake = [
+    data.onceOnly ? tx('offered once') : null,
+    data.retakeAfterAbandon === false ? tx('not again after abandoning it') : null,
+    data.retakeAfterFail === false ? tx('not again after failing it') : null,
+  ].filter(Boolean).join(' · ');
+  body.append(refFacts([
+    [tx('Offered by'), data.contractor],
+    [tx('Rep ladder of'), data.organisation && data.organisation !== data.contractor ? data.organisation : null],
+    [tx('Type'), [data.type, data.illegal ? tx('illegal') : null].filter(Boolean).join(' · ')],
+    [tx('Offered in'), (data.areas || []).join(', ')],
+    [tx('At'), (data.locations || []).join(', ')],
+    [tx('CrimeStat'), missionCrime(data.crime)],
+    [tx('Needs'), (data.gates || []).map(missionGate).filter(Boolean).join('; ')],
+    [tx('After'), data.requiresCompleted ? txn(data.requiresCompleted, 'one earlier contract of its series done', '{count} earlier contracts of its series done') : null],
+    [tx('Takes about'), minutes],
+    [tx('Your median'), s.medianMinutes ? tx('{minutes} min over {count} completed', { minutes: fmtInt(s.medianMinutes), count: s.completed }) : null],
+    [tx('Buy-in'), data.buyIn ? money(data.buyIn) : null],
+    [tx('Crew'), data.maxPlayers > 1 ? tx('up to {count} can share it', { count: data.maxPlayers }) : null],
+    [tx('Taken again'), retake],
+  ]));
+
+  const pays = refSection(tx('What it pays'), tx('From the game files. The aUEC of a generated contract is worked out by the game server when it is offered, and the files hold no figure for it.'));
+  const lines = el('ul', 'ref-materials');
+  for (const r of data.pay?.rep || []) {
+    const when = (r.when || []).map((w) => MISSION_OUTCOMES[w]?.() || w).join(', ');
+    lines.append(el('li', null, tx('{amount} rep on {ladder} ({organisation}), when {when}', {
+      amount: `${r.amount > 0 ? '+' : ''}${r.amount.toLocaleString()}`, ladder: r.ladder, organisation: r.organisation, when,
+    })));
+  }
+  if (data.pay?.reward) lines.append(el('li', null, tx('{reward}, a fixed sum in its broker record', { reward: money(data.pay.reward) })));
+  if (data.pay?.blueprint) lines.append(el('li', null, tx('A blueprint, {chance} of the time', { chance: lootPercent(data.pay.blueprint) })));
+  if (s.payouts) lines.append(el('li', null, txn(s.payouts, 'Paid {total} once in your logs', 'Paid {total} over {count} awards in your logs', { total: money(s.paid) })));
+  if (!lines.children.length) {
+    lines.append(el('li', 'muted', data.pay?.known
+      ? tx('No rep, no blueprint and no fixed sum in the game files.')
+      : tx('Your game files do not say what this one pays.')));
+  }
+  pays.append(lines);
+  if ((data.blueprints || []).length) {
+    pays.append(el('h4', 'loot-where-sub', tx('Blueprints it can give')));
+    pays.append(refLinkList(data.blueprints, (b, li) => li.append(refLink('blueprint', b.className, b.name))));
+  }
+  body.append(pays);
+
+  if (data.description) {
+    const brief = refSection(tx('Briefing'), tx('As the mobiGlas words it; ‹slots› are filled in by the game when it offers the contract.'));
+    for (const para of missionText(data.description).split(/\n{2,}/)) brief.append(el('p', 'mission-brief', para));
+    body.append(brief);
+  }
+
+  const d = data.difficulty;
+  if (d && [d.mechanical, d.mentalLoad, d.riskOfLoss, d.knowledge].some(Boolean)) {
+    // Not "out of 5": a Red Wind bulk haul rates its mental load 7.
+    const rate = refSection(tx('Difficulty'), tx('The game’s own ratings for this contract, with its words for each; higher is harder.'));
+    rate.append(refFacts([
+      [tx('Mechanical skill'), d.mechanical],
+      [tx('Mental load'), d.mentalLoad],
+      [tx('Risk of loss'), d.riskOfLoss],
+      [tx('Game knowledge'), d.knowledge],
+    ].map(([label, value]) => {
+      const r = missionRating(value);
+      return [label, r ? `${r[0]} · ${r[1]}` : null];
+    })));
+    body.append(rate);
+  }
+
+  const runs = data.runs || [];
+  if (runs.length) {
+    const yours = refSection(tx('Your runs'), tx('Every time your logs show you taking it, newest first.'));
+    const table = el('table', 'loot-where-table');
+    const head = el('tr');
+    head.append(el('th', null, tx('When')), el('th', null, tx('As shown')), el('th', null, tx('Outcome')), el('th', 'num', tx('Time')), el('th', 'num', tx('Paid')));
+    const thead = el('thead');
+    thead.append(head);
+    table.append(thead);
+    const tbody = el('tbody');
+    for (const run of runs.slice(0, 30)) {
+      const tr = el('tr');
+      tr.append(el('td', 'route-point', dateOf(run.at)));
+      tr.append(el('td', null, run.title));
+      tr.append(el('td', run.outcome === 'Completed' ? 'inward' : 'muted', MISSION_OUTCOMES[run.outcome]?.() || '—'));
+      tr.append(el('td', 'num muted', run.minutes ? `${Math.round(run.minutes)}m` : '—'));
+      tr.append(el('td', 'num', run.paid ? money(run.paid) : '—'));
+      tbody.append(tr);
+    }
+    table.append(tbody);
+    const wrap = el('div', 'table-wrap');
+    wrap.append(table);
+    yours.append(wrap);
+    if (runs.length > 30) yours.append(el('p', 'muted small', tx('And {count} earlier.', { count: runs.length - 30 })));
+    body.append(yours);
+  }
+
+  if ((data.related || []).length) {
+    const related = refSection(tx('The same job, other versions'), tx('Its handler’s other contracts on the same template: the difficulty steps and the copies for other places.'));
+    related.append(refLinkList(data.related, (r, li) => {
+      // A title the game fills in at run time is the same template on every
+      // version, so the name - which carries the region and grade - says which.
+      const templated = String(r.title || '').includes('~mission(');
+      li.append(refLink('mission', r.id, templated || !r.title ? r.name.replaceAll('_', ' ') : missionTitle(r)));
+      const where = (r.areas || []).join(', ');
+      if (where) li.append(el('span', 'muted', ` · ${where}`));
+    }));
+    body.append(related);
+  }
+
+  body.append(el('p', 'muted small ref-debug', [data.generator, data.template, data.name].filter(Boolean).join(' · ')));
+}
+
+let missionCatalogue = null;
+
+async function loadMissionsRef() {
+  try {
+    missionCatalogue = await getJson('/api/reference/missions');
+  } catch {
+    missionCatalogue = null;
+  }
+
+  const rows = missionCatalogue?.missions || [];
+  const fill = (selector, values, all) => {
+    const select = $(selector);
+    if (!select) return;
+    const previous = select.value;
+    select.textContent = '';
+    select.append(new Option(all, ''));
+    for (const v of values) select.append(new Option(v, v));
+    if (values.includes(previous)) select.value = previous;
+  };
+  const sorted = (list) => [...new Set(list.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  fill('#missions-contractor', sorted(rows.map((m) => m.contractor)), tx('Every contractor'));
+  fill('#missions-type', sorted(rows.map((m) => m.type)), tx('Every type'));
+  fill('#missions-system', sorted(rows.flatMap((m) => m.systems || [])), tx('Every system'));
+  renderMissionsRef();
+}
+
+/** The most a page draws at once; the filters narrow the rest. */
+const MISSIONS_SHOWN = 300;
+
+function renderMissionsRef() {
+  const body = $('#missions-table tbody');
+  if (!body) return;
+  body.textContent = '';
+  const counter = $('#missions-count');
+
+  if (!missionCatalogue?.ready) {
+    if (counter) counter.textContent = tx('Waiting for catalogue');
+    const tr = el('tr');
+    const td = el('td', 'muted', tx('Your game files have not given any contracts yet.'));
+    td.colSpan = 7;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  const term = ($('#missions-search')?.value || '').trim().toLowerCase().replaceAll('_', ' ');
+  const contractor = $('#missions-contractor')?.value || '';
+  const type = $('#missions-type')?.value || '';
+  const system = $('#missions-system')?.value || '';
+  const mine = $('#missions-flown')?.checked;
+
+  const rows = missionCatalogue.missions.filter((m) =>
+    (!contractor || m.contractor === contractor)
+    && (!type || m.type === type)
+    && (!system || (m.systems || []).includes(system))
+    && (!mine || m.taken > 0)
+    && (!term || [missionTitle(m), m.name.replaceAll('_', ' '), m.contractor, m.type, ...(m.areas || [])]
+      .filter(Boolean).join(' ').toLowerCase().includes(term)))
+    // What you have flown first, most first; then by contractor and title.
+    .sort((a, b) => (b.taken - a.taken) || String(a.contractor).localeCompare(String(b.contractor)) || missionTitle(a).localeCompare(missionTitle(b)));
+
+  if (counter) {
+    counter.textContent = !rows.length ? tx('No matches')
+      : rows.length > MISSIONS_SHOWN
+        ? tx('{shown} of {count} contracts; narrow it with the filters', { shown: MISSIONS_SHOWN, count: rows.length.toLocaleString() })
+        : txn(rows.length, '{count} contract', '{count} contracts', { count: rows.length.toLocaleString() });
+  }
+
+  for (const m of rows.slice(0, MISSIONS_SHOWN)) {
+    const tr = el('tr', 'mission-row');
+    const name = el('td');
+    name.append(rowMissionLink(missionTitle(m), m.id));
+    name.append(el('div', 'armoury-kind', m.name.replaceAll('_', ' ')));
+    tr.append(name);
+    tr.append(el('td', null, m.contractor || '—'));
+    tr.append(el('td', 'muted', [m.type, m.illegal ? tx('illegal') : null].filter(Boolean).join(' · ') || '—'));
+    tr.append(el('td', 'muted', (m.areas || []).join(', ') || '—'));
+    tr.append(el('td', 'muted', m.rank ? missionGate({ organisation: '', ladder: m.rank.ladder, min: m.rank.min, max: m.rank.max })?.replace(/^ · /, '') || '—' : '—'));
+
+    const pays = el('td');
+    if (m.rep) pays.append(el('span', 'tag-rep', tx('{rep} rep', { rep: m.rep.toLocaleString() })));
+    if (m.blueprint) {
+      const chip = el('span', 'tag-bp', 'BP');
+      chip.title = blueprintChipTitle(m.blueprint);
+      pays.append(chip);
+    }
+    if (m.reward) pays.append(el('span', 'muted', ` ${money(m.reward)}`));
+    if (!pays.children.length && !m.reward) pays.append(el('span', 'muted', '—'));
+    tr.append(pays);
+
+    tr.append(el('td', m.taken ? 'num' : 'num muted', m.taken ? `${m.completed} / ${m.taken}` : '—'));
+    tr.addEventListener('click', () => openRefDetail('mission', m.id));
+    body.append(tr);
+  }
+}
+
+onInput('#missions-search', renderMissionsRef);
+for (const id of ['#missions-contractor', '#missions-type', '#missions-system', '#missions-flown']) {
+  $(id)?.addEventListener('change', renderMissionsRef);
 }
 
 /* ---------- Reference: encounters ---------- */
@@ -12629,7 +12951,9 @@ function eventContractsTable(event) {
   for (const c of event.contracts) {
     const tr = el('tr');
     tr.title = c.id;
-    tr.append(el('td', null, c.title));
+    const title = el('td');
+    title.append(missionLink(c.title, null, c.id));
+    tr.append(title);
     tr.append(el('td', 'muted', c.issuer || '—'));
     // The overall bar takes every contract, so naming it on every row says
     // nothing; the rows name the bar that sets them apart.
@@ -20518,7 +20842,9 @@ async function loadJobContracts() {
     const card = el('article', 'job-card');
 
     const head = el('div', 'job-head');
-    head.append(el('b', null, contract.name || `${contract.issuer} · ${contract.type}`));
+    const name = el('b');
+    name.append(missionLink(contract.name || `${contract.issuer} · ${contract.type}`, contract.definitionId, contract.contract));
+    head.append(name);
     if (contract.difficulty) head.append(el('span', 'job-kind', tx(contract.difficulty)));
     const focus = el('button', 'ghost tiny', tx('Focus'));
     focus.title = tx('Keep this contract available while you plan');
@@ -32543,7 +32869,7 @@ const VIEW_SOURCES = {
   logs: new Set(['now', 'map', 'logbook', 'sessions', 'servers', 'places', 'points', 'crew', 'casualties',
     'contracts', 'events', 'spending', 'ledger', 'commodities', 'market', 'routes', 'fleet', 'hangar',
     'loadout', 'stash', 'loot', 'garage', 'armoury', 'wikelo', 'blueprints']),
-  gamedata: new Set(['map', 'ships', 'components', 'parts', 'mining', 'crafting', 'encounters', 'blueprints', 'hangar', 'armoury']),
+  gamedata: new Set(['map', 'ships', 'components', 'parts', 'mining', 'crafting', 'encounters', 'missions', 'blueprints', 'hangar', 'armoury']),
   uex: new Set(['market', 'commodity', 'components', 'routes', 'garage', 'armoury', 'jobs', 'events', 'casualties']),
   community: new Set(['market', 'commodity', 'commodities', 'components', 'parts', 'mining']),
 };
