@@ -79,6 +79,8 @@ public class ComponentsPageTests
         Assert.Contains("Regen", head);
         Assert.Contains("100,000", Row(page, 0));
         Assert.DoesNotContain("UNDEFINED", Row(page, 0));
+        Assert.Equal("true", page.Text("__dom.node('#components-tabs').querySelectorAll('button')[3].getAttribute('aria-pressed')"));
+        Assert.Equal("false", page.Text("__dom.node('#components-tabs').querySelectorAll('button')[0].getAttribute('aria-pressed')"));
     }
 
     [Fact]

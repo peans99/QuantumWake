@@ -328,7 +328,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.20.53
+### 0.20.54
+
+**Updated Components controls.** Component categories now use framed selectors with count badges and a clear selected state. The shopping-list action beside catalogue names also has a compact frame and retains its green confirmation after adding an item.
 
 **Consistent Reference catalogues.** Ships, Components, Items, Missions, Encounters and Crafting now share the same table spacing, alternating rows, hover colours and pinned name column. Crafting also uses the shared Reference toolbar and results heading, with its filtered blueprint count visible above the grid.
 

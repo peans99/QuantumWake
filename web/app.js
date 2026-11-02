@@ -5743,9 +5743,10 @@ function renderComponentTabs() {
   tabs.textContent = '';
   for (const kind of COMPONENT_KINDS) {
     const count = componentsData.parts.filter((p) => kind.types.includes(p.type)).length;
-    const button = el('button', kind.key === componentsKind ? 'active' : null);
+    const button = el('button', kind.key === componentsKind ? 'ghost active' : 'ghost');
     button.type = 'button';
     button.dataset.kind = kind.key;
+    button.setAttribute('aria-pressed', String(kind.key === componentsKind));
     button.append(el('span', null, tx(kind.label)), el('span', 'components-tab-count', ` ${count}`));
     button.addEventListener('click', () => {
       componentsKind = kind.key;
@@ -5753,6 +5754,7 @@ function renderComponentTabs() {
       $('#components-size').value = '';
       renderComponentTabs();
       renderComponentsRef();
+      tabs.querySelector(`[data-kind="${kind.key}"]`)?.focus?.({ preventScroll: true });
     });
     tabs.append(button);
   }
