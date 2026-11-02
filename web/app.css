@@ -113,7 +113,7 @@ body::before {
     top: 94px;
     bottom: 0;
     width: calc((100vw - var(--page)) / 2);
-    background: url("assets/mark.svg") center center / min(62%, 240px) auto no-repeat;
+    background: url("assets/watermark.svg") center center / min(68%, 400px) auto no-repeat;
     opacity: .12;
     pointer-events: none;
     z-index: 0;
@@ -7547,8 +7547,8 @@ body:not(.overlay) tbody td :is(button.ghost, a.ghost):hover:not(:disabled) {
 
 /* ======================================================================
    Identity (0.20.25 trial on three pages, every page since 0.20.30).
-   Three ideas: a colour for whose data it is, a wake drawn from your own
-   sessions under each header, and a title face of our own. Not in the
+   Three ideas: a colour for whose data it is, a flight under each header,
+   and a title face of our own. Not in the
    overlay, where a header is a nine-pixel label over a glance.
    ====================================================================== */
 @font-face {
@@ -7584,7 +7584,7 @@ body:not(.overlay) .view > .section-bar h2 .page-glyph { font-family: var(--disp
 /* A page about your own history says so in its label. */
 body:not(.overlay) .view[data-voice='own'] > .section-bar .page-kicker { color: var(--own); }
 
-/* The wake: your last sixty days of play along the foot of the header.
+/* The ships and their wakes travel along the foot of the header.
    Painted beneath the header's contents by a negative z-index inside an
    isolated header, rather than by lifting every child above it: on three
    pages lifting was harmless, on forty it would have overridden whatever
@@ -7592,23 +7592,18 @@ body:not(.overlay) .view[data-voice='own'] > .section-bar .page-kicker { color: 
    which would clip a menu that opens out of a header. */
 body:not(.overlay) .view > .section-bar { position: relative; isolation: isolate; }
 /* --wake-end, when set, is where the header's controls begin (fitWake): the
-   wake and its mark stop short of them rather than running gold behind them. */
-.wake { position: absolute; right: calc(100% - var(--wake-end, 100%) + 14px); bottom: -1px; height: 34px; width: min(480px, max(0px, calc(var(--wake-end, 100%) - 14px))); color: var(--own); pointer-events: none; z-index: -1; }
+   course stops short of them rather than running behind them. */
+.wake { position: absolute; right: calc(100% - var(--wake-end, 100%) + 14px); bottom: -1px; height: 36px; width: min(480px, max(0px, calc(var(--wake-end, 100%) - 14px))); pointer-events: none; z-index: -1; }
 .wake path { vector-effect: non-scaling-stroke; }
-.wake-thread { stroke-width: .75; opacity: .65; }
-.wake-core { stroke-width: 1; }
-.wake-halo { stroke-width: 5; opacity: .09; }
-.wake-spark { fill: none; stroke: currentColor; stroke-width: 1; stroke-linecap: round; opacity: .3; }
-.wake-mark {
-  position: absolute; left: calc(var(--wake-end, 100%) - 19px); bottom: 17px; width: 10px; height: 10px; z-index: 0;
-  color: var(--own); cursor: help;
+.chase-hull { fill: var(--void); stroke: currentColor; stroke-width: 1; stroke-linejoin: round; }
+.chase-cockpit { stroke: currentColor; stroke-width: 1; stroke-linecap: round; }
+.chase-engine { fill: currentColor; }
+.wake-chase-still { display: none; opacity: .7; }
+@media (prefers-reduced-motion: reduce) {
+  .wake-chase-motion { display: none; }
+  .wake-chase-still { display: inline; }
 }
-.wake-mark::before { content: ""; position: absolute; inset: 0; background: currentColor; opacity: .55; clip-path: polygon(50% 0, 62% 37%, 100% 50%, 62% 63%, 50% 100%, 38% 63%, 0 50%, 38% 37%); }
-/* The visible point stays small; its hover target includes the halo. */
-.wake-mark::after { content: ""; position: absolute; inset: -6px; }
-.wake-mark.today { color: #fff3d9; filter: drop-shadow(0 0 3px rgba(233, 194, 125, .7)); }
-.wake-mark.today::before { opacity: 1; }
-body.overlay :is(.wake, .wake-mark) { display: none; }
+body.overlay .wake { display: none; }
 
 /* Source colours on a column heading, as a thin rule under the values it
    covers. A cell is gold only when it holds something of yours. */

@@ -328,11 +328,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.20.50
+### 0.20.51
 
-**A smoother dashboard background.** Removed the cockpit-glass stripes, reflection layer, crossing route lines and background light pools, leaving a consistent dark blue surface as you scroll. On ultrawide displays, the Quantum Wake icon sits quietly in both outer margins, clear of the content.
+**A smoother dashboard background.** Removed the cockpit-glass stripes, reflection layer, crossing route lines and background light pools, leaving a consistent dark blue surface as you scroll. On ultrawide displays, matching circular Quantum Wake emblems sit in both outer margins, clear of the content.
 
-**A lighter quantum wake.** The session-history decoration under page headings now fades through fine curved trails into a small star for today, echoing the logo's swept curve with two faint sparks behind it. The trail stays compact on wide screens, its spread follows your recent sessions, and today's star glows more brightly when you have flown today. It stops before header controls.
+**A little flight across each header.** Two small ships follow a curved course along the page header, trailing short cyan and gold wakes. They fade at the ends for a quiet repeating chase and stay clear of the header's controls. This replaces the session-history strip and is decoration, not a reading of your ship or logs. Reduced-motion settings show a stationary pair instead.
 
 **What a ping on the mining radar is.** Mining has a new **Radar** tab. Type the number your mining radar shows over a contact and it says what makes it: 6,340 is two Quantainium rocks, 9,400 is two C-type asteroids. The figures come from your installed game's own files. Every ship ore has its own, 15 apart within a tier (Quantainium 3,170, Stileron 3,185, Savrilium 3,200), so a ping names both the ore and how many rocks. Asteroid classes, hand-mining deposits and ground-vehicle deposits read one figure per kind of rock whatever ore is inside (every hand-mining rock reads 3,000, a C-type asteroid 4,700), so the tab lists what they might hold instead of guessing one. When two readings give the same number, as 19,200 is six Savrilium or five Aslarite, both are listed and the tab says the number cannot choose; nothing under 14,160 is ambiguous among ship rocks. A number nothing matches shows the nearest readings and how far off each is. Below sits every rock's figure with two to six of them worked out. The game files give one rock's figure: that a ping over a cluster reads it times the number of rocks is how pilots read the radar, and it has not been checked against a ping of yours yet, which the tab says.
 

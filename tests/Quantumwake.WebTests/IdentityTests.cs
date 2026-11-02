@@ -4,8 +4,8 @@ namespace Quantumwake.WebTests;
 
 /// <summary>
 /// The identity, trialled on three pages in 0.20.25 and on every page since
-/// 0.20.30: the wake under each page header, drawn from the pilot's own
-/// sessions, and gold on the pages that are the pilot's own history.
+/// 0.20.30: the decorative flight under each page header, and gold on the
+/// pages that are the pilot's own history.
 /// </summary>
 public class IdentityTests
 {
@@ -29,7 +29,7 @@ public class IdentityTests
     private static string Bar(string view) => $"__dom.node('#view-{view}').querySelector('.section-bar')";
 
     [Fact]
-    public void Every_page_header_carries_a_wake_from_the_logs()
+    public void Every_page_header_carries_one_decorative_flight()
     {
         var page = WithSessions($$"""
             [{"id":"a","startedAt":"{{Today(0)}}","inGame":3600},
@@ -39,7 +39,7 @@ public class IdentityTests
         foreach (var view in Headed)
         {
             Assert.Equal(1, page.Count($"{Bar(view)}.byClass('wake').length"));
-            Assert.Contains("2 sessions", page.Text($"{Bar(view)}.byClass('wake-mark')[0].title"));
+            Assert.Equal("true", page.Text($"{Bar(view)}.byClass('wake')[0].getAttribute('aria-hidden')"));
         }
     }
 
@@ -69,16 +69,14 @@ public class IdentityTests
         Assert.Equal(0, page.Count("__dom.node('#view-help').byClass('wake').length"));
     }
 
-    /// <summary>The mark at today's end is filled only if you have flown today.</summary>
+    /// <summary>A scan refresh must not restart ships that are already flying.</summary>
     [Fact]
-    public void The_mark_at_today_is_filled_only_after_a_session_today()
+    public void A_refresh_keeps_the_existing_flight()
     {
-        var flown = WithSessions($$"""[{"id":"a","startedAt":"{{Today(0)}}","inGame":600}]""");
-        var rested = WithSessions($$"""[{"id":"a","startedAt":"{{Today(3)}}","inGame":600}]""");
-
-        var mark = $"{Bar("jobs")}.byClass('wake-mark')[0].className";
-        Assert.Contains("today", flown.Text(mark));
-        Assert.DoesNotContain("today", rested.Text(mark));
+        var page = WithSessions("[]");
+        page.Do($"const previousFlight = {Bar("jobs")}.querySelector('.wake-chase'); drawWakes();");
+        Assert.Equal("true", page.Text($"String(previousFlight === {Bar("jobs")}.querySelector('.wake-chase'))"));
+        Assert.Equal(1, page.Count($"{Bar("jobs")}.byClass('wake').length"));
     }
 
     /// <summary>
@@ -114,15 +112,14 @@ public class IdentityTests
     }
 
     /// <summary>
-    /// No session in the window draws no wake, rather than a flat line that
-    /// would read as sixty days of nothing being logged.
+    /// The ships are decorative, so a new pilot with no logs sees them too.
     /// </summary>
     [Fact]
-    public void No_recent_session_draws_no_wake()
+    public void A_new_pilot_still_sees_the_flight()
     {
-        var page = WithSessions($$"""[{"id":"a","startedAt":"{{Today(200)}}","inGame":600}]""");
+        var page = WithSessions("[]");
 
-        Assert.Equal(0, page.Count($"{Bar("fleet")}.byClass('wake').length"));
+        Assert.Equal(1, page.Count($"{Bar("fleet")}.byClass('wake').length"));
     }
 
     /// <summary>

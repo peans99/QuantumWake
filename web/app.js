@@ -5480,68 +5480,13 @@ function renderShipsRef() {
   }
 }
 
-/* ---------- the wake: your own sessions along the foot of a page header ----------
-
-   A ship's wake is where it has been, widest where it worked hardest and
-   fading behind it. This one is drawn from the sessions in your logs: sixty
-   days, oldest on the left, the trails spreading with time spent in game
-   before converging at today's end - filled if you have flown today. It
-   is the one piece of these pages that could not belong to any other tool,
-   because nobody else has your logs. */
-
-const WAKE_DAYS = 60;
+/* ---------- two ships and their wakes along the foot of a page header ----------
+   This is a decorative flight, not telemetry or a session-history chart. SVG
+   motion follows the same curved course for both ships; a stationary pair is
+   shown instead when the browser asks for reduced motion. */
 
 function drawWakes() {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const day = 86400000;
-  const minutes = new Array(WAKE_DAYS).fill(0);
-  let sessions = 0;
-  for (const session of allSessions || []) {
-    const at = new Date(session.startedAt);
-    const start = new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime();
-    const index = WAKE_DAYS - 1 - Math.round((today - start) / day);
-    if (index < 0 || index >= WAKE_DAYS) continue;
-    minutes[index] += (Number(session.inGame) || 0) / 60;
-    sessions++;
-  }
-
-  // Smoothed over three days, so a wake rather than a bar chart.
-  const smooth = minutes.map((_, i) => {
-    const near = minutes.slice(Math.max(0, i - 1), i + 2);
-    return near.reduce((a, b) => a + b, 0) / near.length;
-  });
-  const top = Math.max(...smooth, 1);
-  const total = minutes.reduce((a, b) => a + b, 0);
-  const width = 600;
-  const x = (i) => (i / (WAKE_DAYS - 1)) * width;
-  // A shallow swept arc echoes the logo's hooked trail. A bounded footprint
-  // keeps the curve visible even on a very wide header.
-  const centre = (i) => {
-    const t = i / (WAKE_DAYS - 1);
-    return 20 + 6 * Math.sin(Math.PI * t) - 9 * Math.pow(t, 4);
-  };
-  const spread = (i) => (2 + (smooth[i] / top) * 8) * Math.pow(1 - i / (WAKE_DAYS - 1), .65);
-  // Interpolated filaments avoid the angular silhouette of a filled chart.
-  // All end at the same point; the endpoint stays fixed as history changes.
-  const trail = (side) => {
-    const points = smooth.map((_, i) => [x(i), centre(i) + side * spread(i)]);
-    const pair = (p) => `${p[0].toFixed(2)},${p[1].toFixed(2)}`;
-    let path = `M${pair(points[0])}`;
-    for (let i = 0; i < points.length - 1; i++) {
-      const before = points[Math.max(0, i - 1)];
-      const from = points[i];
-      const to = points[i + 1];
-      const after = points[Math.min(points.length - 1, i + 2)];
-      const c1 = [from[0] + (to[0] - before[0]) / 6, from[1] + (to[1] - before[1]) / 6];
-      const c2 = [to[0] - (after[0] - from[0]) / 6, to[1] - (after[1] - from[1]) / 6];
-      path += ` C${pair(c1)} ${pair(c2)} ${pair(to)}`;
-    }
-    return path;
-  };
-  const upper = trail(-1);
-  const lower = trail(1);
-  const inner = trail(-.28);
+  const course = 'M80,20 C170,8 230,28 320,23 S470,23 580,10';
 
   // Every page's own header: the bar that opens a view, not one nested
   // further down (Now, Help and About open on something else entirely).
@@ -5557,39 +5502,42 @@ function drawWakes() {
   if (closedStrip) hosts.push(closedStrip);
 
   for (const [index, bar] of hosts.entries()) {
+    // A data refresh must not restart a flight already in progress.
+    if (bar.querySelector('.wake-chase')) {
+      fitWake(bar);
+      continue;
+    }
     bar.querySelector('.wake')?.remove();
     bar.querySelector('.wake-mark')?.remove();
-    if (!sessions) continue;
 
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
-    svg.setAttribute('class', 'wake');
-    svg.setAttribute('viewBox', `0 0 ${width} 34`);
+    svg.setAttribute('class', 'wake wake-chase');
+    svg.setAttribute('viewBox', '0 0 600 36');
     svg.setAttribute('preserveAspectRatio', 'none');
     svg.setAttribute('aria-hidden', 'true');
-    const id = `wake-fade-${index}`;
-    svg.innerHTML = `<defs><linearGradient id="${id}" x1="0" x2="1" y1="0" y2="0">`
-      + '<stop offset="0" stop-color="currentColor" stop-opacity="0"/>'
-      + '<stop offset=".2" stop-color="currentColor" stop-opacity=".06"/>'
-      + '<stop offset=".65" stop-color="currentColor" stop-opacity=".35"/>'
-      + '<stop offset="1" stop-color="currentColor" stop-opacity=".85"/></linearGradient></defs>'
-      + `<g fill="none" stroke="url(#${id})" stroke-linecap="round">`
-      + `<path class="wake-halo" d="${inner}"/>`
-      + `<path class="wake-thread" d="${upper}"/>`
-      + `<path class="wake-thread" d="${lower}"/>`
-      + `<path class="wake-core" d="${inner}"/></g>`
-      + [WAKE_DAYS - 5, WAKE_DAYS - 11].map((i, spark) =>
-        `<path class="wake-spark" d="M${x(i).toFixed(2)},${(centre(i) - 3 - spark * 2).toFixed(2)} l-3,1"/>`).join('');
+    svg.setAttribute('focusable', 'false');
+    const ships = [
+      { colour: '#7fe4ff', begin: '-7s', resting: 'translate(375 22) rotate(-3)' },
+      { colour: '#e9c27d', begin: '-5s', resting: 'translate(285 23) rotate(2)' },
+    ];
+    const gradients = ships.map((ship, n) => `<linearGradient id="chase-${index}-${n}" gradientUnits="userSpaceOnUse" x1="-72" x2="-7">`
+      + `<stop offset="0" stop-color="${ship.colour}" stop-opacity="0"/>`
+      + `<stop offset="1" stop-color="${ship.colour}" stop-opacity=".7"/></linearGradient>`).join('');
+    const artwork = (n) => `<g fill="none" stroke="url(#chase-${index}-${n})" stroke-linecap="round">`
+      + '<path d="M-7,-1 C-23,-1 -43,-5 -72,-2" stroke-width=".8"/>'
+      + '<path d="M-7,1 C-25,2 -43,5 -62,3" stroke-width=".6"/>'
+      + '<path d="M-7,0 H-50" stroke-width="1.3"/></g>'
+      + '<path class="chase-hull" d="M10,0 L-7,-6 L-4,-1 L-7,0 L-4,1 L-7,6 Z"/>'
+      + '<path class="chase-cockpit" d="M2,0 H5"/>'
+      + '<circle class="chase-engine" cx="-6" cy="0" r="1.2"/>';
+    svg.innerHTML = `<defs>${gradients}</defs>` + ships.map((ship, n) =>
+      `<g class="wake-chase-motion" style="color:${ship.colour}" opacity="0">`
+      + `<animateMotion dur="14s" begin="${ship.begin}" repeatCount="indefinite" rotate="auto" path="${course}"/>`
+      + `<animate attributeName="opacity" values="0;.85;.85;0" keyTimes="0;.08;.9;1" dur="14s" begin="${ship.begin}" repeatCount="indefinite"/>`
+      + artwork(n) + '</g>'
+      + `<g class="wake-chase-still" style="color:${ship.colour}" transform="${ship.resting}">${artwork(n)}</g>`).join('');
     bar.append(svg);
-
-    const mark = el('span', minutes[WAKE_DAYS - 1] > 0 ? 'wake-mark today' : 'wake-mark');
-    bar.append(mark);
-    // Said in words for whoever points at the mark. On the header itself it
-    // would surface over every control there without hover text of its own,
-    // on forty pages.
-    mark.title = tx('Your wake: {sessions} sessions and {hours} in game over the last {days} days, from your logs.', {
-      sessions, hours: duration(total * 60), days: WAKE_DAYS,
-    });
     fitWake(bar);
     watchWake(bar);
   }
@@ -5601,11 +5549,8 @@ const WAKE_CLEARANCE = 24;
 /**
  * Ends the wake before the header's own controls.
  *
- * The wake is brightest at its right end, today, which is exactly where a
- * header keeps its filters: on Mining it ran gold behind three selects and a
- * search box and read as a stray drawing (Nicolas, 2026-11-02). So it stops
- * short of them, endpoint and all, through --wake-end, which the stylesheet
- * reads for both. A header with no controls showing - Mining's other panes
+ * A header keeps its filters at the right, so the ships' course stops short
+ * of them through --wake-end. A header with no controls showing - Mining's other panes
  * hide theirs - keeps the full width, and so does one whose controls have
  * wrapped under the title on a narrow window, where nothing sits beside it.
  */
@@ -5625,7 +5570,7 @@ function fitWake(bar) {
 /**
  * Re-fits when the header or its controls change size: a resized window, a
  * view shown from display:none (measured at nothing when drawn), a pane that
- * hides its filters. Once per bar, as the wake is redrawn on every refresh.
+ * hides its filters. Once per bar, so refreshes do not accumulate observers.
  */
 function watchWake(bar) {
   if (bar.wakeWatched || typeof ResizeObserver !== 'function') return;
