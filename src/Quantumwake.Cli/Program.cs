@@ -384,6 +384,49 @@ if (args.Contains("--climate", StringComparer.OrdinalIgnoreCase))
     return 0;
 }
 
+// The NPC encounters the install describes: which mission scripts name them,
+// how the game files the rest, and what their ships carry at the hold sizes
+// the install gives. The numbers behind docs/encounters.md.
+if (args.Contains("--encounters", StringComparer.OrdinalIgnoreCase))
+{
+    var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
+    var game = GameCommodities.Load(install.RootPath, Path.Combine(data, "commodities.json"));
+    var found = game.Loot.Encounters;
+    var all = found.Encounters;
+    var ships = all.SelectMany(e => e.Waves.SelectMany(w => w.Ships.Select(s => (Encounter: e, Ship: s)))).ToList();
+    var carrying = ships.Where(x => x.Ship.Cargo.Count > 0).ToList();
+    var unused = found.Unused().ToList();
+
+    Console.WriteLine($"{all.Count} encounters; {all.Count(e => e.ArenaCommander)} Arena Commander; {found.ScriptsRead} mission scripts read");
+    Console.WriteLine($"named by a mission script: {all.Count(e => e.Scripts.Count > 0)} ({all.Count(e => e.Scripts.Count > 0 && e.ArenaCommander)} of them Arena Commander); named by none: {all.Count(e => e.Scripts.Count == 0)}");
+    Console.WriteLine($"{ships.Count} ship entries; {ships.Count(x => x.Ship.Ship is null)} name no ship class; {carrying.Count} in {carrying.Select(x => x.Encounter.Name).Distinct().Count()} encounters carry cargo");
+    Console.WriteLine($"{found.Manifests.Count} cargo manifests; {found.Manifests.Count - unused.Count} carried; {unused.Count} carried by nothing\n");
+
+    Console.WriteLine("by mission script:");
+    foreach (var g in all.Where(e => e.Scripts.Count > 0).GroupBy(e => string.Join("/", e.Scripts[0].Split('/').Take(3))).OrderByDescending(g => g.Count()))
+        Console.WriteLine($"  {g.Count(),3}  {g.Key}");
+    Console.WriteLine("\nnamed by no script, by the game's folder:");
+    foreach (var g in all.Where(e => e.Scripts.Count == 0).GroupBy(e => e.Folder).OrderByDescending(g => g.Count()))
+        Console.WriteLine($"  {g.Count(),3}  {g.Key}");
+
+    Console.WriteLine("\nlargest loads (hold x fullest fill):");
+    var loads = carrying
+        .Select(x => (x.Ship.Ship, Hold: GameEncounters.Hold(x.Ship.Ship, game.CargoHulls), Manifest: found.Manifests.GetValueOrDefault(x.Ship.Cargo[0]), x.Encounter.Name))
+        .Where(x => x.Manifest is not null)
+        .GroupBy(x => (x.Ship, x.Manifest!.Name))
+        .Select(g => (g.Key.Ship, g.First().Hold, g.First().Manifest, Encounters: g.Select(x => x.Name).Distinct().Count()))
+        .ToList();
+    foreach (var l in loads.OrderByDescending(l => (l.Hold?.Scu ?? 0) * l.Manifest!.MaxFill).Take(12))
+        Console.WriteLine($"  {l.Ship ?? "(no class)",-38} hold {(l.Hold?.Scu.ToString() ?? "?"),5} SCU  {l.Manifest!.MinFill:P0}-{l.Manifest.MaxFill:P0}  up to {(l.Hold is { } h ? Math.Floor(h.Scu * l.Manifest.MaxFill).ToString() : "?"),4} SCU {string.Join("/", l.Manifest.Goods.Select(g => g.Commodity))}  in {l.Encounters}");
+    Console.WriteLine($"  carrying ship kinds with no hold in the install: {loads.Where(l => l.Hold is null).Select(l => l.Ship ?? "(no class)").Distinct().Count()} of {loads.Select(l => l.Ship ?? "(no class)").Distinct().Count()}");
+
+    Console.WriteLine("\ncarried by nothing:");
+    foreach (var g in unused.GroupBy(m => m.Name.Split('_')[0]))
+        Console.WriteLine($"  {g.Count(),3}  {g.Key}: {g.Min(m => m.MinFill):P0}-{g.Max(m => m.MaxFill):P0} {string.Join("/", g.SelectMany(m => m.Goods.Select(x => x.Commodity)).Distinct().Take(6))}");
+
+    return 0;
+}
+
 // What every logged contract pays in rep by the installed game, joined on the
 // marker's contractDefinitionId, and checked against the StarStrings tags in
 // the titles - which the files never saw. The numbers behind docs/missions.md;

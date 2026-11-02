@@ -41,6 +41,10 @@ public static partial class ServerHost
         // Ship components by what they do - guns, shields, power, coolers,
         // quantum drives - with the figures each kind is chosen on.
         app.MapGet("/api/reference/components", (LogLibrary lib, UexData uex) => ReferenceComponents(lib, uex));
+
+        // The groups of NPC ships the install spawns, wave by wave, with what
+        // each ship's hold carries and which mission script names the group.
+        app.MapGet("/api/reference/encounters", (LogLibrary lib, UexData uex) => Results.Ok(ReferenceEncounters(lib, uex)));
     }
 
     /// <summary>
@@ -430,6 +434,8 @@ public static partial class ServerHost
             shops = npc ? [] : uex.VehicleShops(name),
             rentals = npc ? [] : feeds.RentalDesks(name),
             parts = loot.PartsOf(cls).Select(Part),
+            // The encounters an NPC version is spawned in, and what its hold carries there.
+            encounters = npc ? EncountersOf(lib, uex, cls) : null,
             // Who flies one, and what theirs carries: the parts a disabled one has aboard.
             npcVersions = npc ? [] : loot.NpcVersionsOf(cls).Select(v => new
             {

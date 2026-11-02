@@ -34,7 +34,7 @@ const PAGE_GLYPHS = Object.freeze({
   jobs: '◆', routes: '↝', contracts: '◈', reputation: '▲', checklists: '☑', blueprints: '▧', wikelo: '✦', events: '✧',
   logbook: '≡', sessions: '◷', servers: '⌘', places: '⌖', points: '✣', crew: '◌', casualties: '╳',
   spending: '¤', ledger: '▥', commodities: '▰', market: '◫',
-  ships: '◁', components: '⊛', parts: '⊞', mining: '⬡', crafting: '⌬',
+  ships: '◁', components: '⊛', parts: '⊞', mining: '⬡', crafting: '⌬', encounters: '⊗',
   fleet: '◍', hangar: '⌂', loadout: '⊠', stash: '▣', loot: '✪', garage: '⌁', armoury: '✛',
   settings: '✥', overlay: '◱', controls: '⊹', labels: '▦', imports: '↥', data: '⊟', about: 'ⓘ',
   // Reached from another page rather than the menu, but titled like the rest.
@@ -494,6 +494,7 @@ function showView(name) {
   if (name === 'servers') loadServers().catch(() => {});
   if (name === 'garage') loadGarage().catch(() => {});
   if (name === 'armoury') loadArmoury().catch(() => {});
+  if (name === 'encounters') loadEncounters().catch(() => {});
   if (name === 'points') loadPoints().catch(() => {});
   if (name === 'wikelo') loadWikelo().catch(() => {});
   if (name === 'reputation') loadReputation().catch(() => {});
@@ -6265,6 +6266,33 @@ function renderShipDetail(body, data) {
   if (parts.length) fitted.append(refPartsTable(parts));
   body.append(fitted);
 
+  // An NPC version's hold, and the groups that spawn it: the same answer the
+  // Encounters page gives, so the card and the page cannot disagree.
+  const met = data.encounters;
+  if (met?.names?.length) {
+    const seen = refSection(tx('Turns up in'), txn(met.names.length,
+      'One group of NPC ships in the game files spawns it. Open it for its waves.',
+      '{count} groups of NPC ships in the game files spawn it. Open one for its waves.'));
+    seen.append(refLinkList(met.names, (n, li) => {
+      const link = el('button', 'place-link ref-link', n.name.replaceAll('_', ' '));
+      link.type = 'button';
+      link.title = tx('Open this encounter');
+      link.addEventListener('click', () => openEncounter(n.name, n.arena));
+      li.append(link);
+      // Most are named by no script, so the few that are carry the mark.
+      if (n.linked) li.append(el('span', 'muted', ` · ${tx('named by a mission script')}`));
+    }));
+    const manifests = Object.fromEntries((met.cargo || []).map((m) => [m.name, m]));
+    const cargo = encounterCargoLines({ hold: met.hold }, Object.keys(manifests), manifests, met.uex);
+    if (cargo.length) {
+      seen.append(el('h4', 'loot-where-sub', tx('Its hold, by the lists it is spawned with')));
+      const list = el('ul', 'encounter-ships muted');
+      for (const line of cargo) list.append(el('li', null, line));
+      seen.append(list);
+    }
+    body.append(seen);
+  }
+
   const versions = data.npcVersions || [];
   if (versions.length) {
     const npcs = refSection(tx('Flown by NPCs'),
@@ -6281,6 +6309,368 @@ function renderShipDetail(body, data) {
     body.append(npcs);
   }
 }
+
+/* ---------- Reference: encounters ---------- */
+
+let encounterModel = null;
+/** The encounter whose waves are open, by name; one at a time, as Climate opens one body. */
+let encounterOpen = null;
+
+/**
+ * The mission scripts that name encounters, by where they sit under
+ * Libs/Subsumption. Measured on 4.10.2 these four are every script that names
+ * one; a script a patch adds still shows, by its own folder.
+ */
+const ENCOUNTER_SCRIPTS = [
+  ['Missions/EnvironmentalMissionScenarios/LawEMs/', 'Stanton law missions: wanted policing, security patrols, bounty hunters'],
+  ['Missions/EnvironmentalMissionScenarios/SB_CombatAssist_NPCRequest/', 'Service beacon: combat assist'],
+  ['Missions/EnvironmentalMissionScenarios/FreighterDerelict/', 'Derelict freighter'],
+  ['Missions/AC/', 'Arena Commander: Swarm'],
+];
+
+/**
+ * Where the game files an encounter, the more particular folder first. This is
+ * the game's own filing, which says what kind of work an encounter belongs to
+ * but not that any one contract spawns it.
+ */
+const ENCOUNTER_FOLDERS = [
+  ['pu/mission/ai_bounty', 'Bounty missions'],
+  ['pu/mission/ai_assassination', 'Assassination missions'],
+  ['pu/mission/ai_recovery', 'Recovery missions'],
+  ['pu/mission/ai_steal', 'Steal missions'],
+  ['pu/mission/ai_destroy_satellite', 'Satellite missions'],
+  ['pu/mission/ai_escort', 'Escort missions'],
+  ['pu/mission/ai_hijackedships', 'Hijacked ships'],
+  ['pu/mission/ai_hijacking', 'Hijacking'],
+  ['pu/mission/ai_sb_combatassist', 'Service beacon: combat assist'],
+  ['pu/mission/ai_sb_refuel', 'Service beacon: refuel'],
+  ['pu/mission/ai_emscenarios', 'Space encounters'],
+  ['pu/mission/ai_derelict', 'Derelicts'],
+  ['pu/mission/ai_idrisfight', 'Idris fight'],
+  ['pu/mission/ai_miningactivity', 'Mining activity'],
+  ['pu/mission/pu_mining', 'Mining activity'],
+  ['pu/mission/ai_patrol', 'Patrols'],
+  ['pu/mission/ai_scramble', 'Scramble'],
+  ['pu/mission/ai_spaceporttraffic', 'Spaceport traffic'],
+  ['pu/mission/dynamic_events/pirate_raids', 'Pirate raids'],
+  ['pu/mission/we_ntlockdown', 'Nine Tails Lockdown'],
+  ['pu/mission/we_convoyassemble', 'Convoy'],
+  ['pu/mission/fleetweektest', 'Fleet Week'],
+  ['pu/fleetweek', 'Fleet Week'],
+  ['pu/reinforcement', 'Reinforcements'],
+  ['pu/faction/single', 'Lone ships'],
+  ['ea', 'Arena Commander'],
+];
+
+/** "Bounty missions", or the folder itself for one this table has not met. */
+function encounterFolderLabel(folder) {
+  const f = String(folder || '').toLowerCase();
+  const hit = ENCOUNTER_FOLDERS.find(([prefix]) => f === prefix || f.startsWith(`${prefix}/`));
+  return hit ? tx(hit[1]) : f || tx('Other');
+}
+
+/** The mission a script naming an encounter belongs to, or its folder. */
+function encounterScriptLabel(path) {
+  const hit = ENCOUNTER_SCRIPTS.find(([prefix]) => String(path).startsWith(prefix));
+  return hit ? tx(hit[1]) : String(path).split('/').slice(0, -1).join('/');
+}
+
+const ENCOUNTER_BODIES = { 1: 'Hurston', 2: 'Crusader', 3: 'ArcCorp', 4: 'microTech' };
+
+/** The strength words 4.10.2's encounter names use, as words. */
+const ENCOUNTER_LEVELS = {
+  Easy: 'easy', Medium: 'medium', Hard: 'hard',
+  Weak: 'weak', Strong: 'strong', VeryStrong: 'very strong', Neutral: 'neutral',
+};
+
+/**
+ * What an encounter's name says - "hard", "Crusader", "the target" - for the
+ * ones no script names. Read from the name only, and the page says so.
+ */
+function encounterNameSays(name) {
+  const words = [];
+  const tokens = String(name).split('_');
+  const level = tokens.find((t) => ENCOUNTER_LEVELS[t]);
+  if (level) words.push(tx(ENCOUNTER_LEVELS[level]));
+  const body = tokens.map((t) => /^Stanton(\d)$/.exec(t)).find(Boolean);
+  if (body && ENCOUNTER_BODIES[body[1]]) words.push(ENCOUNTER_BODIES[body[1]]);
+  else if (tokens.includes('Stanton')) words.push('Stanton');
+  if (tokens.includes('Target')) words.push(tx('the target'));
+  return words;
+}
+
+/** How many of one ship a member spawns: its count, else its range written as one. */
+function encounterCount(s) {
+  if (s.amount > 0) return { most: s.amount, text: String(s.amount) };
+  if (s.minAmount != null || s.maxAmount != null) {
+    const lo = s.minAmount ?? 0;
+    const hi = s.maxAmount ?? lo;
+    return { most: hi, text: lo === hi ? String(hi) : `${lo}–${hi}` };
+  }
+  return { most: 0, text: '0' };
+}
+
+/**
+ * What one ship's hold is spawned with, at its fullest: SCU and aUEC. Null
+ * when it carries no list, or the list names nothing, or the hull has no hold
+ * to put it in. The SCU is the fill times the hold, rounded down, since a hold
+ * is loaded in whole SCU.
+ */
+function encounterLoad(ship, names, manifests) {
+  const hold = ship?.hold;
+  if (!hold || !names?.length) return null;
+  let best = null;
+  for (const name of names) {
+    const m = manifests?.[name];
+    if (!m?.goods?.length) continue;
+    const scu = Math.floor(hold * m.maxFill);
+    const prices = m.goods.map((g) => g.price).filter((p) => p > 0);
+    const worth = prices.length ? scu * Math.max(...prices) : null;
+    if (!best || scu > best.scu) best = { scu, worth };
+  }
+  return best;
+}
+
+/** "Distilled Spirits", or "Processed Food 50% · Waste 25% · …" when the list names several. */
+function encounterGoods(m) {
+  const goods = m?.goods || [];
+  if (goods.length < 2) return goods.map((g) => g.commodity).join('');
+  const total = goods.reduce((n, g) => n + (g.probability || 0), 0) || 1;
+  return goods.map((g) => `${g.commodity} ${Math.round(100 * (g.probability || 0) / total)}%`).join(' · ');
+}
+
+/** "25%", or "1–25%" when the hold is spawned somewhere in a range. */
+function encounterFill(m) {
+  const lo = Math.round(100 * (m.minFill || 0));
+  const hi = Math.round(100 * (m.maxFill || 0));
+  return lo === hi ? `${hi}%` : `${lo}–${hi}%`;
+}
+
+/**
+ * One ship's cargo as lines, one per distinct load, or the one line saying why
+ * there is none to speak of. Two lists can load the same - Criminal_25_High
+ * and Criminal_25_Medium are both a quarter of the hold in spirits - and a
+ * card repeating it is noise, so a line is written once.
+ */
+function encounterCargoLines(ship, names, manifests, uex) {
+  if (!names?.length) return [];
+  const lists = names.map((n) => manifests?.[n]).filter(Boolean);
+  if (!lists.length) return [];
+  if (lists.every((m) => !m.goods?.length)) return [tx('Its cargo list names no commodity.')];
+  if (!ship?.hold) return [tx('Its cargo list has nothing to fill: the files give this hull no cargo grid.')];
+
+  const lines = lists.filter((m) => m.goods?.length).map((m) => {
+    const scu = Math.floor(ship.hold * m.maxFill);
+    const values = { goods: encounterGoods(m), fill: encounterFill(m), hold: fmtInt(ship.hold), scu: fmtInt(scu) };
+    // A 1% list in a 46 SCU hold is under one box: no load to price.
+    if (scu < 1) return tx('{goods}, {fill} of a {hold} SCU hold: under 1 SCU', values);
+    const line = tx('{goods}, {fill} of a {hold} SCU hold: up to {scu} SCU', values);
+    if (!uex) return line;
+    const prices = m.goods.map((g) => g.price).filter((p) => p > 0);
+    return prices.length
+      ? `${line}, ${tx('worth up to {worth} at the best UEX sell', { worth: money(scu * Math.max(...prices)) })}`
+      : `${line}, ${tx('no UEX sell price')}`;
+  });
+  return [...new Set(lines)];
+}
+
+async function loadEncounters() {
+  try {
+    encounterModel = await getJson('/api/reference/encounters');
+  } catch {
+    encounterModel = null;
+  }
+  renderEncounters();
+}
+
+/** Who flies one: the class's crew ("Nine Tails · Elite"), else the faction the record names. */
+function encounterCrew(s) {
+  return s.ship?.crew ? s.ship.crew.split(' · ').map((w) => tx(w)).join(' · ') : s.flown;
+}
+
+/** Every ship in an encounter, across its waves. */
+function encounterShips(e) {
+  return (e.waves || []).flatMap((w) => w.ships || []);
+}
+
+function encounterMatches(e, kind, term) {
+  if (kind === 'arena') { if (!e.arena) return false; }
+  else if (e.arena && kind !== 'all') return false;
+  if (kind === 'script' && !e.scripts?.length) return false;
+  if (kind === 'cargo' && !encounterShips(e).some((s) => s.cargo?.length)) return false;
+  if (!term) return true;
+  // The page writes names with spaces, so what a reader copies off a row -
+  // "Bounty Wave Hard" - has to find the record written with underscores.
+  const hay = [e.name, encounterFolderLabel(e.folder), ...(e.scripts || []).map(encounterScriptLabel),
+    ...encounterShips(e).flatMap((s) => [s.ship?.name, s.ship?.crew, s.flown])].filter(Boolean).join(' ')
+    .replaceAll('_', ' ').toLowerCase();
+  return hay.includes(term.replaceAll('_', ' '));
+}
+
+function renderEncounters() {
+  const body = $('#encounters-table tbody');
+  if (!body) return;
+  body.textContent = '';
+
+  const model = encounterModel;
+  const note = $('#encounters-note');
+  const counter = $('#encounters-count');
+  if (!model?.ready) {
+    if (note) note.textContent = tx('Your game files have not given any encounters yet.');
+    if (counter) counter.textContent = tx('Waiting for catalogue');
+    return;
+  }
+
+  const all = model.encounters || [];
+  const universe = all.filter((e) => !e.arena);
+  if (note) {
+    note.textContent = tx('{total} groups of NPC ships in your game files, {arena} of them Arena Commander’s. {linked} of the {universe} in the universe are named by a mission script the game ships, so which mission spawns them is in the files. The other {rest} are named by no script: the server picks them, and only the folder the game files each under and its name say what it is for. The logs never mention an NPC’s cargo, so none of this is checked against your play.', {
+      total: all.length, arena: all.length - universe.length, universe: universe.length,
+      linked: universe.filter((e) => e.scripts?.length).length,
+      rest: universe.filter((e) => !e.scripts?.length).length,
+    });
+  }
+
+  const kind = $('#encounters-kind')?.value || '';
+  const term = ($('#encounters-search')?.value || '').trim().toLowerCase();
+  const rows = all.filter((e) => encounterMatches(e, kind, term));
+  if (counter) {
+    counter.textContent = rows.length
+      ? txn(rows.length, '{count} encounter', '{count} encounters', { count: rows.length.toLocaleString() })
+      : tx('No matches');
+  }
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', tx('No encounters match that filter.'));
+    td.colSpan = 7;
+    tr.append(td);
+    body.append(tr);
+  }
+
+  for (const e of rows) {
+    const ships = encounterShips(e);
+    const tr = el('tr', 'encounter-row');
+    tr.dataset.encounter = e.name;
+    if (encounterOpen === e.name) tr.classList.add('open');
+
+    const name = el('td');
+    name.append(document.createTextNode(e.name.replaceAll('_', ' ')));
+    name.append(el('div', 'armoury-kind', encounterFolderLabel(e.folder)));
+    tr.append(name);
+
+    const mission = el('td');
+    if (e.scripts?.length) {
+      mission.append(document.createTextNode([...new Set(e.scripts.map(encounterScriptLabel))].join(' · ')));
+    } else {
+      const says = encounterNameSays(e.name);
+      mission.append(el('span', 'muted', says.length
+        ? tx('No script names it; its name says {words}', { words: says.join(' · ') })
+        : tx('No script names it')));
+    }
+    tr.append(mission);
+
+    tr.append(el('td', 'num', String((e.waves || []).length)));
+    tr.append(el('td', 'num', String(ships.reduce((n, s) => n + encounterCount(s).most, 0))));
+    tr.append(el('td', null, [...new Set(ships.map((s) => encounterCrew(s)).filter(Boolean))].join(', ')));
+
+    let scu = 0;
+    let worth = 0;
+    let priced = false;
+    for (const s of ships) {
+      const load = encounterLoad(s.ship, s.cargo, model.manifests);
+      if (!load) continue;
+      const n = encounterCount(s).most;
+      scu += load.scu * n;
+      if (load.worth != null) { worth += load.worth * n; priced = true; }
+    }
+    tr.append(el('td', 'num', scu > 0 ? `${fmtInt(scu)} SCU` : '—'));
+    tr.append(el('td', 'num', scu > 0 && priced ? money(worth) : '—'));
+
+    tr.addEventListener('click', () => {
+      encounterOpen = encounterOpen === e.name ? null : e.name;
+      renderEncounters();
+    });
+    body.append(tr);
+
+    if (encounterOpen === e.name) body.append(armouryExpansion(renderEncounterDetail(e, model), 7));
+  }
+
+  renderEncounterUnused(model);
+}
+
+/** One encounter's waves, ship by ship, with what each hold is spawned with. */
+function renderEncounterDetail(e, model) {
+  const inner = el('div', 'armoury-detail');
+  inner.append(el('div', 'panel-title', e.name.replaceAll('_', ' ')));
+  inner.append(el('div', 'panel-sub', e.scripts?.length
+    ? txn(e.scripts.length, 'Filed under {folder} · named by {count} mission script', 'Filed under {folder} · named by {count} mission scripts', { folder: e.folder, count: e.scripts.length })
+    : tx('Filed under {folder} · named by no mission script the game ships', { folder: e.folder })));
+
+  for (const w of e.waves || []) {
+    inner.append(el('h4', 'loot-where-sub', tx('Wave {id}', { id: w.id })));
+    const list = el('ul', 'encounter-ships');
+    for (const s of w.ships || []) {
+      const li = el('li');
+      li.append(document.createTextNode(`${encounterCount(s).text} × `));
+      if (s.ship) li.append(rowRefLink('ship', s.ship.className, s.ship.name));
+      else li.append(el('span', null, tx('a ship the files do not name')));
+      const who = encounterCrew(s);
+      const facts = [who, s.skill ? tx('pilot {skill}', { skill: s.skill.replace(/^HumanPilot/, '') }) : null].filter(Boolean);
+      if (facts.length) li.append(el('span', 'muted', ` · ${facts.join(' · ')}`));
+      for (const line of encounterCargoLines(s.ship, s.cargo, model.manifests, model.uex)) {
+        li.append(el('div', 'muted small', line));
+      }
+      list.append(li);
+    }
+    inner.append(list);
+  }
+
+  if (e.scripts?.length) {
+    const scripts = el('ul', 'encounter-scripts muted small');
+    for (const path of e.scripts) scripts.append(el('li', null, path));
+    inner.append(scripts);
+  }
+  if (encounterShips(e).some((s) => s.ship?.holdFrom === 'community')) {
+    inner.append(el('p', 'muted small', tx('A hold the install gives no cargo grid for is the community dataset’s capacity.')));
+  }
+  return inner;
+}
+
+/** The cargo lists no encounter carries: in the files, used by nothing the client has. */
+function renderEncounterUnused(model) {
+  const box = $('#encounters-unused');
+  if (!box) return;
+  const unused = model?.unused || [];
+  box.hidden = !unused.length;
+  if (!unused.length) return;
+  $('#encounters-unused-summary').textContent = txn(unused.length,
+    '{count} cargo list no encounter carries',
+    '{count} cargo lists no encounter carries', { count: unused.length });
+  const list = $('#encounters-unused-list');
+  list.textContent = '';
+  for (const m of unused) {
+    const li = el('li');
+    li.append(el('code', null, m.name));
+    const goods = encounterGoods(m);
+    li.append(el('span', 'muted', ` · ${encounterFill(m)}${goods ? ` · ${goods}` : ''}`));
+    list.append(li);
+  }
+}
+
+/** Opens the Encounters page on one encounter, from a ship's card. */
+function openEncounter(name, arena = false) {
+  closeRefDetail();
+  encounterOpen = name;
+  const search = $('#encounters-search');
+  if (search) search.value = '';
+  const kind = $('#encounters-kind');
+  if (kind) kind.value = arena ? 'arena' : '';
+  showView('encounters');
+}
+
+onInput('#encounters-search', renderEncounters);
+$('#encounters-kind')?.addEventListener('change', renderEncounters);
 
 async function loadPartsRef() {
   try {
@@ -32153,7 +32543,7 @@ const VIEW_SOURCES = {
   logs: new Set(['now', 'map', 'logbook', 'sessions', 'servers', 'places', 'points', 'crew', 'casualties',
     'contracts', 'events', 'spending', 'ledger', 'commodities', 'market', 'routes', 'fleet', 'hangar',
     'loadout', 'stash', 'loot', 'garage', 'armoury', 'wikelo', 'blueprints']),
-  gamedata: new Set(['map', 'ships', 'components', 'parts', 'mining', 'crafting', 'blueprints', 'hangar', 'armoury']),
+  gamedata: new Set(['map', 'ships', 'components', 'parts', 'mining', 'crafting', 'encounters', 'blueprints', 'hangar', 'armoury']),
   uex: new Set(['market', 'commodity', 'components', 'routes', 'garage', 'armoury', 'jobs', 'events', 'casualties']),
   community: new Set(['market', 'commodity', 'commodities', 'components', 'parts', 'mining']),
 };

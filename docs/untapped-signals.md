@@ -348,6 +348,23 @@ prices come from the server.
 **Do not re-open this for prices.** The live answers are UEX (opt-in) and
 what the logs record as paid.
 
+## 10. NPC cargo manifests - mostly carried by nothing
+
+Probed 2026-11-02 for "what is that NPC ship carrying". Built as the
+Reference Encounters page in 0.20.42 for the part the files can answer; see
+[encounters.md](encounters.md).
+
+What is not there: **65 of the 82** `CargoManifest` records - the blockade
+runners' 14 to 95% Zeta-Prolanide loads, the legal, illegal and mixed value
+tiers, the ship heists - are carried by nothing the client has. Each id occurs
+once in the DataCore (its own record), `CargoControllerParams.cargoManifestOverride`
+is empty on all 1,144 entities, and the scripts name them only in `TagDatabase`.
+Which encounter a bounty, steal or recovery contract spawns is likewise not
+client-side: 136 of 184 wave collections are named by no script.
+
+**Do not re-open this for the rich loads** without a new kind of file to read;
+the server hands them out.
+
 ## A caution
 
 All of these are subject to the same erosion as combat logging. Quantum travel

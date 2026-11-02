@@ -73,6 +73,7 @@
         <button data-view="components">Components</button>
         <button data-view="parts">Items</button>
         <button data-view="loot">Loot</button>
+        <button data-view="encounters">Encounters</button>
         <button data-view="mining">Mining</button>
         <button data-view="crafting">Crafting</button>
       </div>
@@ -2428,6 +2429,64 @@
       </table>
     </div>
     </div>
+  </section>
+
+  <!-- REFERENCE: NPC encounters, the ships in each wave and what their holds carry -->
+  <section id="view-encounters" class="view">
+    <div class="section-bar reference-toolbar-bar">
+      <div class="reference-title">
+        <span class="page-kicker">Reference</span>
+        <h2>Encounters</h2>
+      </div>
+      <div class="controls reference-toolbar">
+        <select id="encounters-kind" class="select" title="Which encounters">
+          <option value="">In the universe</option>
+          <option value="script">Named by a mission script</option>
+          <option value="cargo">Ships carry cargo</option>
+          <option value="arena">Arena Commander</option>
+          <option value="all">All</option>
+        </select>
+        <input type="search" id="encounters-search" class="search" placeholder="Search encounters or ships…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p>Every group of NPC ships your game install spawns in waves, the ships in
+        each wave and what each one's hold is spawned with, read from the game files.
+        A hold is filled to a share of the ship's cargo grid, so the SCU here is that
+        share of the hold the install gives the hull, at its fullest, and the worth is
+        UEX's best sell price when UEX prices are on. Open an encounter for its waves,
+        and a ship for its parts.</p>
+    </details>
+    <p class="muted caption" id="encounters-note"></p>
+    <div class="reference-results">
+      <div class="reference-results-head">
+        <span>Matching encounters</span>
+        <span class="muted" id="encounters-count" aria-live="polite"></span>
+      </div>
+      <div class="table-wrap reference-table-wrap">
+        <table id="encounters-table">
+          <thead>
+            <tr>
+              <th>Encounter</th><th>Mission</th>
+              <th class="num">Waves</th><th class="num">Ships</th><th>Flown by</th>
+              <th class="num" title="Every wave, every ship at its fullest">Cargo, up to</th>
+              <th class="num" title="At the best UEX sell price">Worth, up to</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <details class="page-note" id="encounters-unused" hidden>
+      <summary id="encounters-unused-summary"></summary>
+      <p class="muted caption">These are in the game files, but no encounter the client
+        has carries them, and the one other field that could name one is empty on every
+        ship. The blockade runners' and the value tiers' loads are probably given out by
+        the server, so nothing here can say which ship is carrying one.</p>
+      <ul class="encounter-unused" id="encounters-unused-list"></ul>
+    </details>
   </section>
 
   <!-- REFERENCE: mining and salvage spawns -->

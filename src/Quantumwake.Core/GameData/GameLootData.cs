@@ -147,6 +147,13 @@ public sealed class GameLootData
     public IReadOnlyList<LootPlace> PlacesOf(string preset) =>
         Places.TryGetValue(preset, out var places) ? places : [];
 
+    /// <summary>
+    /// The NPC encounters the install describes and what their ships carry.
+    /// Kept beside the NPC ships' parts because it is the same question - what
+    /// is aboard one - asked of the hold instead of the hardpoints.
+    /// </summary>
+    public GameEncounterData Encounters { get; init; } = GameEncounterData.Empty;
+
     public static GameLootData Empty { get; } = new();
 
     private Dictionary<string, List<(int Roll, float PerRoll, int Via)>>? _byItem;
@@ -243,9 +250,10 @@ public sealed class GameLootData
     /// <param name="p4k">The archive, to read where presets are placed; null leaves places empty.</param>
     /// <param name="text">The English table, for the star map's names.</param>
     /// <param name="typeOf">An item class's type, to keep the parts worth taking off an NPC ship; null skips ships.</param>
+    /// <param name="commodities">ResourceType id to English name, to name what an encounter ship carries; null skips encounters.</param>
     public static GameLootData Read(
         DataCore core, P4kArchive? p4k = null, IReadOnlyDictionary<string, string>? text = null,
-        Func<string, string?>? typeOf = null)
+        Func<string, string?>? typeOf = null, IReadOnlyDictionary<string, string>? commodities = null)
     {
         var loot = new GameLoot(core);
         var sources = loot.Sources().ToList();
@@ -301,6 +309,8 @@ public sealed class GameLootData
             Ships = npcShips,
             Stock = stock,
             Npcs = typeOf is null || p4k is null ? new(StringComparer.OrdinalIgnoreCase) : GameNpcOutfits.Read(p4k, core, typeOf),
+            Encounters = commodities is null ? GameEncounterData.Empty
+                : GameEncounters.Read(core, text ?? new Dictionary<string, string>(), commodities, p4k),
         };
     }
 }
