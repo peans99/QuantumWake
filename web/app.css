@@ -7646,18 +7646,21 @@ body:not(.overlay) .view[data-voice='own'] > .section-bar .page-kicker { color: 
 body:not(.overlay) .view > .section-bar { position: relative; isolation: isolate; }
 /* --wake-end, when set, is where the header's controls begin (fitWake): the
    wake and its mark stop short of them rather than running gold behind them. */
-.wake { position: absolute; left: 0; bottom: -1px; height: 26px; width: max(0px, calc(var(--wake-end, 100%) - 14px)); color: var(--own); pointer-events: none; z-index: -1; }
+.wake { position: absolute; right: calc(100% - var(--wake-end, 100%) + 14px); bottom: -1px; height: 34px; width: min(480px, max(0px, calc(var(--wake-end, 100%) - 14px))); color: var(--own); pointer-events: none; z-index: -1; }
 .wake path { vector-effect: non-scaling-stroke; }
 .wake-thread { stroke-width: .75; opacity: .65; }
 .wake-core { stroke-width: 1; }
 .wake-halo { stroke-width: 5; opacity: .09; }
+.wake-spark { fill: none; stroke: currentColor; stroke-width: 1; stroke-linecap: round; opacity: .3; }
 .wake-mark {
-  position: absolute; left: calc(var(--wake-end, 100%) - 17px); bottom: 9px; width: 6px; height: 6px; z-index: 0;
-  border: 1px solid var(--own); border-radius: 50%; background: var(--deep); cursor: help;
+  position: absolute; left: calc(var(--wake-end, 100%) - 19px); bottom: 17px; width: 10px; height: 10px; z-index: 0;
+  color: var(--own); cursor: help;
 }
+.wake-mark::before { content: ""; position: absolute; inset: 0; background: currentColor; opacity: .55; clip-path: polygon(50% 0, 62% 37%, 100% 50%, 62% 63%, 50% 100%, 38% 63%, 0 50%, 38% 37%); }
 /* The visible point stays small; its hover target includes the halo. */
 .wake-mark::after { content: ""; position: absolute; inset: -6px; }
-.wake-mark.today { background: #fff3d9; box-shadow: 0 0 5px rgba(233, 194, 125, .7), 0 0 15px rgba(233, 194, 125, .25); }
+.wake-mark.today { color: #fff3d9; filter: drop-shadow(0 0 3px rgba(233, 194, 125, .7)); }
+.wake-mark.today::before { opacity: 1; }
 body.overlay :is(.wake, .wake-mark) { display: none; }
 
 /* Source colours on a column heading, as a thin rule under the values it

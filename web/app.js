@@ -5514,13 +5514,18 @@ function drawWakes() {
   const top = Math.max(...smooth, 1);
   const total = minutes.reduce((a, b) => a + b, 0);
   const width = 600;
-  const mid = 13;
   const x = (i) => (i / (WAKE_DAYS - 1)) * width;
+  // A shallow swept arc echoes the logo's hooked trail. A bounded footprint
+  // keeps the curve visible even on a very wide header.
+  const centre = (i) => {
+    const t = i / (WAKE_DAYS - 1);
+    return 20 + 6 * Math.sin(Math.PI * t) - 9 * Math.pow(t, 4);
+  };
   const spread = (i) => (2 + (smooth[i] / top) * 8) * Math.pow(1 - i / (WAKE_DAYS - 1), .65);
   // Interpolated filaments avoid the angular silhouette of a filled chart.
   // All end at the same point; the endpoint stays fixed as history changes.
   const trail = (side) => {
-    const points = smooth.map((_, i) => [x(i), mid + side * spread(i)]);
+    const points = smooth.map((_, i) => [x(i), centre(i) + side * spread(i)]);
     const pair = (p) => `${p[0].toFixed(2)},${p[1].toFixed(2)}`;
     let path = `M${pair(points[0])}`;
     for (let i = 0; i < points.length - 1; i++) {
@@ -5559,7 +5564,7 @@ function drawWakes() {
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
     svg.setAttribute('class', 'wake');
-    svg.setAttribute('viewBox', `0 0 ${width} 26`);
+    svg.setAttribute('viewBox', `0 0 ${width} 34`);
     svg.setAttribute('preserveAspectRatio', 'none');
     svg.setAttribute('aria-hidden', 'true');
     const id = `wake-fade-${index}`;
@@ -5572,7 +5577,9 @@ function drawWakes() {
       + `<path class="wake-halo" d="${inner}"/>`
       + `<path class="wake-thread" d="${upper}"/>`
       + `<path class="wake-thread" d="${lower}"/>`
-      + `<path class="wake-core" d="${inner}"/></g>`;
+      + `<path class="wake-core" d="${inner}"/></g>`
+      + [WAKE_DAYS - 5, WAKE_DAYS - 11].map((i, spark) =>
+        `<path class="wake-spark" d="M${x(i).toFixed(2)},${(centre(i) - 3 - spark * 2).toFixed(2)} l-3,1"/>`).join('');
     bar.append(svg);
 
     const mark = el('span', minutes[WAKE_DAYS - 1] > 0 ? 'wake-mark today' : 'wake-mark');
