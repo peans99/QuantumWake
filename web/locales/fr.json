@@ -5444,6 +5444,7 @@
   "Every ship component a pilot can fit, a tab for each kind, with the figures that kind is chosen on. The figures are the community dataset's reduction of the game's own records, the same ones the Garage computes with; prices are UEX's; where it drops and which ships come with it are read from your game install. Click a heading to sort by it, and a name for where it drops, who sells it and what it comes fitted to.": "Tous les composants de vaisseau qu’un pilote peut monter, un onglet par type, avec les chiffres sur lesquels on choisit ce type. Les chiffres sont la réduction par le jeu de données communautaire des propres fiches du jeu, les mêmes que celles du Garage ; les prix viennent d’UEX ; où il se trouve et quels vaisseaux en sont équipés sont lus dans votre installation du jeu. Cliquez un en-tête pour trier, et un nom pour savoir où il se trouve, qui le vend et sur quoi il est monté.",
   "Turn on the community dataset in Settings for the performance figures: without it this lists the parts your install names, with size, grade and maker only.": "Activez le jeu de données communautaire dans Réglages pour les performances : sans lui, cette page liste les pièces que nomme votre installation, avec seulement taille, classe et fabricant.",
   "Matching parts": "Pièces correspondantes",
+  "Matching blueprints": "Plans correspondants",
   "Component kinds": "Types de composants",
   "Any size": "Toutes tailles",
   "Size {size}": "Taille {size}",

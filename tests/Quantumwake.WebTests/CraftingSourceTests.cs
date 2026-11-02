@@ -50,6 +50,16 @@ public class CraftingSourceTests
         Assert.Contains("1 reward pool", body);
     }
 
+    [Fact]
+    public void The_result_count_follows_the_search()
+    {
+        var page = Loaded(Recipes("install"));
+        Assert.Equal("1 blueprint", page.NodeText("#crafting-count"));
+        page.Do("document.querySelector('#crafting-search').value = 'no such blueprint'; renderCraftingRef();");
+        Assert.Equal(string.Empty, page.NodeText("#crafting-count"));
+        Assert.Contains("Nothing matches", page.NodeText("#crafting-table tbody"));
+    }
+
     /// <summary>
     /// Some recipes take ten seconds. Rounding those to minutes printed "0m",
     /// which reads as a number the page failed to find rather than as something

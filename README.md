@@ -328,7 +328,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.20.52
+### 0.20.53
+
+**Consistent Reference catalogues.** Ships, Components, Items, Missions, Encounters and Crafting now share the same table spacing, alternating rows, hover colours and pinned name column. Crafting also uses the shared Reference toolbar and results heading, with its filtered blueprint count visible above the grid.
 
 **More room to fly.** The header's ships now use its available width while keeping their size. Each header picks a pursuit, overtaking or evasive flight with a varied starting position; some chases include a brief laser shot. A separate lower lane keeps the flight below the title and caption, and the reduced-motion version stays still.
 

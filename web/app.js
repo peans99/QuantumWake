@@ -10175,7 +10175,7 @@ function renderCraftingRef() {
   const counter = $('#crafting-count');
   counter.textContent = rows.length > CRAFTING_CAP
     ? tx('Showing {shown} of {total} matches — refine the search or filters.', { shown: CRAFTING_CAP.toLocaleString(), total: rows.length.toLocaleString() })
-    : '';
+    : rows.length ? txn(rows.length, '{count} blueprint', '{count} blueprints') : '';
 
   if (!rows.length) {
     const tr = el('tr');

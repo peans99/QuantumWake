@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css?v=0.20.52">
+  <link rel="stylesheet" href="app.css?v=0.20.53">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -3004,12 +3004,12 @@
 
   <!-- REFERENCE: crafting blueprints -->
   <section id="view-crafting" class="view">
-    <div class="section-bar">
-      <div class="page-title">
+    <div class="section-bar reference-toolbar-bar">
+      <div class="reference-title">
         <span class="page-kicker">Reference</span>
         <h2>Crafting</h2>
       </div>
-      <div class="controls">
+      <div class="controls reference-toolbar">
         <select id="crafting-type" class="select" title="Filter by output type"></select>
         <select id="crafting-obtained" class="select" title="Filter by how the blueprint is obtained">
           <option value="">Any availability</option>
@@ -3030,7 +3030,12 @@
         weighed against a shopping trip.
       </p>
     </details>
-    <div class="table-wrap">
+    <div class="reference-results">
+      <div class="reference-results-head">
+        <span>Matching blueprints</span>
+        <span class="muted" id="crafting-count" aria-live="polite"></span>
+      </div>
+    <div class="table-wrap reference-table-wrap">
       <table id="crafting-table">
         <thead>
           <tr>
@@ -3043,7 +3048,7 @@
         <tbody></tbody>
       </table>
     </div>
-    <p class="muted caption" id="crafting-count"></p>
+    </div>
   </section>
 
   <section id="view-loot" class="view">
@@ -4957,6 +4962,6 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.20.52"></script>
+<script src="app.js?v=0.20.53"></script>
 </body>
 </html>

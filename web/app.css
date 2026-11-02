@@ -2176,15 +2176,18 @@ body.overlay .activity-panel { width: min(300px, calc(100vw - 16px)); }
 .reference-table-wrap { border-color: var(--rule-hot); box-shadow: 0 10px 24px rgba(0, 0, 0, .15), inset 0 1px 0 rgba(53, 200, 240, .06); }
 #ships-table { min-width: 1260px; }
 #parts-table { min-width: 930px; }
-#ships-table th:first-child, #ships-table td:first-child,
-#parts-table th:first-child, #parts-table td:first-child { position: sticky; left: 0; z-index: 1; border-right: 1px solid var(--rule); }
-#ships-table th:first-child, #parts-table th:first-child { z-index: 2; background: var(--panel-2); }
-#ships-table tbody tr:nth-child(odd) td:first-child,
-#parts-table tbody tr:nth-child(odd) td:first-child { background: var(--deep); }
-#ships-table tbody tr:nth-child(even) td:first-child,
-#parts-table tbody tr:nth-child(even) td:first-child { background: #0d1c2b; }
-#ships-table tbody tr:hover td:first-child,
-#parts-table tbody tr:hover td:first-child { background: #102738; }
+.reference-table-wrap :is(th, td) { padding-left: 12px; padding-right: 12px; }
+.reference-table-wrap th:first-child,
+.reference-table-wrap td:first-child:not([colspan]) { position: sticky; left: 0; z-index: 1; border-right: 1px solid var(--rule); }
+.reference-table-wrap th:first-child { z-index: 2; background: var(--panel-2); }
+/* Opaque name cells keep horizontally scrolling values from showing through.
+   Their colour follows the row instead of becoming a separate dark strip. */
+.reference-table-wrap tbody tr:nth-child(odd),
+.reference-table-wrap tbody tr:nth-child(odd) td:first-child:not([colspan]) { background: var(--deep); }
+.reference-table-wrap tbody tr:nth-child(even),
+.reference-table-wrap tbody tr:nth-child(even) td:first-child:not([colspan]) { background: #0d1c2b; }
+.reference-table-wrap tbody tr:hover,
+.reference-table-wrap tbody tr:hover td:first-child:not([colspan]) { background: #102738; }
 #ships-table th:nth-child(n+9), #ships-table td:nth-child(n+9) { background-image: linear-gradient(90deg, rgba(53, 200, 240, .025), transparent); }
 #ships-table td:nth-child(11), #parts-table td:nth-child(7) { color: var(--cyan-hot); }
 /* The name, role and shop columns wrap; the numbers never do. Held to one
@@ -2193,7 +2196,6 @@ body.overlay .activity-panel { width: min(300px, calc(100vw - 16px)); }
    Cheapest at) sat past the right edge. */
 #ships-table td:nth-child(1), #ships-table td:nth-child(3), #ships-table td:nth-child(12),
 #parts-table td:nth-child(1), #parts-table td:nth-child(6), #parts-table td:nth-child(9) { white-space: normal; min-width: 12ch; }
-#ships-table th, #ships-table td { padding-left: 10px; padding-right: 10px; }
 @media (max-width: 720px) {
   .reference-toolbar { justify-content: stretch; border-top: 1px solid var(--rule); border-left: 0; }
   .reference-toolbar .search, .reference-toolbar .select { flex: 1 1 170px; min-width: 0; }
@@ -6722,7 +6724,6 @@ body:not(.overlay) #now-server-star::after { display: none; }
 #missions-table tbody tr.mission-row { cursor: pointer; }
 #missions-table td:first-child { max-width: 360px; }
 #missions-table .armoury-kind { overflow-wrap: anywhere; }
-#missions-table tbody tr.mission-row:hover { background: rgba(53, 200, 240, .06); }
 .mission-brief { white-space: pre-line; margin: 0 0 10px; line-height: 1.55; }
 .ref-debug { margin-top: 14px; font: 11px var(--mono); overflow-wrap: anywhere; }
 .armoury-modes { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; }
@@ -7681,8 +7682,6 @@ body:not(.overlay) .checklist-item :is(button.ghost, button.tiny).icon:hover:not
 #components-table th.figure.sorted { color: var(--cyan-hot); }
 #components-table td.figure { color: var(--text); font-weight: 600; }
 #components-table td .note-inline { margin-left: 6px; color: var(--dim); font-size: 10.5px; }
-#components-table th:first-child, #components-table td:first-child { position: sticky; left: 0; z-index: 1; border-right: 1px solid var(--rule); background: var(--deep); }
-#components-table th:first-child { z-index: 2; background: var(--panel-2); }
 
 /* ---- Form controls in the dark (0.20.28). The browser drew its own parts of
    them - a number box's spin arrows, a date picker, an open dropdown - in its
