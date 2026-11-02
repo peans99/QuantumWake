@@ -2180,13 +2180,10 @@ body.overlay .activity-panel { width: min(300px, calc(100vw - 16px)); }
 .reference-table-wrap th:first-child,
 .reference-table-wrap td:first-child:not([colspan]) { position: sticky; left: 0; z-index: 1; border-right: 1px solid var(--rule); }
 .reference-table-wrap th:first-child { z-index: 2; background: var(--panel-2); }
-/* Opaque name cells keep horizontally scrolling values from showing through.
-   Their colour follows the row instead of becoming a separate dark strip. */
-.reference-table-wrap tbody tr:nth-child(odd),
+/* Opaque leading cells keep horizontally scrolling values from showing through.
+   Keep the original Items tints here; other cells use the shared subtle stripe. */
 .reference-table-wrap tbody tr:nth-child(odd) td:first-child:not([colspan]) { background: var(--deep); }
-.reference-table-wrap tbody tr:nth-child(even),
 .reference-table-wrap tbody tr:nth-child(even) td:first-child:not([colspan]) { background: #0d1c2b; }
-.reference-table-wrap tbody tr:hover,
 .reference-table-wrap tbody tr:hover td:first-child:not([colspan]) { background: #102738; }
 #ships-table th:nth-child(n+9), #ships-table td:nth-child(n+9) { background-image: linear-gradient(90deg, rgba(53, 200, 240, .025), transparent); }
 #ships-table td:nth-child(11), #parts-table td:nth-child(7) { color: var(--cyan-hot); }

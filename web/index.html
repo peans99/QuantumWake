@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css?v=0.20.55">
+  <link rel="stylesheet" href="app.css?v=0.20.56">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -3055,12 +3055,12 @@
     <!-- One bar per page, named for the page: its main question - where an
          item comes from - is the search it carries. New items is a section
          of the page with its own filters, as Standing is of Contracts. -->
-    <div class="section-bar">
-      <div class="page-title">
+    <div class="section-bar reference-toolbar-bar">
+      <div class="reference-title">
         <span class="page-kicker">Reference</span>
         <h2>Loot</h2>
       </div>
-      <div class="controls">
+      <div class="controls reference-toolbar">
         <input type="search" id="loot-find" class="search" placeholder="Where to find any item, by name…"
                autocomplete="off" spellcheck="false">
       </div>
@@ -3080,7 +3080,7 @@
     </details>
 
     <div id="loot-find-results" class="loot-find-results"></div>
-    <div id="loot-where" class="loot-where" hidden></div>
+    <div id="loot-where" class="loot-where card" hidden></div>
 
     <div class="subsection-head">
       <h2 class="spaced">New items</h2>
@@ -3110,7 +3110,7 @@
 
     <div class="summary-strip" id="loot-summary"></div>
 
-    <div class="table-wrap">
+    <div class="table-wrap reference-table-wrap">
       <table id="loot-table">
         <thead>
           <tr>
@@ -4962,6 +4962,6 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.20.54"></script>
+<script src="app.js?v=0.20.56"></script>
 </body>
 </html>

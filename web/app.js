@@ -4930,7 +4930,7 @@ function renderLootPlaces(panel, data, hasSlots) {
     section.append(pick);
   }
 
-  const holder = el('div', 'table-wrap');
+  const holder = el('div', 'table-wrap reference-table-wrap');
   section.append(holder);
   const more = el('button', 'ghost tiny loot-places-more');
   more.addEventListener('click', () => { expanded = !expanded; draw(); });
@@ -5191,7 +5191,7 @@ function renderLootWhere(panel, data, { embedded = false } = {}) {
   }
   table.append(body);
 
-  const wrap = el('div', 'table-wrap');
+  const wrap = el('div', 'table-wrap reference-table-wrap');
   wrap.append(table);
   panel.append(wrap);
 }
@@ -5210,7 +5210,7 @@ function renderLootNpcs(panel, npcs) {
     tx('what they spawn wearing, so what their bodies hold. The share counts every outfit they can be given as equally likely.'),
   ].join(' · ')));
 
-  const holder = el('div', 'table-wrap');
+  const holder = el('div', 'table-wrap reference-table-wrap');
   section.append(holder);
   const more = el('button', 'ghost tiny loot-npcs-more');
   let expanded = false;
@@ -5281,7 +5281,7 @@ function renderLootShips(panel, ships) {
     tx('fitted as standard - what a disabled one carries. How often each is met is not in the files.'),
   ].join(' · ')));
 
-  const holder = el('div', 'table-wrap');
+  const holder = el('div', 'table-wrap reference-table-wrap');
   section.append(holder);
   const more = el('button', 'ghost tiny loot-ships-more');
   let expanded = false;
@@ -6934,7 +6934,21 @@ function renderEncounters() {
     if (encounterOpen === e.name) tr.classList.add('open');
 
     const name = el('td');
-    name.append(document.createTextNode(e.name.replaceAll('_', ' ')));
+    const toggleEncounter = () => {
+      encounterOpen = encounterOpen === e.name ? null : e.name;
+      renderEncounters();
+      const updated = [...body.children].find((row) => row.dataset.encounter === e.name);
+      updated?.querySelector('.encounter-toggle')?.focus?.({ preventScroll: true });
+    };
+    const toggle = el('button', 'place-link encounter-toggle', e.name.replaceAll('_', ' '));
+    toggle.type = 'button';
+    toggle.title = tx('Details');
+    toggle.setAttribute('aria-expanded', String(encounterOpen === e.name));
+    toggle.addEventListener('click', (event) => {
+      event?.stopPropagation?.();
+      toggleEncounter();
+    });
+    name.append(toggle);
     name.append(el('div', 'armoury-kind', encounterFolderLabel(e.folder)));
     tr.append(name);
 
@@ -6966,10 +6980,7 @@ function renderEncounters() {
     tr.append(el('td', 'num', scu > 0 ? `${fmtInt(scu)} SCU` : '—'));
     tr.append(el('td', 'num', scu > 0 && priced ? money(worth) : '—'));
 
-    tr.addEventListener('click', () => {
-      encounterOpen = encounterOpen === e.name ? null : e.name;
-      renderEncounters();
-    });
+    tr.addEventListener('click', toggleEncounter);
     body.append(tr);
 
     if (encounterOpen === e.name) body.append(armouryExpansion(renderEncounterDetail(e, model), 7));

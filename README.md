@@ -328,7 +328,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.20.55
+### 0.20.56
+
+**The calmer Items colours across Reference.** Restored the original subtle row stripes instead of the stronger solid catalogue fills. Loot now shares the Reference header and table frames, including its item-location results. Encounter names use the same cyan link treatment as Items and can be expanded from the keyboard. Source, ownership and price colours keep their meaning.
 
 **A complete Reference header frame.** The divider and filter-panel background now extend through the ships' flight lane to the bottom of the header, instead of stopping part-way down.
 

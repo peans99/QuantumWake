@@ -130,6 +130,20 @@ public class EncountersPageTests
     }
 
     [Fact]
+    public void The_name_button_expands_and_collapses_its_encounter()
+    {
+        var page = Opened();
+        const string Toggle = "__dom.node('#encounters-table tbody').byClass('encounter-toggle')[0]";
+        Assert.Equal("false", page.Text($"{Toggle}.getAttribute('aria-expanded')"));
+        page.Do($"{Toggle}.fire('click');");
+        Assert.Equal("true", page.Text($"{Toggle}.getAttribute('aria-expanded')"));
+        Assert.Contains("Wave 1", page.NodeText("#encounters-table tbody"));
+        page.Do($"{Toggle}.fire('click');");
+        Assert.Equal("false", page.Text($"{Toggle}.getAttribute('aria-expanded')"));
+        Assert.DoesNotContain("Wave 1", page.NodeText("#encounters-table tbody"));
+    }
+
+    [Fact]
     public void The_cargo_lists_nothing_carries_are_listed_apart()
     {
         var page = Opened();
