@@ -82,6 +82,38 @@ public class IdentityTests
     }
 
     /// <summary>
+    /// The wake ends before a header's controls rather than running gold
+    /// behind its filters, which on Mining read as a stray drawing; a header
+    /// whose controls are hidden or wrapped under the title keeps it whole.
+    /// </summary>
+    [Fact]
+    public void The_wake_stops_short_of_the_header_controls()
+    {
+        var page = new Page();
+        page.Do("""
+            const bar = document.createElement('div'); bar.className = 'section-bar';
+            bar.getBoundingClientRect = () => ({ left: 60, top: 0, width: 1550, height: 90 });
+            const controls = document.createElement('div'); controls.className = 'controls';
+            controls.getBoundingClientRect = () => ({ left: 1150, top: 40, width: 450, height: 32 });
+            controls.offsetWidth = 450;
+            bar.append(controls);
+            __dom.node('#view-mining').append(bar);
+            """);
+        page.Do($$"""allSessions = [{"id":"a","startedAt":"{{Today(0)}}","inGame":600}]; drawWakes();""");
+
+        // 1150 - 60 is where the controls begin; the wake leaves 24 px clear.
+        Assert.Equal("1066px", page.Text($"{Bar("mining")}.style['--wake-end']"));
+
+        // Mining's other panes hide the filters: nothing to stop short of.
+        page.Do($"{Bar("mining")}.children[0].offsetWidth = 0; fitWake({Bar("mining")});");
+        Assert.Equal("undefined", page.Text($"String({Bar("mining")}.style['--wake-end'])"));
+
+        // Wrapped under the title on a narrow window: nothing sits beside it.
+        page.Do($"const c = {Bar("mining")}.children[0]; c.offsetWidth = 450; c.getBoundingClientRect = () => ({{ left: 60, top: 70, width: 450, height: 32 }}); fitWake({Bar("mining")});");
+        Assert.Equal("undefined", page.Text($"String({Bar("mining")}.style['--wake-end'])"));
+    }
+
+    /// <summary>
     /// No session in the window draws no wake, rather than a flat line that
     /// would read as sixty days of nothing being logged.
     /// </summary>

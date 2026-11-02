@@ -5561,7 +5561,50 @@ function drawWakes() {
     mark.title = tx('Your wake: {sessions} sessions and {hours} in game over the last {days} days, from your logs.', {
       sessions, hours: duration(total * 60), days: WAKE_DAYS,
     });
+    fitWake(bar);
+    watchWake(bar);
   }
+}
+
+/** The gap left between the wake's end and the first control, in pixels. */
+const WAKE_CLEARANCE = 24;
+
+/**
+ * Ends the wake before the header's own controls.
+ *
+ * The wake is brightest at its right end, today, which is exactly where a
+ * header keeps its filters: on Mining it ran gold behind three selects and a
+ * search box and read as a stray drawing (Nicolas, 2026-11-02). So it stops
+ * short of them, diamond and all, through --wake-end, which the stylesheet
+ * reads for both. A header with no controls showing - Mining's other panes
+ * hide theirs - keeps the full width, and so does one whose controls have
+ * wrapped under the title on a narrow window, where nothing sits beside it.
+ */
+function fitWake(bar) {
+  const controls = [...bar.children].find((child) => child.classList?.contains('controls'));
+  let end = null;
+  if (controls && controls.offsetWidth > 0) {
+    const barBox = bar.getBoundingClientRect();
+    const box = controls.getBoundingClientRect();
+    const left = box.left - barBox.left;
+    if (left > barBox.width * 0.3) end = Math.round(left - WAKE_CLEARANCE);
+  }
+  if (end === null) bar.style.removeProperty('--wake-end');
+  else bar.style.setProperty('--wake-end', `${end}px`);
+}
+
+/**
+ * Re-fits when the header or its controls change size: a resized window, a
+ * view shown from display:none (measured at nothing when drawn), a pane that
+ * hides its filters. Once per bar, as the wake is redrawn on every refresh.
+ */
+function watchWake(bar) {
+  if (bar.wakeWatched || typeof ResizeObserver !== 'function') return;
+  bar.wakeWatched = true;
+  const observer = new ResizeObserver(() => fitWake(bar));
+  observer.observe(bar);
+  const controls = [...bar.children].find((child) => child.classList?.contains('controls'));
+  if (controls) observer.observe(controls);
 }
 
 /* ---------- reference: ship components, by what they do ----------

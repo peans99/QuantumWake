@@ -131,7 +131,11 @@ and not in the overlay, where a header is a small label over a glance.
   wake goes under the header's contents by `z-index: -1` inside an isolated
   header rather than by lifting the contents, which would override how a
   header's own controls are positioned, and without `overflow: hidden`, which
-  would clip a menu opening out of a header.
+  would clip a menu opening out of a header. It ends 24 px before the
+  header's `.controls` (`fitWake()` sets `--wake-end`, re-measured by a
+  `ResizeObserver`), because its brightest end ran behind Mining's filters
+  and read as a stray drawing. Hidden controls, or controls wrapped under the
+  title on a narrow window, leave it full width.
 - **Title face.** Big Shoulders Display (SIL OFL 1.1), bundled in
   `web/assets/fonts/` and credited in `docs/credits.md`. It is used for page
   titles only; mono stays for numbers.

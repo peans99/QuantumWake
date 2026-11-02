@@ -7644,9 +7644,11 @@ body:not(.overlay) .view[data-voice='own'] > .section-bar .page-kicker { color: 
    positioning a header's own controls rely on. No overflow:hidden either,
    which would clip a menu that opens out of a header. */
 body:not(.overlay) .view > .section-bar { position: relative; isolation: isolate; }
-.wake { position: absolute; left: 0; bottom: 0; height: 18px; width: 100%; pointer-events: none; z-index: -1; }
+/* --wake-end, when set, is where the header's controls begin (fitWake): the
+   wake and its mark stop short of them rather than running gold behind them. */
+.wake { position: absolute; left: 0; bottom: 0; height: 18px; width: var(--wake-end, 100%); pointer-events: none; z-index: -1; }
 .wake-mark {
-  position: absolute; right: 10px; bottom: 5px; width: 7px; height: 7px; z-index: 0;
+  position: absolute; left: calc(var(--wake-end, 100%) - 17px); bottom: 5px; width: 7px; height: 7px; z-index: 0;
   border: 1px solid var(--own); transform: rotate(45deg); cursor: help;
 }
 /* A wider target than the seven-pixel diamond, for the hover text. */
