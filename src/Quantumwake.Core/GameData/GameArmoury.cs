@@ -115,7 +115,40 @@ public sealed record PersonalWeapon(
     double Mass,
     IReadOnlyList<FireMode> Modes,
     string? BaseClass = null,
-    Explosion? Explosion = null);
+    Explosion? Explosion = null)
+{
+    /// <summary>
+    /// The sight, barrel and underbarrel slots the gun has, and what each
+    /// takes; empty in a cache written before they were read, and on a gun
+    /// with none.
+    /// </summary>
+    public IReadOnlyList<WeaponPort> Ports { get; init; } = [];
+}
+
+/// <summary>
+/// One attachment slot on a gun, as its <c>SItemPortDef</c> lays it out.
+/// </summary>
+/// <param name="Slot">Sight, Barrel or Underbarrel - the attachment kind it takes.</param>
+/// <param name="Name">The port's own name - <c>optics_attach</c>.</param>
+/// <param name="MinSize">The smallest attachment size it takes.</param>
+/// <param name="MaxSize">The largest.</param>
+/// <param name="RequiredTags">
+/// Tags an attachment must carry to go on it. The P4-AR's barrel port asks
+/// for <c>FPS_Barrel ballistic_attach</c>, which is what keeps an
+/// energy-only compensator off a ballistic rifle.
+/// </param>
+/// <param name="PortTags">Tags the port offers, for an attachment that asks for one.</param>
+/// <param name="Default">The class the gun ships with in this slot, or null when it ships bare.</param>
+/// <param name="Fixed">True when the slot cannot be changed - a sight built into the gun.</param>
+public sealed record WeaponPort(
+    string Slot,
+    string Name,
+    int MinSize,
+    int MaxSize,
+    IReadOnlyList<string> RequiredTags,
+    IReadOnlyList<string> PortTags,
+    string? Default = null,
+    bool Fixed = false);
 
 /// <summary>How a piece of armour scales what hits it: 0.7 is thirty percent off.</summary>
 /// <param name="Macro">The shared table it reads from - <c>MediumArmor</c>; every piece of a class shares one.</param>
@@ -285,7 +318,17 @@ public sealed record WeaponAttachment(
     double Mass,
     AttachmentEffect Effect,
     string? BaseClass = null,
-    string? Icon = null);
+    string? Icon = null)
+{
+    /// <summary>
+    /// The tags it carries, which a gun's port can ask for - <c>FPS_Barrel</c>,
+    /// <c>ballistic_attach</c>, <c>energy_attach</c>. Empty in an older cache.
+    /// </summary>
+    public IReadOnlyList<string> Tags { get; init; } = [];
+
+    /// <summary>Tags it asks of the port it goes on; empty for nearly every piece.</summary>
+    public IReadOnlyList<string> RequiredTags { get; init; } = [];
+}
 
 /// <summary>Everything the install says about what a pilot wears and carries.</summary>
 public sealed record GameArmouryData(
@@ -365,6 +408,8 @@ public static class GameArmoury
         var inventory = core.StructIndexOf("SCItemInventoryContainerComponentParams");
         var purchasable = core.StructIndexOf("SCItemPurchasableParams");
         var physics = core.StructIndexOf("SEntityPhysicsControllerParams");
+        var itemPorts = core.StructIndexOf("SItemPortContainerComponentParams");
+        var defaultLoadout = core.StructIndexOf("SEntityComponentDefaultLoadoutParams");
         if (attach < 0 || weapon < 0) return data;
 
         var byId = new Dictionary<Guid, DataRecord>();
@@ -388,11 +433,12 @@ public static class GameArmoury
                 {
                     if (Grenade(core, record, cls, item, byId, devices, hazard, physics) is { } grenade) data.Throwables.Add(grenade);
                 }
-                else if (Weapon(core, text, record, cls, item, byId, weapon, ammoContainer, purchasable, physics) is { } gun) data.Weapons.Add(gun);
+                else if (Weapon(core, text, record, cls, item, byId, weapon, ammoContainer, purchasable, physics) is { } gun)
+                    data.Weapons.Add(gun with { Ports = Ports(core, record, byId, itemPorts, defaultLoadout) });
             }
             else if (item.Type.Equals("WeaponAttachment", StringComparison.OrdinalIgnoreCase))
             {
-                if (Attachment(core, record, cls, item, modifier, physics) is { } piece) data.Attachments.Add(piece);
+                if (Attachment(core, record, cls, item, modifier, physics, attach) is { } piece) data.Attachments.Add(piece);
             }
             else if (item.Type.StartsWith("Char_Armor_", StringComparison.OrdinalIgnoreCase))
             {
@@ -617,7 +663,7 @@ public static class GameArmoury
         return null;
     }
 
-    private static WeaponAttachment? Attachment(DataCore core, DataRecord record, string cls, GameItem item, int modifier, int physics)
+    private static WeaponAttachment? Attachment(DataCore core, DataRecord record, string cls, GameItem item, int modifier, int physics, int attach)
     {
         // Sights, barrels and underbarrel pieces; the rest of the type is a
         // gun's own internals - firing mechanism, power array, ventilation -
@@ -637,11 +683,17 @@ public static class GameArmoury
 
         long modifierAt = -1;
         double mass = 0;
+        IReadOnlyList<string> tags = [], requires = [];
         foreach (var component in core.PointerArray(record, "Components"))
         {
             var at = core.InstanceAt(component);
             if (component.StructIndex == modifier) modifierAt = at;
             else if (component.StructIndex == physics) mass = Mass(core, at, physics);
+            else if (component.StructIndex == attach && GameMining.Nested(core, at, attach, "AttachDef") is { } def)
+            {
+                tags = TagList(core.StringAt(def.At, def.StructIndex, "Tags"));
+                requires = TagList(core.StringAt(def.At, def.StructIndex, "RequiredTags"));
+            }
         }
         if (modifierAt < 0) return null;
 
@@ -689,7 +741,86 @@ public static class GameArmoury
                 ZeroingMax: zeroMax, ZeroingStep: zeroStep);
         }
 
-        return new WeaponAttachment(cls, item.Name, kind, AttachmentFamily(cls, item.Name, kind), item.Size, item.Manufacturer, mass, effect);
+        return new WeaponAttachment(cls, item.Name, kind, AttachmentFamily(cls, item.Name, kind), item.Size, item.Manufacturer, mass, effect)
+        {
+            Tags = tags,
+            RequiredTags = requires,
+        };
+    }
+
+    /// <summary>A space-separated tag field as a list; the files write several to a string.</summary>
+    private static IReadOnlyList<string> TagList(string? tags) =>
+        string.IsNullOrWhiteSpace(tags) ? [] : tags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>
+    /// A gun's attachment slots: its <c>SItemPortDef</c>s whose type is a
+    /// weapon attachment of the sight, barrel or underbarrel kind, with what
+    /// its default loadout puts there.
+    /// </summary>
+    /// <remarks>
+    /// The magazine port is a weapon attachment too, and is left out by its
+    /// sub-type: it takes one magazine, named by the gun, and the figures
+    /// already read it. The sub-type decides the slot rather than the port's
+    /// name, which is a convention the files mostly keep; the name is the
+    /// fallback for a port that lists no sub-type.
+    /// </remarks>
+    private static IReadOnlyList<WeaponPort> Ports(DataCore core, DataRecord record, IReadOnlyDictionary<Guid, DataRecord> byId, int itemPorts, int defaultLoadout)
+    {
+        if (itemPorts < 0) return [];
+        var defaults = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var found = new List<WeaponPort>();
+        foreach (var component in core.PointerArray(record, "Components"))
+        {
+            var at = core.InstanceAt(component);
+            if (component.StructIndex == defaultLoadout
+                && core.PointerAt(at, defaultLoadout, "loadout") is { } loadout
+                && core.StructName(loadout.StructIndex) == "SItemPortLoadoutManualParams")
+            {
+                foreach (var entry in core.ClassArrayAt(core.InstanceAt(loadout), loadout.StructIndex, "entries"))
+                {
+                    var e = core.InstanceAt(entry);
+                    var port = core.StringAt(e, entry.StructIndex, "itemPortName");
+                    var item = core.StringAt(e, entry.StructIndex, "entityClassName");
+                    if (item is not { Length: > 0 }
+                        && core.ReferenceAt(e, entry.StructIndex, "entityClassReference") is { } id
+                        && byId.TryGetValue(id, out var referenced))
+                        item = referenced.Name[(referenced.Name.IndexOf('.') + 1)..];
+                    if (port is { Length: > 0 } && item is { Length: > 0 }) defaults[port] = item;
+                }
+            }
+            else if (component.StructIndex == itemPorts)
+            {
+                foreach (var port in core.ClassArrayAt(at, itemPorts, "Ports"))
+                {
+                    var pat = core.InstanceAt(port);
+                    var ps = port.StructIndex;
+                    var name = core.StringAt(pat, ps, "Name") ?? "";
+                    string? slot = null;
+                    foreach (var type in core.ClassArrayAt(pat, ps, "Types"))
+                    {
+                        var tat = core.InstanceAt(type);
+                        if (!string.Equals(core.EnumAt(tat, type.StructIndex, "Type"), "WeaponAttachment", StringComparison.Ordinal)) continue;
+                        var subTypes = core.EnumArrayAt(tat, type.StructIndex, "SubTypes");
+                        slot = subTypes.Contains("IronSight") ? "Sight"
+                            : subTypes.Contains("Barrel") ? "Barrel"
+                            : subTypes.Contains("BottomAttachment") ? "Underbarrel"
+                            : subTypes.Count > 0 ? null
+                            : name.StartsWith("optics", StringComparison.OrdinalIgnoreCase) ? "Sight"
+                            : name.StartsWith("barrel", StringComparison.OrdinalIgnoreCase) ? "Barrel"
+                            : name.StartsWith("underbarrel", StringComparison.OrdinalIgnoreCase) ? "Underbarrel"
+                            : null;
+                        if (slot is not null) break;
+                    }
+                    if (slot is null) continue;
+                    var flags = TagList(core.StringAt(pat, ps, "Flags"));
+                    found.Add(new WeaponPort(slot, name,
+                        core.Int32At(pat, ps, "MinSize") ?? 0, core.Int32At(pat, ps, "MaxSize") ?? 0,
+                        TagList(core.StringAt(pat, ps, "RequiredPortTags")), TagList(core.StringAt(pat, ps, "PortTags")),
+                        Fixed: flags.Any(f => f.Equals("uneditable", StringComparison.OrdinalIgnoreCase))));
+                }
+            }
+        }
+        return found.Select(p => p with { Default = defaults.GetValueOrDefault(p.Name) }).ToList();
     }
 
     /// <summary>

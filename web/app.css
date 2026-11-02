@@ -6730,6 +6730,15 @@ body:not(.overlay) #now-server-star::after { display: none; }
 .armoury-effect { display: inline-block; margin: 1px 6px 1px 0; padding: 0 5px; border: 1px solid var(--rule-hot); border-radius: 3px; font: 11px var(--mono); color: var(--text); white-space: nowrap; }
 .armoury-effect.gain { color: var(--green); border-color: #1f5c3d; }
 .armoury-effect.cost { color: var(--amber); border-color: #5c4a1f; }
+/* A gun with attachments on it: a picker per slot, then the bare figure → the fitted one. */
+.armoury-fit { margin: 6px 0 10px; }
+.armoury-fit-pickers { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 8px; }
+.armoury-fit-slot { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.armoury-fit-word { color: var(--muted); min-width: 72px; }
+.armoury-fit-slot select { max-width: 260px; }
+.armoury-fit-delta.gain { color: var(--green); }
+.armoury-fit-delta.cost { color: var(--amber); }
+.armoury-fit-handling { margin: 6px 0 4px; font-size: 12.5px; }
 #armoury-pane-attachments h3.spaced { margin-top: 18px; }
 #armoury-pane-attachments h3.spaced .muted { font-weight: normal; font-size: 12px; }
 td.armoury-gain { color: var(--green); }

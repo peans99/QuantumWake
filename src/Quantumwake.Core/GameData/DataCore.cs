@@ -546,6 +546,39 @@ public sealed class DataCore
         return value.Length > 0 ? value : null;
     }
 
+    /// <summary>
+    /// An array of enum options, by name: a count and a first index into the
+    /// enum value table, each entry a text offset the way a single enum is.
+    /// </summary>
+    /// <remarks>
+    /// Needed for a gun's item ports, whose <c>Types[].SubTypes</c> say which
+    /// slot a port is - <c>IronSight</c>, <c>Barrel</c>, <c>BottomAttachment</c>
+    /// - where the port's name is only a convention.
+    /// </remarks>
+    public IReadOnlyList<string> EnumArrayAt(long instance, int structIndex, string name)
+    {
+        var (at, field) = FieldAt(instance, structIndex, name);
+
+        if (at < 0 || field is null || field.ConversionType == 0
+            || field.DataType != 0x000F || at + 8 > _data.LongLength)
+        {
+            return [];
+        }
+
+        var count = BitConverter.ToUInt32(_data, (int)at);
+        var first = BitConverter.ToUInt32(_data, (int)(at + 4));
+        if (count > 256 || _enumValues + (first + (long)count) * 4 > _data.LongLength) return [];
+
+        var items = new List<string>((int)count);
+        for (var i = 0; i < count; i++)
+        {
+            var value = Text(BitConverter.ToUInt32(_data, (int)(_enumValues + (first + i) * 4L)));
+            if (value.Length > 0) items.Add(value);
+        }
+
+        return items;
+    }
+
     /// <summary>The struct index of a named struct, or -1.</summary>
     public int StructIndexOf(string name)
     {

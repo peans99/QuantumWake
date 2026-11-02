@@ -826,7 +826,9 @@ if (args.Any(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)))
 if (args.Any(a => a.StartsWith("--armoury", StringComparison.OrdinalIgnoreCase)))
 {
     var all = args.Contains("--armoury=all", StringComparer.OrdinalIgnoreCase);
-    var cache = Path.Combine(Path.GetDirectoryName(SessionStore.DatabasePathFor(install.RootPath))!, "commodities.json");
+    // --data points the cache at a copy, so a re-read after a reader change
+    // does not land in the real data folder.
+    var cache = Path.Combine(GetOption(args, "--data") ?? Path.GetDirectoryName(SessionStore.DatabasePathFor(install.RootPath))!, "commodities.json");
     var armoury = GameCommodities.Load(install.RootPath, cache).Armoury;
 
     static string Kinds(DamageKinds d) => string.Join("+", new[]
@@ -857,6 +859,38 @@ if (args.Any(a => a.StartsWith("--armoury", StringComparison.OrdinalIgnoreCase))
             + $"  [{w.Class}] {w.Manufacturer}");
         foreach (var m in w.Modes)
             Console.WriteLine($"      {Mode(m),-80} {Armoury.DamagePerSecond(w, m),7:0} dps  {Armoury.DamagePerMagazine(w, m),7:0}/mag  empties in {Armoury.SecondsToEmpty(w, m),5:0.#}s");
+    }
+
+    // Every gun's attachment slots and what goes in each, by the files' own
+    // rule (Armoury.Fits): the numbers behind docs/armoury.md's fitting section.
+    if (args.Contains("--armoury=ports", StringComparer.OrdinalIgnoreCase))
+    {
+        var plainPieces = armoury.Attachments.Where(a => a.BaseClass is null).ToList();
+        var plainGuns = armoury.Weapons.Where(w => w.BaseClass is null).ToList();
+        Console.WriteLine($"\n{plainGuns.Count(w => w.Ports.Count > 0)} of {plainGuns.Count} plain guns have attachment slots; {plainGuns.Sum(w => w.Ports.Count)} slots in all");
+        foreach (var slot in new[] { "Sight", "Barrel", "Underbarrel" })
+            Console.WriteLine($"  {slot,-11} on {plainGuns.Count(w => w.Ports.Any(p => p.Slot == slot)),3} guns; fixed on {plainGuns.Count(w => w.Ports.Any(p => p.Slot == slot && p.Fixed)),2}; shipped filled on {plainGuns.Count(w => w.Ports.Any(p => p.Slot == slot && p.Default is not null)),2}");
+        Console.WriteLine($"  pieces asking a tag of the port: {plainPieces.Count(a => a.RequiredTags.Count > 0)}; pieces that fit no gun: {plainPieces.Count(a => !plainGuns.Any(w => w.Ports.Any(p => Armoury.Fits(p, a))))}");
+        foreach (var a in plainPieces.Where(a => !plainGuns.Any(w => w.Ports.Any(p => Armoury.Fits(p, a)))))
+            Console.WriteLine($"      fits nothing: {a.Name} [{a.Class}] {a.Kind} S{a.Size} tags {string.Join(" ", a.Tags)}");
+        foreach (var w in plainGuns)
+        {
+            Console.WriteLine($"  {w.Name,-38} [{w.Class}]");
+            foreach (var p in w.Ports)
+            {
+                var fits = plainPieces.Where(a => Armoury.Fits(p, a)).ToList();
+                Console.WriteLine($"      {p.Slot,-11} {p.Name,-22} S{p.MinSize}-{p.MaxSize} needs [{string.Join(" ", p.RequiredTags)}] offers [{string.Join(" ", p.PortTags)}]"
+                    + (p.Fixed ? " FIXED" : "") + (p.Default is { } d ? $" ships with {d}" : "") + $"  {fits.Count} fit");
+            }
+        }
+        var p4ar = plainGuns.FirstOrDefault(w => w.Class == "behr_rifle_ballistic_01");
+        var tacit = plainPieces.FirstOrDefault(a => a.Name.StartsWith("Tacit Suppressor", StringComparison.OrdinalIgnoreCase) && p4ar?.Ports.Any(p => Armoury.Fits(p, a)) == true);
+        if (p4ar is not null && tacit is not null)
+        {
+            var fitted = Armoury.Fitted(p4ar, tacit.Effect);
+            var m = p4ar.Modes[0]; var fm = fitted.Modes[0];
+            Console.WriteLine($"  P4-AR with {tacit.Name}: {Armoury.DamagePerSecond(p4ar, m):0.#} -> {Armoury.DamagePerSecond(fitted, fm):0.#} dps, {Armoury.DamagePerMagazine(p4ar, m):0} -> {Armoury.DamagePerMagazine(fitted, fm):0}/mag");
+        }
     }
 
     var knives = armoury.Melee.Where(k => all || k.BaseClass is null).ToList();

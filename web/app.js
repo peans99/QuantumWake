@@ -9104,6 +9104,8 @@ $('#mining-system')?.addEventListener('change', renderMiningRef);
 let armouryModel = null;
 let armouryPane = 'guns';
 let armouryOpenGun = null;
+/** A gun to bring into view once, after something outside the page opened it - a kit. */
+let armouryRevealGun = null;
 let armouryOpenSet = null;
 
 const ARMOURY_PANES = ['guns', 'armour', 'attachments', 'grenades', 'knives', 'climate'];
@@ -9892,6 +9894,10 @@ function renderArmouryGuns() {
     });
     body.append(tr);
     if (armouryOpenGun === w.class) body.append(armouryExpansion(renderArmouryGunDetail(w), 11));
+    if (armouryRevealGun === w.class) {
+      armouryRevealGun = null;
+      tr.scrollIntoView({ block: 'start' });
+    }
   }
 }
 
@@ -9937,6 +9943,7 @@ function renderArmouryGunDetail(w) {
   }
   table.append(tb);
   inner.append(table);
+  inner.append(armouryFitSection(w));
 
   const notes = [];
   notes.push(tx('Projectile {speed} m/s for {seconds} s ({range} m before it is gone).',
@@ -9974,6 +9981,160 @@ function renderArmouryGunDetail(w) {
     inner.append(el('p', 'muted small', tx('A finish is the same gun in another colour: same figures, its own price.')));
   }
   return inner;
+}
+
+/* ---------- fitting ----------
+   A gun with a sight, a barrel piece and an underbarrel piece on it. The
+   server says which pieces go in which slot, by the files' own rule of
+   size and tags (a stabiliser is for energy guns, a compensator for
+   ballistic ones), and does the arithmetic (Armoury.Fitted), so the page
+   only picks and compares. The choice is kept per gun for the session, so
+   closing and reopening a row, or re-sorting the table, keeps it. */
+
+/** Gun class → { Sight, Barrel, Underbarrel } → the chosen piece's class, or ''. */
+const armouryFits = {};
+let armouryFitTurn = 0;
+
+/** The slot's word, one literal each so the catalogue check sees them. */
+function armourySlotWord(slot) {
+  switch (slot) {
+    case 'Sight': return tx('Sight');
+    case 'Barrel': return tx('Barrel');
+    case 'Underbarrel': return tx('Underbarrel');
+    default: return slot;
+  }
+}
+
+/** The pieces chosen for a gun, starting from what it ships with. */
+function armouryFitChoice(w) {
+  if (!armouryFits[w.class]) {
+    const start = {};
+    for (const p of w.ports || []) start[p.slot] = p.default || '';
+    armouryFits[w.class] = start;
+  }
+  return armouryFits[w.class];
+}
+
+/** One picker per slot the gun has, and the gun's figures with the picks on it. */
+function armouryFitSection(w) {
+  const wrap = el('div', 'armoury-fit');
+  wrap.append(el('h4', null, tx('Fit attachments')));
+  if (!w.ports?.length) {
+    wrap.append(el('p', 'muted small', tx('The files give this gun no attachment slots.')));
+    return wrap;
+  }
+  const choice = armouryFitChoice(w);
+  const pickers = el('div', 'armoury-fit-pickers');
+  const result = el('div', 'armoury-fit-result');
+  for (const p of w.ports) {
+    const label = el('label', 'armoury-fit-slot');
+    label.append(el('span', 'armoury-fit-word', armourySlotWord(p.slot)));
+    const select = el('select', 'select');
+    select.dataset.slot = p.slot;
+    select.append(new Option(tx('Nothing'), ''));
+    const pieces = (p.fits || [])
+      .map((c) => (armouryModel?.attachments || []).find((a) => a.class === c))
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    for (const a of pieces)
+      select.append(new Option(a.class === p.default ? `${a.name} · ${tx('ships with it')}` : a.name, a.class));
+    select.value = choice[p.slot] || '';
+    select.disabled = !!p.fixed;
+    // The row underneath opens and closes the panel; a pick is not that.
+    select.addEventListener('click', (e) => e.stopPropagation());
+    select.addEventListener('change', () => {
+      choice[p.slot] = select.value;
+      renderArmouryFit(w, result);
+    });
+    label.append(select);
+    label.append(el('span', 'muted small', tx('size {sizes}', { sizes: p.minSize === p.maxSize ? p.minSize : `${p.minSize}–${p.maxSize}` })));
+    pickers.append(label);
+  }
+  wrap.append(pickers);
+  wrap.append(result);
+  renderArmouryFit(w, result);
+  return wrap;
+}
+
+/** "162 → 149", marked as a gain or a cost when the figure moved. */
+function armouryFitDelta(bare, fitted, format, better = 'high') {
+  const td = el('td', 'num');
+  if (!(bare > 0) && !(fitted > 0)) { td.textContent = '—'; return td; }
+  const before = format(bare);
+  const after = format(fitted);
+  if (before === after) { td.textContent = after; return td; }
+  td.append(el('span', 'muted', `${before} → `));
+  const up = fitted > bare;
+  td.append(el('span', `armoury-fit-delta ${up === (better === 'high') ? 'gain' : 'cost'}`, after));
+  return td;
+}
+
+/**
+ * Asks the server for the gun with the picked pieces on it and lays the
+ * fitted figures beside the bare ones. A later pick overtakes an earlier
+ * answer still on its way, so the table never shows a choice since undone.
+ */
+async function renderArmouryFit(w, result) {
+  const choice = armouryFitChoice(w);
+  const chosen = (w.ports || []).map((p) => choice[p.slot]).filter(Boolean);
+  const turn = ++armouryFitTurn;
+  if (!chosen.length) {
+    result.textContent = '';
+    result.append(el('p', 'muted small', tx('Pick a piece for a slot to see the gun with it.')));
+    return;
+  }
+
+  let fit = null;
+  let problem = '';
+  try {
+    const response = await fetch(`/api/armoury/fit?gun=${encodeURIComponent(w.class)}&with=${chosen.map(encodeURIComponent).join(',')}`);
+    const body = await response.json().catch(() => null);
+    if (response.ok) fit = body;
+    else problem = body?.problem || `${response.status}`;
+  } catch (e) {
+    problem = e.message;
+  }
+  if (turn !== armouryFitTurn) return;
+  result.textContent = '';
+  if (!fit) {
+    result.append(el('p', 'muted small', tx('The figures could not be worked out: {problem}', { problem: serverText(problem) })));
+    return;
+  }
+
+  const table = el('table', 'armoury-fit-table');
+  const head = el('thead');
+  const hr = el('tr');
+  for (const [label, cls] of [['Mode', null], ['Per shot', 'num'], ['Sustained', 'num'], ['DPS', 'num'], ['Per mag', 'num'], ['Empties in', 'num']])
+    hr.append(el('th', cls, tx(label)));
+  head.append(hr);
+  table.append(head);
+  const tb = el('tbody');
+  const seconds = (v) => `${Math.round(v * 10) / 10} s`;
+  (fit.modes || []).forEach((m, i) => {
+    const bare = w.modes?.[i] || {};
+    const tr = el('tr');
+    tr.append(el('td', null, armouryMode(m)));
+    tr.append(armouryFitDelta(bare.damagePerShot, m.damagePerShot, fmtDamage));
+    tr.append(armouryFitDelta(bare.sustainedRoundsPerMinute, m.sustainedRoundsPerMinute, (v) => `${fmtInt(v)} rpm`));
+    tr.append(armouryFitDelta(bare.damagePerSecond, m.damagePerSecond, fmtInt));
+    tr.append(armouryFitDelta(w.magazine > 0 ? bare.damagePerMagazine : 0, w.magazine > 0 ? m.damagePerMagazine : 0, fmtInt));
+    tr.append(armouryFitDelta(bare.secondsToEmpty, m.secondsToEmpty, seconds));
+    tb.append(tr);
+  });
+  table.append(tb);
+  result.append(table);
+
+  // What the table already carries - damage, rate, heat, rounds a shot,
+  // charge, pellets, burst - is left out of the handling line.
+  const e = fit.effect || {};
+  const handling = armouryEffectWords({ ...e, damage: 1, fireRate: 1, heat: 1, ammoCost: 1, chargeTime: 1, pellets: 0, burstShots: 0 });
+  const line = el('p', 'armoury-fit-handling');
+  line.append(el('span', 'muted', `${tx('Handling')}: `));
+  if (handling.length) for (const word of handling) line.append(word);
+  else line.append(el('span', 'muted', tx('unchanged')));
+  result.append(line);
+
+  result.append(el('p', 'muted small', tx('Derived: the pieces’ multipliers from the files, applied to the gun’s own figures at the muzzle. Two pieces that move one figure are multiplied; whether the game does the same, and whether a damage multiplier also lifts the drop’s floor, is not in the files.')));
 }
 
 function armouryArmourFiltered() {
@@ -29912,6 +30073,8 @@ function runPlannedRow(review, stop, action) {
 
 let kits = [];
 let preparing = null;
+/** Kit id → the guns in it the Armoury knows, each with the kit's attachments that fit it. */
+let kitGuns = {};
 
 /**
  * What each holding means, in the reader's terms.
@@ -29929,7 +30092,33 @@ const KIT_HOLDING = {
 
 async function loadKits() {
   kits = await getJson('/api/kits');
+  // The guns are an extra: a list that cannot reach the Armoury still lists.
+  kitGuns = {};
+  try {
+    for (const k of await getJson('/api/kits/guns')) kitGuns[k.kitId] = k.guns || [];
+  } catch { /* the kits stand without it */ }
   renderKits();
+}
+
+/**
+ * Opens a kit's gun on the Armoury with the kit's own attachments fitted.
+ * The gun table's filters are cleared on the way, since a rifle hidden by
+ * a "pistols only" left from last time would read as the link not working.
+ */
+function openKitGun(gun) {
+  const picks = { Sight: '', Barrel: '', Underbarrel: '' };
+  for (const p of gun.with || []) picks[p.slot] = p.class;
+  armouryFits[gun.class] = picks;
+  armouryOpenGun = gun.class;
+  armouryRevealGun = gun.class;
+  armouryPane = 'guns';
+  for (const id of ['#armoury-gun-kind', '#armoury-gun-damage', '#armoury-search']) {
+    const field = $(id);
+    if (field) field.value = '';
+  }
+  const priced = $('#armoury-gun-priced');
+  if (priced) priced.checked = false;
+  showView('armoury');
 }
 
 function renderKits() {
@@ -29951,6 +30140,15 @@ function renderKits() {
     main.append(el('div', 'sub muted',
       txn(kit.items.length, '{count} item', '{count} items')));
     row.append(main);
+
+    for (const gun of kitGuns[kit.id] || []) {
+      const open = el('button', 'ghost tiny', tx('{gun} in the Armoury', { gun: gun.name }));
+      open.title = gun.with?.length
+        ? tx('Open it with {pieces} fitted', { pieces: gun.with.map((p) => p.name).join(', ') })
+        : tx('Open it on the Armoury');
+      open.addEventListener('click', () => openKitGun(gun));
+      row.append(open);
+    }
 
     const prepare = el('button', 'ghost tiny', tx('Prepare'));
     prepare.title = tx('Compare this kit with what you have');

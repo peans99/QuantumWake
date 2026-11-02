@@ -5879,5 +5879,16 @@
   "What one rock reads": "Ce qu’affiche un seul rocher",
   "Rock": "Rocher",
   "Tier": "Rang",
-  "Found": "Où"
+  "Found": "Où",
+  "Fit attachments": "Monter des accessoires",
+  "The files give this gun no attachment slots.": "Les fichiers ne donnent à cette arme aucun emplacement d’accessoire.",
+  "ships with it": "fourni avec",
+  "size {sizes}": "taille {sizes}",
+  "Pick a piece for a slot to see the gun with it.": "Choisissez une pièce pour un emplacement pour voir l’arme équipée.",
+  "The figures could not be worked out: {problem}": "Les chiffres n’ont pas pu être calculés : {problem}",
+  "Handling": "Maniement",
+  "Derived: the pieces’ multipliers from the files, applied to the gun’s own figures at the muzzle. Two pieces that move one figure are multiplied; whether the game does the same, and whether a damage multiplier also lifts the drop’s floor, is not in the files.": "Calculé : les multiplicateurs des pièces, tirés des fichiers, appliqués aux chiffres de l’arme à la bouche du canon. Deux pièces qui modifient un même chiffre sont multipliées ; les fichiers ne disent pas si le jeu fait de même, ni si un multiplicateur de dégâts relève aussi le plancher de la perte à distance.",
+  "{gun} in the Armoury": "{gun} dans l’Armurerie",
+  "Open it with {pieces} fitted": "L’ouvrir avec {pieces} en place",
+  "Open it on the Armoury": "L’ouvrir dans l’Armurerie"
 }
