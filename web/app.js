@@ -5484,8 +5484,8 @@ function renderShipsRef() {
 
    A ship's wake is where it has been, widest where it worked hardest and
    fading behind it. This one is drawn from the sessions in your logs: sixty
-   days, oldest on the left, each day as wide as the time you spent in game
-   that day, and a mark at today's end - filled if you have flown today. It
+   days, oldest on the left, the trails spreading with time spent in game
+   before converging at today's end - filled if you have flown today. It
    is the one piece of these pages that could not belong to any other tool,
    because nobody else has your logs. */
 
@@ -5514,11 +5514,29 @@ function drawWakes() {
   const top = Math.max(...smooth, 1);
   const total = minutes.reduce((a, b) => a + b, 0);
   const width = 600;
-  const mid = 11;
+  const mid = 13;
   const x = (i) => (i / (WAKE_DAYS - 1)) * width;
-  const half = (i) => 0.6 + (smooth[i] / top) * 6.5;
-  const upper = smooth.map((_, i) => `${x(i).toFixed(1)},${(mid - half(i)).toFixed(2)}`);
-  const lower = smooth.map((_, i) => `${x(i).toFixed(1)},${(mid + half(i)).toFixed(2)}`).reverse();
+  const spread = (i) => (2 + (smooth[i] / top) * 8) * Math.pow(1 - i / (WAKE_DAYS - 1), .65);
+  // Interpolated filaments avoid the angular silhouette of a filled chart.
+  // All end at the same point; the endpoint stays fixed as history changes.
+  const trail = (side) => {
+    const points = smooth.map((_, i) => [x(i), mid + side * spread(i)]);
+    const pair = (p) => `${p[0].toFixed(2)},${p[1].toFixed(2)}`;
+    let path = `M${pair(points[0])}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const before = points[Math.max(0, i - 1)];
+      const from = points[i];
+      const to = points[i + 1];
+      const after = points[Math.min(points.length - 1, i + 2)];
+      const c1 = [from[0] + (to[0] - before[0]) / 6, from[1] + (to[1] - before[1]) / 6];
+      const c2 = [to[0] - (after[0] - from[0]) / 6, to[1] - (after[1] - from[1]) / 6];
+      path += ` C${pair(c1)} ${pair(c2)} ${pair(to)}`;
+    }
+    return path;
+  };
+  const upper = trail(-1);
+  const lower = trail(1);
+  const inner = trail(-.28);
 
   // Every page's own header: the bar that opens a view, not one nested
   // further down (Now, Help and About open on something else entirely).
@@ -5541,16 +5559,20 @@ function drawWakes() {
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
     svg.setAttribute('class', 'wake');
-    svg.setAttribute('viewBox', `0 0 ${width} 18`);
+    svg.setAttribute('viewBox', `0 0 ${width} 26`);
     svg.setAttribute('preserveAspectRatio', 'none');
     svg.setAttribute('aria-hidden', 'true');
     const id = `wake-fade-${index}`;
     svg.innerHTML = `<defs><linearGradient id="${id}" x1="0" x2="1" y1="0" y2="0">`
-      + '<stop offset="0" stop-color="#e9c27d" stop-opacity="0"/>'
-      + '<stop offset=".55" stop-color="#e9c27d" stop-opacity=".22"/>'
-      + '<stop offset="1" stop-color="#e9c27d" stop-opacity=".7"/></linearGradient></defs>'
-      + `<polygon points="${[...upper, ...lower].join(' ')}" fill="url(#${id})"/>`
-      + `<line x1="0" y1="${mid}" x2="${width}" y2="${mid}" stroke="url(#${id})" stroke-width=".6"/>`;
+      + '<stop offset="0" stop-color="currentColor" stop-opacity="0"/>'
+      + '<stop offset=".2" stop-color="currentColor" stop-opacity=".06"/>'
+      + '<stop offset=".65" stop-color="currentColor" stop-opacity=".35"/>'
+      + '<stop offset="1" stop-color="currentColor" stop-opacity=".85"/></linearGradient></defs>'
+      + `<g fill="none" stroke="url(#${id})" stroke-linecap="round">`
+      + `<path class="wake-halo" d="${inner}"/>`
+      + `<path class="wake-thread" d="${upper}"/>`
+      + `<path class="wake-thread" d="${lower}"/>`
+      + `<path class="wake-core" d="${inner}"/></g>`;
     bar.append(svg);
 
     const mark = el('span', minutes[WAKE_DAYS - 1] > 0 ? 'wake-mark today' : 'wake-mark');
@@ -5575,7 +5597,7 @@ const WAKE_CLEARANCE = 24;
  * The wake is brightest at its right end, today, which is exactly where a
  * header keeps its filters: on Mining it ran gold behind three selects and a
  * search box and read as a stray drawing (Nicolas, 2026-11-02). So it stops
- * short of them, diamond and all, through --wake-end, which the stylesheet
+ * short of them, endpoint and all, through --wake-end, which the stylesheet
  * reads for both. A header with no controls showing - Mining's other panes
  * hide theirs - keeps the full width, and so does one whose controls have
  * wrapped under the title on a narrow window, where nothing sits beside it.

@@ -7646,14 +7646,18 @@ body:not(.overlay) .view[data-voice='own'] > .section-bar .page-kicker { color: 
 body:not(.overlay) .view > .section-bar { position: relative; isolation: isolate; }
 /* --wake-end, when set, is where the header's controls begin (fitWake): the
    wake and its mark stop short of them rather than running gold behind them. */
-.wake { position: absolute; left: 0; bottom: 0; height: 18px; width: var(--wake-end, 100%); pointer-events: none; z-index: -1; }
+.wake { position: absolute; left: 0; bottom: -1px; height: 26px; width: max(0px, calc(var(--wake-end, 100%) - 14px)); color: var(--own); pointer-events: none; z-index: -1; }
+.wake path { vector-effect: non-scaling-stroke; }
+.wake-thread { stroke-width: .75; opacity: .65; }
+.wake-core { stroke-width: 1; }
+.wake-halo { stroke-width: 5; opacity: .09; }
 .wake-mark {
-  position: absolute; left: calc(var(--wake-end, 100%) - 17px); bottom: 5px; width: 7px; height: 7px; z-index: 0;
-  border: 1px solid var(--own); transform: rotate(45deg); cursor: help;
+  position: absolute; left: calc(var(--wake-end, 100%) - 17px); bottom: 9px; width: 6px; height: 6px; z-index: 0;
+  border: 1px solid var(--own); border-radius: 50%; background: var(--deep); cursor: help;
 }
-/* A wider target than the seven-pixel diamond, for the hover text. */
+/* The visible point stays small; its hover target includes the halo. */
 .wake-mark::after { content: ""; position: absolute; inset: -6px; }
-.wake-mark.today { background: var(--own); box-shadow: 0 0 9px rgba(233, 194, 125, .75); }
+.wake-mark.today { background: #fff3d9; box-shadow: 0 0 5px rgba(233, 194, 125, .7), 0 0 15px rgba(233, 194, 125, .25); }
 body.overlay :is(.wake, .wake-mark) { display: none; }
 
 /* Source colours on a column heading, as a thin rule under the values it
