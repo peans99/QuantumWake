@@ -102,43 +102,29 @@ body::before {
   }
 }
 
-/* The mark in both margins, drawn rather than photographic.
-
-   The emblem was tried here and pulled back out. It is a raster with a dark
-   ground, so it needed screen blending and a circular mask to sit on the page
-   at all, and it still had to bleed off the corners to be big enough to read.
-   The drawn geometry has real transparency, holds a thin line at any size, and
-   asks nothing of the compositor. The emblem keeps the places where it is the
-   subject: the About page and the footer.
-
-   Each mark fills its whole margin and centres inside it, so the two are
-   symmetric, vertically aligned, and never cut off by an edge. That is also why
-   this needs 2400px: below it the margins are too narrow to hold a mark without
-   it either overlapping the content or being clipped. */
-.brandmark { display: none; }
+/* Outside the blurred header so fixed positioning is relative to the viewport.
+   Each mark sits wholly in the unused margin and cannot intercept a control. */
+.margin-mark { display: none; }
 
 @media (min-width: 2400px) {
-  .brandmark,
-  body::after {
-    content: "";
+  body:not(.overlay) .margin-mark {
     display: block;
     position: fixed;
-    top: 0;
+    top: 94px;
     bottom: 0;
     width: calc((100vw - var(--page)) / 2);
-    background: url("assets/watermark.svg") center center / min(64%, 460px) auto no-repeat;
-    opacity: .09;
+    background: url("assets/mark.svg") center center / min(62%, 240px) auto no-repeat;
+    opacity: .12;
     pointer-events: none;
     z-index: 0;
   }
 
-  .brandmark { left: 0; }
-  body::after { right: 0; }
+  .margin-mark-left { left: 0; }
+  .margin-mark-right { right: 0; }
 }
 
-body.overlay::after { display: none; }
 body.overlay .railmark,
-body.overlay .brandmark,
+body.overlay .margin-mark,
 body.overlay .context-rail { display: none; }
 
 /* ---------- overlay mode ---------- */
@@ -7159,20 +7145,12 @@ body:not(.overlay) {
   --cyan-deep: #0d5c78;
   --amber: #ffab3d;
   --chamfer: none;
-  background:
-    radial-gradient(900px 520px at 88% -12%, rgba(53, 200, 240, .13), transparent 60%),
-    radial-gradient(720px 430px at 2% 86%, rgba(13, 92, 120, .10), transparent 68%),
-    var(--void);
+  background: var(--void);
 }
 
-/* The previous chart grid made this read as a cousin of the reference site.
-   A distant light pool gives the page depth without turning its background
-   into another piece of interface. */
-body:not(.overlay)::before {
-  background: radial-gradient(760px 430px at 86% 0%, rgba(53, 200, 240, .07), transparent 68%);
-}
-body:not(.overlay) .railmark,
-body:not(.overlay) .brandmark { display: none !important; }
+/* A flat page surface avoids patches of light appearing as content scrolls. */
+body:not(.overlay)::before { content: none; }
+body:not(.overlay) .railmark { display: none; }
 body:not(.overlay) main {
   border-inline: 0;
   -webkit-mask-image: none;
@@ -7326,26 +7304,7 @@ body:not(.overlay) .telemetry-field:first-child::after { content: ""; width: 4px
 body:not(.overlay) #now-feed li::before, body:not(.overlay) #contracts-table .route-point::before { border-color: var(--flight-tone-deep, var(--cyan-deep)); }
 body:not(.overlay) #now-feed { background-image: linear-gradient(var(--flight-tone-deep, var(--rule-hot)), var(--flight-tone-deep, var(--rule-hot))); }
 
-/* A few route points in otherwise empty space give the product its own spatial
-   signature. They are deliberately dim and never sit behind a control. */
 body:not(.overlay) .view.active { position: relative; isolation: isolate; }
-body:not(.overlay) .view.active::after {
-  content: "";
-  position: absolute;
-  top: 34px;
-  right: 18px;
-  width: min(300px, 26vw);
-  height: 174px;
-  pointer-events: none;
-  z-index: 0;
-  opacity: .48;
-  background:
-    radial-gradient(circle at 8% 77%, rgba(127, 228, 255, .72) 0 1px, transparent 2px),
-    radial-gradient(circle at 47% 31%, rgba(127, 228, 255, .58) 0 1px, transparent 2px),
-    radial-gradient(circle at 91% 62%, rgba(181, 140, 240, .7) 0 1px, transparent 2px),
-    linear-gradient(30deg, transparent 49.5%, rgba(53, 200, 240, .14) 50%, transparent 50.5%),
-    linear-gradient(153deg, transparent 49.5%, rgba(181, 140, 240, .13) 50%, transparent 50.5%);
-}
 body:not(.overlay) .view.active > * { position: relative; z-index: 1; }
 
 /* Source labels carry a small shape as well as words and colour, so provenance
