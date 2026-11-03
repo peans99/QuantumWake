@@ -24,6 +24,7 @@ import { EffectComposer } from './vendor/three/addons/postprocessing/EffectCompo
 import { RenderPass } from './vendor/three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from './vendor/three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from './vendor/three/addons/postprocessing/OutputPass.js';
+import { UnrealBloomPass } from './vendor/three/addons/postprocessing/UnrealBloomPass.js';
 
 const t = (s, v) => (typeof window.tx === 'function' ? window.tx(s, v) : s.replace(/\{(\w+)\}/g, (_, k) => v?.[k] ?? ''));
 const escHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -166,7 +167,7 @@ export function parseDds(buf, caps) {
 }
 
 function loadTexture(path, { gloss = false, colour = false, stamp, caps, max }) {
-  const key = `${path.toLowerCase()}|${gloss}|${colour}`;
+  const key = `${path.toLowerCase()}|${gloss}|${colour}|${max}`;
   if (!textureCache.has(key)) {
     const url = `/api/models/texture?path=${encodeURIComponent(path)}${gloss ? '&gloss=true' : ''}&max=${max}&v=${stamp}`;
     textureCache.set(key, fetch(url)
@@ -324,14 +325,19 @@ class MaterialBuilder {
     const decal = sub.decal;
     const glow = glowing(sub);
     const emissive = glow ? linear(sub.emissive) : new THREE.Color(0, 0, 0);
-    const material = new THREE.MeshStandardMaterial({
+    // Painted panels are lacquered: a thin clear coat over the colour, which
+    // is what makes a livery catch the light the way it does in the hangar.
+    const lacquered = paletteDriven && metal < 0.5 && !decal && !glow;
+    const Material = lacquered ? THREE.MeshPhysicalMaterial : THREE.MeshStandardMaterial;
+    const material = new Material({
+      ...(lacquered ? { clearcoat: 0.55, clearcoatRoughness: 0.14 } : {}),
       color: base,
       metalness: metal,
       // Until a gloss map lands, nothing is mirror-smooth: a value of 255 is
       // the map's multiplier, not the surface.
       roughness: THREE.MathUtils.clamp(1 - glossScale, 0.32, 1),
       emissive,
-      emissiveIntensity: glow ? 1.4 : 0,
+      emissiveIntensity: glow ? 3.2 : 0,
       transparent: decal || sub.opacity < 0.99,
       opacity: decal ? 1 : sub.opacity,
       alphaTest: sub.alphaTest > 0 ? sub.alphaTest : (decal ? 0.02 : 0),
@@ -493,6 +499,28 @@ class MaterialBuilder {
   }
 }
 
+/**
+ * The dark field behind the model, as a texture: the page's own gradient was
+ * behind a transparent canvas, and the effects chain draws an opaque one, so
+ * with effects on the model sat on black. In the scene it survives, and a
+ * saved picture carries it.
+ */
+function backdrop() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 16;
+  canvas.height = 512;
+  const g = canvas.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, 0, 512);
+  grad.addColorStop(0, '#0b1724');
+  grad.addColorStop(0.55, '#10233a');
+  grad.addColorStop(1, '#04080e');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 16, 512);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 // --- the view -------------------------------------------------------------
 
 class ModelView {
@@ -527,6 +555,7 @@ class ModelView {
 
     const scene = new THREE.Scene();
     this.scene = scene;
+    scene.background = backdrop();
     const pmrem = new THREE.PMREMGenerator(renderer);
     scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     scene.environmentIntensity = 0.85;
@@ -535,6 +564,7 @@ class ModelView {
     const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 5000);
     this.camera = camera;
     const controls = new OrbitControls(camera, canvas);
+    controls.addEventListener('change', () => this.invalidate());
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.screenSpacePanning = true;
@@ -580,6 +610,10 @@ class ModelView {
 
     this.composer = null;
     this.quality = opts.quality ?? true;
+    // Drawn only when something changed. Counted, so the saving can be
+    // measured: renders, and the time spent issuing them.
+    this.dirty = true;
+    this.stats = { frames: 0, renders: 0, renderMs: 0 };
     this.resize = this.resize.bind(this);
     this.frame = this.frame.bind(this);
     window.addEventListener('resize', this.resize);
@@ -600,7 +634,12 @@ class ModelView {
   pending(list) {
     this.loadingCount += list.length;
     this.progress();
-    list.forEach(p => p.finally(() => { this.loadedCount += 1; this.progress(); }));
+    list.forEach(p => p.finally(() => { this.loadedCount += 1; this.progress(); this.invalidate(); }));
+  }
+
+  /** Something on screen changed: draw the next frame. */
+  invalidate() {
+    this.dirty = true;
   }
 
   progress() {
@@ -617,6 +656,7 @@ class ModelView {
   }
 
   resize() {
+    this.invalidate();
     const box = this.host.querySelector('.v3d-stage').getBoundingClientRect();
     const w = Math.max(1, box.width), h = Math.max(1, box.height);
     this.renderer.setSize(w, h, false);
@@ -633,6 +673,7 @@ class ModelView {
    * flight.
    */
   setLighting(name) {
+    this.invalidate();
     const presets = {
       studio: { env: 1.35, key: 3.2, rim: 1.6, fill: 1.4, sky: 0.6, exposure: 1.2, keyColour: 0xffffff, rimColour: 0xbfe6ff },
       hangar: { env: 0.85, key: 2.6, rim: 1.4, fill: 0.6, sky: 0.35, exposure: 1.05, keyColour: 0xfff1e0, rimColour: 0x9fd8ff },
@@ -653,40 +694,89 @@ class ModelView {
 
   /** The brightness slider: a multiplier on the preset's exposure. */
   setBrightness(value) {
+    this.invalidate();
     this.brightness = value;
     this.renderer.toneMappingExposure = (this.baseExposure ?? 1.05) * value;
   }
 
   setInterior(on) {
+    this.invalidate();
     this.interior = on;
     for (const m of this.interiorMaterials) m.visible = on && m.userData.wanted !== false;
   }
 
+  /**
+   * The effects chain: ambient occlusion, then bloom, then tone mapping.
+   * Drawn into a multisampled target, because a composer's own targets have
+   * no antialiasing and the browser's is lost the moment one is used - hull
+   * edges came out stepped with the effects on and smooth with them off.
+   * Bloom catches only what is brighter than white once lit: thruster
+   * glows, running lights, screens and the hardest highlights.
+   */
   setQuality(on) {
+    this.invalidate();
     this.quality = on;
     if (on && !this.composer) {
-      const composer = new EffectComposer(this.renderer);
+      const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+      const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+      const composer = new EffectComposer(this.renderer, target);
+      composer.setPixelRatio(this.renderer.getPixelRatio());
       composer.addPass(new RenderPass(this.scene, this.camera));
       const ao = new GTAOPass(this.scene, this.camera);
       ao.output = GTAOPass.OUTPUT.Default;
       ao.blendIntensity = 0.85;
       this.ao = ao;
       composer.addPass(ao);
+      const bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.38, 0.5, 1.7);
+      this.bloomPass = bloom;
+      composer.addPass(bloom);
       composer.addPass(new OutputPass());
       this.composer = composer;
       this.resize();
     }
   }
 
+  /** Texture size: High is 2048, Ultra the full 4096 the game ships for close looks. */
+  async setTextureQuality(max) {
+    if (this.textureMax === max) return;
+    this.textureMax = max;
+    const jobs = [];
+    this.root.traverse(o => {
+      if (o.isMesh && o.userData.slots && o.userData.dressedFiles)
+        jobs.push(this.dress([o], o.userData.dressedFiles, o.userData.dressedPalette));
+    });
+    await Promise.all(jobs);
+  }
+
+  /** A slow turn on its own, for looking rather than handling. */
+  setTurntable(on) {
+    this.invalidate();
+    this.controls.autoRotate = on;
+    this.controls.autoRotateSpeed = 0.9;
+  }
+
+  /**
+   * The loop runs every display frame but draws only when something changed:
+   * the camera moved or is still easing to a stop, a texture or part arrived,
+   * a setting changed, or the turntable is turning. A still model costs
+   * nothing after its last frame - which matters with the game running
+   * beside it, since the effects pass is the heaviest thing the view does.
+   */
   frame() {
     if (this.disposed) return;
     requestAnimationFrame(this.frame);
-    this.controls.update();
+    this.stats.frames += 1;
+    const moved = this.controls.update();
+    if (!moved && !this.dirty && !this.controls.autoRotate) return;
+    this.dirty = false;
     this.fill.position.copy(this.camera.position);
     this.fill.target.position.copy(this.controls.target);
     this.fill.target.updateMatrixWorld();
+    const started = performance.now();
     if (this.quality && this.composer) this.composer.render();
     else this.renderer.render(this.scene, this.camera);
+    this.stats.renders += 1;
+    this.stats.renderMs += performance.now() - started;
     this.placeMarkers();
   }
 
@@ -770,6 +860,7 @@ class ModelView {
   }
 
   setSuit(on) {
+    this.invalidate();
     this.showSuit = on;
     for (const group of this.suitParts || []) group.visible = on;
     this.frameModel();
@@ -917,6 +1008,7 @@ class ModelView {
     }
     group.userData.meshes = meshes;
     parent.add(group);
+    this.invalidate();
 
     await this.dress(meshes, files, palette);
 
@@ -930,6 +1022,9 @@ class ModelView {
     if (this.disposed) return;
     const made = new Map();
     for (const m of meshes) {
+      this.invalidate();
+      m.userData.dressedFiles = files;
+      m.userData.dressedPalette = palette;
       m.material = m.userData.slots.map(slot => {
         const key = `${slot.file}|${slot.mat}`;
         if (!made.has(key)) {
@@ -960,6 +1055,7 @@ class ModelView {
   }
 
   frameModel(keepView) {
+    this.invalidate();
     const box = new THREE.Box3();
     this.root.updateMatrixWorld(true);
     this.root.traverseVisible(o => {
@@ -1038,6 +1134,7 @@ class ModelView {
   }
 
   select(part) {
+    this.invalidate();
     this.selected = part;
     if (this.box) {
       this.scene.remove(this.box);
@@ -1110,6 +1207,7 @@ function shell() {
         </div>
         <label class="v3d-toggle"><input type="checkbox" data-v3d-markers checked> ${escHtml(t('Slots'))}</label>
         <label class="v3d-toggle"><input type="checkbox" data-v3d-interior> ${escHtml(t('Interior'))}</label>
+        <label class="v3d-toggle"><input type="checkbox" data-v3d-turntable> ${escHtml(t('Turntable'))}</label>
         <label class="v3d-toggle" data-v3d-suit-box hidden><input type="checkbox" data-v3d-suit checked> ${escHtml(t('Full suit'))}</label>
         <select class="v3d-select" data-v3d-lighting aria-label="${escHtml(t('Lighting'))}" title="${escHtml(t('Lighting'))}">
           <option value="studio">${escHtml(t('Studio light'))}</option>
@@ -1117,7 +1215,11 @@ function shell() {
           <option value="space">${escHtml(t('Deep space'))}</option>
         </select>
         <label class="v3d-toggle" title="${escHtml(t('Brightness'))}">☀ <input type="range" data-v3d-brightness min="0.5" max="2.2" step="0.05" value="1" aria-label="${escHtml(t('Brightness'))}"></label>
-        <label class="v3d-toggle"><input type="checkbox" data-v3d-quality checked> ${escHtml(t('Ambient occlusion'))}</label>
+        <label class="v3d-toggle" title="${escHtml(t('Ambient occlusion, glow and smoothed edges'))}"><input type="checkbox" data-v3d-quality checked> ${escHtml(t('Effects'))}</label>
+        <select class="v3d-select" data-v3d-textures aria-label="${escHtml(t('Texture quality'))}" title="${escHtml(t('Texture quality'))}">
+          <option value="2048">${escHtml(t('High textures'))}</option>
+          <option value="4096">${escHtml(t('Ultra textures'))}</option>
+        </select>
         <button type="button" class="v3d-shot" data-v3d-shot>${escHtml(t('Save picture'))}</button>
         <button type="button" class="v3d-close" data-v3d-close aria-label="${escHtml(t('Close'))}">✕</button>
       </div>
@@ -1196,12 +1298,14 @@ export async function openModel(opts) {
   host.querySelectorAll('[data-v3d-view]').forEach(b => b.addEventListener('click', () => view.view(b.dataset.v3dView)));
   q('[data-v3d-quality]').addEventListener('change', e => view.setQuality(e.target.checked));
   q('[data-v3d-interior]').addEventListener('change', e => view.setInterior(e.target.checked));
+  q('[data-v3d-turntable]').addEventListener('change', e => view.setTurntable(e.target.checked));
   q('[data-v3d-suit]').addEventListener('change', e => view.setSuit(e.target.checked));
   view.onSuit = () => { q('[data-v3d-suit-box]').hidden = false; };
   q('[data-v3d-lighting]').addEventListener('change', e => view.setLighting(e.target.value));
+  q('[data-v3d-textures]').addEventListener('change', e => view.setTextureQuality(Number(e.target.value)));
   q('[data-v3d-brightness]').addEventListener('input', e => view.setBrightness(Number(e.target.value)));
   view.setLighting(opts.lighting || 'studio');
-  q('[data-v3d-markers]').addEventListener('change', e => { q('.v3d-markers').hidden = !e.target.checked; });
+  q('[data-v3d-markers]').addEventListener('change', e => { q('.v3d-markers').hidden = !e.target.checked; view.invalidate(); });
   q('[data-v3d-shot]').addEventListener('click', () => {
     const a = document.createElement('a');
     a.href = view.renderer.domElement.toDataURL('image/png');

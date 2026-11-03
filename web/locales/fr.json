@@ -6055,5 +6055,11 @@
   "Deep space": "Espace profond",
   "Contract title": "Titre de contrat",
   "Full suit": "Armure complète",
-  "Fitting the rest of the suit…": "Mise en place du reste de l’armure…"
+  "Fitting the rest of the suit…": "Mise en place du reste de l’armure…",
+  "Effects": "Effets",
+  "Ambient occlusion, glow and smoothed edges": "Occlusion ambiante, halo lumineux et bords lissés",
+  "Texture quality": "Qualité des textures",
+  "High textures": "Textures hautes",
+  "Ultra textures": "Textures ultra",
+  "Turntable": "Plateau tournant"
 }

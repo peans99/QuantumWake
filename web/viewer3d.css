@@ -198,3 +198,7 @@ body .v3d label { text-transform: none; letter-spacing: normal; font-family: var
   font: 12px var(--display, sans-serif);
 }
 .v3d-toggle input[type="range"] { width: 90px; accent-color: var(--cyan, #35c8f0); }
+
+.v3d-bar { flex-wrap: wrap; row-gap: 8px; }
+.v3d-title { flex: 1 1 260px; }
+.v3d-tools { flex: 1 1 auto; row-gap: 6px; }
