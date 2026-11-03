@@ -62,7 +62,7 @@ public sealed record ModelPalette(ModelTint A, ModelTint B, ModelTint C, int[] G
 /// </remarks>
 public sealed class GameModelCatalogue
 {
-    public const int CacheVersion = 3;
+    public const int CacheVersion = 5;
 
     public static readonly GameModelCatalogue Empty = new([], []);
 
@@ -164,13 +164,45 @@ public sealed class GameModelCatalogue
                     var (node, nodeField) = core.FieldAt(at, geometry, "Geometry");
                     if (node < 0 || nodeField is null) continue;
                     (path, material, palette) = Data(core, node, nodeField.StructIndex, PaletteOf);
+                    // A colourway is often the component's material over a shared model.
+                    var componentMaterial = ComponentMaterial(core, at, geometry);
+                    material = componentMaterial ?? material;
+                    string? worn = null, wornMaterial = null, bodyMaterial = null;
                     foreach (var sub in core.ClassArrayAt(node, nodeField.StructIndex, "SubGeometry"))
                     {
                         var subAt = core.InstanceAt(sub);
                         var tags = core.StringAt(subAt, sub.StructIndex, "Tags");
                         if (string.IsNullOrWhiteSpace(tags)) continue;
-                        var (_, subMaterial, subPalette) = Data(core, subAt, sub.StructIndex, PaletteOf);
+                        var (subPath, subMaterial, subPalette) = Data(core, subAt, sub.StructIndex, PaletteOf);
+                        var words = tags.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+                        // Body armour's own geometry is the crate it is carried
+                        // in; the suit as worn is the sub-geometry tagged for a
+                        // body - cds_armor_heavy_core_01_01_01's is
+                        // m_cds_heavy_armor_01_core.skin under "Male". The male
+                        // body is the one the view draws.
+                        var male = words.Contains("Male", StringComparer.OrdinalIgnoreCase);
+                        if (male || words.Contains("Female", StringComparer.OrdinalIgnoreCase))
+                            bodyMaterial ??= subMaterial;
+                        if (male && subPath is not null)
+                        {
+                            worn = subPath;
+                            wornMaterial = subMaterial;
+                            palette = subPalette ?? palette;
+                            continue;
+                        }
+                        if (words.Any(w => NotPaints.Contains(w))) continue;
                         paints.Add(new ModelPaint(tags.Trim(), subPalette, subMaterial));
+                    }
+
+                    // The colourway's material is often written on one body
+                    // only - that torso's names m_cds_heavy_armor_01_01_01.mtl
+                    // under Female and nothing under Male - and both bodies
+                    // wear it. Never the crate's material.
+                    if (worn is not null)
+                    {
+                        path = worn;
+                        material = componentMaterial ?? wornMaterial ?? bodyMaterial;
                     }
                 }
                 else if (component.StructIndex == attach)
@@ -203,6 +235,26 @@ public sealed class GameModelCatalogue
         }
 
         return new GameModelCatalogue(entities, palettes);
+    }
+
+    /// <summary>
+    /// Sub-geometry tags that are a body, a state or a place the item is held,
+    /// not a livery: armour's Male and Female, the crate a suit is carried in.
+    /// </summary>
+    private static readonly HashSet<string> NotPaints = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Male", "Female", "heldEntity", "inventoryStoredEntity", "shouldered", "Holstered", "Stowed", "FirstPerson", "ThirdPerson",
+    };
+
+    /// <summary>The material the geometry component names for the whole entity, as armour's colourways do.</summary>
+    private static string? ComponentMaterial(DataCore core, long at, int geometry)
+    {
+        var (node, nodeField) = core.FieldAt(at, geometry, "Material");
+        if (node < 0 || nodeField is null) return null;
+        var (inner, innerField) = core.FieldAt(node, nodeField.StructIndex, "Material");
+        if (inner < 0 || innerField is null) return null;
+        var p = core.StringAt(inner, innerField.StructIndex, "path");
+        return string.IsNullOrWhiteSpace(p) ? null : p;
     }
 
     private static (string? Path, string? Material, string? Palette) Data(

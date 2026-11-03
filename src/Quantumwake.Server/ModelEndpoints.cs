@@ -203,6 +203,40 @@ public static partial class ServerHost
             return Results.Ok(new { stamp = models.Stamp, vehicles, weapons, armour });
         });
 
+        // The rest of an armour piece's set, so the view can draw the whole
+        // suit. The set is in the class names: cds_armor_heavy_helmet_01_02_01
+        // goes with cds_armor_heavy_core_01_02_01, _arms_, _legs_ and
+        // _backpack_. Pieces are skinned to the same body at rest, so drawn
+        // together they stand where they belong. A part the colourway lacks
+        // is taken in another colourway of the same model, said as such.
+        app.MapGet("/api/models/suit/{cls}", (string cls, ModelLibrary models, LogLibrary lib) =>
+        {
+            if (!models.Available) return Results.NotFound();
+            var catalogue = models.Catalogue;
+            var match = System.Text.RegularExpressions.Regex.Match(cls,
+                "^(?<pre>.+?)_(?<part>helmet|core|arms|legs|backpack)_(?<post>.+)$",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (!match.Success) return Results.Ok(new { pieces = Array.Empty<object>() });
+
+            var pre = match.Groups["pre"].Value;
+            var post = match.Groups["post"].Value;
+            var model = post.Split('_')[0];
+            var pieces = new List<object>();
+            foreach (var part in new[] { "helmet", "core", "arms", "legs", "backpack" })
+            {
+                if (part.Equals(match.Groups["part"].Value, StringComparison.OrdinalIgnoreCase)) continue;
+                var exact = catalogue.Find($"{pre}_{part}_{post}");
+                var other = exact ?? catalogue.Entities.Values
+                    .Where(e => e.Class.StartsWith($"{pre}_{part}_{model}_", StringComparison.OrdinalIgnoreCase)
+                        && e.Type?.StartsWith("Char_Armor_", StringComparison.OrdinalIgnoreCase) == true)
+                    .OrderBy(e => e.Class.Length).ThenBy(e => e.Class, StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault();
+                if (other is null) continue;
+                pieces.Add(new { cls = other.Class, name = lib.ItemName(other.Class), part, sameColour = exact is not null });
+            }
+            return Results.Ok(new { pieces });
+        });
+
         // Whether something has a model the view can open, by class or by
         // the name a page shows: a Reference ship card is opened by the
         // ship's name ("Origin 315p"), an item card by its class. Pages ask

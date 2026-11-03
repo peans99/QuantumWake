@@ -44,6 +44,11 @@ const PART_GROUPS = [
   ['MainThruster', 'Thrusters'],
   ['ManneuverThruster', 'Thrusters'],
   ['WeaponAttachment', 'Attachments'],
+  ['Char_Armor_Helmet', 'Armour pieces'],
+  ['Char_Armor_Torso', 'Armour pieces'],
+  ['Char_Armor_Arms', 'Armour pieces'],
+  ['Char_Armor_Legs', 'Armour pieces'],
+  ['Char_Armor_Backpack', 'Armour pieces'],
 ];
 
 function groupOf(type) {
@@ -570,6 +575,7 @@ class ModelView {
     this.fallback = new THREE.MeshStandardMaterial({ color: 0x8a9096, metalness: 0.4, roughness: 0.5 });
     this.interior = false;
     this.interiorMaterials = new Set();
+    this.showSuit = true;
     this.materials = new MaterialBuilder(this);
 
     this.composer = null;
@@ -722,6 +728,51 @@ class ModelView {
     this.setStatus('');
     this.frameModel(true);
     this.onParts?.(this.parts);
+
+    if (/^Char_Armor_/i.test(scene.type || '')) {
+      await this.suit(cls);
+      this.onParts?.(this.parts);
+    }
+  }
+
+  /**
+   * The rest of an armour piece's set - helmet, torso, arms, legs, backpack -
+   * drawn around it. Every piece is skinned to the same body at rest, so they
+   * stand where they belong without being placed. Shown by default, behind
+   * the Full suit box.
+   */
+  async suit(cls) {
+    let got = null;
+    try {
+      got = await getJson(`/api/models/suit/${encodeURIComponent(cls)}`);
+    } catch {
+      return;
+    }
+    if (!got?.pieces?.length || this.disposed) return;
+    this.suitParts = [];
+    this.onSuit?.(got.pieces);
+    this.setStatus(t('Fitting the rest of the suit…'));
+    await Promise.all(got.pieces.map(async piece => {
+      const scene = await getJson(`/api/models/scene/${encodeURIComponent(piece.cls)}`).catch(() => null);
+      if (!scene?.geometry || this.disposed) return;
+      Object.assign(this.palettes, scene.palettes || {});
+      const group = await this.model({
+        geometry: scene.geometry, material: scene.material, palette: scene.palette,
+        name: piece.name, cls: piece.cls, type: scene.type, port: piece.part, path: [piece.part],
+      }, this.root, false, 0);
+      if (group) {
+        group.visible = this.showSuit;
+        this.suitParts.push(group);
+      }
+    }));
+    this.setStatus('');
+    this.frameModel();
+  }
+
+  setSuit(on) {
+    this.showSuit = on;
+    for (const group of this.suitParts || []) group.visible = on;
+    this.frameModel();
   }
 
   /**
@@ -825,8 +876,12 @@ class ModelView {
       byNode.get(s.node).push(s);
     });
 
-    const files = header.materials.map((file, i) => (i === 0 && part.material ? part.material : file));
-    const palette = this.palettes[part.palette] || this.palettes[this.sceneInfo.palette] || null;
+    // The hull wears the paint the view opened in - the one picked for it on
+    // Fleet or the Garage - from the first frame, not recoloured after.
+    const hullPaint = isHull ? this.paint : null;
+    const files = header.materials.map((file, i) => (i === 0 && hullPaint?.material ? hullPaint.material : i === 0 && part.material ? part.material : file));
+    const own = isHull ? null : this.palettes[part.palette];
+    const palette = own || (this.paint && this.palettes[this.paint.palette]) || this.palettes[this.sceneInfo.palette] || null;
 
     const meshes = [];
     for (const [nodeIndex, subsets] of byNode) {
@@ -905,7 +960,11 @@ class ModelView {
   }
 
   frameModel(keepView) {
-    const box = new THREE.Box3().setFromObject(this.root);
+    const box = new THREE.Box3();
+    this.root.updateMatrixWorld(true);
+    this.root.traverseVisible(o => {
+      if (o.isMesh && o.geometry.boundingBox) box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld));
+    });
     if (box.isEmpty()) return;
     const size = box.getSize(new THREE.Vector3());
     const centre = box.getCenter(new THREE.Vector3());
@@ -1051,6 +1110,7 @@ function shell() {
         </div>
         <label class="v3d-toggle"><input type="checkbox" data-v3d-markers checked> ${escHtml(t('Slots'))}</label>
         <label class="v3d-toggle"><input type="checkbox" data-v3d-interior> ${escHtml(t('Interior'))}</label>
+        <label class="v3d-toggle" data-v3d-suit-box hidden><input type="checkbox" data-v3d-suit checked> ${escHtml(t('Full suit'))}</label>
         <select class="v3d-select" data-v3d-lighting aria-label="${escHtml(t('Lighting'))}" title="${escHtml(t('Lighting'))}">
           <option value="studio">${escHtml(t('Studio light'))}</option>
           <option value="hangar">${escHtml(t('Hangar light'))}</option>
@@ -1136,6 +1196,8 @@ export async function openModel(opts) {
   host.querySelectorAll('[data-v3d-view]').forEach(b => b.addEventListener('click', () => view.view(b.dataset.v3dView)));
   q('[data-v3d-quality]').addEventListener('change', e => view.setQuality(e.target.checked));
   q('[data-v3d-interior]').addEventListener('change', e => view.setInterior(e.target.checked));
+  q('[data-v3d-suit]').addEventListener('change', e => view.setSuit(e.target.checked));
+  view.onSuit = () => { q('[data-v3d-suit-box]').hidden = false; };
   q('[data-v3d-lighting]').addEventListener('change', e => view.setLighting(e.target.value));
   q('[data-v3d-brightness]').addEventListener('input', e => view.setBrightness(Number(e.target.value)));
   view.setLighting(opts.lighting || 'studio');
@@ -1157,6 +1219,13 @@ export async function openModel(opts) {
         .map((p, i) => `<option value="${i}">${escHtml(p.name)}</option>`).join('');
       select.addEventListener('change', () => view.setPaint(select.value === '' ? null : paints[+select.value]));
       q('[data-v3d-paints]').hidden = false;
+      // The paint item the pilot chose for this hull elsewhere in the app is
+      // the paint's tag here; open in it.
+      const wanted = opts.paint ? paints.findIndex(p => String(p.tag).toLowerCase() === String(opts.paint).toLowerCase()) : -1;
+      if (wanted >= 0) {
+        select.value = String(wanted);
+        view.paint = paints[wanted];
+      }
     }
   };
 

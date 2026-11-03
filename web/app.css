@@ -8709,3 +8709,8 @@ body .model-maker { text-transform: none; letter-spacing: normal; }
 .models-maker-head .model-maker-logo { width: 40px; height: 30px; }
 .models-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
 .model-card-outline.ship-outline { align-self: center; width: 150px; height: 84px; margin: 2px 0 6px; cursor: inherit; }
+
+/* A model card's picture: the game's render of the hull in its paint. */
+.model-card-picture { position: relative; display: flex; align-items: center; justify-content: center; align-self: stretch; height: 104px; margin: 0 0 6px; }
+.model-card-picture .model-card-outline.ship-outline { margin: 0; }
+.model-card-render { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .55)); }

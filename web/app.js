@@ -20044,9 +20044,20 @@ function shipModelButton(classOrName, name) {
     } catch {
       found = null;
     }
-    if (found?.cls) openModelView({ cls: found.cls, title: name || found.name });
+    if (found?.cls) openModelView({ cls: found.cls, title: name || found.name, paint: modelPaintFor(found.cls) });
     else toast('warn', tx('The install holds no model for {ship}.', { ship: name || classOrName }));
   }, tx('3D'), 'ghost tiny ship-model');
+}
+
+/**
+ * The paint a hull should open in: the one picked for it on Fleet or the
+ * Garage, else the first the game pictures - what its card shows.
+ */
+function modelPaintFor(cls) {
+  const chosen = shipPaints[cls];
+  if (chosen && chosen !== SILHOUETTE) return chosen;
+  if (chosen === SILHOUETTE) return null;
+  return resolvedHullPaints.get(cls)?.[0]?.item || null;
 }
 
 /** The Garage bench's changed ports, as the viewer's fits. */
@@ -20157,15 +20168,35 @@ function modelsCard(m, makerName, kind) {
   const card = el('button', 'model-card');
   card.type = 'button';
   if (kind === 'vehicles') {
+    // The game's own picture of the hull in its paint, as Fleet and the
+    // Garage show it: the paint picked for it there, else the first the game
+    // pictures. The silhouette holds the place until the picture arrives, and
+    // stays when the files picture no paint for the hull.
+    const stage = el('span', 'model-card-picture');
     const outline = el('span', 'ship-outline model-card-outline');
     outline.style.setProperty('--tint', makerTint(String(m.maker || '').toUpperCase()));
     outline.style.setProperty('--outline', `url("/api/fleet/icons/${encodeURIComponent(m.cls)}")`);
-    card.append(outline);
+    stage.append(outline);
+    card.append(stage);
+    const show = (item) => {
+      if (!item) return;
+      const img = document.createElement('img');
+      img.className = 'model-card-render';
+      img.alt = '';
+      img.loading = 'lazy';
+      img.addEventListener('load', () => outline.remove());
+      img.addEventListener('error', () => img.remove());
+      img.src = `/api/fleet/paints/${encodeURIComponent(item)}/render`;
+      stage.append(img);
+    };
+    const chosen = shipPaints[m.cls];
+    if (chosen && chosen !== SILHOUETTE) show(chosen);
+    else if (chosen !== SILHOUETTE) paintsForHull(m.cls).then((paints) => show(paints[0]?.item)).catch(() => {});
   }
   card.append(el('strong', null, modelsShortName(m.name, makerName)),
     el('span', 'model-card-meta', [m.cls, m.paints ? txn(m.paints, '{count} paint', '{count} paints') : null].filter(Boolean).join(' · ')));
   card.title = tx('Open {name} in 3D', { name: m.name });
-  card.addEventListener('click', () => openModelView({ cls: m.cls, title: m.name }));
+  card.addEventListener('click', () => openModelView({ cls: m.cls, title: m.name, paint: modelPaintFor(m.cls) }));
   return card;
 }
 
@@ -20265,7 +20296,7 @@ function renderGarage(data, stock) {
   const modelAction = $('#garage-model-action');
   if (modelAction) {
     modelAction.textContent = '';
-    modelAction.append(modelViewButton(() => openModelView({ cls: data.ship.class, title: data.ship.name, fitted: garageModelFits(data) })));
+    modelAction.append(modelViewButton(() => openModelView({ cls: data.ship.class, title: data.ship.name, fitted: garageModelFits(data), paint: modelPaintFor(data.ship.class) })));
   }
   const discipline = garageShipDiscipline(data.ship.career, data.ship.role);
   const sub = $('#garage-sub');
