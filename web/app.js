@@ -17092,6 +17092,261 @@ async function describeInstallSearch() {
   if (input) input.placeholder = (prefixes[0] || '~/Games/star-citizen') + '/drive_c/Program Files/Roberts Space Industries/StarCitizen/LIVE';
 }
 
+/* ---------- game channels: LIVE, PTU, EPTU ---------- */
+
+/**
+ * The channels this machine has, from /api/install/channels.
+ *
+ * The app reads one channel at a time - each keeps its own history, so a PTU
+ * evening never lands in the LIVE totals - and switching is a restart pointed
+ * at the other folder. What the page adds is noticing: the game started on
+ * PTU while the app is reading LIVE is exactly when nobody thinks to look.
+ */
+let channelState = null;
+
+/** Which "game is running on PTU" notices were waved away, by folder. */
+const CHANNEL_DISMISS_KEY = 'qw-channel-dismissed';
+
+async function loadChannels(refresh = false) {
+  try {
+    channelState = await getJson(`/api/install/channels${refresh ? '?refresh=true' : ''}`);
+  } catch {
+    channelState = null;
+  }
+  renderChannels();
+  return channelState;
+}
+
+/** A switch's line: "PTU · 12 logs · played 4m ago". */
+function channelDetail(c) {
+  const parts = [txn(c.logs || 0, '{count} log', '{count} logs')];
+  parts.push(c.lastPlayed ? tx('played {when}', { when: ago(c.lastPlayed) }) : tx('never played'));
+  return parts.join(' · ');
+}
+
+function channelDismissed(playing) {
+  try {
+    const kept = JSON.parse(localStorage.getItem(CHANNEL_DISMISS_KEY) || '{}');
+    // Waved away for this game session only: a log written after the wave
+    // is the game started again, and worth saying again.
+    const at = kept[playing.root];
+    return Boolean(at) && new Date(at) >= new Date(playing.lastPlayed || 0) - 15 * 60000;
+  } catch {
+    return false;
+  }
+}
+
+function dismissChannel(playing) {
+  try {
+    const kept = JSON.parse(localStorage.getItem(CHANNEL_DISMISS_KEY) || '{}');
+    kept[playing.root] = new Date().toISOString();
+    localStorage.setItem(CHANNEL_DISMISS_KEY, JSON.stringify(kept));
+  } catch { /* private browsing: it comes back next minute, which is honest */ }
+}
+
+/** One channel as a row, for the Settings list and the top-bar menu alike. */
+function channelRow(c, data, onStatus) {
+  const row = el('div', `channel-row${c.current ? ' current' : ''}`);
+  const name = el('div', 'channel-name');
+  name.append(el('b', null, c.channel));
+  if (c.current) name.append(el('span', 'channel-reading', tx('reading')));
+  if (data.playing && data.playing.root === c.root) name.append(el('span', 'channel-playing', tx('game running')));
+  row.append(name);
+
+  // Two installs of one channel - a second library on another drive - are
+  // told apart by where they are, or both rows would read "LIVE".
+  const twin = (data.channels || []).filter((o) => o.channel === c.channel).length > 1;
+  const detail = el('span', 'muted channel-detail', twin ? `${channelDetail(c)} · ${c.root}` : channelDetail(c));
+  detail.title = c.root;
+  row.append(detail);
+
+  if (!c.current) {
+    const button = el('button', 'ghost', tx('Switch to {channel}', { channel: c.channel }));
+    button.disabled = Boolean(data.pinned);
+    if (data.pinned) button.title = tx('Quantum Wake was started with a game folder named on its command line, so it always reads that one. Start it without --path to switch channels.');
+    button.addEventListener('click', () => switchChannel(c, button, onStatus));
+    row.append(button);
+  }
+  return row;
+}
+
+function renderChannels() {
+  const data = channelState;
+  const channels = data?.channels || [];
+  const others = channels.filter((c) => !c.current);
+
+  // Top bar: the install label opens the menu once there is somewhere to go.
+  const label = $('#install');
+  if (label) {
+    const switchable = others.length > 0;
+    label.classList.toggle('install-switch', switchable);
+    label.classList.toggle('install-elsewhere', Boolean(data?.playing));
+    if (switchable) {
+      label.setAttribute('role', 'button');
+      label.tabIndex = 0;
+    } else {
+      label.removeAttribute('role');
+      label.removeAttribute('tabindex');
+      const menu = $('#channel-menu');
+      if (menu) menu.hidden = true;
+    }
+  }
+
+  // Settings: every channel, with what it holds.
+  const list = $('#channel-list');
+  if (list) {
+    list.textContent = '';
+    const status = $('#channel-status');
+    const say = (text) => { if (status) status.textContent = text; };
+    if (!channels.length) {
+      list.append(el('p', 'muted', tx('No game channel was found on this machine.')));
+    } else {
+      for (const c of channels) list.append(channelRow(c, data, say));
+    }
+    const note = $('#channel-note');
+    if (note) {
+      note.hidden = !data?.pinned;
+      note.textContent = data?.pinned
+        ? tx('Quantum Wake was started with a game folder named on its command line, so it always reads that one. Start it without --path to switch channels.')
+        : '';
+    }
+  }
+
+  // The notice: the game is running somewhere this app is not reading.
+  const notice = $('#channel-notice');
+  if (notice) {
+    const playing = data?.playing;
+    const show = Boolean(playing) && !data.pinned && !channelDismissed(playing);
+    notice.hidden = !show;
+    if (show) {
+      $('#channel-notice-title').textContent = tx('Star Citizen is running on {channel}', { channel: playing.channel });
+      $('#channel-notice-detail').textContent = tx('Quantum Wake is reading {current}. The {channel} log was written {when}.', {
+        current: data.current || tx('no channel'), channel: playing.channel, when: ago(playing.lastPlayed),
+      });
+      const actions = $('#channel-notice-actions');
+      actions.textContent = '';
+      const status = el('span', 'muted');
+      const go = el('button', 'ghost', tx('Switch to {channel}', { channel: playing.channel }));
+      go.addEventListener('click', () => switchChannel(playing, go, (text) => { status.textContent = text; }));
+      const later = el('button', 'ghost', tx('Not now'));
+      later.addEventListener('click', () => { dismissChannel(playing); notice.hidden = true; });
+      actions.append(go, later, status);
+    }
+  }
+}
+
+/** The top-bar menu: the other channels, one click each. */
+function toggleChannelMenu(force) {
+  const menu = $('#channel-menu');
+  const data = channelState;
+  if (!menu || !data) return;
+  const open = force ?? menu.hidden;
+  if (!open) {
+    menu.hidden = true;
+    return;
+  }
+  menu.textContent = '';
+  menu.append(el('div', 'channel-menu-head', tx('Game channel')));
+  const status = el('div', 'muted channel-menu-status');
+  for (const c of data.channels || []) menu.append(channelRow(c, data, (text) => { status.textContent = text; }));
+  menu.append(status);
+  menu.hidden = false;
+}
+
+/**
+ * Saves the channel and asks the app to start again on it, then waits for the
+ * new copy to answer and reloads. A bare server cannot restart itself, so
+ * there it says the switch takes effect on the next start.
+ */
+async function switchChannel(target, button, say) {
+  if (button) button.disabled = true;
+  say(tx('Switching to {channel}…', { channel: target.channel }));
+  let result;
+  let response;
+  try {
+    response = await fetch('/api/install/channel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root: target.root }),
+    });
+    result = await response.json();
+  } catch {
+    say(tx('Could not reach the server.'));
+    if (button) button.disabled = false;
+    return;
+  }
+
+  if (!response.ok) {
+    say(serverText(result?.message) || tx('Could not switch channel.'));
+    if (button) button.disabled = false;
+    return;
+  }
+  if (result.already) {
+    say(tx('Already reading {channel}.', { channel: result.channel }));
+    return;
+  }
+  if (!result.restarting) {
+    say(tx('Saved. Restart Quantum Wake to read {channel}.', { channel: result.channel }));
+    return;
+  }
+
+  say(tx('Restarting on {channel}…', { channel: result.channel }));
+  waitForRestart();
+}
+
+/** Polls until the restarted copy answers, then reloads onto it. */
+async function waitForRestart() {
+  const started = Date.now();
+  let wentDown = false;
+  while (Date.now() - started < 90000) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      const response = await fetch('/api/install', { cache: 'no-store' });
+      // The old copy answers for a moment before it stands down; only a
+      // reply after a gap is the new one.
+      if (wentDown || Date.now() - started > 15000) {
+        if (response.ok || response.status === 404) {
+          location.reload();
+          return;
+        }
+      }
+    } catch {
+      wentDown = true;
+    }
+  }
+  location.reload();
+}
+
+function startChannelWatch() {
+  const label = $('#install');
+  if (label) {
+    label.addEventListener('click', (e) => {
+      if (!label.classList.contains('install-switch')) return;
+      e.stopPropagation();
+      toggleChannelMenu();
+    });
+    label.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === ' ') && label.classList.contains('install-switch')) {
+        e.preventDefault();
+        toggleChannelMenu();
+      }
+    });
+  }
+  document.addEventListener('click', (e) => {
+    const menu = $('#channel-menu');
+    if (menu && !menu.hidden && !menu.contains(e.target)) menu.hidden = true;
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') toggleChannelMenu(false);
+  });
+  $('#channel-refresh')?.addEventListener('click', () => loadChannels(true));
+
+  loadChannels();
+  // A minute is soon enough to notice a game started on PTU, and the ask is
+  // a handful of file times.
+  setInterval(() => loadChannels(), 60000);
+}
+
 $('#install-path-save')?.addEventListener('click', async (e) => {
   const status = $('#install-path-status');
   const path = $('#install-path').value.trim();
@@ -34963,6 +35218,9 @@ async function boot() {
       describeInstallSearch();
     }
   }
+
+  // After the label, which the switcher hangs off.
+  if (!isOverlay && !isSnapshot) startChannelWatch();
 
   try {
     const info = await getJson('/api/version');

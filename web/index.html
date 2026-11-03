@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css?v=0.21.0">
+  <link rel="stylesheet" href="app.css?v=0.21.1">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -135,6 +135,7 @@
       </div>
     </div>
     <span id="install" class="muted">detecting…</span>
+    <div class="channel-menu" id="channel-menu" hidden></div>
     <span id="link" class="dot" title="disconnected"></span>
   </div>
 </header>
@@ -212,6 +213,17 @@
   <!-- Notices share one quiet strip. Their detail and choices stay one click
        away, so important work remains available without displacing the page. -->
   <section class="notice-strip" aria-label="Notices">
+    <details class="notice" id="channel-notice" hidden>
+      <summary class="notice-summary">
+        <span class="notice-body">
+          <b id="channel-notice-title">Star Citizen is running on another channel</b>
+          <span class="muted" id="channel-notice-detail"></span>
+        </span>
+        <span class="notice-toggle"><span class="when-closed">Details</span><span class="when-open">Close</span></span>
+      </summary>
+      <div class="notice-actions" id="channel-notice-actions"></div>
+    </details>
+
     <details class="notice" id="stale" hidden>
       <summary class="notice-summary">
         <span class="notice-body">
@@ -4234,6 +4246,23 @@
       <div class="settings-group-content">
     <div class="option-block">
       <div class="option-head">
+        <h3>Game channel</h3>
+        <button class="ghost" id="channel-refresh">Look again</button>
+      </div>
+      <p class="muted">
+        LIVE, PTU and the other test channels are separate installs with
+        separate logs. Quantum Wake reads one at a time and keeps each one's
+        history apart, so a PTU evening never lands in your LIVE totals.
+        Switching restarts the app on the other folder; when the game is
+        running on a channel this is not reading, the top of the page says so.
+      </p>
+      <div class="channel-list" id="channel-list"></div>
+      <p class="muted warn" id="channel-note" hidden></p>
+      <span class="muted" id="channel-status"></span>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
         <h3>Your game files</h3>
         <span class="muted" id="gamedata-state"></span>
       </div>
@@ -5000,6 +5029,6 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.21.0"></script>
+<script src="app.js?v=0.21.1"></script>
 </body>
 </html>

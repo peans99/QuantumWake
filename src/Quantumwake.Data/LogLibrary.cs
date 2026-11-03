@@ -864,9 +864,9 @@ public sealed class LogLibrary : IDisposable
     /// </summary>
     public void LoadNames(string installRoot)
     {
-        var cache = Path.Combine(
-            Path.GetDirectoryName(SessionStore.DatabasePathFor(installRoot))!,
-            "names.json");
+        // Per channel: LIVE and PTU are different builds, and one shared file
+        // would be rebuilt from scratch on every switch between them.
+        var cache = Path.Combine(Quantumwake.Core.AppPaths.ForChannel(installRoot), "names.json");
 
         Names = GameNames.Load(installRoot, cache);
 

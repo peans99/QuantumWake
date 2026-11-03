@@ -52,6 +52,33 @@ public static class AppPaths
         Path.Combine([Root, .. parts]);
 
     /// <summary>
+    /// Where what was read out of one game channel's files is kept: names,
+    /// commodities, models, pictures, and what was written into its folder.
+    /// </summary>
+    /// <remarks>
+    /// LIVE keeps the data folder itself, so nothing anyone already has moves.
+    /// Every other channel gets <c>channels\&lt;name&gt;</c>. The caches are
+    /// stamped with the archive's write time, so sharing one file between LIVE
+    /// and PTU would not show wrong answers - it would throw the other's away on
+    /// every switch, and rebuilding the commodity table alone reads 316 MB.
+    /// </remarks>
+    public static string ForChannel(string? installRoot)
+    {
+        if (string.IsNullOrWhiteSpace(installRoot))
+            return Root;
+
+        // Either separator: a Windows path read off the launcher reaches the
+        // Linux build too, where GetFileName would not split it.
+        var trimmed = installRoot.TrimEnd('\\', '/');
+        var name = trimmed[(trimmed.LastIndexOfAny(['\\', '/']) + 1)..];
+        var safe = new string([.. name.Where(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')]);
+
+        return safe.Length == 0 || safe.Equals("LIVE", StringComparison.OrdinalIgnoreCase)
+            ? Root
+            : In("channels", safe.ToUpperInvariant());
+    }
+
+    /// <summary>
     /// Points every store at another folder. Reads <c>--data &lt;folder&gt;</c>
     /// from the command line; anything else leaves the default alone.
     /// </summary>

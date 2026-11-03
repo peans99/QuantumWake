@@ -74,6 +74,11 @@ public static partial class ServerHost
         });
 
         var install = ResolveInstall(args, builder.Configuration);
+
+        // A folder named on the command line or in the settings file beats the
+        // remembered one, so switching channel from the page cannot take.
+        var installPinned = Array.IndexOf(args, "--path") >= 0
+            || !string.IsNullOrWhiteSpace(builder.Configuration["InstallPath"]);
         DiagnosticTrace.Mark("server", install is null ? "No game install resolved." : "Game install resolved.");
 
         // Scope the cache to the install, so a PTU channel or a simulated install never
@@ -161,7 +166,10 @@ public static partial class ServerHost
 
         // The keybinding profile, kept whenever the game rewrites it, and the
         // stick pictures the Controls page draws bindings on.
-        builder.Services.AddSingleton<ControlsStore>();
+        // Per channel: PTU's profile is its own, and kept in LIVE's history it
+        // would read as a change every time the other one was played.
+        var channelFolder = Core.AppPaths.ForChannel(install?.RootPath);
+        builder.Services.AddSingleton(new ControlsStore(Path.Combine(channelFolder, "controls", "backups")));
         // The sticks as Windows sees them, from the host; the bare server has none.
         builder.Services.AddSingleton<IJoystickReader>(joysticks ?? new NoJoysticks());
         builder.Services.AddSingleton<JoystickTemplates>();
@@ -184,7 +192,9 @@ public static partial class ServerHost
         // app that writes outside its own data folder.
         builder.Services.AddSingleton<StarStringsStore>();
         builder.Services.AddSingleton<StarStrings>();
-        builder.Services.AddSingleton<TextOverlayStore>();
+        // Per channel, because the record is what knows how to take the marks
+        // out again: installing on PTU over LIVE's record would strand LIVE's.
+        builder.Services.AddSingleton(new TextOverlayStore(channelFolder));
         builder.Services.AddSingleton<ItemLabelStore>();
         builder.Services.AddSingleton<GoalStore>();
         builder.Services.AddSingleton<MiningLogStore>();
@@ -747,6 +757,7 @@ public static partial class ServerHost
         ControlsEndpoints.Map(app, install);
         MapDataRead(app, install);
         MapModels(app, install);
+        MapChannels(app, install, installPinned);
 
         app.MapGet("/api/now", (LiveSessionService live) => live.Current);
 
@@ -967,7 +978,7 @@ public static partial class ServerHost
         {
             if (install is null) return Results.NotFound();
 
-            var cacheDir = Path.Combine(Core.AppPaths.Root, cacheFolder);
+            var cacheDir = Path.Combine(Core.AppPaths.ForChannel(install.RootPath), cacheFolder);
             var cached = Path.Combine(cacheDir, Path.GetFileNameWithoutExtension(entry) + ".png");
 
             if (!File.Exists(cached))
