@@ -87,7 +87,7 @@ public class ArmouryBenchTests
         page.Do($"{Picker("Underbarrel")}.value = 'laser'; {Picker("Underbarrel")}.fire('change');");
 
         var svg = $"{Result}.byClass('bench-plot')[0].children[0]";
-        Assert.Equal("narrower", page.Text($"{svg}.getAttribute('data-spread')"));
+        Assert.Equal("tighter", page.Text($"{svg}.getAttribute('data-spread')"));
         Assert.Equal(1, page.Count($"{svg}.byClass('bench-pattern-vectors').length"));
         Assert.Equal(1, page.Count($"{Result}.byClass('bench-spread-verdict').filter(n => n.classList.contains('gain')).length"));
 
@@ -241,5 +241,24 @@ public class ArmouryBenchTests
         Assert.Equal("bench", page.Text("armouryPane"));
         Assert.Equal(Gun, page.Text("armouryBenchGun"));
         Assert.Equal("scope", page.Text($"{Picker("Sight")}.value"));
+    }
+
+    [Fact]
+    public void Target_marks_tighter_and_wider_fits_and_keeps_scope_points_crisp()
+    {
+        var page = Open();
+        page.Do("var sameSvg = armouryBenchTarget(1); var tightSvg = armouryBenchTarget(0.8); var wideSvg = armouryBenchTarget(1.25);");
+        Assert.Equal("same", page.Text("sameSvg.getAttribute('data-spread')"));
+        Assert.Equal(0, page.Count("sameSvg.byClass('bench-pattern-vectors').length"));
+        Assert.Equal("tighter", page.Text("tightSvg.getAttribute('data-spread')"));
+        Assert.Equal(1, page.Count("tightSvg.byClass('bench-pattern-vectors').length"));
+        Assert.Equal("wider", page.Text("wideSvg.getAttribute('data-spread')"));
+
+        page.Do("var optic = armouryBenchScope({zoom:4,secondZoom:8,spread:0.8},true);");
+        Assert.Equal(1, page.Count("optic.scope.byClass('bench-scope-reticle').length"));
+        var r4 = page.Number("+optic.scope.byClass('bench-scope-lens')[0].children[0].byClass('bench-pattern-point')[0].getAttribute('r')");
+        page.Do("var opticZoom = optic.scope.descendants().find(n => n.tagName === 'select'); opticZoom.value = '8'; opticZoom.fire('change');");
+        var r8 = page.Number("+optic.scope.byClass('bench-scope-lens')[0].children[0].byClass('bench-pattern-point')[0].getAttribute('r')");
+        Assert.True(r8 < r4);
     }
 }

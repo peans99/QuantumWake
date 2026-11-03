@@ -10183,80 +10183,81 @@ function armouryBenchTarget(spread) {
     for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
     return node;
   };
-  const svg = make('svg', { viewBox: '0 0 400 360', role: 'img', 'aria-label': tx('Illustrative spread comparison: bare weapon and fitted weapon') });
-  // Wider or narrower turns the fitted pattern amber or keeps it cyan, so the
-  // direction reads before the number does.
-  svg.setAttribute('data-spread', spread > 1 ? 'wider' : spread < 1 ? 'narrower' : 'same');
+  const state = spread < 0.9999 ? 'tighter' : spread > 1.0001 ? 'wider' : 'same';
+  const svg = make('svg', {
+    viewBox: '0 0 400 360',
+    role: 'img',
+    'data-spread': state,
+    'aria-label': tx('Illustrative spread comparison: bare weapon and fitted weapon'),
+  });
 
-  // The instrument face: frame corners, a disc with banded zones, a bezel
-  // with ticks every 15°, faint diagonals. Drawn first, so the patterns sit on it.
-  svg.append(make('path', {
-    d: 'M12 34V12H34 M366 12H388V34 M388 326V348H366 M34 348H12V326',
+  // Tactical range-bay backdrop: purely angular graduations and tonal rings,
+  // with no distance labels that could suggest a physical scale in metres.
+  const frame = make('g', { class: 'bench-target-frame', 'aria-hidden': 'true' });
+  frame.append(make('path', {
+    d: 'M26 42V20H48 M352 20H374V42 M374 318V340H352 M48 340H26V318',
     class: 'bench-target-bracket',
   }));
-  svg.append(make('circle', { cx: 200, cy: 180, r: 160, class: 'bench-target-disc' }));
-  for (const [radius, band] of [[144, 'outer'], [96, 'mid'], [48, 'core']])
-    svg.append(make('circle', { cx: 200, cy: 180, r: radius, class: `bench-target-band-${band}` }));
-  svg.append(make('circle', { cx: 200, cy: 180, r: 160, class: 'bench-target-bezel' }));
-  const ticks = [];
-  for (let degrees = 0; degrees < 360; degrees += 15) {
-    const angle = (degrees * Math.PI) / 180;
-    const inner = degrees % 45 === 0 ? 150 : 155;
-    const at = (r) => `${(200 + Math.cos(angle) * r).toFixed(1)} ${(180 + Math.sin(angle) * r).toFixed(1)}`;
-    ticks.push(`M${at(inner)}L${at(160)}`);
+  frame.append(make('circle', { cx: 200, cy: 180, r: 156, class: 'bench-target-disc' }));
+  frame.append(make('circle', { cx: 200, cy: 180, r: 156, class: 'bench-target-bezel' }));
+  frame.append(make('circle', { cx: 200, cy: 180, r: 108, class: 'bench-target-band-outer' }));
+  frame.append(make('circle', { cx: 200, cy: 180, r: 72, class: 'bench-target-band-mid' }));
+  frame.append(make('circle', { cx: 200, cy: 180, r: 36, class: 'bench-target-band-core' }));
+  frame.append(make('circle', { cx: 200, cy: 180, r: 16, class: 'bench-target-bullseye' }));
+
+  let ticks = '';
+  for (let deg = 0; deg < 360; deg += 15) {
+    const rad = (deg * Math.PI) / 180;
+    const major = deg % 45 === 0;
+    const r0 = major ? 146 : 150;
+    const r1 = 156;
+    const x0 = (200 + Math.cos(rad) * r0).toFixed(2);
+    const y0 = (180 + Math.sin(rad) * r0).toFixed(2);
+    const x1 = (200 + Math.cos(rad) * r1).toFixed(2);
+    const y1 = (180 + Math.sin(rad) * r1).toFixed(2);
+    ticks += `M${x0} ${y0}L${x1} ${y1} `;
   }
-  svg.append(make('path', { d: ticks.join(' '), class: 'bench-target-ticks' }));
-  svg.append(make('path', { d: 'M87 67L313 293 M313 67L87 293', class: 'bench-target-diag' }));
+  frame.append(make('path', { d: ticks.trim(), class: 'bench-target-ticks' }));
+  frame.append(make('path', {
+    d: 'M92 72L176 156 M308 72L224 156 M92 288L176 204 M308 288L224 204',
+    class: 'bench-target-diag',
+  }));
+  svg.append(frame);
 
   for (const radius of [36, 72, 108, 144])
     svg.append(make('circle', { cx: 200, cy: 180, r: radius, class: 'bench-target-ring' }));
-  svg.append(make('path', { d: 'M20 180H380 M200 18V342', class: 'bench-target-cross' }));
-  // Short marks where each ring crosses the axes, as on a rangefinding reticle.
-  svg.append(make('path', {
-    d: [36, 72, 108, 144].map((r) => `M${200 + r} 176V184 M${200 - r} 176V184 M196 ${180 + r}H204 M196 ${180 - r}H204`).join(' '),
-    class: 'bench-target-stadia',
-  }));
-  svg.append(make('circle', { cx: 200, cy: 180, r: 12, class: 'bench-target-bullseye' }));
+  svg.append(make('path', { d: 'M24 180H376 M200 14V346', class: 'bench-target-cross' }));
+
+  let stadia = '';
+  for (const r of [36, 72, 108, 144]) {
+    stadia += `M${200 - r} 176V184 M${200 + r} 176V184 M196 ${180 - r}H204 M196 ${180 + r}H204 `;
+  }
+  svg.append(make('path', { d: stadia.trim(), class: 'bench-target-stadia', 'aria-hidden': 'true' }));
 
   const bareRadius = 144 / Math.max(1, spread);
-  const points = armouryBenchPattern(armouryBenchSeed);
-
-  // Where each sample point moves when the fit is applied: the same points,
-  // scaled, so a line joins each one's bare and fitted place.
-  if (spread !== 1) {
-    const moves = points.map(([x, y]) =>
-      `M${(200 + x * bareRadius).toFixed(1)} ${(180 + y * bareRadius).toFixed(1)}L${(200 + x * bareRadius * spread).toFixed(1)} ${(180 + y * bareRadius * spread).toFixed(1)}`);
-    svg.append(make('path', { d: moves.join(' '), class: 'bench-pattern-vectors' }));
+  const sample = armouryBenchPattern(armouryBenchSeed);
+  if (state !== 'same') {
+    let vectors = '';
+    for (const [x, y] of sample) {
+      const bx = (200 + x * bareRadius).toFixed(2);
+      const by = (180 + y * bareRadius).toFixed(2);
+      const fx = (200 + x * bareRadius * spread).toFixed(2);
+      const fy = (180 + y * bareRadius * spread).toFixed(2);
+      vectors += `M${bx} ${by}L${fx} ${fy} `;
+    }
+    svg.append(make('path', { d: vectors.trim(), class: 'bench-pattern-vectors', 'aria-hidden': 'true' }));
   }
 
   for (const [name, scale] of [['bare', 1], ['fitted', spread]]) {
     const group = make('g', { class: `bench-pattern-${name}` });
     group.append(make('circle', { cx: 200, cy: 180, r: bareRadius * scale, class: 'bench-pattern-limit' }));
-    for (const [x, y] of points)
-      group.append(make('circle', { cx: 200 + x * bareRadius * scale, cy: 180 + y * bareRadius * scale, r: name === 'bare' ? 2.6 : 2, class: 'bench-pattern-point' }));
+    for (const [x, y] of sample)
+      group.append(make('circle', { cx: 200 + x * bareRadius * scale, cy: 180 + y * bareRadius * scale, r: name === 'bare' ? 3 : 2.1, class: 'bench-pattern-point' }));
     svg.append(group);
   }
-  svg.append(make('path', { d: 'M193 180H207 M200 173V187', class: 'bench-target-origin' }));
-  return svg;
-}
-
-/**
- * The scope's crosshair, drawn over the magnified scene and not scaled with
- * it: a dashed outer ring, a fine inner one, and a cross broken at the centre
- * with stadia marks. It replaces the plain CSS cross the lens used to carry.
- */
-function armouryBenchReticle() {
-  const make = (tag, attrs = {}) => {
-    const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
-    for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
-    return node;
-  };
-  const svg = make('svg', { viewBox: '0 0 100 100', class: 'bench-scope-reticle' });
-  svg.append(make('circle', { cx: 50, cy: 50, r: 44, class: 'bench-reticle-ring-outer' }));
-  svg.append(make('circle', { cx: 50, cy: 50, r: 16, class: 'bench-reticle-ring-inner' }));
   svg.append(make('path', {
-    d: 'M14 50H44 M56 50H86 M50 14V44 M50 56V86 M30 48V52 M70 48V52 M48 30H52 M48 70H52',
-    class: 'bench-reticle-marks',
+    d: 'M188 180H195 M205 180H212 M200 168V175 M200 185V192 M200 176.5L203.5 180L200 183.5L196.5 180Z',
+    class: 'bench-target-origin',
   }));
   return svg;
 }
@@ -10399,10 +10400,29 @@ function armouryBenchScope(effect, canPlot) {
   scope.append(lens);
   const redraw = () => {
     lens.textContent = '';
+    const factor = Number(zoom.value) || 1;
     const scene = armouryBenchTarget(canPlot ? effect.spread : 1);
     if (!canPlot) scene.setAttribute('class', 'bench-scope-grid-only');
-    scene.style.transform = `scale(${Number(zoom.value)})`;
-    lens.append(scene, armouryBenchReticle());
+    scene.style.transform = `scale(${factor})`;
+    const pointRadius = Math.max(0.45, Math.round((2.1 / Math.pow(Math.max(1, factor), 0.82)) * 100) / 100);
+    for (const pt of scene.querySelectorAll('.bench-pattern-point'))
+      pt.setAttribute('r', String(pointRadius));
+    const makeSvg = (tag, attrs = {}) => {
+      const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, String(v));
+      return node;
+    };
+    const reticle = makeSvg('svg', { viewBox: '0 0 260 260', class: 'bench-scope-reticle', 'aria-hidden': 'true' });
+    reticle.append(makeSvg('circle', { cx: 130, cy: 130, r: 122, class: 'bench-reticle-ring-outer' }));
+    reticle.append(makeSvg('circle', { cx: 130, cy: 130, r: 38, class: 'bench-reticle-ring-inner' }));
+    reticle.append(makeSvg('path', {
+      d: 'M14 130H102 M158 130H246 M130 14V102 M130 158V246 '
+        + 'M50 127V133 M70 126V134 M90 127V133 M170 127V133 M190 126V134 M210 127V133 '
+        + 'M127 50H133 M126 70H134 M127 90H133 M126 170H134 M125 190H135 M124 210H136 '
+        + 'M126 134L130 128L134 134',
+      class: 'bench-reticle-marks',
+    }));
+    lens.append(scene, reticle);
   };
   zoom.addEventListener('change', redraw);
   redraw();
@@ -10545,9 +10565,9 @@ function renderArmouryBenchReadout(w, fit, root) {
     const line = el('div', 'bench-handling-row');
     line.append(el('span', null, label));
     const known = Number.isFinite(value) && value > 0;
-    const track = el('span', 'bench-meter');
-    // Lower is better on every one of these, so under 100 fills green and over it amber.
-    const bar = el('span', known && value !== 1 ? `bench-meter-fill ${value < 1 ? 'gain' : 'cost'}` : 'bench-meter-fill');
+    const state = known ? (value < 1 ? 'gain' : value > 1 ? 'cost' : 'muted') : 'muted';
+    const track = el('span', `bench-meter ${state}`);
+    const bar = el('span', `bench-meter-fill ${state}`);
     bar.style.width = known ? `${Math.min(value, 2) * 50}%` : '0%';
     track.append(bar);
     track.setAttribute('aria-hidden', 'true');

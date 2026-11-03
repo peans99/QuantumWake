@@ -328,7 +328,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.20.65
+### 0.20.66
 
 **Headhunters no longer look like they dropped a rank.** Headhunters have two ladders in the Rep app, Standing and Ship Combat, and screenshots of both were filed as one history. A Ship Combat Rank I screenshot followed by a Standing Jr. Contractor one read as a rank lost, and the trend line mixed the two. Each ladder now has its own card, named for its ladder ("HEADHUNTERS · Standing", "HEADHUNTERS · Ship Combat"), with its own history and change. The rep-run planner lets you pick which one you are climbing. The header still counts an organisation once.
 
@@ -338,7 +338,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 **Item labels by kind.** Settings → Item labels has a picker beside the search to show one kind at a time, with how many each holds. Ship parts, which were all listed under Other (about 650 of them), are now listed as ship weapons, coolers, shields, power plants, quantum drives, missiles, missile racks, turrets, countermeasures, ship armour and so on. Hauling titles show what the game fills in, such as ‹rank›, ‹pickup› and ‹drop-off›, instead of tokens like `~mission(ReputationRank)` that looked like a broken rep figure. What gets written into the game is unchanged.
 
-**A new face for the Armoury test bench.** The spread target is now drawn as an instrument: corner brackets, banded zones, a ticked bezel and range marks on the cross. A faint line joins each sample point to where the fit moves it. A narrower fit stays cyan with a green verdict under the target; a wider one turns the fitted pattern and the verdict amber. The handling meters fill green below 100 and amber above it. The scope preview has a proper reticle (rings, a crosshair broken at the centre, range marks) that stays sharp at every zoom, in place of the plain cross.
+**A new face for the Armoury test bench.** The spread target is now drawn as an instrument: corner brackets, banded zones, a ticked bezel and range marks on the cross. A faint line joins each sample point to where the fit moves it. A narrower fit stays cyan with a green verdict under the target; a wider one turns the fitted pattern and the verdict amber. The handling meters fill green below 100 and amber above it. The scope preview has a proper reticle (rings, a crosshair broken at the centre, range marks) that stays sharp at every zoom, in place of the plain cross, and the shot marks shrink as you zoom in so they stay points rather than blobs.
 
 ### 0.20.63
 
