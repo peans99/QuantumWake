@@ -18,7 +18,12 @@ namespace Quantumwake.Data;
 /// Whether to add the size, grade and armour-class marks as well as the
 /// sold/unsold one.
 /// </param>
-public sealed record TextOverlayOptions(bool Colour = false, int Level = 3, bool Facts = true);
+/// <param name="Routes">
+/// Whether hauling contract titles ask the game to print their places -
+/// <c>| Port Tressler &gt; NB Int. Spaceport</c> - which is the only way a log
+/// ever names where a haul goes, and what the hauling planner reads.
+/// </param>
+public sealed record TextOverlayOptions(bool Colour = false, int Level = 3, bool Facts = true, bool Routes = true);
 
 /// <summary>What a generated text overlay would change, and the file itself.</summary>
 /// <param name="Marked">Item names that would gain the unsold mark.</param>
@@ -33,13 +38,15 @@ public sealed record TextOverlayOptions(bool Colour = false, int Level = 3, bool
 /// Lines the pass leaves alone are not here, because they have nothing to show.
 /// </param>
 /// <param name="Content">The whole localisation file, ready to write.</param>
+/// <param name="Routed">Hauling contract titles that would ask the game to print their places.</param>
 public sealed record TextOverlayPlan(
     int Marked,
     int Sold,
     int Skipped,
     int Annotated,
     IReadOnlyList<TextOverlayLine> Changes,
-    string Content)
+    string Content,
+    int Routed = 0)
 {
     public int Considered => Marked + Sold + Skipped;
 }
@@ -148,11 +155,16 @@ public static class TextOverlay
     /// <param name="isSold">Whether anything is known to sell an item class.</param>
     /// <param name="facts">What the install says each item is, keyed by class name.</param>
     /// <param name="options">Which marks to write, and whether to colour them.</param>
+    /// <param name="routes">
+    /// Hauling title keys and which ends each can name, from
+    /// <see cref="GameReputationCatalogue.HaulTitles"/>.
+    /// </param>
     public static TextOverlayPlan Build(
         string baseIni,
         Func<string, bool> isSold,
         IReadOnlyDictionary<string, GameItem>? facts = null,
-        TextOverlayOptions? options = null)
+        TextOverlayOptions? options = null,
+        IReadOnlyDictionary<string, string>? routes = null)
     {
         var settings = options ?? new TextOverlayOptions();
         var level = Math.Clamp(settings.Level, 1, 5);
@@ -161,7 +173,7 @@ public static class TextOverlay
         var output = new StringBuilder(baseIni.Length + (lines.Length / 8));
         var changes = new List<TextOverlayLine>();
 
-        int marked = 0, sold = 0, skipped = 0, annotated = 0;
+        int marked = 0, sold = 0, skipped = 0, annotated = 0, routed = 0;
 
         for (var i = 0; i < lines.Length; i++)
         {
@@ -174,6 +186,15 @@ public static class TextOverlay
 
             var split = line.IndexOf('=');
             var key = split > 0 ? line[..split].TrimStart('﻿') : string.Empty;
+
+            if (split > 0 && settings.Routes && routes is not null
+                && Route(key, line[(split + 1)..], routes) is { } titled)
+            {
+                routed++;
+                changes.Add(new TextOverlayLine(key, titled.Was, titled.Becomes, HaulTitleCategory));
+                Emit(key + "=" + titled.Becomes + titled.Padding);
+                continue;
+            }
 
             if (split <= 0 || !key.StartsWith(ItemNamePrefix, StringComparison.OrdinalIgnoreCase))
             {
@@ -242,7 +263,49 @@ public static class TextOverlay
             }
         }
 
-        return new TextOverlayPlan(marked, sold, skipped, annotated, changes, output.ToString());
+        return new TextOverlayPlan(marked, sold, skipped, annotated, changes, output.ToString(), routed);
+    }
+
+    /// <summary>The category a rewritten hauling title is listed under.</summary>
+    public const string HaulTitleCategory = "Hauling title";
+
+    /// <summary>
+    /// The placeholders, worded exactly as StarStrings words them, so a title
+    /// either wrote reads the same to <c>HaulingContract.RouteFromTitle</c> and
+    /// to a pilot.
+    /// </summary>
+    private static readonly Dictionary<string, string> RouteText = new(StringComparer.Ordinal)
+    {
+        [GameMissions.BothEnds] = "~mission(Location|name) > ~mission(Destination|name)",
+        [GameMissions.DeliveryEnd] = "to ~mission(Destination|name)",
+        [GameMissions.PickupEnd] = "from ~mission(Location|name)",
+    };
+
+    /// <summary>
+    /// A hauling title with its places asked for, or null when the key is not
+    /// one or the title already asks.
+    /// </summary>
+    /// <remarks>
+    /// Already asking is the layered case: StarStrings' table has its own
+    /// places in these titles, and a second pair would print every place twice.
+    /// The game's own key spelling sometimes carries <c>,P</c>; the contract
+    /// names the key without it. The value comes with its own line ending, so
+    /// a carriage return goes back after the addition rather than being lost:
+    /// the game's table is bare LF, a mod's need not be.
+    /// </remarks>
+    private static (string Was, string Becomes, string Padding)? Route(
+        string key, string value, IReadOnlyDictionary<string, string> routes)
+    {
+        var bare = key.EndsWith(",P", StringComparison.OrdinalIgnoreCase) ? key[..^2] : key;
+        if (!routes.TryGetValue(bare, out var ends) || !RouteText.TryGetValue(ends, out var place)) return null;
+
+        var trimmed = value.TrimEnd();
+        if (trimmed.Length == 0
+            || trimmed.Contains("~mission(Location", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("~mission(Destination", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        return (trimmed, $"{trimmed} | {place}", value[trimmed.Length..]);
     }
 
     /// <summary>

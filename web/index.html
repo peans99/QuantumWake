@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css?v=0.20.35">
+  <link rel="stylesheet" href="app.css?v=0.20.61">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -14,9 +14,11 @@
 </head>
 <body>
 
+<div class="margin-mark margin-mark-left" aria-hidden="true"></div>
+<div class="margin-mark margin-mark-right" aria-hidden="true"></div>
+
 <header class="topbar">
   <span class="railmark">Quantum Wake · a pilot's logbook</span>
-  <div class="brandmark" aria-hidden="true"></div>
 
   <div class="brand">
     <img class="mark" src="assets/mark.svg" alt="" width="22" height="22">
@@ -73,6 +75,8 @@
         <button data-view="components">Components</button>
         <button data-view="parts">Items</button>
         <button data-view="loot">Loot</button>
+        <button data-view="encounters">Encounters</button>
+        <button data-view="missions">Missions</button>
         <button data-view="mining">Mining</button>
         <button data-view="crafting">Crafting</button>
       </div>
@@ -96,6 +100,7 @@
         <button data-view="controls">Controls</button>
         <button data-view="labels">Item labels</button>
         <button data-view="imports">Shared files</button>
+        <button data-view="data">What was read</button>
         <!-- An action, not a view. The strip's handler binds only
              button[data-view], so this is ignored by the view switcher and
              runs its own click instead; menu-action keeps it out of the
@@ -855,6 +860,74 @@
     <div class="export-row" id="imports-filter"></div>
     <span class="muted" id="imports-status"></span>
     <div id="imports-list"></div>
+  </section>
+
+  <!-- Every place the app reads from, what it found there, and where that
+       sits on disk. The pieces lived on five pages before this. -->
+  <section id="view-data" class="view">
+    <div class="section-bar">
+      <div class="page-title">
+        <span class="page-kicker">Settings</span>
+        <h2>What was read</h2>
+      </div>
+      <span class="spacer"></span>
+      <span class="muted" id="data-taken"></span>
+      <button class="ghost" id="data-refresh">Read again</button>
+    </div>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p class="muted caption">
+        Each block is one place this app reads from: your game logs, your game
+        files, the optional downloads, your screenshots and what you wrote
+        yourself. It says what was found there and when, so an empty page
+        elsewhere can be traced to its source. The folder at the end is where
+        all of it is kept; nothing leaves this machine unless you turn a feed on.
+      </p>
+    </details>
+    <p class="muted" id="data-status"></p>
+    <div class="data-sections" id="data-sections"></div>
+
+    <div class="option-block">
+      <div class="option-head">
+        <h3>What the logs still carry</h3>
+      </div>
+      <p class="muted">
+        Star Citizen has been logging less with every patch &mdash; quantum
+        detail went in 4.0.1, inter-system jumps in 4.1.0, combat entirely by
+        4.9 &mdash; and from inside this app each removal looks exactly like a
+        quiet evening. So here is when each thing last arrived. A row that has
+        gone quiet for weeks is worth a look; a row at zero may simply be
+        something you do not do.
+      </p>
+      <div class="table-wrap">
+        <table id="signals-table">
+          <thead>
+            <tr>
+              <th>Signal</th><th class="num">Total</th>
+              <th class="num">Sessions</th><th>Last seen</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
+        <h3>Where it is kept</h3>
+      </div>
+      <p class="muted" id="data-folder"></p>
+      <div class="table-wrap">
+        <table id="data-folder-table">
+          <thead>
+            <tr>
+              <th>Entry</th><th>Holds</th><th class="num">Size</th><th>Last written</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <section id="view-checklists" class="view">
@@ -2014,9 +2087,10 @@
       your reputation</b> &mdash; the game logs none: the client opens a channel
       to a reputation service and every number stays on the far side of it. What
       can be counted is the work, which is what moves standing. The
-      <em>rep</em> column fills in only for contracts whose title has been
-      annotated by the StarStrings text mod, and says how many contracts it
-      could read.
+      <em>rep</em> column is what the finished ones paid by the installed
+      game's own figures &mdash; a StarStrings title tag stands in only for a
+      contract the game files do not know &mdash; and says how many contracts
+      it could read.
     </p>
     <div class="table-wrap">
       <table id="standing-table">
@@ -2050,7 +2124,7 @@
       <table id="contracts-table">
         <thead>
           <tr>
-            <th>When</th><th>Issuer</th><th>Type</th><th>Difficulty</th>
+            <th>When</th><th>Contract</th><th>Issuer</th><th>Type</th><th>Difficulty</th>
             <th>System</th><th>Outcome</th><th>Pays</th>
             <th class="num">Steps</th><th class="num">Took</th>
           </tr>
@@ -2360,6 +2434,113 @@
     </div>
   </section>
 
+  <!-- REFERENCE: every contract the installed game defines -->
+  <section id="view-missions" class="view">
+    <div class="section-bar reference-toolbar-bar">
+      <div class="reference-title">
+        <span class="page-kicker">Reference</span>
+        <h2>Missions</h2>
+      </div>
+      <div class="controls reference-toolbar">
+        <select id="missions-contractor" class="select" title="Filter by contractor"></select>
+        <select id="missions-type" class="select" title="Filter by mission type"></select>
+        <select id="missions-system" class="select" title="Filter by system"></select>
+        <label class="toggle" title="Only contracts your logs show you taking">
+          <input type="checkbox" id="missions-flown">
+          <span>Flown by me</span>
+        </label>
+        <input type="search" id="missions-search" class="search" placeholder="Search missions…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p>Every contract your installed game defines, read from its own files: who offers
+        it, its title and briefing, what kind of work it is, the systems and places it is
+        offered in, the CrimeStat and ranks it needs, the game's estimate of how long it
+        takes, and what it pays in rep and blueprints. The ones your logs show you taking
+        come first, with how many you finished. Open one for its briefing, its difficulty
+        ratings, every time you took it and its other versions. The aUEC a generated
+        contract pays is worked out by the game server, so it is not here; the older
+        Covalex hauls have a fixed sum, and the logs print what some contracts paid.</p>
+    </details>
+    <div class="reference-results">
+      <div class="reference-results-head">
+        <span>Matching missions</span>
+        <span class="muted" id="missions-count" aria-live="polite"></span>
+      </div>
+      <div class="table-wrap reference-table-wrap">
+        <table id="missions-table">
+          <thead>
+            <tr>
+              <th>Mission</th><th>Offered by</th><th>Type</th><th>Where</th><th>Rank</th>
+              <th>Pays</th><th class="num" title="Completed / taken, from your logs">Yours</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- REFERENCE: NPC encounters, the ships in each wave and what their holds carry -->
+  <section id="view-encounters" class="view">
+    <div class="section-bar reference-toolbar-bar">
+      <div class="reference-title">
+        <span class="page-kicker">Reference</span>
+        <h2>Encounters</h2>
+      </div>
+      <div class="controls reference-toolbar">
+        <select id="encounters-kind" class="select" title="Which encounters">
+          <option value="">In the universe</option>
+          <option value="script">Named by a mission script</option>
+          <option value="cargo">Ships carry cargo</option>
+          <option value="arena">Arena Commander</option>
+          <option value="all">All</option>
+        </select>
+        <input type="search" id="encounters-search" class="search" placeholder="Search encounters or ships…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p>Every group of NPC ships your game install spawns in waves, the ships in
+        each wave and what each one's hold is spawned with, read from the game files.
+        A hold is filled to a share of the ship's cargo grid, so the SCU here is that
+        share of the hold the install gives the hull, at its fullest, and the worth is
+        UEX's best sell price when UEX prices are on. Open an encounter for its waves,
+        and a ship for its parts.</p>
+    </details>
+    <p class="muted caption" id="encounters-note"></p>
+    <div class="reference-results">
+      <div class="reference-results-head">
+        <span>Matching encounters</span>
+        <span class="muted" id="encounters-count" aria-live="polite"></span>
+      </div>
+      <div class="table-wrap reference-table-wrap">
+        <table id="encounters-table">
+          <thead>
+            <tr>
+              <th>Encounter</th><th>Mission</th>
+              <th class="num">Waves</th><th class="num">Ships</th><th>Flown by</th>
+              <th class="num" title="Every wave, every ship at its fullest">Cargo, up to</th>
+              <th class="num" title="At the best UEX sell price">Worth, up to</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <details class="page-note" id="encounters-unused" hidden>
+      <summary id="encounters-unused-summary"></summary>
+      <p class="muted caption">These are in the game files, but no encounter the client
+        has carries them, and the one other field that could name one is empty on every
+        ship. The blockade runners' and the value tiers' loads are probably given out by
+        the server, so nothing here can say which ship is carrying one.</p>
+      <ul class="encounter-unused" id="encounters-unused-list"></ul>
+    </details>
+  </section>
+
   <!-- REFERENCE: mining and salvage spawns -->
   <section id="view-mining" class="view mining-view">
     <div class="section-bar" data-workspace="PROSPECTING">
@@ -2381,9 +2562,10 @@
 
     <nav class="subtabs" id="mining-tabs" aria-label="Mining pages">
       <button type="button" data-pane="go" class="active"><span>01</span> Where to go</button>
-      <button type="button" data-pane="crack"><span>02</span> Mining fit</button>
-      <button type="button" data-pane="runs"><span>03</span> Haul &amp; refinery</button>
-      <button type="button" data-pane="salvage"><span>04</span> Salvage</button>
+      <button type="button" data-pane="radar"><span>02</span> Radar</button>
+      <button type="button" data-pane="crack"><span>03</span> Mining fit</button>
+      <button type="button" data-pane="runs"><span>04</span> Haul &amp; refinery</button>
+      <button type="button" data-pane="salvage"><span>05</span> Salvage</button>
     </nav>
 
     <div class="mining-pane active" id="mining-pane-go">
@@ -2465,6 +2647,47 @@
       </table>
     </div>
     <p class="muted caption" id="mining-count"></p>
+    </div>
+
+    <div class="mining-pane" id="mining-pane-radar">
+      <div class="mining-brief">
+        <span class="mining-brief-mark" aria-hidden="true"></span>
+        <p class="muted caption" id="radar-brief">
+          What each rock reads on the mining radar, from your install. Ship
+          rocks read one figure per ore, so a ping names the ore and how many
+          rocks; asteroid classes, hand-mining and ground-vehicle deposits read
+          one figure per kind of rock, whatever ore is inside.
+          <b>The files give one rock's figure, not the ping's</b>: that a ping
+          over a cluster reads it times the rocks in it is how pilots read the
+          radar, and has not been checked against yours.
+        </p>
+      </div>
+      <p class="muted" id="radar-unready" hidden></p>
+
+      <div class="radar-lookup">
+        <label><span>Ping</span>
+          <input type="number" id="radar-ping" class="search" min="0" step="1" inputmode="numeric"
+                 placeholder="6340" title="The number the mining radar shows over a contact">
+        </label>
+        <div id="radar-matches" aria-live="polite"></div>
+      </div>
+
+      <h4 class="spaced">Every rock's signature</h4>
+      <div class="table-wrap">
+        <table id="radar-table">
+          <thead><tr>
+            <th class="num" title="What one rock reads">Signature</th>
+            <th>Rock</th>
+            <th>Holds</th>
+            <th>Tier</th>
+            <th>Found</th>
+            <th class="num">×2</th><th class="num">×3</th><th class="num">×4</th>
+            <th class="num">×5</th><th class="num">×6</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted small" id="radar-note"></p>
     </div>
 
     <div class="mining-pane" id="mining-pane-crack">
@@ -2781,12 +3004,12 @@
 
   <!-- REFERENCE: crafting blueprints -->
   <section id="view-crafting" class="view">
-    <div class="section-bar">
-      <div class="page-title">
+    <div class="section-bar reference-toolbar-bar">
+      <div class="reference-title">
         <span class="page-kicker">Reference</span>
         <h2>Crafting</h2>
       </div>
-      <div class="controls">
+      <div class="controls reference-toolbar">
         <select id="crafting-type" class="select" title="Filter by output type"></select>
         <select id="crafting-obtained" class="select" title="Filter by how the blueprint is obtained">
           <option value="">Any availability</option>
@@ -2807,7 +3030,12 @@
         weighed against a shopping trip.
       </p>
     </details>
-    <div class="table-wrap">
+    <div class="reference-results">
+      <div class="reference-results-head">
+        <span>Matching blueprints</span>
+        <span class="muted" id="crafting-count" aria-live="polite"></span>
+      </div>
+    <div class="table-wrap reference-table-wrap">
       <table id="crafting-table">
         <thead>
           <tr>
@@ -2820,19 +3048,19 @@
         <tbody></tbody>
       </table>
     </div>
-    <p class="muted caption" id="crafting-count"></p>
+    </div>
   </section>
 
   <section id="view-loot" class="view">
     <!-- One bar per page, named for the page: its main question - where an
          item comes from - is the search it carries. New items is a section
          of the page with its own filters, as Standing is of Contracts. -->
-    <div class="section-bar">
-      <div class="page-title">
+    <div class="section-bar reference-toolbar-bar">
+      <div class="reference-title">
         <span class="page-kicker">Reference</span>
         <h2>Loot</h2>
       </div>
-      <div class="controls">
+      <div class="controls reference-toolbar">
         <input type="search" id="loot-find" class="search" placeholder="Where to find any item, by name…"
                autocomplete="off" spellcheck="false">
       </div>
@@ -2852,7 +3080,7 @@
     </details>
 
     <div id="loot-find-results" class="loot-find-results"></div>
-    <div id="loot-where" class="loot-where" hidden></div>
+    <div id="loot-where" class="loot-where card" hidden></div>
 
     <div class="subsection-head">
       <h2 class="spaced">New items</h2>
@@ -2882,7 +3110,7 @@
 
     <div class="summary-strip" id="loot-summary"></div>
 
-    <div class="table-wrap">
+    <div class="table-wrap reference-table-wrap">
       <table id="loot-table">
         <thead>
           <tr>
@@ -3128,7 +3356,13 @@
       <button type="button" data-pane="attachments"><span>03</span> Attachments</button>
       <button type="button" data-pane="grenades"><span>04</span> Grenades</button>
       <button type="button" data-pane="knives"><span>05</span> Knives</button>
+      <button type="button" data-pane="climate"><span>06</span> Climate</button>
+      <button type="button" data-pane="bench"><span>07</span> Test bench</button>
     </nav>
+
+    <div class="armoury-pane" id="armoury-pane-bench">
+      <div id="armoury-bench"></div>
+    </div>
 
     <div class="armoury-pane active" id="armoury-pane-guns">
       <div class="controls armoury-filters">
@@ -3272,6 +3506,23 @@
             <th class="num" title="The push a hit gives, in the game's own unit">Impulse</th><th class="num">kg</th>
             <th class="num" title="Colours and editions with these figures">Finishes</th>
             <th class="num" title="UEX's cheapest terminal across the knife's finishes">From</th><th>Cheapest at</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="armoury-pane" id="armoury-pane-climate">
+      <p class="muted small" id="armoury-climate-note"></p>
+      <div class="table-wrap">
+        <table id="armoury-climate">
+          <thead><tr>
+            <th>Body</th><th>System</th>
+            <th class="num" title="The body's baseline temperature in your game files, not the weather on the ground">Baseline</th>
+            <th class="num" title="The game's own pressure figure; a room at its default reads 1">Pressure</th>
+            <th class="num">Humidity</th>
+            <th title="Whether an unprotected body is comfortable at the baseline">Unprotected</th>
+            <th class="num" title="Armour sets with a core or an undersuit whose temperature range takes in the baseline">Sets rated</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -3692,6 +3943,13 @@
         <a href="https://github.com/MrKraken/StarStrings" target="_blank" rel="noreferrer">github.com/MrKraken/StarStrings</a>
         &mdash; not written by, or affiliated with, this app.
       </p>
+      <p class="muted" id="starstrings-not-needed">
+        <b>Quantum Wake no longer needs it.</b> The reputation, rep ladders and
+        blueprints the app shows come from your installed game's own files, and
+        the labels below name the places on hauling contract titles. Install it
+        for what it does in game; the app reads its tags only for a contract
+        your game files do not know.
+      </p>
       <p class="muted">
         <b>It works alongside the labels below.</b> Both replace the same file,
         so whichever is installed second would otherwise remove the first.
@@ -3733,6 +3991,14 @@
           <span>
             Mark size, grade and armour class
             <em class="muted">From your install, not a download.</em>
+          </span>
+        </label>
+
+        <label class="toggle">
+          <input type="checkbox" id="label-routes" checked>
+          <span>
+            Name the places on hauling contract titles
+            <em class="muted">The game fills them in when it shows the contract, so the logs say where a haul goes and the hauling planner can route it.</em>
           </span>
         </label>
 
@@ -4214,7 +4480,7 @@
     <details class="settings-group">
       <summary>
         <span class="settings-group-index">03</span>
-        <span class="settings-group-copy"><strong>Log maintenance</strong><span>Re-read history and see which game signals remain available.</span></span>
+        <span class="settings-group-copy"><strong>Log maintenance</strong><span>Re-read history, and see what was read from where.</span></span>
       </summary>
       <div class="settings-group-content">
     <div class="option-block">
@@ -4231,27 +4497,13 @@
 
     <div class="option-block">
       <div class="option-head">
-        <h3>What the logs still carry</h3>
+        <h3>What was read</h3>
+        <button class="ghost" id="settings-open-data">Open</button>
       </div>
       <p class="muted">
-        Star Citizen has been logging less with every patch &mdash; quantum
-        detail went in 4.0.1, inter-system jumps in 4.1.0, combat entirely by
-        4.9 &mdash; and from inside this app each removal looks exactly like a
-        quiet evening. So here is when each thing last arrived. A row that has
-        gone quiet for weeks is worth a look; a row at zero may simply be
-        something you do not do.
+        Every place this app reads from, what it found there and when, which
+        game signals still arrive, and where all of it is kept on this machine.
       </p>
-      <div class="table-wrap">
-        <table id="signals-table">
-          <thead>
-            <tr>
-              <th>Signal</th><th class="num">Total</th>
-              <th class="num">Sessions</th><th>Last seen</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
     </div>
       </div>
     </details>
@@ -4715,6 +4967,6 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.20.35"></script>
+<script src="app.js?v=0.20.61"></script>
 </body>
 </html>

@@ -19,7 +19,8 @@ public sealed record TextOverlayStatus(
     int Annotated = 0,
     TextOverlayOptions? Options = null,
     int Filled = 0,
-    string GameLanguage = GameLanguage.English);
+    string GameLanguage = GameLanguage.English,
+    int Routed = 0);
 
 /// <summary>Whether the loose text file the game reads has fallen behind the game's own.</summary>
 /// <param name="Present">Whether there is a loose file at all; with none the game uses its own and nothing is behind.</param>
@@ -70,7 +71,8 @@ public sealed class TextOverlayService(
     /// </remarks>
     /// <summary>Builds against the player's own choice of marks.</summary>
     private TextOverlayPlan Plan(string ini) =>
-        TextOverlay.Build(ini, SoldTest(), library.GameCommodities.ItemFacts, options.Current);
+        TextOverlay.Build(ini, SoldTest(), library.GameCommodities.ItemFacts, options.Current,
+            library.GameCommodities.Reputation.HaulTitles);
 
     private Func<string, bool> SoldTest()
     {
@@ -246,7 +248,7 @@ public sealed class TextOverlayService(
 
         return new(installed, install?.InstalledAt, install?.Layered ?? false,
             source, plan.Marked, plan.Sold, plan.Skipped, plan.Changes, null, plan.Annotated,
-            options.Current, filled);
+            options.Current, filled, Routed: plan.Routed);
     }
 
     /// <summary>Writes the overlay into the game folder.</summary>

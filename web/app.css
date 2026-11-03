@@ -102,43 +102,29 @@ body::before {
   }
 }
 
-/* The mark in both margins, drawn rather than photographic.
-
-   The emblem was tried here and pulled back out. It is a raster with a dark
-   ground, so it needed screen blending and a circular mask to sit on the page
-   at all, and it still had to bleed off the corners to be big enough to read.
-   The drawn geometry has real transparency, holds a thin line at any size, and
-   asks nothing of the compositor. The emblem keeps the places where it is the
-   subject: the About page and the footer.
-
-   Each mark fills its whole margin and centres inside it, so the two are
-   symmetric, vertically aligned, and never cut off by an edge. That is also why
-   this needs 2400px: below it the margins are too narrow to hold a mark without
-   it either overlapping the content or being clipped. */
-.brandmark { display: none; }
+/* Outside the blurred header so fixed positioning is relative to the viewport.
+   Each mark sits wholly in the unused margin and cannot intercept a control. */
+.margin-mark { display: none; }
 
 @media (min-width: 2400px) {
-  .brandmark,
-  body::after {
-    content: "";
+  body:not(.overlay) .margin-mark {
     display: block;
     position: fixed;
-    top: 0;
+    top: 94px;
     bottom: 0;
     width: calc((100vw - var(--page)) / 2);
-    background: url("assets/watermark.svg") center center / min(64%, 460px) auto no-repeat;
-    opacity: .09;
+    background: url("assets/watermark.svg") center center / min(68%, 400px) auto no-repeat;
+    opacity: .12;
     pointer-events: none;
     z-index: 0;
   }
 
-  .brandmark { left: 0; }
-  body::after { right: 0; }
+  .margin-mark-left { left: 0; }
+  .margin-mark-right { right: 0; }
 }
 
-body.overlay::after { display: none; }
 body.overlay .railmark,
-body.overlay .brandmark,
+body.overlay .margin-mark,
 body.overlay .context-rail { display: none; }
 
 /* ---------- overlay mode ---------- */
@@ -2190,15 +2176,15 @@ body.overlay .activity-panel { width: min(300px, calc(100vw - 16px)); }
 .reference-table-wrap { border-color: var(--rule-hot); box-shadow: 0 10px 24px rgba(0, 0, 0, .15), inset 0 1px 0 rgba(53, 200, 240, .06); }
 #ships-table { min-width: 1260px; }
 #parts-table { min-width: 930px; }
-#ships-table th:first-child, #ships-table td:first-child,
-#parts-table th:first-child, #parts-table td:first-child { position: sticky; left: 0; z-index: 1; border-right: 1px solid var(--rule); }
-#ships-table th:first-child, #parts-table th:first-child { z-index: 2; background: var(--panel-2); }
-#ships-table tbody tr:nth-child(odd) td:first-child,
-#parts-table tbody tr:nth-child(odd) td:first-child { background: var(--deep); }
-#ships-table tbody tr:nth-child(even) td:first-child,
-#parts-table tbody tr:nth-child(even) td:first-child { background: #0d1c2b; }
-#ships-table tbody tr:hover td:first-child,
-#parts-table tbody tr:hover td:first-child { background: #102738; }
+.reference-table-wrap :is(th, td) { padding-left: 12px; padding-right: 12px; }
+.reference-table-wrap th:first-child,
+.reference-table-wrap td:first-child:not([colspan]) { position: sticky; left: 0; z-index: 1; border-right: 1px solid var(--rule); }
+.reference-table-wrap th:first-child { z-index: 2; background: var(--panel-2); }
+/* Opaque leading cells keep horizontally scrolling values from showing through.
+   Keep the original Items tints here; other cells use the shared subtle stripe. */
+.reference-table-wrap tbody tr:nth-child(odd) td:first-child:not([colspan]) { background: var(--deep); }
+.reference-table-wrap tbody tr:nth-child(even) td:first-child:not([colspan]) { background: #0d1c2b; }
+.reference-table-wrap tbody tr:hover td:first-child:not([colspan]) { background: #102738; }
 #ships-table th:nth-child(n+9), #ships-table td:nth-child(n+9) { background-image: linear-gradient(90deg, rgba(53, 200, 240, .025), transparent); }
 #ships-table td:nth-child(11), #parts-table td:nth-child(7) { color: var(--cyan-hot); }
 /* The name, role and shop columns wrap; the numbers never do. Held to one
@@ -2207,7 +2193,6 @@ body.overlay .activity-panel { width: min(300px, calc(100vw - 16px)); }
    Cheapest at) sat past the right edge. */
 #ships-table td:nth-child(1), #ships-table td:nth-child(3), #ships-table td:nth-child(12),
 #parts-table td:nth-child(1), #parts-table td:nth-child(6), #parts-table td:nth-child(9) { white-space: normal; min-width: 12ch; }
-#ships-table th, #ships-table td { padding-left: 10px; padding-right: 10px; }
 @media (max-width: 720px) {
   .reference-toolbar { justify-content: stretch; border-top: 1px solid var(--rule); border-left: 0; }
   .reference-toolbar .search, .reference-toolbar .select { flex: 1 1 170px; min-width: 0; }
@@ -6629,6 +6614,19 @@ body:not(.overlay) #now-server-star::after { display: none; }
 .subtabs button.active { color: var(--cyan); border-bottom-color: var(--cyan); }
 .mining-pane { display: none; }
 .mining-pane.active { display: block; }
+/* Mining → Radar: one number in, the rock counts that make it out. The answer
+   sits beside the box, not below a table, because it is the whole point. */
+.radar-lookup { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); gap: 16px; align-items: start; margin: 14px 0 6px; padding: 16px; border: 1px solid var(--rule); border-top: 2px solid var(--cyan-deep); background: linear-gradient(145deg, rgba(14, 25, 38, .98), rgba(6, 12, 19, .92)); }
+.radar-lookup label { display: flex; flex-direction: column; gap: 5px; font-size: 9.5px; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; }
+.radar-lookup .search { width: 100%; box-sizing: border-box; font: 20px var(--mono); letter-spacing: .04em; }
+#radar-matches { min-width: 0; }
+#radar-matches p { margin: 0 0 6px; }
+.radar-match-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.radar-match { padding: 5px 10px; border-left: 2px solid var(--cyan-deep); background: rgba(53, 200, 240, .04); overflow-wrap: anywhere; }
+.radar-match.radar-ship { border-left-color: var(--cyan); }
+.radar-count { font-family: var(--mono); color: var(--cyan); margin-right: 2px; }
+#radar-table tr:not([data-kind="ship"]) td:nth-child(2) { color: var(--muted); }
+@media (max-width: 560px) { .radar-lookup { grid-template-columns: 1fr; } }
 @keyframes mining-pane-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @media (max-width: 850px) {
   .crack-inputs { grid-template-columns: 1fr; }
@@ -6701,15 +6699,30 @@ body:not(.overlay) #now-server-star::after { display: none; }
 .armoury-pane { display: none; }
 .armoury-pane.active { display: block; }
 .armoury-pane[hidden], #armoury-tabs[hidden], #armoury-deck[hidden] { display: none; }
-#armoury-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin: 0 0 12px; padding: 4px; border: 1px solid var(--rule); background: rgba(7, 20, 30, .58); }
+#armoury-tabs { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin: 0 0 12px; padding: 4px; border: 1px solid var(--rule); background: rgba(7, 20, 30, .58); }
 #armoury-tabs button { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; margin: 0; padding: 6px 8px; border: 1px solid transparent; border-bottom: 1px solid transparent; color: var(--muted); }
 #armoury-tabs button > span { color: var(--dim); font: 10px var(--mono); }
 #armoury-tabs button:hover { border-color: var(--rule-hot); background: rgba(30, 73, 91, .22); }
 #armoury-tabs button.active { border-color: var(--cyan-deep); border-bottom-color: var(--cyan); background: rgba(26, 91, 116, .26); color: var(--cyan-hot); }
 #armoury-tabs button.active > span { color: var(--cyan); }
 .armoury-filters { flex-wrap: wrap; margin: 0 0 8px; }
-#armoury-guns tbody tr, #armoury-armour tbody tr { cursor: pointer; }
-#armoury-guns tbody tr.open, #armoury-armour tbody tr.open { background: rgba(53, 200, 240, .09); }
+#armoury-guns tbody tr, #armoury-armour tbody tr, #armoury-climate tbody tr { cursor: pointer; }
+#armoury-guns tbody tr.open, #armoury-armour tbody tr.open, #armoury-climate tbody tr.open { background: rgba(53, 200, 240, .09); }
+.armoury-climate-sets { columns: 2; column-gap: 28px; margin: 8px 0 4px; padding-left: 18px; font-size: 12px; line-height: 1.7; }
+@media (max-width: 900px) { .armoury-climate-sets { columns: 1; } }
+#encounters-table tbody tr.encounter-row { cursor: pointer; }
+#encounters-table tbody tr.encounter-row.open { background: rgba(53, 200, 240, .09); }
+.encounter-ships { margin: 6px 0 10px; padding-left: 18px; font-size: 12px; line-height: 1.7; }
+.encounter-ships .small { line-height: 1.45; margin-bottom: 4px; }
+.encounter-scripts, .encounter-unused { margin: 8px 0 4px; padding-left: 18px; line-height: 1.6; }
+.encounter-scripts li { font: 11px var(--mono); overflow-wrap: anywhere; }
+.encounter-unused { columns: 2; column-gap: 28px; font-size: 12px; }
+@media (max-width: 900px) { .encounter-unused { columns: 1; } }
+#missions-table tbody tr.mission-row { cursor: pointer; }
+#missions-table td:first-child { max-width: 360px; }
+#missions-table .armoury-kind { overflow-wrap: anywhere; }
+.mission-brief { white-space: pre-line; margin: 0 0 10px; line-height: 1.55; }
+.ref-debug { margin-top: 14px; font: 11px var(--mono); overflow-wrap: anywhere; }
 .armoury-modes { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; }
 .armoury-modes .armoury-when { color: var(--dim); }
 .armoury-kind { color: var(--muted); font-size: 11px; }
@@ -6717,6 +6730,99 @@ body:not(.overlay) #now-server-star::after { display: none; }
 .armoury-effect { display: inline-block; margin: 1px 6px 1px 0; padding: 0 5px; border: 1px solid var(--rule-hot); border-radius: 3px; font: 11px var(--mono); color: var(--text); white-space: nowrap; }
 .armoury-effect.gain { color: var(--green); border-color: #1f5c3d; }
 .armoury-effect.cost { color: var(--amber); border-color: #5c4a1f; }
+/* A gun with attachments on it: a picker per slot, then the bare figure → the fitted one. */
+.armoury-fit { margin: 6px 0 10px; }
+.armoury-fit-pickers { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 8px; }
+.armoury-fit-slot { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.armoury-fit-word { color: var(--muted); min-width: 72px; }
+.armoury-fit-slot select { max-width: 260px; }
+.armoury-fit-delta.gain { color: var(--green); }
+.armoury-fit-delta.cost { color: var(--amber); }
+.armoury-fit-handling { margin: 6px 0 4px; font-size: 12.5px; }
+
+/* A normalized target: decoration must not suggest a scale in metres. */
+.bench-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 22px 0 12px; }
+.bench-heading h3 { margin: 4px 0 6px; font-size: 24px; }
+.bench-heading p { margin: 0; }
+.bench-eyebrow, .bench-model-badge { font: 10px var(--mono); text-transform: uppercase; letter-spacing: .13em; color: var(--cyan); }
+.bench-model-badge { padding: 7px 10px; border: 1px solid var(--cyan-deep); white-space: nowrap; }
+.bench-disclosure { padding: 10px 14px; border-left: 2px solid var(--amber); background: rgba(196, 153, 79, .06); color: var(--muted); }
+.bench-layout { display: grid; grid-template-columns: minmax(230px, 300px) minmax(0, 1fr); gap: 18px; align-items: start; margin-top: 18px; }
+.bench-controls { padding: 18px; border: 1px solid var(--rule); background: rgba(7, 18, 28, .65); }
+.bench-field { display: grid; gap: 7px; margin-bottom: 18px; color: var(--muted); font-size: 12px; }
+.bench-field select { width: 100%; min-width: 0; }
+.bench-controls h4 { margin: 26px 0 16px; }
+.bench-controls .armoury-fit-pickers { display: grid; gap: 18px; }
+.bench-controls .armoury-fit-slot { display: grid; gap: 6px; min-width: 0; }
+.bench-controls .armoury-fit-slot select { max-width: none; width: 100%; min-width: 0; }
+.bench-controls > button { margin: 16px 0 4px; }
+.bench-controls > p { line-height: 1.6; }
+.bench-readout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(230px, 1fr); gap: 16px; min-width: 0; }
+.bench-target, .bench-handling, .bench-figures { min-width: 0; border: 1px solid var(--rule); padding: 16px; background: rgba(7, 18, 28, .65); }
+.bench-readout h4 { margin: 0; font-size: 13px; color: var(--cyan-hot); }
+.bench-target { grid-row: span 2; }
+.bench-target-title { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: space-between; align-items: center; }
+.bench-index { color: var(--cyan); font: 11px var(--mono); }
+.bench-plot { max-width: 500px; margin: 8px auto 0; }
+.bench-plot svg { display: block; width: 100%; height: auto; }
+.bench-target-ring { fill: none; stroke: var(--cyan-deep); stroke-width: .6; opacity: .7; }
+.bench-target-cross { fill: none; stroke: var(--cyan-deep); stroke-width: .5; stroke-dasharray: 2 5; }
+.bench-target-origin { fill: none; stroke: var(--cyan-hot); stroke-width: 1; }
+.bench-pattern-limit { fill: none; stroke-width: 1; }
+.bench-pattern-bare { color: var(--muted); }
+.bench-pattern-bare .bench-pattern-limit { stroke: currentColor; stroke-dasharray: 4 6; opacity: .55; }
+.bench-pattern-bare .bench-pattern-point { fill: none; stroke: currentColor; stroke-width: 1; opacity: .65; }
+.bench-pattern-fitted { color: var(--cyan); }
+.bench-pattern-fitted .bench-pattern-limit { stroke: currentColor; opacity: .65; }
+.bench-pattern-fitted .bench-pattern-point { fill: currentColor; }
+.bench-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; font-size: 11px; }
+.bench-legend-bare { color: var(--muted); }
+.bench-legend-fitted { color: var(--cyan); }
+.bench-legend-bare::before, .bench-legend-fitted::before { content: ''; display: inline-block; width: 7px; height: 7px; border: 1px solid currentColor; border-radius: 50%; margin-right: 6px; }
+.bench-legend-fitted::before { background: currentColor; }
+.bench-legend button[aria-pressed="true"] { border-color: var(--cyan); color: var(--cyan-hot); }
+.bench-legend button:last-child { margin-left: auto; }
+.bench-plot[data-layer="bare"] .bench-pattern-fitted,
+.bench-plot[data-layer="fitted"] .bench-pattern-bare { display: none; }
+.bench-controls > .bench-example { display: block; max-width: 100%; white-space: normal; }
+.bench-target > p { line-height: 1.6; margin-bottom: 0; }
+.bench-no-pattern { min-height: 200px; display: grid; place-content: center; }
+.bench-handling > p { line-height: 1.6; margin: 10px 0 16px; }
+.bench-handling-row { display: grid; grid-template-columns: minmax(80px, 1.5fr) minmax(30px, 1fr) 40px; gap: 12px; align-items: center; margin-top: 14px; font-size: 12px; }
+.bench-handling-row strong { text-align: right; font: 12px var(--mono); }
+.bench-handling-row .gain { color: var(--green); }
+.bench-handling-row .cost { color: var(--amber); }
+.bench-meter { position: relative; height: 4px; background: var(--rule); }
+.bench-meter::after { content: ''; position: absolute; left: 50%; top: -3px; width: 1px; height: 10px; background: var(--muted); }
+.bench-meter-fill { display: block; height: 100%; background: var(--cyan-deep); }
+.bench-figures-table { width: 100%; margin-top: 10px; font-size: 12px; }
+.bench-figures-table th { white-space: normal; }
+.bench-figures-table thead th:not(:first-child) { text-align: right; }
+.bench-figures-table tbody th { font-weight: normal; color: var(--muted); text-align: left; }
+.bench-figures > p { line-height: 1.6; margin-bottom: 0; }
+.bench-source { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+.bench-source summary { cursor: pointer; }
+.bench-scope { margin-top: 16px; border-top: 1px solid var(--rule); padding-top: 12px; }
+.bench-scope summary { cursor: pointer; color: var(--cyan-hot); }
+.bench-range { margin-top: 14px; padding: 10px 0; border-block: 1px solid var(--rule); }
+.bench-range-markers { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
+.bench-range-markers > div { flex: 1 1 110px; padding: 6px 8px; background: var(--deep); border: 1px solid var(--rule); }
+.bench-range-markers dt { color: var(--muted); font-size: 11px; }
+.bench-range-markers dd { margin: 4px 0 0; color: var(--cyan-hot); font: 12px var(--mono); }
+.bench-range > p { margin: 8px 0 0; }
+.bench-scope .bench-field { margin: 12px 0; max-width: 160px; }
+.bench-scope-lens { position: relative; display: grid; place-items: center; width: min(100%, 260px); aspect-ratio: 1; margin: 12px auto; overflow: hidden; border: 2px solid var(--cyan-deep); border-radius: 50%; background: var(--deep); }
+.bench-scope-lens svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.bench-scope-lens .bench-pattern-bare, .bench-scope-lens .bench-target-origin,
+.bench-scope-grid-only .bench-pattern-fitted { display: none; }
+.bench-scope-lens::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(var(--cyan), var(--cyan)) center / 48px 1px no-repeat, linear-gradient(var(--cyan), var(--cyan)) center / 1px 48px no-repeat; pointer-events: none; }
+.bench-contributions { grid-column: 1 / -1; min-width: 0; padding: 16px; border: 1px solid var(--rule); background: rgba(7, 18, 28, .65); }
+.bench-contribution-list > div { display: grid; grid-template-columns: minmax(85px, 130px) minmax(0, 1fr); gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+.bench-contribution-list dd { display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 0; }
+.bench-factor, .bench-factor-total { padding: 2px 6px; border: 1px solid var(--rule); overflow-wrap: anywhere; }
+.bench-factor-total { color: var(--cyan-hot); }
+@media (max-width: 1200px) { .bench-readout { grid-template-columns: minmax(0, 1fr); } .bench-target { grid-row: auto; } }
+@media (max-width: 620px) { .bench-layout { grid-template-columns: minmax(0, 1fr); } .bench-heading { align-items: start; } .bench-heading h3 { font-size: 20px; } .bench-model-badge { white-space: normal; text-align: center; } }
 #armoury-pane-attachments h3.spaced { margin-top: 18px; }
 #armoury-pane-attachments h3.spaced .muted { font-weight: normal; font-size: 12px; }
 td.armoury-gain { color: var(--green); }
@@ -7130,20 +7236,12 @@ body:not(.overlay) {
   --cyan-deep: #0d5c78;
   --amber: #ffab3d;
   --chamfer: none;
-  background:
-    radial-gradient(900px 520px at 88% -12%, rgba(53, 200, 240, .13), transparent 60%),
-    radial-gradient(720px 430px at 2% 86%, rgba(13, 92, 120, .10), transparent 68%),
-    var(--void);
+  background: var(--void);
 }
 
-/* The previous chart grid made this read as a cousin of the reference site.
-   A distant light pool gives the page depth without turning its background
-   into another piece of interface. */
-body:not(.overlay)::before {
-  background: radial-gradient(760px 430px at 86% 0%, rgba(53, 200, 240, .07), transparent 68%);
-}
-body:not(.overlay) .railmark,
-body:not(.overlay) .brandmark { display: none !important; }
+/* A flat page surface avoids patches of light appearing as content scrolls. */
+body:not(.overlay)::before { content: none; }
+body:not(.overlay) .railmark { display: none; }
 body:not(.overlay) main {
   border-inline: 0;
   -webkit-mask-image: none;
@@ -7297,38 +7395,7 @@ body:not(.overlay) .telemetry-field:first-child::after { content: ""; width: 4px
 body:not(.overlay) #now-feed li::before, body:not(.overlay) #contracts-table .route-point::before { border-color: var(--flight-tone-deep, var(--cyan-deep)); }
 body:not(.overlay) #now-feed { background-image: linear-gradient(var(--flight-tone-deep, var(--rule-hot)), var(--flight-tone-deep, var(--rule-hot))); }
 
-/* A few route points in otherwise empty space give the product its own spatial
-   signature. They are deliberately dim and never sit behind a control. */
 body:not(.overlay) .view.active { position: relative; isolation: isolate; }
-body:not(.overlay) .view.active::after {
-  content: "";
-  position: absolute;
-  top: 34px;
-  right: 18px;
-  width: min(300px, 26vw);
-  height: 174px;
-  pointer-events: none;
-  z-index: 0;
-  opacity: .48;
-  background:
-    radial-gradient(circle at 8% 77%, rgba(127, 228, 255, .72) 0 1px, transparent 2px),
-    radial-gradient(circle at 47% 31%, rgba(127, 228, 255, .58) 0 1px, transparent 2px),
-    radial-gradient(circle at 91% 62%, rgba(181, 140, 240, .7) 0 1px, transparent 2px),
-    linear-gradient(30deg, transparent 49.5%, rgba(53, 200, 240, .14) 50%, transparent 50.5%),
-    linear-gradient(153deg, transparent 49.5%, rgba(181, 140, 240, .13) 50%, transparent 50.5%);
-}
-/* Glass reflections only occupy the empty upper band of a workspace. The
-   actual panels remain opaque enough to preserve contrast and legibility. */
-body:not(.overlay) .view.active::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 230px;
-  pointer-events: none;
-  z-index: 0;
-  opacity: .24;
-  background: linear-gradient(118deg, transparent 0 42%, rgba(152, 224, 255, .055) 43% 46%, transparent 47% 66%, rgba(255, 255, 255, .025) 67% 68%, transparent 69%), repeating-linear-gradient(90deg, rgba(127, 228, 255, .022) 0 1px, transparent 1px 9px);
-}
 body:not(.overlay) .view.active > * { position: relative; z-index: 1; }
 
 /* Source labels carry a small shape as well as words and colour, so provenance
@@ -7571,8 +7638,8 @@ body:not(.overlay) tbody td :is(button.ghost, a.ghost):hover:not(:disabled) {
 
 /* ======================================================================
    Identity (0.20.25 trial on three pages, every page since 0.20.30).
-   Three ideas: a colour for whose data it is, a wake drawn from your own
-   sessions under each header, and a title face of our own. Not in the
+   Three ideas: a colour for whose data it is, a flight under each header,
+   and a title face of our own. Not in the
    overlay, where a header is a nine-pixel label over a glance.
    ====================================================================== */
 @font-face {
@@ -7608,22 +7675,37 @@ body:not(.overlay) .view > .section-bar h2 .page-glyph { font-family: var(--disp
 /* A page about your own history says so in its label. */
 body:not(.overlay) .view[data-voice='own'] > .section-bar .page-kicker { color: var(--own); }
 
-/* The wake: your last sixty days of play along the foot of the header.
+/* The ships and their wakes travel along the foot of the header.
    Painted beneath the header's contents by a negative z-index inside an
    isolated header, rather than by lifting every child above it: on three
    pages lifting was harmless, on forty it would have overridden whatever
    positioning a header's own controls rely on. No overflow:hidden either,
    which would clip a menu that opens out of a header. */
 body:not(.overlay) .view > .section-bar { position: relative; isolation: isolate; }
-.wake { position: absolute; left: 0; bottom: 0; height: 18px; width: 100%; pointer-events: none; z-index: -1; }
-.wake-mark {
-  position: absolute; right: 10px; bottom: 5px; width: 7px; height: 7px; z-index: 0;
-  border: 1px solid var(--own); transform: rotate(45deg); cursor: help;
+/* --wake-end, when set, is where the header's controls begin (fitWake): the
+   course stops short of them rather than running behind them. */
+body:not(.overlay) .view > .section-bar:has(> .wake-chase),
+body:not(.overlay) #now-closed:has(> .wake-chase) { --flight-lane: 32px; padding-bottom: var(--flight-lane); }
+/* Extend the filter panel through the flight lane. Matching padding keeps its
+   controls in place while the divider and background reach the lower frame. */
+body:not(.overlay) .reference-toolbar-bar:has(> .wake-chase) .reference-toolbar {
+  margin-bottom: calc(-1 * var(--flight-lane));
+  padding-bottom: calc(10px + var(--flight-lane));
 }
-/* A wider target than the seven-pixel diamond, for the hover text. */
-.wake-mark::after { content: ""; position: absolute; inset: -6px; }
-.wake-mark.today { background: var(--own); box-shadow: 0 0 9px rgba(233, 194, 125, .75); }
-body.overlay :is(.wake, .wake-mark) { display: none; }
+.wake { position: absolute; right: calc(100% - var(--wake-end, 100%) + 14px); bottom: -1px; height: 36px; width: max(0px, calc(var(--wake-end, 100%) - 14px)); pointer-events: none; z-index: -1; }
+.wake[data-compact="true"] { visibility: hidden; }
+.wake path { vector-effect: non-scaling-stroke; }
+.chase-hull { fill: var(--void); stroke: currentColor; stroke-width: 1; stroke-linejoin: round; }
+.chase-cockpit { stroke: currentColor; stroke-width: 1; stroke-linecap: round; }
+.chase-engine { fill: currentColor; }
+.chase-shot path { fill: none; stroke: currentColor; stroke-width: 1; stroke-linecap: round; }
+.wake-chase[data-flight="overtake"] .chase-shot { display: none; }
+.wake-chase-still { display: none; opacity: .7; }
+@media (prefers-reduced-motion: reduce) {
+  .wake-chase-motion { display: none; }
+  .wake-chase-still { display: inline; }
+}
+body.overlay .wake { display: none; }
 
 /* Source colours on a column heading, as a thin rule under the values it
    covers. A cell is gold only when it holds something of yours. */
@@ -7681,11 +7763,59 @@ body:not(.overlay) .checklist-item :is(button.ghost, button.tiny).icon:hover:not
   border-color: rgba(255, 90, 77, .5); background: rgba(255, 90, 77, .08); color: var(--red, #ff5a4d);
 }
 
-/* ---- Reference: components, a tab per kind (0.20.27) ---- */
-.components-tabs { flex-wrap: wrap; }
-.components-tabs button { clip-path: none; box-shadow: none; background-image: none; }
-.components-tabs button::after { display: none; }
-.components-tab-count { color: var(--dim); font: 10px var(--mono); letter-spacing: 0; }
+/* Component kinds are choices, so the active frame and count stay visible
+   without a hover. The grid wraps whole controls rather than clipping labels. */
+body:not(.overlay) .components-tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 6px;
+  margin: 8px 0 16px;
+  border: 0;
+}
+body:not(.overlay) .components-tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 38px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--rule-hot);
+  color: var(--muted);
+  font: 10.5px/1.3 var(--display);
+  letter-spacing: .055em;
+  text-align: left;
+}
+body:not(.overlay) .components-tabs button.active {
+  color: var(--cyan-hot);
+  border-color: var(--cyan-deep);
+  background-color: rgba(13, 92, 120, .2);
+  box-shadow: inset 2px 0 0 var(--cyan), inset 0 1px 0 rgba(127, 228, 255, .25);
+}
+.components-tab-count { flex: 0 0 auto; padding: 2px 5px; border: 1px solid var(--rule); background: var(--deep); color: var(--muted); font: 10px/1 var(--mono); letter-spacing: 0; }
+.components-tabs .active .components-tab-count { border-color: var(--cyan-deep); color: var(--cyan-hot); }
+body:not(.overlay) .components-tabs button:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--cyan); }
+
+/* This shared shopping action needs a visible boundary beside a text link.
+   It stays compact in lists but uses the same frame as larger actions. */
+body:not(.overlay) button.ghost.track {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 4px 8px;
+  border: 1px solid rgba(53, 200, 240, .3);
+  background: linear-gradient(90deg, rgba(53, 200, 240, .1), rgba(7, 12, 20, .5));
+  box-shadow: inset 0 1px 0 rgba(127, 228, 255, .18);
+  color: var(--cyan);
+  font-size: 10px;
+  letter-spacing: .06em;
+  white-space: nowrap;
+}
+body:not(.overlay) button.ghost.track:hover:not(:disabled) { border-color: var(--cyan); background-color: rgba(53, 200, 240, .12); color: var(--cyan-hot); }
+body:not(.overlay) button.ghost.track:disabled { color: var(--green); border-color: rgba(79, 212, 138, .45); background: rgba(79, 212, 138, .06); opacity: 1; }
+body:not(.overlay) button.ghost.track:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--cyan); }
 #components-table { min-width: 1080px; }
 #components-table th.sortable { cursor: pointer; user-select: none; }
 #components-table th.sortable:hover { color: var(--text); }
@@ -7696,8 +7826,6 @@ body:not(.overlay) .checklist-item :is(button.ghost, button.tiny).icon:hover:not
 #components-table th.figure.sorted { color: var(--cyan-hot); }
 #components-table td.figure { color: var(--text); font-weight: 600; }
 #components-table td .note-inline { margin-left: 6px; color: var(--dim); font-size: 10.5px; }
-#components-table th:first-child, #components-table td:first-child { position: sticky; left: 0; z-index: 1; border-right: 1px solid var(--rule); background: var(--deep); }
-#components-table th:first-child { z-index: 2; background: var(--panel-2); }
 
 /* ---- Form controls in the dark (0.20.28). The browser drew its own parts of
    them - a number box's spin arrows, a date picker, an open dropdown - in its
@@ -7712,3 +7840,18 @@ body:not(.overlay) :is(input, select, textarea) { color-scheme: dark; }
 .ref-pool { margin: 10px 0 0; }
 .ref-pool-head { margin: 0 0 4px; }
 .ref-ways-table { max-width: 860px; }
+
+/* ---- Settings → What was read (0.20.36). One card per source the app reads
+   from, in the order it trusts them; the facts are the same dl the Reference
+   window uses, so a count reads the same way everywhere. ---- */
+.data-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; margin: 10px 0 18px; }
+.data-card { padding: 12px 14px 10px; min-width: 0; }
+.data-card-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.data-card-head h3 { margin: 0; flex: 1 1 auto; }
+.data-verdict { margin: 6px 0 2px; font-size: 12.5px; }
+.data-card .ref-facts { font-size: 12px; }
+.data-card .ref-facts dt { color: var(--muted); }
+.data-card .ref-facts dd { margin: 0; overflow-wrap: anywhere; }
+#data-folder { overflow-wrap: anywhere; }
+#data-folder-table td.kind { color: var(--muted); }
+body.overlay #view-data .data-sections { grid-template-columns: 1fr; }

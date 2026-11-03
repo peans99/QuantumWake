@@ -350,6 +350,272 @@ if (args.Contains("--events", StringComparer.OrdinalIgnoreCase))
     return 0;
 }
 
+// Each planet and moon's baseline against every armour set's temperature
+// range, by the rule the Armoury's Climate tab uses: a set is judged by the
+// narrowest of its pieces and counts only when it covers the body (a core or
+// an undersuit). The numbers behind docs/armoury.md's climate section.
+if (args.Contains("--climate", StringComparer.OrdinalIgnoreCase))
+{
+    var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
+    var armoury = GameCommodities.Load(install.RootPath, Path.Combine(data, "commodities.json")).Armoury;
+    var climate = armoury.Climate ?? GameClimateData.Empty;
+
+    var families = armoury.Armour
+        .Where(p => p.Slot != "Backpack" && (p.TemperatureMin != 0 || p.TemperatureMax != 0))
+        .GroupBy(p => p.Family)
+        .Select(g => (Family: g.Key, Min: g.Max(p => p.TemperatureMin), Max: g.Min(p => p.TemperatureMax),
+            Body: g.Any(p => p.Slot is "Core" or "Undersuit")))
+        .ToList();
+    var sets = families.Where(f => f.Body).ToList();
+
+    Console.WriteLine($"{climate.Bodies.Count} bodies; unprotected {climate.BodyMin} to {climate.BodyMax} °C; visor frosts at {climate.VisorFrost} °C");
+    Console.WriteLine($"{sets.Count} sets that cover the body, {families.Count - sets.Count} other families (helmets, arms, legs alone)");
+    Console.WriteLine($"hottest-rated set {sets.MaxBy(s => s.Max).Family} to {sets.Max(s => s.Max)} °C; coldest {sets.MinBy(s => s.Min).Family} to {sets.Min(s => s.Min)} °C\n");
+
+    foreach (var b in climate.Bodies)
+    {
+        var rated = sets.Where(s => s.Min <= b.Celsius && b.Celsius <= s.Max).ToList();
+        var bare = climate.BodyMin <= b.Celsius && b.Celsius <= climate.BodyMax;
+        Console.WriteLine($"  {b.Name,-11} {(b.Parent is null ? "" : "(" + b.Parent + ")"),-12} {b.Celsius,7:F1} °C  p {b.Pressure,5}  h {b.Humidity,4}  "
+            + $"{(bare ? "comfortable" : "needs a suit"),-12}  sets {rated.Count,3}"
+            + (rated.Count is > 0 and <= 5 ? "  " + string.Join(", ", rated.Select(s => s.Family)) : ""));
+    }
+
+    return 0;
+}
+
+// Every mineable rock's radar signature, grouped by value, and which counts of
+// which rocks a ping could not tell apart. The numbers behind docs/mining.md's
+// radar section.
+if (args.Contains("--signatures", StringComparer.OrdinalIgnoreCase))
+{
+    var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
+    var mining = GameCommodities.Load(install.RootPath, Path.Combine(data, "commodities.json")).Mining;
+    var rocks = mining.Signatures ?? [];
+    Console.WriteLine($"{rocks.Count} mineable entities with a signature, {rocks.Count(r => r.Placed)} placed by a preset; {rocks.Select(r => r.Signature).Distinct().Count()} distinct values");
+    if (args.Contains("--all", StringComparer.OrdinalIgnoreCase))
+    {
+        foreach (var r in rocks) Console.WriteLine($"  {r.Signature,7}  {(r.Placed ? "placed" : "      ")}  {r.Class}  {r.Composition}");
+        return 0;
+    }
+    var radar = GameRockSignatures.Radar(rocks);
+    Console.WriteLine($"{radar.Count} radar rows, {radar.Select(r => r.Signature).Distinct().Count()} values a pilot can meet");
+    foreach (var r in radar)
+    {
+        var where = r.Surface && r.Asteroid ? "both" : r.Surface ? "surface" : "asteroid";
+        var stones = r.Stones.Count > 0 ? $"  stones: {string.Join(", ", r.Stones)}" : "";
+        Console.WriteLine($"  {r.Signature,7}  {r.Kind,-8} {r.Name,-24} {r.Tier,-10} {where,-8} {string.Join(", ", r.Ores)}{stones}");
+    }
+
+    // Counts of different rocks that read the same: a ping no reading can split.
+    var ones = radar.Select(r => (r.Signature, r.Name)).Distinct().ToList();
+    var sums = ones.SelectMany(o => Enumerable.Range(1, 12).Select(n => (Total: o.Signature * n, Read: $"{n}x {o.Name}")))
+        .GroupBy(x => x.Total).Where(g => g.Count() > 1).OrderBy(g => g.Key).ToList();
+    Console.WriteLine($"{sums.Count} totals up to 12 rocks that two readings share; the first ten:");
+    foreach (var g in sums.Take(10)) Console.WriteLine($"  {g.Key,7}  {string.Join(" = ", g.Select(x => x.Read))}");
+    return 0;
+}
+
+// Every contract's details as the Missions page shows them - contractor,
+// title, type, where, CrimeStat, gates - and how many of the logged contracts
+// they cover. The numbers behind docs/missions.md's catalogue section.
+if (args.Contains("--mission-catalogue", StringComparer.OrdinalIgnoreCase))
+{
+    var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
+    var details = GameCommodities.Load(install.RootPath, Path.Combine(data, "commodities.json")).Reputation.Details ?? GameMissionCatalogue.Empty;
+    var all = details.Missions;
+    var released = all.Where(m => !m.Unreleased).ToList();
+    string Pct(int n) => released.Count == 0 ? "0%" : $"{100.0 * n / released.Count:F0}%";
+
+    Console.WriteLine($"{all.Count} contracts; {all.Count - released.Count} unreleased; {released.Count} released; {details.Texts.Count} text keys");
+    Console.WriteLine($"of the released: title {Pct(released.Count(m => m.TitleKey is not null))}, briefing {Pct(released.Count(m => m.DescriptionKey is not null))}, "
+        + $"contractor {Pct(released.Count(m => m.ContractorKey is not null))}, type {Pct(released.Count(m => m.TypeKey is not null))}, "
+        + $"system {Pct(released.Count(m => m.Systems.Count > 0))}, location {Pct(released.Count(m => m.Locations.Count > 0))}, "
+        + $"CrimeStat {Pct(released.Count(m => m.MaxCrimeStat is not null))}, gates {Pct(released.Count(m => m.Gates.Count > 0))}, "
+        + $"series {Pct(released.Count(m => m.RequiresCompleted is not null))}, minutes {Pct(released.Count(m => m.Minutes is not null))}, "
+        + $"difficulty {Pct(released.Count(m => m.Difficulty is not null))}, illegal {released.Count(m => m.Illegal)}, buy-in {released.Count(m => m.BuyIn is not null)}");
+
+    Console.WriteLine("types: " + string.Join(", ", released.GroupBy(m => details.Text(m.TypeKey) ?? "(none)").OrderByDescending(g => g.Count()).Take(20).Select(g => $"{g.Key} {g.Count()}")));
+    Console.WriteLine("areas: " + string.Join("; ", details.Areas.OrderBy(a => a.Key).Select(a => $"{a.Key} = {a.Value.Name}")));
+    Console.WriteLine("systems: " + string.Join(", ", released.SelectMany(m => m.Systems.DefaultIfEmpty("(none)")).GroupBy(s => s).OrderByDescending(g => g.Count()).Take(20).Select(g => $"{g.Key} {g.Count()}")));
+    Console.WriteLine("contractors: " + string.Join(", ", released.GroupBy(m => details.Text(m.ContractorKey) ?? "(none)").OrderByDescending(g => g.Count()).Take(25).Select(g => $"{g.Key} {g.Count()}")));
+
+    var contracts = new List<ContractRecord>();
+    foreach (var file in install.BackupLogs().Concat(install.HasGameLog ? [install.GameLogPath] : []))
+    {
+        var builder = new SessionBuilder(Path.GetFileName(file));
+        foreach (var ev in LogFileReader.ReadEvents(file, new LogEventParser())) builder.Add(ev);
+        contracts.AddRange(builder.Build().Contracts);
+    }
+    var byId = all.ToDictionary(m => m.Id, StringComparer.OrdinalIgnoreCase);
+    var withId = contracts.Where(c => c.DefinitionId is not null).ToList();
+    var found = withId.Where(c => byId.ContainsKey(c.DefinitionId!)).ToList();
+    var sameName = found.Count(c => string.Equals(byId[c.DefinitionId!].Name, c.Raw, StringComparison.OrdinalIgnoreCase));
+    Console.WriteLine($"\n{contracts.Count} logged contracts; {withId.Count} with a definition id; {found.Count} found; debug name agrees on {sameName}");
+    Console.WriteLine($"logged contracts the files give a title for: {found.Count(c => byId[c.DefinitionId!].TitleKey is not null)}; distinct definitions flown {found.Select(c => c.DefinitionId).Distinct().Count()}");
+    foreach (var c in found.GroupBy(c => c.DefinitionId).Take(6).Select(g => g.First()))
+    {
+        var m = byId[c.DefinitionId!];
+        Console.WriteLine($"  {m.Name,-50} {details.Text(m.ContractorKey) ?? "-",-28} {details.Text(m.TypeKey) ?? "-",-12} [{string.Join(",", m.Systems)}] crime {m.MinCrimeStat}-{m.MaxCrimeStat} {m.Minutes} min");
+        Console.WriteLine($"     files: {details.Text(m.TitleKey)}");
+        Console.WriteLine($"     log:   {c.Title}");
+    }
+
+    return 0;
+}
+
+// The NPC encounters the install describes: which mission scripts name them,
+// how the game files the rest, and what their ships carry at the hold sizes
+// the install gives. The numbers behind docs/encounters.md.
+if (args.Contains("--encounters", StringComparer.OrdinalIgnoreCase))
+{
+    var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
+    var game = GameCommodities.Load(install.RootPath, Path.Combine(data, "commodities.json"));
+    var found = game.Loot.Encounters;
+    var all = found.Encounters;
+    var ships = all.SelectMany(e => e.Waves.SelectMany(w => w.Ships.Select(s => (Encounter: e, Ship: s)))).ToList();
+    var carrying = ships.Where(x => x.Ship.Cargo.Count > 0).ToList();
+    var unused = found.Unused().ToList();
+
+    Console.WriteLine($"{all.Count} encounters; {all.Count(e => e.ArenaCommander)} Arena Commander; {found.ScriptsRead} mission scripts read");
+    Console.WriteLine($"named by a mission script: {all.Count(e => e.Scripts.Count > 0)} ({all.Count(e => e.Scripts.Count > 0 && e.ArenaCommander)} of them Arena Commander); named by none: {all.Count(e => e.Scripts.Count == 0)}");
+    Console.WriteLine($"{ships.Count} ship entries; {ships.Count(x => x.Ship.Ship is null)} name no ship class; {carrying.Count} in {carrying.Select(x => x.Encounter.Name).Distinct().Count()} encounters carry cargo");
+    Console.WriteLine($"{found.Manifests.Count} cargo manifests; {found.Manifests.Count - unused.Count} carried; {unused.Count} carried by nothing\n");
+
+    Console.WriteLine("by mission script:");
+    foreach (var g in all.Where(e => e.Scripts.Count > 0).GroupBy(e => string.Join("/", e.Scripts[0].Split('/').Take(3))).OrderByDescending(g => g.Count()))
+        Console.WriteLine($"  {g.Count(),3}  {g.Key}");
+    Console.WriteLine("\nnamed by no script, by the game's folder:");
+    foreach (var g in all.Where(e => e.Scripts.Count == 0).GroupBy(e => e.Folder).OrderByDescending(g => g.Count()))
+        Console.WriteLine($"  {g.Count(),3}  {g.Key}");
+
+    Console.WriteLine("\nlargest loads (hold x fullest fill):");
+    var loads = carrying
+        .Select(x => (x.Ship.Ship, Hold: GameEncounters.Hold(x.Ship.Ship, game.CargoHulls), Manifest: found.Manifests.GetValueOrDefault(x.Ship.Cargo[0]), x.Encounter.Name))
+        .Where(x => x.Manifest is not null)
+        .GroupBy(x => (x.Ship, x.Manifest!.Name))
+        .Select(g => (g.Key.Ship, g.First().Hold, g.First().Manifest, Encounters: g.Select(x => x.Name).Distinct().Count()))
+        .ToList();
+    foreach (var l in loads.OrderByDescending(l => (l.Hold?.Scu ?? 0) * l.Manifest!.MaxFill).Take(12))
+        Console.WriteLine($"  {l.Ship ?? "(no class)",-38} hold {(l.Hold?.Scu.ToString() ?? "?"),5} SCU  {l.Manifest!.MinFill:P0}-{l.Manifest.MaxFill:P0}  up to {(l.Hold is { } h ? Math.Floor(h.Scu * l.Manifest.MaxFill).ToString() : "?"),4} SCU {string.Join("/", l.Manifest.Goods.Select(g => g.Commodity))}  in {l.Encounters}");
+    Console.WriteLine($"  carrying ship kinds with no hold in the install: {loads.Where(l => l.Hold is null).Select(l => l.Ship ?? "(no class)").Distinct().Count()} of {loads.Select(l => l.Ship ?? "(no class)").Distinct().Count()}");
+
+    Console.WriteLine("\ncarried by nothing:");
+    foreach (var g in unused.GroupBy(m => m.Name.Split('_')[0]))
+        Console.WriteLine($"  {g.Count(),3}  {g.Key}: {g.Min(m => m.MinFill):P0}-{g.Max(m => m.MaxFill):P0} {string.Join("/", g.SelectMany(m => m.Goods.Select(x => x.Commodity)).Distinct().Take(6))}");
+
+    return 0;
+}
+
+// What every logged contract pays in rep by the installed game, joined on the
+// marker's contractDefinitionId, and checked against the StarStrings tags in
+// the titles - which the files never saw. The numbers behind docs/missions.md;
+// run it again after a patch, since a patch can move every id.
+if (args.Contains("--missions", StringComparer.OrdinalIgnoreCase))
+{
+    var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
+    var catalogue = GameCommodities.Load(install.RootPath, Path.Combine(data, "commodities.json")).Reputation;
+    var missions = catalogue.Missions ?? new Dictionary<string, GameMissionPay>();
+    var contracts = new List<ContractRecord>();
+    var receipts = new List<(BlueprintReceipt Receipt, ContractRecord? After)>();
+
+    foreach (var file in install.BackupLogs().Concat(install.HasGameLog ? [install.GameLogPath] : []))
+    {
+        var builder = new SessionBuilder(Path.GetFileName(file));
+        foreach (var ev in LogFileReader.ReadEvents(file, new LogEventParser())) builder.Add(ev);
+        var session = builder.Build();
+        contracts.AddRange(session.Contracts);
+
+        // A blueprint lands within a second of the completion that paid it.
+        foreach (var receipt in session.Blueprints)
+            receipts.Add((receipt, session.Contracts
+                .Where(c => c.CompletedAt is { } done && receipt.At - done >= TimeSpan.FromSeconds(-5) && receipt.At - done <= TimeSpan.FromSeconds(30))
+                .OrderByDescending(c => c.CompletedAt)
+                .FirstOrDefault()));
+    }
+
+    var known = contracts.Where(c => catalogue.Mission(c.DefinitionId) is not null).ToList();
+    var paying = known.Where(c => catalogue.Mission(c.DefinitionId)!.OnCompletion is > 0).ToList();
+
+    Console.WriteLine($"{missions.Count} contracts in the install; {missions.Values.Count(m => m.Rep.Count > 0)} move a ladder, "
+        + $"{missions.Values.Count(m => m.Blueprint is > 0)} can award a blueprint, {missions.Values.Count(m => m.Reward is not null)} pay a fixed sum");
+    Console.WriteLine($"{contracts.Count} logged contracts; {contracts.Count(c => c.DefinitionId is not null)} carry a definition id; "
+        + $"{known.Count} the install knows; {paying.Count} pay rep on completion");
+
+    // The check: a single-figure tag the mod wrote against the game's figure.
+    var tagged = known.Where(c => ContractTags.RepFrom(c.Title) is not null).ToList();
+    var agree = tagged.Count(c => ContractTags.RepFrom(c.Title) == catalogue.Mission(c.DefinitionId)!.OnCompletion);
+    Console.WriteLine($"\nStarStrings single-figure tags: {tagged.Count}; the install agrees on {agree}");
+    foreach (var c in tagged.Where(c => ContractTags.RepFrom(c.Title) != catalogue.Mission(c.DefinitionId)!.OnCompletion))
+        Console.WriteLine($"  ! {c.Raw}: tag {ContractTags.RepFrom(c.Title)}, game {catalogue.Mission(c.DefinitionId)!.OnCompletion}");
+
+    var laddered = known.Where(c => ContractTags.LadderFrom(c.Title) is not null).ToList();
+    var onLadder = laddered.Count(c => ContractTags.LadderFrom(c.Title)!.Contains(catalogue.Mission(c.DefinitionId)!.OnCompletion ?? -1));
+    Console.WriteLine($"StarStrings ladder tags: {laddered.Count}; the game's figure is one of the ladder's on {onLadder}");
+
+    var blueprintTags = known.Count(c => ContractTags.AwardsBlueprint(c.Title));
+    var blueprintBoth = known.Count(c => ContractTags.AwardsBlueprint(c.Title) && catalogue.Mission(c.DefinitionId)!.Blueprint is > 0);
+    Console.WriteLine($"[BP] tags: {blueprintTags}; the install has a blueprint result on {blueprintBoth}");
+
+    // The ground truth for blueprints is the toast that says one arrived.
+    var paired = receipts.Where(r => r.After is not null).ToList();
+    Console.WriteLine($"Received Blueprint toasts: {receipts.Count}; after a completion {paired.Count}; "
+        + $"the install predicted {paired.Count(r => catalogue.Mission(r.After!.DefinitionId)?.Blueprint is > 0)}, "
+        + $"a [BP] tag {paired.Count(r => ContractTags.AwardsBlueprint(r.After!.Title))}");
+    var tagOnly = contracts.Where(c => c.Outcome == ContractOutcome.Completed && ContractTags.AwardsBlueprint(c.Title)
+        && catalogue.Mission(c.DefinitionId)?.Blueprint is not > 0).ToList();
+    Console.WriteLine($"  completed with a [BP] tag the install does not back: {tagOnly.Count}; followed by a blueprint: "
+        + $"{tagOnly.Count(c => paired.Any(r => r.After == c))}");
+
+    // Hauling titles: what the overlay would write into the game's own text,
+    // set beside what StarStrings wrote for the same key - the mod chose its
+    // wording from the key's name, this from the contracts under the key.
+    var haulTitles = catalogue.HaulTitles ?? new Dictionary<string, string>();
+    var vanillaRaw = new P4kArchive(P4kArchive.PathFor(install.RootPath)).TryRead(@"Data\Localization\english\global.ini");
+    if (vanillaRaw is not null)
+    {
+        var vanilla = GameText.WithoutBom(System.Text.Encoding.UTF8.GetString(vanillaRaw));
+        var plan = TextOverlay.Build(vanilla, _ => true, null, new TextOverlayOptions(Facts: false), haulTitles);
+        var ours = plan.Changes.Where(c => c.Category == TextOverlay.HaulTitleCategory)
+            .ToDictionary(c => c.ItemClass.EndsWith(",P") ? c.ItemClass[..^2] : c.ItemClass, c => c.Becomes, StringComparer.OrdinalIgnoreCase);
+
+        var loose = Path.Combine(install.RootPath, @"Data\Localization\english\global.ini");
+        var mod = File.Exists(loose)
+            ? File.ReadLines(loose).Select(l => l.TrimStart('﻿')).Where(l => l.Contains('='))
+                .Select(l => (Key: l[..l.IndexOf('=')], Value: l[(l.IndexOf('=') + 1)..]))
+                .Where(x => x.Value.Contains("~mission(Location") || x.Value.Contains("~mission(Destination"))
+                .GroupBy(x => x.Key.EndsWith(",P") ? x.Key[..^2] : x.Key, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First().Value, StringComparer.OrdinalIgnoreCase)
+            : [];
+
+        static string Ends(string v) =>
+            v.Contains("~mission(Location|name) > ~mission(Destination|name)") ? "A > B"
+            : v.Contains("to ~mission(Destination") ? "to" : v.Contains("from ~mission(Location") ? "from" : "-";
+
+        Console.WriteLine($"\nhauling title keys: {haulTitles.Count} ({string.Join(", ", haulTitles.Values.GroupBy(v => v).Select(g => $"{g.Key} {g.Count()}"))}); "
+            + $"the overlay rewrites {plan.Routed} lines of the game's own text");
+        var shared = ours.Keys.Where(mod.ContainsKey).ToList();
+        Console.WriteLine($"  keys StarStrings also placed: {shared.Count}; same ends on {shared.Count(k => Ends(ours[k]) == Ends(mod[k]))}");
+        foreach (var k in shared.Where(k => Ends(ours[k]) != Ends(mod[k])))
+            Console.WriteLine($"    {k}: ours {Ends(ours[k])}, the mod's {Ends(mod[k])}");
+        foreach (var k in ours.Keys.Where(k => !mod.ContainsKey(k)))
+            Console.WriteLine($"    only ours: {k} ({Ends(ours[k])})");
+    }
+
+    Console.WriteLine("\nrep on completion, by issuer:");
+    foreach (var g in paying.GroupBy(c => (c.Issuer, Rep: catalogue.Mission(c.DefinitionId)!.OnCompletion)).OrderBy(g => g.Key.Issuer).ThenBy(g => g.Key.Rep))
+        Console.WriteLine($"  {g.Count(),4}  {g.Key.Issuer,-30} {g.Key.Rep,7:N0}");
+
+    Console.WriteLine("\nlogged but paying no rep, by issuer:");
+    foreach (var g in known.Except(paying).GroupBy(c => c.Issuer).OrderByDescending(g => g.Count()))
+        Console.WriteLine($"  {g.Count(),4}  {g.Key}");
+
+    foreach (var c in contracts.Where(c => c.DefinitionId is not null && catalogue.Mission(c.DefinitionId) is null).GroupBy(c => c.Raw).Take(20))
+        Console.WriteLine($"  ? not in the install: {c.Key} x{c.Count()}");
+
+    return 0;
+}
+
 // Hauling as the logs have it: every hauling contract folded out of the
 // backups with what its title and archetype say about the route, and the
 // totals that decide how much a screenshot still has to add. The evidence
@@ -560,7 +826,9 @@ if (args.Any(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)))
 if (args.Any(a => a.StartsWith("--armoury", StringComparison.OrdinalIgnoreCase)))
 {
     var all = args.Contains("--armoury=all", StringComparer.OrdinalIgnoreCase);
-    var cache = Path.Combine(Path.GetDirectoryName(SessionStore.DatabasePathFor(install.RootPath))!, "commodities.json");
+    // --data points the cache at a copy, so a re-read after a reader change
+    // does not land in the real data folder.
+    var cache = Path.Combine(GetOption(args, "--data") ?? Path.GetDirectoryName(SessionStore.DatabasePathFor(install.RootPath))!, "commodities.json");
     var armoury = GameCommodities.Load(install.RootPath, cache).Armoury;
 
     static string Kinds(DamageKinds d) => string.Join("+", new[]
@@ -591,6 +859,38 @@ if (args.Any(a => a.StartsWith("--armoury", StringComparison.OrdinalIgnoreCase))
             + $"  [{w.Class}] {w.Manufacturer}");
         foreach (var m in w.Modes)
             Console.WriteLine($"      {Mode(m),-80} {Armoury.DamagePerSecond(w, m),7:0} dps  {Armoury.DamagePerMagazine(w, m),7:0}/mag  empties in {Armoury.SecondsToEmpty(w, m),5:0.#}s");
+    }
+
+    // Every gun's attachment slots and what goes in each, by the files' own
+    // rule (Armoury.Fits): the numbers behind docs/armoury.md's fitting section.
+    if (args.Contains("--armoury=ports", StringComparer.OrdinalIgnoreCase))
+    {
+        var plainPieces = armoury.Attachments.Where(a => a.BaseClass is null).ToList();
+        var plainGuns = armoury.Weapons.Where(w => w.BaseClass is null).ToList();
+        Console.WriteLine($"\n{plainGuns.Count(w => w.Ports.Count > 0)} of {plainGuns.Count} plain guns have attachment slots; {plainGuns.Sum(w => w.Ports.Count)} slots in all");
+        foreach (var slot in new[] { "Sight", "Barrel", "Underbarrel" })
+            Console.WriteLine($"  {slot,-11} on {plainGuns.Count(w => w.Ports.Any(p => p.Slot == slot)),3} guns; fixed on {plainGuns.Count(w => w.Ports.Any(p => p.Slot == slot && p.Fixed)),2}; shipped filled on {plainGuns.Count(w => w.Ports.Any(p => p.Slot == slot && p.Default is not null)),2}");
+        Console.WriteLine($"  pieces asking a tag of the port: {plainPieces.Count(a => a.RequiredTags.Count > 0)}; pieces that fit no gun: {plainPieces.Count(a => !plainGuns.Any(w => w.Ports.Any(p => Armoury.Fits(p, a))))}");
+        foreach (var a in plainPieces.Where(a => !plainGuns.Any(w => w.Ports.Any(p => Armoury.Fits(p, a)))))
+            Console.WriteLine($"      fits nothing: {a.Name} [{a.Class}] {a.Kind} S{a.Size} tags {string.Join(" ", a.Tags)}");
+        foreach (var w in plainGuns)
+        {
+            Console.WriteLine($"  {w.Name,-38} [{w.Class}]");
+            foreach (var p in w.Ports)
+            {
+                var fits = plainPieces.Where(a => Armoury.Fits(p, a)).ToList();
+                Console.WriteLine($"      {p.Slot,-11} {p.Name,-22} S{p.MinSize}-{p.MaxSize} needs [{string.Join(" ", p.RequiredTags)}] offers [{string.Join(" ", p.PortTags)}]"
+                    + (p.Fixed ? " FIXED" : "") + (p.Default is { } d ? $" ships with {d}" : "") + $"  {fits.Count} fit");
+            }
+        }
+        var p4ar = plainGuns.FirstOrDefault(w => w.Class == "behr_rifle_ballistic_01");
+        var tacit = plainPieces.FirstOrDefault(a => a.Name.StartsWith("Tacit Suppressor", StringComparison.OrdinalIgnoreCase) && p4ar?.Ports.Any(p => Armoury.Fits(p, a)) == true);
+        if (p4ar is not null && tacit is not null)
+        {
+            var fitted = Armoury.Fitted(p4ar, tacit.Effect);
+            var m = p4ar.Modes[0]; var fm = fitted.Modes[0];
+            Console.WriteLine($"  P4-AR with {tacit.Name}: {Armoury.DamagePerSecond(p4ar, m):0.#} -> {Armoury.DamagePerSecond(fitted, fm):0.#} dps, {Armoury.DamagePerMagazine(p4ar, m):0} -> {Armoury.DamagePerMagazine(fitted, fm):0}/mag");
+        }
     }
 
     var knives = armoury.Melee.Where(k => all || k.BaseClass is null).ToList();

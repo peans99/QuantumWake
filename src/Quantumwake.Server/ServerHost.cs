@@ -744,6 +744,7 @@ public static partial class ServerHost
         app.MapGet("/api/scan/history", (LogLibrary lib) => ScanHistory.Build(install, lib.Store));
 
         ControlsEndpoints.Map(app, install);
+        MapDataRead(app, install);
 
         app.MapGet("/api/now", (LiveSessionService live) => live.Current);
 
@@ -1260,6 +1261,24 @@ public static partial class ServerHost
             });
         });
 
+        // What each rock reads on the mining radar, from the install. The
+        // matching of a ping against these is the page's: it is arithmetic on
+        // 36 rows, and a reply per keystroke would be slower than doing it.
+        // Ready is false until the install has been read, or when the cache
+        // predates the signatures; unplaced counts what was left out.
+        app.MapGet("/api/mining/signatures", (LogLibrary lib) =>
+        {
+            var rocks = lib.GameCommodities.Mining.Signatures ?? [];
+            var rows = GameRockSignatures.Radar(rocks);
+            return Results.Ok(new
+            {
+                ready = rows.Count > 0,
+                rows,
+                read = rocks.Count,
+                unplaced = rocks.Count(r => !r.Placed),
+            });
+        });
+
         // A rock as scanned against a fit: the verdict, and the same rock on
         // every head of that size so the pilot sees what a different head
         // would do without refitting.
@@ -1456,18 +1475,8 @@ public static partial class ServerHost
             {
                 w.Class, uuid = lib.GameCommodities.ItemUuid(w.Class), w.Name, w.Kind, w.Weight, w.Size, w.Manufacturer, w.Damage, w.ProjectileSpeed, w.ProjectileLifetime,
                 w.DropStart, w.DropPerMetre, w.DropFloor, floorAt = Armoury.FloorAt(w), w.Magazine, w.MagazineClass, w.Mass, w.Explosion,
-                modes = w.Modes.Select(m => new
-                {
-                    m.Name, m.Kind, m.RoundsPerMinute, m.Pellets, m.AmmoPerShot, m.BurstShots, m.BurstCooldown,
-                    m.ChargeSeconds, m.ChargeDamageMultiplier, m.ChargeAmmoMultiplier, m.ChargePellets,
-                    m.BeamDamagePerSecond, m.BeamFullRange, m.BeamZeroRange, m.BeamAmmoPerSecond, m.HeatPerShot, m.Condition, m.SecondaryAmmo,
-                    hit = Armoury.Hit(w, m),
-                    sustainedRoundsPerMinute = Armoury.SustainedRoundsPerMinute(m),
-                    damagePerShot = Armoury.DamagePerShot(w, m),
-                    damagePerSecond = Armoury.DamagePerSecond(w, m),
-                    damagePerMagazine = Armoury.DamagePerMagazine(w, m),
-                    secondsToEmpty = Armoury.SecondsToEmpty(w, m),
-                }),
+                modes = ArmouryModeRows(w),
+                ports = ArmouryPorts(w, armoury.Attachments),
                 market = WeaponMarket(w),
                 finishes = (finishesOf.GetValueOrDefault(w.Class) ?? [])
                     .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
@@ -1537,6 +1546,15 @@ public static partial class ServerHost
                 // One melee config shared by every knife is the finding the
                 // page states above the table; more than one means it cannot.
                 meleeConfigs = armoury.Melee.Where(k => k.BaseClass is null).Select(k => k.Config).Distinct().Count(),
+                // Each body's baseline, for "which suit copes here". The page
+                // does the matching: it already holds every set's range.
+                climate = armoury.Climate is { } climate
+                    ? new
+                    {
+                        bodies = climate.Bodies.Select(b => new { b.Id, b.Name, b.System, b.Parent, b.Celsius, b.Pressure, b.Humidity, b.NightCooling }),
+                        climate.BodyMin, climate.BodyMax, climate.VisorFrost,
+                    }
+                    : null,
                 itemPricesKnown = uex.IsEnabled,
                 // Pictures come from the wiki, and the wiki is asked only once the
                 // community dataset is on - the app's consent to talk to the network.
@@ -1621,6 +1639,43 @@ public static partial class ServerHost
                 // The smallest hulls that take it, and no more than a dozen.
                 smallest = others.Where(s => !s.flown && s.Fits).Take(12).ToList(),
                 cratesFromInstall = lib.GameCommodities.Crates.Count > 0,
+            });
+        });
+
+        // A gun with attachments on it: the same figures /api/armoury derives
+        // for the bare gun, with the pieces' multipliers applied (Armoury.Fitted),
+        // and the handling the figures do not show - spread, recoil, sound,
+        // zoom - as one combined block. Every piece has to fit the gun by the
+        // files' rule and take a slot of its own, so the page cannot ask for a
+        // rifle with two suppressors and get a number back.
+        app.MapGet("/api/armoury/fit", (string gun, string? with, LogLibrary lib) =>
+        {
+            var armoury = lib.GameCommodities.Armoury;
+            var weapon = armoury.Weapons.FirstOrDefault(w => w.BaseClass is null && w.Class.Equals(gun, StringComparison.OrdinalIgnoreCase));
+            if (weapon is null) return Results.NotFound(new { problem = "No such gun in the install." });
+
+            var chosen = new List<(WeaponPort Port, WeaponAttachment Piece)>();
+            foreach (var cls in Keys(with))
+            {
+                var piece = armoury.Attachments.FirstOrDefault(a => a.Class.Equals(cls, StringComparison.OrdinalIgnoreCase));
+                if (piece is null) return Results.BadRequest(new { problem = $"No attachment {cls} in the install." });
+                if (!weapon.Ports.Any(p => Armoury.Fits(p, piece)))
+                    return Results.BadRequest(new { problem = $"{piece.Name} does not fit the {weapon.Name}." });
+                var port = weapon.Ports.FirstOrDefault(p => Armoury.Fits(p, piece) && chosen.All(c => c.Port != p));
+                if (port is null) return Results.BadRequest(new { problem = $"The {weapon.Name} has one {piece.Kind.ToLowerInvariant()} slot, and {piece.Name} is a second piece for it." });
+                chosen.Add((port, piece));
+            }
+
+            var effect = Armoury.Combine(chosen.Select(c => c.Piece.Effect));
+            var fitted = Armoury.Fitted(weapon, effect);
+            return Results.Ok(new
+            {
+                gun = weapon.Class,
+                pieces = chosen.Select(c => new { c.Piece.Class, c.Piece.Name, c.Piece.Kind, slot = c.Port.Slot }),
+                effect,
+                damage = fitted.Damage,
+                projectileSpeed = fitted.ProjectileSpeed,
+                modes = ArmouryModeRows(fitted),
             });
         });
 
@@ -2258,6 +2313,7 @@ public static partial class ServerHost
         // ---- data - what the community digest describes, priced by UEX ----
 
         MapReference(app);
+        MapMissions(app);
 
         // Manufacturer codes to full names, for every page that shows a maker.
         app.MapGet("/api/manufacturers", (LogLibrary lib) => lib.Community.Manufacturers);
@@ -3595,6 +3651,64 @@ public static partial class ServerHost
          * of the logs and a set of questions only the pilot can answer.
          */
         app.MapGet("/api/kits", (KitStore kits) => kits.All());
+
+        // The guns in each kit, as the Armoury knows them, with the kit's own
+        // attachments assigned to the gun they fit - so a kit row can open its
+        // rifle on the Armoury with the suppressor it is carried with already
+        // on. A kit keeps display names, not classes, so the names are matched
+        // here against the install's: a finish's name finds its plain gun, and
+        // an attachment goes on the first gun in the kit with a free slot that
+        // takes it, by the files' rule. A kit with no gun is left out.
+        app.MapGet("/api/kits/guns", (KitStore kits, LogLibrary lib) =>
+        {
+            var armoury = lib.GameCommodities.Armoury;
+            var plainGun = armoury.Weapons
+                .GroupBy(w => w.Name, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.Select(w => w.BaseClass ?? w.Class).First(), StringComparer.OrdinalIgnoreCase);
+            var gunOf = armoury.Weapons.Where(w => w.BaseClass is null).ToDictionary(w => w.Class, StringComparer.OrdinalIgnoreCase);
+            var pieceOf = armoury.Attachments
+                .GroupBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+            var plainPiece = armoury.Attachments.Where(a => a.BaseClass is null).ToDictionary(a => a.Class, StringComparer.OrdinalIgnoreCase);
+
+            var answer = new List<object>();
+            foreach (var kit in kits.All())
+            {
+                var guns = kit.Items
+                    .Select(i => plainGun.GetValueOrDefault(i.Name))
+                    .Where(c => c is not null && gunOf.ContainsKey(c))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Select(c => (Gun: gunOf[c!], Taken: new List<(WeaponPort Port, WeaponAttachment Piece)>()))
+                    .ToList();
+                if (guns.Count == 0) continue;
+
+                foreach (var item in kit.Items)
+                {
+                    if (!pieceOf.TryGetValue(item.Name, out var piece)) continue;
+                    // A finish fits where its plain piece does; the picker lists plain pieces.
+                    var plain = piece.BaseClass is { } b && plainPiece.TryGetValue(b, out var p) ? p : piece;
+                    foreach (var (gun, taken) in guns)
+                    {
+                        var port = gun.Ports.FirstOrDefault(port => Armoury.Fits(port, plain) && taken.All(t => t.Port != port));
+                        if (port is null) continue;
+                        taken.Add((port, plain));
+                        break;
+                    }
+                }
+
+                answer.Add(new
+                {
+                    kitId = kit.Id,
+                    guns = guns.Select(g => new
+                    {
+                        @class = g.Gun.Class,
+                        name = g.Gun.Name,
+                        with = g.Taken.Select(t => new { slot = t.Port.Slot, @class = t.Piece.Class, name = t.Piece.Name }),
+                    }),
+                });
+            }
+            return Results.Ok(answer);
+        });
 
         app.MapPost("/api/kits", (KitStore kits, KitRequest body) =>
             Results.Ok(kits.Add(body.Name, body.Items)));
@@ -5453,6 +5567,38 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
     /// not rate, which is the kind of disagreement nobody reports and everybody
     /// stops trusting.
     /// </remarks>
+    /// <summary>A gun's fire modes with the figures the Armoury derives from them, as the page reads them.</summary>
+    private static IEnumerable<object> ArmouryModeRows(PersonalWeapon w) => w.Modes.Select(m => (object)new
+    {
+        m.Name, m.Kind, m.RoundsPerMinute, m.Pellets, m.AmmoPerShot, m.BurstShots, m.BurstCooldown,
+        m.ChargeSeconds, m.ChargeDamageMultiplier, m.ChargeAmmoMultiplier, m.ChargePellets,
+        m.BeamDamagePerSecond, m.BeamFullRange, m.BeamZeroRange, m.BeamAmmoPerSecond, m.HeatPerShot, m.Condition, m.SecondaryAmmo,
+        hit = Armoury.Hit(w, m),
+        sustainedRoundsPerMinute = Armoury.SustainedRoundsPerMinute(m),
+        damagePerShot = Armoury.DamagePerShot(w, m),
+        damagePerSecond = Armoury.DamagePerSecond(w, m),
+        damagePerMagazine = Armoury.DamagePerMagazine(w, m),
+        secondsToEmpty = Armoury.SecondsToEmpty(w, m),
+    });
+
+    /// <summary>
+    /// A gun's attachment slots and the plain pieces that go in each, by the
+    /// files' rule. The shipped piece is named by its plain class, since a
+    /// finish has the same figures and the picker lists plain pieces only.
+    /// </summary>
+    private static IEnumerable<object> ArmouryPorts(PersonalWeapon w, IReadOnlyList<WeaponAttachment> pieces) => w.Ports.Select(p =>
+    {
+        var fits = pieces.Where(a => a.BaseClass is null && Armoury.Fits(p, a)).Select(a => a.Class).ToList();
+        var shipped = p.Default is { } d ? pieces.FirstOrDefault(a => a.Class.Equals(d, StringComparison.OrdinalIgnoreCase)) : null;
+        var plain = shipped?.BaseClass ?? shipped?.Class;
+        return (object)new
+        {
+            p.Slot, p.Name, minSize = p.MinSize, maxSize = p.MaxSize, p.Fixed,
+            @default = plain is not null && fits.Contains(plain, StringComparer.OrdinalIgnoreCase) ? plain : null,
+            fits,
+        };
+    });
+
     /// <summary>The whole request body as text, for the file-shaped endpoints.</summary>
     private static async Task<string> Body(HttpRequest request)
     {

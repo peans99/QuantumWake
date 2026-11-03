@@ -4,8 +4,8 @@ namespace Quantumwake.WebTests;
 
 /// <summary>
 /// The identity, trialled on three pages in 0.20.25 and on every page since
-/// 0.20.30: the wake under each page header, drawn from the pilot's own
-/// sessions, and gold on the pages that are the pilot's own history.
+/// 0.20.30: the decorative flight under each page header, and gold on the
+/// pages that are the pilot's own history.
 /// </summary>
 public class IdentityTests
 {
@@ -29,7 +29,7 @@ public class IdentityTests
     private static string Bar(string view) => $"__dom.node('#view-{view}').querySelector('.section-bar')";
 
     [Fact]
-    public void Every_page_header_carries_a_wake_from_the_logs()
+    public void Every_page_header_carries_one_decorative_flight()
     {
         var page = WithSessions($$"""
             [{"id":"a","startedAt":"{{Today(0)}}","inGame":3600},
@@ -39,7 +39,7 @@ public class IdentityTests
         foreach (var view in Headed)
         {
             Assert.Equal(1, page.Count($"{Bar(view)}.byClass('wake').length"));
-            Assert.Contains("2 sessions", page.Text($"{Bar(view)}.byClass('wake-mark')[0].title"));
+            Assert.Equal("true", page.Text($"{Bar(view)}.byClass('wake')[0].getAttribute('aria-hidden')"));
         }
     }
 
@@ -69,28 +69,80 @@ public class IdentityTests
         Assert.Equal(0, page.Count("__dom.node('#view-help').byClass('wake').length"));
     }
 
-    /// <summary>The mark at today's end is filled only if you have flown today.</summary>
+    /// <summary>A scan refresh must not restart ships that are already flying.</summary>
     [Fact]
-    public void The_mark_at_today_is_filled_only_after_a_session_today()
+    public void A_refresh_keeps_the_existing_flight()
     {
-        var flown = WithSessions($$"""[{"id":"a","startedAt":"{{Today(0)}}","inGame":600}]""");
-        var rested = WithSessions($$"""[{"id":"a","startedAt":"{{Today(3)}}","inGame":600}]""");
+        var page = WithSessions("[]");
+        page.Do($"const previousFlight = {Bar("jobs")}.querySelector('.wake-chase'); drawWakes();");
+        Assert.Equal("true", page.Text($"String(previousFlight === {Bar("jobs")}.querySelector('.wake-chase'))"));
+        Assert.Equal(1, page.Count($"{Bar("jobs")}.byClass('wake').length"));
+    }
 
-        var mark = $"{Bar("jobs")}.byClass('wake-mark')[0].className";
-        Assert.Contains("today", flown.Text(mark));
-        Assert.DoesNotContain("today", rested.Text(mark));
+    [Fact]
+    public void Resizing_the_lane_updates_its_viewbox_without_replacing_the_flight()
+    {
+        var page = WithSessions("[]");
+        page.Do($"const flight = {Bar("jobs")}.querySelector('.wake-chase'); const phase = flight.flightPhase; flight.getBoundingClientRect = () => ({{ width: 1760 }}); fitWake({Bar("jobs")});");
+        Assert.Equal("0 0 1760 36", page.Text("flight.getAttribute('viewBox')"));
+
+        page.Do($"flight.getBoundingClientRect = () => ({{ width: 920 }}); fitWake({Bar("jobs")});");
+        Assert.Equal("0 0 920 36", page.Text("flight.getAttribute('viewBox')"));
+        Assert.Equal("true", page.Text("String(flight.flightPhase === phase)"));
+        Assert.Equal("true", page.Text($"String(flight === {Bar("jobs")}.querySelector('.wake-chase'))"));
+    }
+
+    [Fact]
+    public void A_lane_too_narrow_for_two_ships_is_hidden()
+    {
+        var page = WithSessions("[]");
+        page.Do($"const flight = {Bar("jobs")}.querySelector('.wake-chase'); fitChase(flight, 120);");
+        Assert.Equal("true", page.Text("flight.dataset.compact"));
+        page.Do("fitChase(flight, 600);");
+        Assert.Equal("false", page.Text("flight.dataset.compact"));
     }
 
     /// <summary>
-    /// No session in the window draws no wake, rather than a flat line that
-    /// would read as sixty days of nothing being logged.
+    /// The wake ends before a header's controls rather than running gold
+    /// behind its filters, which on Mining read as a stray drawing; a header
+    /// whose controls are hidden or wrapped under the title keeps it whole.
     /// </summary>
     [Fact]
-    public void No_recent_session_draws_no_wake()
+    public void The_wake_stops_short_of_the_header_controls()
     {
-        var page = WithSessions($$"""[{"id":"a","startedAt":"{{Today(200)}}","inGame":600}]""");
+        var page = new Page();
+        page.Do("""
+            const bar = document.createElement('div'); bar.className = 'section-bar';
+            bar.getBoundingClientRect = () => ({ left: 60, top: 0, width: 1550, height: 90 });
+            const controls = document.createElement('div'); controls.className = 'controls';
+            controls.getBoundingClientRect = () => ({ left: 1150, top: 40, width: 450, height: 32 });
+            controls.offsetWidth = 450;
+            bar.append(controls);
+            __dom.node('#view-mining').append(bar);
+            """);
+        page.Do($$"""allSessions = [{"id":"a","startedAt":"{{Today(0)}}","inGame":600}]; drawWakes();""");
 
-        Assert.Equal(0, page.Count($"{Bar("fleet")}.byClass('wake').length"));
+        // 1150 - 60 is where the controls begin; the wake leaves 24 px clear.
+        Assert.Equal("1066px", page.Text($"{Bar("mining")}.style['--wake-end']"));
+
+        // Mining's other panes hide the filters: nothing to stop short of.
+        page.Do($"{Bar("mining")}.children[0].offsetWidth = 0; fitWake({Bar("mining")});");
+        Assert.Equal("undefined", page.Text($"String({Bar("mining")}.style['--wake-end'])"));
+
+        // Wrapped under the title on a narrow window: nothing sits beside it.
+        page.Do($"const c = {Bar("mining")}.children[0]; c.offsetWidth = 450; c.getBoundingClientRect = () => ({{ left: 60, top: 70, width: 450, height: 32 }}); fitWake({Bar("mining")});");
+        Assert.Equal("undefined", page.Text($"String({Bar("mining")}.style['--wake-end'])"));
+    }
+
+    /// <summary>
+    /// The ships are decorative, so a new pilot with no logs sees them too.
+    /// </summary>
+    [Fact]
+    public void A_new_pilot_still_sees_the_flight()
+    {
+        var page = WithSessions("[]");
+
+        Assert.Equal(1, page.Count($"{Bar("fleet")}.byClass('wake').length"));
     }
 
     /// <summary>

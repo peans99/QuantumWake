@@ -41,6 +41,10 @@ public static partial class ServerHost
         // Ship components by what they do - guns, shields, power, coolers,
         // quantum drives - with the figures each kind is chosen on.
         app.MapGet("/api/reference/components", (LogLibrary lib, UexData uex) => ReferenceComponents(lib, uex));
+
+        // The groups of NPC ships the install spawns, wave by wave, with what
+        // each ship's hold carries and which mission script names the group.
+        app.MapGet("/api/reference/encounters", (LogLibrary lib, UexData uex) => Results.Ok(ReferenceEncounters(lib, uex)));
     }
 
     /// <summary>
@@ -54,7 +58,8 @@ public static partial class ServerHost
             || r.Name.Contains(output, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>One way to get a blueprint, the variants of one contract folded together.</summary>
-    sealed record BlueprintWay(string Kind, string Issuer, string Title, IReadOnlyList<string> Systems, int Variants, double Chance, int Points);
+    /// <param name="Mission">A contract way's first debug name, which opens its mission window; null for an event tier.</param>
+    sealed record BlueprintWay(string Kind, string Issuer, string Title, IReadOnlyList<string> Systems, int Variants, double Chance, int Points, string? Mission = null);
 
     /// <summary>
     /// Each pool a blueprint is in, with this blueprint's share of it and who
@@ -81,7 +86,8 @@ public static partial class ServerHost
                     [.. g.SelectMany(s => Systems(s.Id)).Distinct().OrderBy(s => s)],
                     g.Count(),
                     g.Max(s => s.Chance),
-                    g.Key.Kind == "event" ? g.Min(s => s.Points) : 0))
+                    g.Key.Kind == "event" ? g.Min(s => s.Points) : 0,
+                    g.Key.Kind == "contract" ? g.Select(s => s.Id).Order(StringComparer.Ordinal).First() : null))
                 .OrderBy(w => w.Kind).ThenBy(w => w.Issuer, StringComparer.OrdinalIgnoreCase).ThenBy(w => w.Title, StringComparer.OrdinalIgnoreCase)
                 .ToList();
             result.Add((pool, share, ways));
@@ -120,7 +126,7 @@ public static partial class ServerHost
             {
                 name = p.Pool,
                 share = p.Share,
-                sources = p.Sources.Select(w => new { w.Kind, w.Issuer, w.Title, w.Systems, w.Variants, w.Chance, w.Points }),
+                sources = p.Sources.Select(w => new { w.Kind, w.Issuer, w.Title, w.Systems, w.Variants, w.Chance, w.Points, w.Mission }),
             }),
         };
     }
@@ -430,6 +436,8 @@ public static partial class ServerHost
             shops = npc ? [] : uex.VehicleShops(name),
             rentals = npc ? [] : feeds.RentalDesks(name),
             parts = loot.PartsOf(cls).Select(Part),
+            // The encounters an NPC version is spawned in, and what its hold carries there.
+            encounters = npc ? EncountersOf(lib, uex, cls) : null,
             // Who flies one, and what theirs carries: the parts a disabled one has aboard.
             npcVersions = npc ? [] : loot.NpcVersionsOf(cls).Select(v => new
             {

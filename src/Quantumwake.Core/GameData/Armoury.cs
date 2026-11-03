@@ -94,4 +94,90 @@ public static class Armoury
         var fall = weapon.Damage.Total - weapon.DropFloor;
         return fall <= 0 ? weapon.DropStart : weapon.DropStart + fall / weapon.DropPerMetre;
     }
+
+    /// <summary>
+    /// Whether an attachment goes on a gun's port, by the rule the files
+    /// state: the slot's kind, a size inside the port's range, every tag the
+    /// port asks for carried by the piece, and every tag the piece asks for
+    /// offered by the port.
+    /// </summary>
+    /// <remarks>
+    /// The tags are what size alone misses. A compensator for ballistic
+    /// guns carries <c>ballistic_attach</c> and no <c>energy_attach</c>, and
+    /// an energy rifle's barrel port asks for the second, so the two never
+    /// meet however the sizes fall.
+    /// </remarks>
+    public static bool Fits(WeaponPort port, WeaponAttachment piece) =>
+        port.Slot == piece.Kind
+        && piece.Size >= port.MinSize && piece.Size <= port.MaxSize
+        && port.RequiredTags.All(t => piece.Tags.Contains(t, StringComparer.OrdinalIgnoreCase))
+        && piece.RequiredTags.All(t => port.PortTags.Contains(t, StringComparer.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Several attachments as one block: the multipliers multiplied, the
+    /// pellets and burst shots added, the sight's zoom and zeroing kept.
+    /// </summary>
+    /// <remarks>
+    /// Multiplying is the assumption, and the one place it matters is rare:
+    /// a gun takes one piece a slot, and the pieces of different slots mostly
+    /// touch different figures - a barrel the damage, the rate and the kick,
+    /// a sight the zoom, an underbarrel laser the spread. Spread is the
+    /// exception (a Stoic suppressor's ×1.2 and a laser's ×0.885), and
+    /// whether the game multiplies those or adds what each takes off is not
+    /// in the files.
+    /// </remarks>
+    public static AttachmentEffect Combine(IEnumerable<AttachmentEffect> effects)
+    {
+        var all = effects.ToList();
+        double Product(Func<AttachmentEffect, double> f) => all.Aggregate(1.0, (p, e) => p * f(e));
+        var sight = all.Where(e => e.Zoom > 0).MaxBy(e => e.Zoom);
+        return new AttachmentEffect(
+            Damage: Product(e => e.Damage), FireRate: Product(e => e.FireRate), Spread: Product(e => e.Spread),
+            RecoilStrength: Product(e => e.RecoilStrength), RecoilTime: Product(e => e.RecoilTime), Sound: Product(e => e.Sound),
+            Heat: Product(e => e.Heat), AmmoCost: Product(e => e.AmmoCost), ChargeTime: Product(e => e.ChargeTime),
+            ProjectileSpeed: Product(e => e.ProjectileSpeed),
+            Pellets: all.Sum(e => e.Pellets), BurstShots: all.Sum(e => e.BurstShots),
+            Zoom: sight?.Zoom ?? 0, SecondZoom: sight?.SecondZoom ?? 0, ZoomTime: Product(e => e.ZoomTime),
+            ZeroingMax: all.Max(e => (double?)e.ZeroingMax) ?? 0,
+            ZeroingStep: all.Where(e => e.ZeroingMax > 0).Select(e => e.ZeroingStep).FirstOrDefault());
+    }
+
+    /// <summary>
+    /// The gun with an attachment block applied to the figures this page
+    /// derives from: every hit and a beam's damage a second, the cyclic rate,
+    /// the pellets and burst shots, the rounds a shot costs, the charge time,
+    /// the heat and the projectile's speed. The rest of the block - spread,
+    /// recoil, sound, zoom - changes how the gun handles, not these figures,
+    /// and the page lists it beside them.
+    /// </summary>
+    /// <remarks>
+    /// The damage drop is left as the files write it. Whether a damage
+    /// multiplier also lifts the drop's floor is not in the files, so the
+    /// fitted gun is compared at the muzzle only.
+    /// </remarks>
+    public static PersonalWeapon Fitted(PersonalWeapon weapon, AttachmentEffect effect)
+    {
+        if (effect.IsNone) return weapon;
+        var modes = weapon.Modes.Select(m => m with
+        {
+            RoundsPerMinute = m.RoundsPerMinute * effect.FireRate,
+            // A pellet count never falls below one: a rifle's single round
+            // with a shotgun choke on it is still a round.
+            Pellets = Math.Max(1, m.Pellets + effect.Pellets),
+            ChargePellets = m.ChargePellets > 0 ? Math.Max(1, m.ChargePellets + effect.Pellets) : 0,
+            BurstShots = m.BurstShots > 0 ? Math.Max(1, m.BurstShots + effect.BurstShots) : 0,
+            AmmoPerShot = Math.Max(1, (int)Math.Round(Math.Max(1, m.AmmoPerShot) * effect.AmmoCost)),
+            ChargeSeconds = m.ChargeSeconds * effect.ChargeTime,
+            HeatPerShot = m.HeatPerShot * effect.Heat,
+            Hit = m.Hit?.Times(effect.Damage),
+            BeamDamagePerSecond = m.BeamDamagePerSecond?.Times(effect.Damage),
+            BeamAmmoPerSecond = m.BeamAmmoPerSecond * effect.AmmoCost,
+        }).ToList();
+        return weapon with
+        {
+            Damage = weapon.Damage.Times(effect.Damage),
+            ProjectileSpeed = weapon.ProjectileSpeed * effect.ProjectileSpeed,
+            Modes = modes,
+        };
+    }
 }

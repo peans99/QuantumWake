@@ -307,6 +307,55 @@ line is the Now page's *Refinery* card, selectable in the overlay, and the
 pane's header. The marks are not in the backup: a restore puts old orders
 back under waiting, one press each to clear.
 
+## Radar signatures
+
+The Radar tab answers "what is that ping?". `GameRockSignatures` reads every
+`EntityClassDefinition` under `entities/mineable/`: its
+`SSCSignatureSystemParams.radarProperties.baseSignatureParams.signatures` is
+an array of eight floats, and the fifth (index 4) is the resource signature
+the mining radar prints. Reading it needed a float-array reader,
+`DataCore.SingleArrayAt`, beside the bool one. Nothing third-party is
+involved.
+
+`--signatures` on 4.10.2, 2026-11-02: **260 entities carry a signature, in 34
+distinct values; 201 are named by some `HarvestablePreset`.** Every preset is
+asked, not just those a deposit table this app reads reaches, because
+`GameSpawns` reaches only 50 of the download's 234 places. What the values
+are:
+
+| Value | What reads it | Names the ore? |
+|---|---|---|
+| 3170 - 3200 | Legendary ship rocks: Quantainium, Stileron, Savrilium | yes, 15 apart |
+| 3370 - 3400 | Epic: Ouratite, Riccite, Lindinium | yes |
+| 3540 - 3600 | Rare: Beryl, Taranite, Borase, Gold, Bexalite | yes |
+| 3825 - 3900 | Uncommon: Laranite, Aslarite, Titanium, Tungsten, Agricium, Torite | yes |
+| 4180 - 4300 | Common: Hephaestanite, Tin, Quartz, Corundum, Copper, Silicon, Iron, Aluminum, Ice | yes |
+| 4700 - 4900 | Asteroid classes C, S, P, M, Q, E (4700, 4720, 4750, 4850, 4870, 4900) | no - nine common ores each |
+| 3000 | Every hand-mining rock (Aphorite, Hadanite, Janalite...) | no |
+| 4000 | Ground-vehicle rocks, the older deposit-type rocks (Felsic, Granite, Shale... with a common ore each), I-type Ice asteroids, and every test preset | no |
+
+The surface and asteroid version of a ship ore read the same, so they are one
+row found in both places. The tab leaves out 59 rocks no preset places and the
+game's templates and test rocks; `MineableRock_FPS_TEMPLATE` is named by a
+preset, so "placed" alone does not exclude it, and the class name does.
+
+**What is not in the files:** that a ping over a cluster reads one rock's
+figure times the rocks in it. That is how pilots read the radar, and the tab
+says it has not been checked here; nor whether a scanner or ship changes the
+figure. A pair of radar pings with their scan results would settle both.
+
+**Collisions.** Up to 12 rocks, 14 totals are reached from two different
+values (the CLI's 21 also counts the three kinds at 4000 against each other).
+Six involve 3000 or 4000, such as 12000, four hand-mining rocks or three of
+anything at 4000. The rest: 14160 (4 Beryl, 3 S-type), 19200 (6 Savrilium,
+5 Aslarite), 28320 (8 Beryl, 6 S-type), 28800 (9 Savrilium, 8 Bexalite),
+30600 (9 Lindinium, 8 Laranite), 38400 (12 Savrilium, 10 Aslarite), 38700
+(10 Tungsten, 9 Ice) and 42480 (12 Beryl, 9 S-type). Nothing below 14160 is
+ambiguous among ship rocks. The tab lists every exact reading, fewest rocks
+first, and says when there is more than one. It matches exactly, because the
+figures are whole and 15 apart: a ping 15 off is a different ore, so it is
+shown as the nearest reading with its offset rather than as a match.
+
 ## The dump
 
 `--mining` on this install, 2026-09-15:

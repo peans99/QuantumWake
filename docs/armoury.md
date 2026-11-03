@@ -297,11 +297,144 @@ The resolver behind "cheapest at" is taken once per request: `LogLibrary.
 Terminals` rebuilds from the atlas on every read, and three thousand pieces
 each asking for it took the first version of this endpoint thirty seconds.
 
+## Fitting attachments (0.20.57)
+
+An opened gun has a picker per attachment slot, and the gun's figures with
+the picks on it beside the bare ones. Read on this install 2026-11-02 with
+`--armoury=ports` (add `--data <copy>` so the re-read lands in a copy).
+
+**What goes where is the files' rule, not a guess from names.** A gun's
+`SItemPortContainerComponentParams.Ports` holds an `SItemPortDef` per slot:
+`Types[].SubTypes` says which slot it is (`IronSight`, `Barrel`,
+`BottomAttachment`; the magazine port is left out), `MinSize`/`MaxSize` the
+sizes it takes, and `RequiredPortTags` the tags an attachment must carry.
+The attachment's own `SAttachableComponentParams.AttachDef` gives its size
+and `Tags`. `Armoury.Fits` checks all of it, and the attachment's
+`RequiredTags` against the port's `PortTags`, which no piece on this install
+uses.
+
+- 41 of the 46 plain guns have slots, 105 in all: a sight slot on 41, an
+  underbarrel slot on 40, a barrel slot on 24. The Animus and Boomtube
+  launchers, the Scourge railgun, the Vendetta HMG and the Deadrig shotgun
+  have none, and the page says so.
+- The tags split the barrels by ammunition. Stabilisers carry only
+  `energy_attach`, compensators only `ballistic_attach`, suppressors and
+  flash hiders both. The P4-AR's barrel port asks for
+  `FPS_Barrel ballistic_attach` at size 2, so 8 barrel pieces fit it; an
+  energy gun's port takes 6.
+- Sight ports run 1–1, 1–2 or 1–3, taking 19, 26 or 35 plain sights.
+  Every underbarrel piece is size 1 and fits every underbarrel slot (9).
+- Every one of the 73 plain attachments fits some gun.
+- Six guns ship with a sight on, in their `SEntityComponentDefaultLoadoutParams`:
+  the A03 (OT8-RF), Arrowhead (Touchstone), Atzkav (Omarof), P6-LR (EE08),
+  Scalpel (Black Prism) and Zenith (FarSight). The picker opens with that
+  sight chosen. No gun ships with a barrel or underbarrel piece, and no slot
+  carries the `uneditable` flag.
+
+**The arithmetic** (`Armoury.Combine`, `Armoury.Fitted`): the pieces'
+multipliers are multiplied together and applied to the hit (and a beam's
+damage a second), the cyclic rate, the rounds a shot costs, the charge time,
+the heat and the projectile speed; pellets and burst shots are added, and a
+shot never falls below one pellet. The derived figures then follow from the
+same functions as the bare gun's. The P4-AR with a Tacit Suppressor2 reads
+11.04 a hit, 162 → 149.04 a second and 480 → 441.6 a magazine.
+
+Two things are assumed, and the page says both. Two pieces moving one
+figure are multiplied: in practice only the spread, where a Stoic
+Suppressor1's ×1.2 and a laser's ×0.885 meet. And the damage drop is left as
+written, since whether a damage multiplier also lifts the drop's floor is not
+in the files, so the fitted gun is compared at the muzzle. The rest of the
+block (spread, recoil, sound, zoom, aim-down time, zeroing) does not move
+these figures and is listed under them as handling.
+
+`GET /api/armoury` gives each gun its `ports` (slot, sizes, the plain pieces
+that fit, the shipped one). `GET /api/armoury/fit?gun=<class>&with=<a,b>`
+returns the fitted modes in the shape the bare ones come in, and refuses a
+piece that does not fit or a second piece for one slot.
+
+**From a kit.** `GET /api/kits/guns` matches a saved kit's item names against
+the install's (a finish's name finds its plain gun) and gives each kit's
+attachments to the first gun in it with a free slot that takes them. The
+Loadout page's kit row then has a button per gun that opens it on the
+Armoury with those pieces fitted, clearing the gun filters on the way.
+
+## Attachment test bench
+
+The Armoury's **Test bench** tab shares attachment choices with each gun's
+expanded row. **Test this fit** opens the bench on that gun. Its pickers use
+the same server-provided port compatibility and fixed/default pieces; the
+existing `/api/armoury/fit` endpoint supplies the combined effects and derived
+mode figures. Factory fit restores the port defaults.
+
+The target is a relative illustration. Both layers use the same repeatable
+sample points in a unit disc, with the fitted layer scaled by the returned
+spread multiplier. Changing pieces retains the sample; **New sample** replaces
+both layers together. It does not model shot distribution, stance, distance,
+recoil, or hit probability. Beam modes have no scatter plot. The base gun's
+spread angle and recoil path are not extracted, so the target has no physical
+distance scale and the handling indices cannot rank different weapons.
+
+The firing figures are the endpoint's derived values at the muzzle, beside
+the same mode's bare values. These inherit the fitting caveats above. No
+saved kits or game data are changed by using the bench.
+
 ## Next
 
-- An attachment applied to a gun's row: the multipliers are read, so "the
-  P4-AR with a Tacit" is arithmetic the page could do; it does not yet.
 - How long the plasma patch burns, from the hazard zone's state machine.
-- Kits: a gun or a set from this page into a kit on the Loadout page, and a
-  kit's missing pieces onto a shopping list with the destination that sells
-  the most of them, as the Garage does for parts.
+- A gun or a set from this page into a kit on the Loadout page. The other
+  way round is built: a kit opens its gun here.
+- Whether the game multiplies two pieces' multipliers on one figure, and
+  whether a damage multiplier lifts the drop's floor: an in-game check with
+  a suppressor and a laser on, against a target at range.
+
+## Climate: which suit copes where (0.20.41)
+
+Measured on 4.10.2; `dotnet run --project src\Quantumwake.Cli -c Release -- --climate --data <scratch folder>`
+reprints all of it.
+
+**Bodies.** Each planet and moon has an `AtmosphereStateTemplate` named for
+it (`Stanton1b`). Its `state` overrides temperature in kelvin, pressure and
+humidity. There are 67 templates, and 28 of them are a body: Stanton's 16 and
+Pyro's 12. The rest are gas clouds, asteroid fields, two prison rooms, a helmet
+and vacuum. Names come from the star map (`StarMapObject.Pyro5a` is "Ignis"),
+and from the app's table where a record has none, as Daymar's does.
+
+**It is a baseline.** `PlanetDayNightTemperatureTemplate` holds only cooling
+rates per profile: Earth-like -2.5, moon-like -16, Venus-like -0.1. It gives no
+night temperature. Biome, altitude and caves are not in these records at all.
+Daymar's baseline reads 160 °C, which no one at Shubin's pads would call
+noon. Every place the page shows a baseline, it says so.
+
+**The body.** `ActorEnvironmentComponent.temperatureParams`: an unprotected
+body is comfortable from 4 to 35 °C, and the visor is fully frosted at a
+suit temperature of -20 °C.
+
+**A suit.** Every piece of a set carries the same `TemperatureResistance`
+range. Every Testudo piece reads -50 to 80 °C; Novikov's exploration suit and
+its helmet are -225 to 75; Pembroke's are -75 to 225. So a set is judged by
+the narrowest of its worn pieces. How the game combines pieces of *different*
+sets is not in the files, and a mixed outfit is not judged.
+
+A set counts only when it covers the body, with a core or an undersuit. On
+Euterpe half of what the install rates is a helmet alone. A suit's helmet and
+its undersuit are named as two families ("Novikov", "Novikov Exploration"),
+and nothing in the files pairs them. That leaves 99 sets that cover the body,
+and 79 families of helmets, arms or legs alone.
+
+| Body | Baseline | Sets rated |
+|---|---|---|
+| Aberdeen | 249.8 °C | 0 |
+| Pyro I | 225.8 °C | 0 |
+| Arial | 225.0 °C | 1 (Pembroke Exploration, to exactly 225) |
+| Daymar | 159.9 °C | 3 (Stirling Exploration, Stirling Hazard, Pembroke Exploration) |
+| Terminus | -133.1 °C | 5 (the Stirling and Novikov exploration suits) |
+| Vatra | -86.0 °C | 7 |
+| Euterpe | -73.1 °C | 16 |
+| Bloom, Fairo, Fuego, Vuur, Ita, Cellin, ArcCorp | 6 to 30 °C | all 99; unprotected is comfortable |
+
+The hottest-rated set reaches 225 °C and the coldest -225 °C, so no suit in
+the install is rated for the baselines of Aberdeen or Pyro I.
+
+Not yet checked against anything outside the files: a screenshot of the
+helmet's temperature readout on a body would say how far the ground sits from
+its baseline.

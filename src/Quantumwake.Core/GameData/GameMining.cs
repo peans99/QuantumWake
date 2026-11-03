@@ -133,6 +133,9 @@ public sealed record GameMiningData(
     List<MineralComposition> Compositions)
 {
     public static readonly GameMiningData Empty = new(null, [], [], [], [], []);
+
+    /// <summary>What each mineable rock reads on the mining radar; see <see cref="GameRockSignatures"/>. Null in a cache written before they were read.</summary>
+    public List<GameRockSignature>? Signatures { get; init; }
 }
 
 /// <summary>

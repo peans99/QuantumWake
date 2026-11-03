@@ -34,9 +34,9 @@ const PAGE_GLYPHS = Object.freeze({
   jobs: '◆', routes: '↝', contracts: '◈', reputation: '▲', checklists: '☑', blueprints: '▧', wikelo: '✦', events: '✧',
   logbook: '≡', sessions: '◷', servers: '⌘', places: '⌖', points: '✣', crew: '◌', casualties: '╳',
   spending: '¤', ledger: '▥', commodities: '▰', market: '◫',
-  ships: '◁', components: '⊛', parts: '⊞', mining: '⬡', crafting: '⌬',
+  ships: '◁', components: '⊛', parts: '⊞', mining: '⬡', crafting: '⌬', encounters: '⊗', missions: '❖',
   fleet: '◍', hangar: '⌂', loadout: '⊠', stash: '▣', loot: '✪', garage: '⌁', armoury: '✛',
-  settings: '✥', overlay: '◱', controls: '⊹', labels: '▦', imports: '↥', about: 'ⓘ',
+  settings: '✥', overlay: '◱', controls: '⊹', labels: '▦', imports: '↥', data: '⊟', about: 'ⓘ',
   // Reached from another page rather than the menu, but titled like the rest.
   commodity: '◩', share: '⇱', help: '◔',
 });
@@ -453,6 +453,7 @@ function showView(name) {
     loadRefineryOrders().catch(() => {});
     loadCrackModel().catch(() => {});
     loadSalvage().catch(() => {});
+    loadRadar().catch(() => {});
     // A rock handed over from the Log opens on the calculator; otherwise the
     // page opens where it was left.
     showMiningPane(crackFromScan ? 'crack' : miningPane);
@@ -478,6 +479,8 @@ function showView(name) {
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
   if (name === 'checklists') loadChecklists().catch(() => {});
   if (name === 'imports') loadImports().catch(() => {});
+  // Every store as it is now: the page is a reading, not a cache.
+  if (name === 'data') loadDataPage().catch(() => {});
   if (name === 'loadout') loadKits().catch(() => {});
   if (name === 'commodities') renderSharedReceipts().catch(() => {});
   if (name === 'blueprints') renderSharedBlueprints().catch(() => {});
@@ -492,6 +495,8 @@ function showView(name) {
   if (name === 'servers') loadServers().catch(() => {});
   if (name === 'garage') loadGarage().catch(() => {});
   if (name === 'armoury') loadArmoury().catch(() => {});
+  if (name === 'encounters') loadEncounters().catch(() => {});
+  if (name === 'missions') loadMissionsRef().catch(() => {});
   if (name === 'points') loadPoints().catch(() => {});
   if (name === 'wikelo') loadWikelo().catch(() => {});
   if (name === 'reputation') loadReputation().catch(() => {});
@@ -2910,10 +2915,10 @@ async function loadStanding() {
     if (row.repFrom > 0) {
       rep.append(el('span', null, row.rep.toLocaleString()));
       rep.append(el('span', 'muted', ` · ${tx('from {count}', { count: row.repFrom })}`));
-      rep.title = txn(row.repFrom, 'Read from {count} contract title the StarStrings mod has annotated', 'Read from {count} contract titles the StarStrings mod has annotated');
+      rep.title = repFromTitle(row.repFrom, row.repTagged || 0);
     } else {
       rep.append(el('span', 'muted', '—'));
-      rep.title = tx('No annotated title among these, so nobody has written down what they pay');
+      rep.title = tx('None of these finished contracts pays rep, by the installed game or a title tag');
     }
 
     tr.append(rep);
@@ -2941,7 +2946,7 @@ async function loadContractList() {
     setWorkspaceState('#contracts-state', 'offline', tx('Contract history is unavailable. Refresh after the local server reconnects.'));
     const tr = el('tr');
     const td = el('td', 'muted', tx('Contract history is unavailable.'));
-    td.colSpan = 9;
+    td.colSpan = 10;
     tr.append(td);
     body.append(tr);
     return;
@@ -2951,7 +2956,7 @@ async function loadContractList() {
     setWorkspaceState('#contracts-state', 'empty', tx('No contracts match this range.'));
     const tr = el('tr');
     const td = el('td', 'muted', tx('No contracts in that range.'));
-    td.colSpan = 9;
+    td.colSpan = 10;
     tr.append(td);
     body.append(tr);
     return;
@@ -2975,13 +2980,15 @@ async function loadContractList() {
     const tr = el('tr');
     tr.append(el('td', 'route-point', dateOf(row.at)));
 
-    // The composed name repeats issuer, type and difficulty, so the columns
-    // carry those and the full name rides the row's tooltip.
+    // The title is what the mobiGlas showed, and it opens the mission window:
+    // what the contract is, what it pays and every other time you took it.
+    const contract = el('td');
+    contract.append(missionLink(row.name, row.definitionId, row.contract));
+    tr.append(contract);
     tr.append(el('td', null, row.issuer || '—'));
     tr.append(el('td', 'muted', row.type || '—'));
     tr.append(el('td', 'muted', row.difficulty ? tx(row.difficulty) : '—'));
     tr.append(el('td', 'muted', row.system || '—'));
-    tr.title = row.name;
 
     const [cls, label] = OUTCOMES[row.outcome] || OUTCOMES.Unknown;
     const outcome = el('td', cls === 'done' ? 'inward' : cls, label);
@@ -2992,20 +2999,23 @@ async function loadContractList() {
     }
     tr.append(outcome);
 
-    // What the title says it pays, when a text mod has annotated it. Silence
-    // is the honest default: most titles say nothing, and a zero would read as
-    // "this pays nothing" rather than "nobody wrote it down".
+    // What finishing it pays, by the installed game's own figure for this
+    // contract - a StarStrings title tag only where the game has no word.
+    // Silence stays the default: an Iasi patrol pays no rep, and a zero
+    // would read as a figure rather than as nothing.
     const pays = el('td');
 
     if (row.rep) {
       const chip = el('span', 'tag-rep', tx('{rep} rep', { rep: row.rep.toLocaleString() }));
-      chip.title = tx('From the contract title, annotated by the StarStrings mod');
+      chip.title = row.repSource === 'game'
+        ? tx('What the installed game says finishing this contract pays')
+        : tx('From the contract title, annotated by the StarStrings mod');
       pays.append(chip);
     }
 
     if (row.blueprint) {
       const chip = el('span', 'tag-bp', 'BP');
-      chip.title = tx('Tagged as awarding a blueprint');
+      chip.title = blueprintChipTitle(row.blueprintChance);
       pays.append(chip);
     }
 
@@ -3377,7 +3387,9 @@ function renderSessionDebrief(summary) {
   contracts.slice(0, 8).forEach((contract) => {
     const item = el('li');
     item.append(el('span', contract.outcome === 'Completed' ? 'inward' : 'muted', sessionOutcome(contract.outcome)));
-    item.append(el('span', null, contract.displayName || contract.raw || tx('Unnamed contract')));
+    const name = el('span');
+    name.append(missionLink(contract.displayName || contract.raw || tx('Unnamed contract'), contract.definitionId, contract.raw));
+    item.append(name);
     if (contract.steps > 0) item.append(el('span', 'muted', tx('{done} / {total} steps', { done: contract.stepsDone, total: contract.steps })));
     contractList.append(item);
   });
@@ -4918,7 +4930,7 @@ function renderLootPlaces(panel, data, hasSlots) {
     section.append(pick);
   }
 
-  const holder = el('div', 'table-wrap');
+  const holder = el('div', 'table-wrap reference-table-wrap');
   section.append(holder);
   const more = el('button', 'ghost tiny loot-places-more');
   more.addEventListener('click', () => { expanded = !expanded; draw(); });
@@ -5179,7 +5191,7 @@ function renderLootWhere(panel, data, { embedded = false } = {}) {
   }
   table.append(body);
 
-  const wrap = el('div', 'table-wrap');
+  const wrap = el('div', 'table-wrap reference-table-wrap');
   wrap.append(table);
   panel.append(wrap);
 }
@@ -5198,7 +5210,7 @@ function renderLootNpcs(panel, npcs) {
     tx('what they spawn wearing, so what their bodies hold. The share counts every outfit they can be given as equally likely.'),
   ].join(' · ')));
 
-  const holder = el('div', 'table-wrap');
+  const holder = el('div', 'table-wrap reference-table-wrap');
   section.append(holder);
   const more = el('button', 'ghost tiny loot-npcs-more');
   let expanded = false;
@@ -5269,7 +5281,7 @@ function renderLootShips(panel, ships) {
     tx('fitted as standard - what a disabled one carries. How often each is met is not in the files.'),
   ].join(' · ')));
 
-  const holder = el('div', 'table-wrap');
+  const holder = el('div', 'table-wrap reference-table-wrap');
   section.append(holder);
   const more = el('button', 'ghost tiny loot-ships-more');
   let expanded = false;
@@ -5468,45 +5480,12 @@ function renderShipsRef() {
   }
 }
 
-/* ---------- the wake: your own sessions along the foot of a page header ----------
-
-   A ship's wake is where it has been, widest where it worked hardest and
-   fading behind it. This one is drawn from the sessions in your logs: sixty
-   days, oldest on the left, each day as wide as the time you spent in game
-   that day, and a mark at today's end - filled if you have flown today. It
-   is the one piece of these pages that could not belong to any other tool,
-   because nobody else has your logs. */
-
-const WAKE_DAYS = 60;
+/* ---------- two ships and their wakes along the foot of a page header ----------
+   This is a decorative flight, not telemetry or a session-history chart. SVG
+   motion follows the same curved course for both ships; a stationary pair is
+   shown instead when the browser asks for reduced motion. */
 
 function drawWakes() {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const day = 86400000;
-  const minutes = new Array(WAKE_DAYS).fill(0);
-  let sessions = 0;
-  for (const session of allSessions || []) {
-    const at = new Date(session.startedAt);
-    const start = new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime();
-    const index = WAKE_DAYS - 1 - Math.round((today - start) / day);
-    if (index < 0 || index >= WAKE_DAYS) continue;
-    minutes[index] += (Number(session.inGame) || 0) / 60;
-    sessions++;
-  }
-
-  // Smoothed over three days, so a wake rather than a bar chart.
-  const smooth = minutes.map((_, i) => {
-    const near = minutes.slice(Math.max(0, i - 1), i + 2);
-    return near.reduce((a, b) => a + b, 0) / near.length;
-  });
-  const top = Math.max(...smooth, 1);
-  const total = minutes.reduce((a, b) => a + b, 0);
-  const width = 600;
-  const mid = 11;
-  const x = (i) => (i / (WAKE_DAYS - 1)) * width;
-  const half = (i) => 0.6 + (smooth[i] / top) * 6.5;
-  const upper = smooth.map((_, i) => `${x(i).toFixed(1)},${(mid - half(i)).toFixed(2)}`);
-  const lower = smooth.map((_, i) => `${x(i).toFixed(1)},${(mid + half(i)).toFixed(2)}`).reverse();
 
   // Every page's own header: the bar that opens a view, not one nested
   // further down (Now, Help and About open on something else entirely).
@@ -5522,34 +5501,121 @@ function drawWakes() {
   if (closedStrip) hosts.push(closedStrip);
 
   for (const [index, bar] of hosts.entries()) {
+    // A data refresh must not restart a flight already in progress.
+    if (bar.querySelector('.wake-chase')) {
+      fitWake(bar);
+      continue;
+    }
     bar.querySelector('.wake')?.remove();
     bar.querySelector('.wake-mark')?.remove();
-    if (!sessions) continue;
 
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
-    svg.setAttribute('class', 'wake');
-    svg.setAttribute('viewBox', `0 0 ${width} 18`);
+    svg.setAttribute('class', 'wake wake-chase');
+    svg.setAttribute('viewBox', '0 0 600 36');
     svg.setAttribute('preserveAspectRatio', 'none');
     svg.setAttribute('aria-hidden', 'true');
-    const id = `wake-fade-${index}`;
-    svg.innerHTML = `<defs><linearGradient id="${id}" x1="0" x2="1" y1="0" y2="0">`
-      + '<stop offset="0" stop-color="#e9c27d" stop-opacity="0"/>'
-      + '<stop offset=".55" stop-color="#e9c27d" stop-opacity=".22"/>'
-      + '<stop offset="1" stop-color="#e9c27d" stop-opacity=".7"/></linearGradient></defs>'
-      + `<polygon points="${[...upper, ...lower].join(' ')}" fill="url(#${id})"/>`
-      + `<line x1="0" y1="${mid}" x2="${width}" y2="${mid}" stroke="url(#${id})" stroke-width=".6"/>`;
+    svg.setAttribute('focusable', 'false');
+    svg.dataset.flight = ['pursuit', 'overtake', 'evasive'][Math.floor(Math.random() * 3)];
+    svg.flightPhase = .25 + Math.random() * .45;
+    svg.flightGap = .07 + Math.random() * .05;
+    svg.flightPace = .95 + Math.random() * .15;
+    const ships = [
+      { colour: '#7fe4ff', resting: 'translate(375 22) rotate(-3)' },
+      { colour: '#e9c27d', resting: 'translate(285 23) rotate(2)' },
+    ];
+    const gradients = ships.map((ship, n) => `<linearGradient id="chase-${index}-${n}" gradientUnits="userSpaceOnUse" x1="-72" x2="-7">`
+      + `<stop offset="0" stop-color="${ship.colour}" stop-opacity="0"/>`
+      + `<stop offset="1" stop-color="${ship.colour}" stop-opacity=".7"/></linearGradient>`).join('');
+    const artwork = (n) => `<g fill="none" stroke="url(#chase-${index}-${n})" stroke-linecap="round">`
+      + '<path d="M-7,-1 C-23,-1 -43,-5 -72,-2" stroke-width=".8"/>'
+      + '<path d="M-7,1 C-25,2 -43,5 -62,3" stroke-width=".6"/>'
+      + '<path d="M-7,0 H-50" stroke-width="1.3"/></g>'
+      + '<path class="chase-hull" d="M10,0 L-7,-6 L-4,-1 L-7,0 L-4,1 L-7,6 Z"/>'
+      + '<path class="chase-cockpit" d="M2,0 H5"/>'
+      + '<circle class="chase-engine" cx="-6" cy="0" r="1.2"/>';
+    svg.innerHTML = `<defs>${gradients}</defs>` + ships.map((ship, n) =>
+      `<g class="wake-chase-motion" style="color:${ship.colour}" opacity="0">`
+      + '<animateMotion class="chase-motion" repeatCount="indefinite" rotate="auto"/>'
+      + '<animate class="chase-fade" attributeName="opacity" values="0;.85;.85;0" keyTimes="0;.08;.9;1" repeatCount="indefinite"/>'
+      + artwork(n)
+      + (n === 1
+        ? '<g class="chase-shot" opacity="0"><path d="M15,0 H30"/>'
+          + '<animate class="chase-fire" attributeName="opacity" values="0;0;.65;0;0" keyTimes="0;.42;.425;.445;1" repeatCount="indefinite"/>'
+          + '<animateTransform class="chase-bolt" attributeName="transform" type="translate" values="0 0;0 0;85 0;85 0" keyTimes="0;.42;.445;1" repeatCount="indefinite"/></g>' : '')
+      + '</g>'
+      + `<g class="wake-chase-still" style="color:${ship.colour}" transform="${ship.resting}">${artwork(n)}</g>`).join('');
     bar.append(svg);
-
-    const mark = el('span', minutes[WAKE_DAYS - 1] > 0 ? 'wake-mark today' : 'wake-mark');
-    bar.append(mark);
-    // Said in words for whoever points at the mark. On the header itself it
-    // would surface over every control there without hover text of its own,
-    // on forty pages.
-    mark.title = tx('Your wake: {sessions} sessions and {hours} in game over the last {days} days, from your logs.', {
-      sessions, hours: duration(total * 60), days: WAKE_DAYS,
-    });
+    fitWake(bar);
+    watchWake(bar);
   }
+}
+
+/** The gap left between the wake's end and the first control, in pixels. */
+const WAKE_CLEARANCE = 24;
+
+/**
+ * Ends the wake before the header's own controls.
+ *
+ * A header keeps its filters at the right, so the ships' course stops short
+ * of them through --wake-end. A header with no controls showing - Mining's other panes
+ * hide theirs - keeps the full width, and so does one whose controls have
+ * wrapped under the title on a narrow window, where nothing sits beside it.
+ */
+function fitWake(bar) {
+  const controls = [...bar.children].find((child) => child.classList?.contains('controls'));
+  let end = null;
+  if (controls && controls.offsetWidth > 0) {
+    const barBox = bar.getBoundingClientRect();
+    const box = controls.getBoundingClientRect();
+    const left = box.left - barBox.left;
+    if (left > barBox.width * 0.3) end = Math.round(left - WAKE_CLEARANCE);
+  }
+  if (end === null) bar.style.removeProperty('--wake-end');
+  else bar.style.setProperty('--wake-end', `${end}px`);
+  const svg = bar.querySelector('.wake-chase');
+  const width = Math.round(svg?.getBoundingClientRect().width || 0);
+  if (svg && width > 0 && svg.flightWidth !== width) fitChase(svg, width);
+}
+
+function fitChase(svg, width) {
+  svg.flightWidth = width;
+  svg.dataset.compact = String(width < 180);
+  // Match the viewBox to CSS pixels: a wide course must not stretch the ships.
+  svg.setAttribute('viewBox', `0 0 ${width} 36`);
+  const x = (fraction) => Math.round(24 + Math.max(0, width - 48) * fraction);
+  const paths = {
+    pursuit: `M${x(0)},21 C${x(.2)},8 ${x(.35)},28 ${x(.52)},23 S${x(.82)},23 ${x(1)},12`,
+    overtake: `M${x(0)},23 C${x(.25)},23 ${x(.4)},12 ${x(.6)},17 S${x(.85)},25 ${x(1)},17`,
+    evasive: `M${x(0)},19 C${x(.16)},7 ${x(.25)},29 ${x(.4)},23 S${x(.6)},8 ${x(.73)},15 S${x(.9)},29 ${x(1)},15`,
+  };
+  const duration = Math.max(14, Math.min(28, width / 55)) * svg.flightPace;
+  Array.from(svg.querySelectorAll('.wake-chase-motion')).forEach((ship, n) => {
+    const seconds = duration * (n === 1 && svg.dataset.flight === 'overtake' ? .84 : 1);
+    const begin = -(svg.flightPhase - n * svg.flightGap) * seconds;
+    ship.querySelector('.chase-motion').setAttribute('path', paths[svg.dataset.flight]);
+    for (const animation of ship.querySelectorAll('animateMotion, animate, animateTransform')) {
+      animation.setAttribute('dur', `${seconds.toFixed(2)}s`);
+      animation.setAttribute('begin', `${begin.toFixed(2)}s`);
+    }
+  });
+  Array.from(svg.querySelectorAll('.wake-chase-still')).forEach((ship, n) => {
+    ship.setAttribute('transform', `translate(${x(.62 - n * .12)} ${20 + n * 3})`);
+  });
+}
+
+/**
+ * Re-fits when the header or its controls change size: a resized window, a
+ * view shown from display:none (measured at nothing when drawn), a pane that
+ * hides its filters. Once per bar, so refreshes do not accumulate observers.
+ */
+function watchWake(bar) {
+  if (bar.wakeWatched || typeof ResizeObserver !== 'function') return;
+  bar.wakeWatched = true;
+  const observer = new ResizeObserver(() => fitWake(bar));
+  observer.observe(bar);
+  const controls = [...bar.children].find((child) => child.classList?.contains('controls'));
+  if (controls) observer.observe(controls);
 }
 
 /* ---------- reference: ship components, by what they do ----------
@@ -5677,9 +5743,10 @@ function renderComponentTabs() {
   tabs.textContent = '';
   for (const kind of COMPONENT_KINDS) {
     const count = componentsData.parts.filter((p) => kind.types.includes(p.type)).length;
-    const button = el('button', kind.key === componentsKind ? 'active' : null);
+    const button = el('button', kind.key === componentsKind ? 'ghost active' : 'ghost');
     button.type = 'button';
     button.dataset.kind = kind.key;
+    button.setAttribute('aria-pressed', String(kind.key === componentsKind));
     button.append(el('span', null, tx(kind.label)), el('span', 'components-tab-count', ` ${count}`));
     button.addEventListener('click', () => {
       componentsKind = kind.key;
@@ -5687,6 +5754,7 @@ function renderComponentTabs() {
       $('#components-size').value = '';
       renderComponentTabs();
       renderComponentsRef();
+      tabs.querySelector(`[data-kind="${kind.key}"]`)?.focus?.({ preventScroll: true });
     });
     tabs.append(button);
   }
@@ -5829,8 +5897,26 @@ let refTicket = 0;
 function refLink(kind, id, label, extraClass = '') {
   const link = el('button', `place-link ref-link${extraClass ? ` ${extraClass}` : ''}`, label || prettyItem(id || ''));
   link.type = 'button';
-  link.title = kind === 'ship' ? tx('Open this ship') : kind === 'blueprint' ? tx('Open this blueprint') : tx('Open this item');
+  link.title = kind === 'ship' ? tx('Open this ship') : kind === 'blueprint' ? tx('Open this blueprint')
+    : kind === 'mission' ? tx('Open this mission') : tx('Open this item');
   link.addEventListener('click', () => openRefDetail(kind, id));
+  return link;
+}
+
+/**
+ * A logged contract's name as a link to its mission window, or plain words
+ * when nothing names which contract of the game it was. The marker's id wins;
+ * the debug name is what a contract from before the id was read carries.
+ */
+function missionLink(label, definitionId, contract) {
+  const id = definitionId || contract;
+  return id ? refLink('mission', id, label) : document.createTextNode(label);
+}
+
+/** The same inside a row that opens something itself: the name's click stays on the name. */
+function rowMissionLink(label, definitionId, contract) {
+  const link = missionLink(label, definitionId, contract);
+  link.addEventListener?.('click', (event) => event.stopPropagation());
   return link;
 }
 
@@ -5849,15 +5935,17 @@ async function openRefDetail(kind, id, { push = true } = {}) {
   modal.hidden = false;
   document.body.classList.add('ref-modal-open');
   $('#ref-modal-back').hidden = refTrail.length < 2;
-  $('#ref-modal-kicker').textContent = kind === 'ship' ? tx('Ship') : kind === 'blueprint' ? tx('Blueprint') : tx('Item');
-  $('#ref-modal-title').textContent = prettyItem(id);
+  $('#ref-modal-kicker').textContent = kind === 'ship' ? tx('Ship') : kind === 'blueprint' ? tx('Blueprint')
+    : kind === 'mission' ? tx('Mission') : tx('Item');
+  // A mission's id is a guid until its title arrives; a guid in the heading reads as an error.
+  $('#ref-modal-title').textContent = kind === 'mission' ? (/^[0-9a-f-]{36}$/i.test(id) ? '…' : id.replaceAll('_', ' ')) : prettyItem(id);
   $('#ref-modal-sub').textContent = '';
   const body = $('#ref-modal-body');
   body.replaceChildren(el('p', 'muted', tx('Reading what is known…')));
 
   let data;
   try {
-    data = await getJson(`/api/reference/${kind === 'ship' || kind === 'blueprint' ? kind : 'item'}?id=${encodeURIComponent(id)}`);
+    data = await getJson(`/api/reference/${['ship', 'blueprint', 'mission'].includes(kind) ? kind : 'item'}?id=${encodeURIComponent(id)}`);
   } catch {
     if (ticket === refTicket) body.replaceChildren(el('p', 'muted', tx('Nothing is known about that.')));
     return false;
@@ -5867,6 +5955,7 @@ async function openRefDetail(kind, id, { push = true } = {}) {
   if (ticket !== refTicket) return false;
   if (kind === 'ship') renderShipDetail(body, data);
   else if (kind === 'blueprint') renderBlueprintDetail(body, data);
+  else if (kind === 'mission') renderMissionDetail(body, data);
   else renderItemDetail(body, data);
   body.scrollTop = 0;
   return true;
@@ -6145,9 +6234,10 @@ function renderBlueprintDetail(body, data) {
       for (const way of sources) {
         const tr = el('tr');
         tr.append(el('td', null, way.issuer || '—'));
-        const title = el('td', null, way.kind === 'event'
-          ? tx('{bar}, at {points} points', { bar: way.title, points: way.points.toLocaleString() })
-          : way.title);
+        const title = el('td');
+        // A contract opens its mission window; an event tier has none to open.
+        if (way.kind === 'event') title.textContent = tx('{bar}, at {points} points', { bar: way.title, points: way.points.toLocaleString() });
+        else title.append(missionLink(way.title, null, way.mission));
         if (way.variants > 1) title.append(el('span', 'muted', ` · ${txn(way.variants, '{count} version', '{count} versions')}`));
         tr.append(title);
         tr.append(el('td', 'muted', (way.systems || []).join(', ') || '—'));
@@ -6260,6 +6350,33 @@ function renderShipDetail(body, data) {
   if (parts.length) fitted.append(refPartsTable(parts));
   body.append(fitted);
 
+  // An NPC version's hold, and the groups that spawn it: the same answer the
+  // Encounters page gives, so the card and the page cannot disagree.
+  const met = data.encounters;
+  if (met?.names?.length) {
+    const seen = refSection(tx('Turns up in'), txn(met.names.length,
+      'One group of NPC ships in the game files spawns it. Open it for its waves.',
+      '{count} groups of NPC ships in the game files spawn it. Open one for its waves.'));
+    seen.append(refLinkList(met.names, (n, li) => {
+      const link = el('button', 'place-link ref-link', n.name.replaceAll('_', ' '));
+      link.type = 'button';
+      link.title = tx('Open this encounter');
+      link.addEventListener('click', () => openEncounter(n.name, n.arena));
+      li.append(link);
+      // Most are named by no script, so the few that are carry the mark.
+      if (n.linked) li.append(el('span', 'muted', ` · ${tx('named by a mission script')}`));
+    }));
+    const manifests = Object.fromEntries((met.cargo || []).map((m) => [m.name, m]));
+    const cargo = encounterCargoLines({ hold: met.hold }, Object.keys(manifests), manifests, met.uex);
+    if (cargo.length) {
+      seen.append(el('h4', 'loot-where-sub', tx('Its hold, by the lists it is spawned with')));
+      const list = el('ul', 'encounter-ships muted');
+      for (const line of cargo) list.append(el('li', null, line));
+      seen.append(list);
+    }
+    body.append(seen);
+  }
+
   const versions = data.npcVersions || [];
   if (versions.length) {
     const npcs = refSection(tx('Flown by NPCs'),
@@ -6276,6 +6393,674 @@ function renderShipDetail(body, data) {
     body.append(npcs);
   }
 }
+
+/* ---------- Reference: missions ---------- */
+
+/**
+ * A contract's text as a pilot reads it. The game fills `~mission(Location|name)`
+ * when it shows the contract, so here the slot is named instead - ‹Location› -
+ * and its markup tags (`<EM4>`) go, keeping the words they wrap.
+ */
+function missionText(text) {
+  return String(text || '')
+    // The text table stores a line break as the two characters \n.
+    .replace(/\\n/g, '\n')
+    .replace(/~mission\(([^)|]+)(?:\|[^)]*)?\)/g, (_, slot) => `‹${slot.replace(/([a-z])([A-Z])/g, '$1 $2')}›`)
+    .replace(/<\/?EM\d*>/gi, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+/**
+ * A mission's heading: the game's title, else the one your logs saw, else its
+ * debug name. A files title the game fills in at run time - Red Wind's
+ * "‹Reputation Rank› Hauler Needed for ‹Cargo Grade Token› Shipment" - gives way
+ * to the words your logs saw it shown with, when there are some.
+ */
+function missionTitle(m) {
+  if (m.loggedTitle && String(m.title || '').includes('~mission(')) return missionText(m.loggedTitle);
+  return missionText(m.title || m.loggedTitle) || String(m.name || '').replaceAll('_', ' ');
+}
+
+/** "Normal_PvE_only_action_4" as a rating and its words: [4, "Normal PvE only action"]. */
+function missionRating(value) {
+  const match = /^(.*?)_?(\d)$/.exec(String(value || ''));
+  if (!match) return null;
+  return [Number(match[2]), match[1].replaceAll('_', ' ')];
+}
+
+/** "0 to 2", "up to 2", "from 3" - a CrimeStat range as the files bound it. */
+function missionCrime(crime) {
+  if (!crime) return null;
+  const { min, max } = crime;
+  if (min != null && max != null) return min === max ? String(min) : tx('{min} to {max}', { min, max });
+  if (max != null) return tx('up to {max}', { max });
+  return tx('from {min}', { min });
+}
+
+/** "Hauling: Trainee to Senior" - a rank gate, open ends left open. */
+function missionGate(g) {
+  const ranks = g.min && g.max ? tx('{min} to {max}', { min: g.min, max: g.max })
+    : g.min ? tx('{rank} and up', { rank: g.min })
+      : g.max ? tx('up to {rank}', { rank: g.max }) : null;
+  if (!ranks) return null;
+  return `${g.organisation} · ${g.ladder}: ${ranks}`;
+}
+
+const MISSION_OUTCOMES = {
+  Completed: () => tx('completed'),
+  Failed: () => tx('failed'),
+  Abandoned: () => tx('abandoned'),
+  Withdrawn: () => tx('withdrawn'),
+  InProgress: () => tx('in progress'),
+};
+
+function renderMissionDetail(body, data) {
+  $('#ref-modal-title').textContent = missionTitle(data);
+  $('#ref-modal-sub').textContent = [data.contractor, data.type, (data.areas || []).join(', ')].filter(Boolean).join(' · ');
+  body.textContent = '';
+
+  const top = el('div', 'ref-top');
+  const record = el('p', 'ref-holding');
+  const s = data.summary || {};
+  if (s.taken) {
+    record.append(el('strong', 'ref-owned', txn(s.taken, 'taken once in your logs', 'taken {count} times in your logs')));
+    const parts = [
+      s.completed ? tx('{count} completed', { count: s.completed }) : null,
+      s.failed ? tx('{count} failed', { count: s.failed }) : null,
+      s.abandoned ? tx('{count} abandoned', { count: s.abandoned }) : null,
+    ].filter(Boolean);
+    if (parts.length) record.append(el('span', 'muted', ` · ${parts.join(' · ')}`));
+  } else {
+    record.append(el('strong', null, tx('not in your logs')));
+  }
+  top.append(record);
+  if (data.unreleased) top.append(el('p', 'muted small', tx('The game files mark this contract not for release; it is listed because your logs show it.')));
+  body.append(top);
+
+  const minutes = data.minutes ? tx('{minutes} min, the game’s own estimate', { minutes: fmtInt(data.minutes) }) : null;
+  const retake = [
+    data.onceOnly ? tx('offered once') : null,
+    data.retakeAfterAbandon === false ? tx('not again after abandoning it') : null,
+    data.retakeAfterFail === false ? tx('not again after failing it') : null,
+  ].filter(Boolean).join(' · ');
+  body.append(refFacts([
+    [tx('Offered by'), data.contractor],
+    [tx('Rep ladder of'), data.organisation && data.organisation !== data.contractor ? data.organisation : null],
+    [tx('Type'), [data.type, data.illegal ? tx('illegal') : null].filter(Boolean).join(' · ')],
+    [tx('Offered in'), (data.areas || []).join(', ')],
+    [tx('At'), (data.locations || []).join(', ')],
+    [tx('CrimeStat'), missionCrime(data.crime)],
+    [tx('Needs'), (data.gates || []).map(missionGate).filter(Boolean).join('; ')],
+    [tx('After'), data.requiresCompleted ? txn(data.requiresCompleted, 'one earlier contract of its series done', '{count} earlier contracts of its series done') : null],
+    [tx('Takes about'), minutes],
+    [tx('Your median'), s.medianMinutes ? tx('{minutes} min over {count} completed', { minutes: fmtInt(s.medianMinutes), count: s.completed }) : null],
+    [tx('Buy-in'), data.buyIn ? money(data.buyIn) : null],
+    [tx('Crew'), data.maxPlayers > 1 ? tx('up to {count} can share it', { count: data.maxPlayers }) : null],
+    [tx('Taken again'), retake],
+  ]));
+
+  const pays = refSection(tx('What it pays'), tx('From the game files. The aUEC of a generated contract is worked out by the game server when it is offered, and the files hold no figure for it.'));
+  const lines = el('ul', 'ref-materials');
+  for (const r of data.pay?.rep || []) {
+    const when = (r.when || []).map((w) => MISSION_OUTCOMES[w]?.() || w).join(', ');
+    lines.append(el('li', null, tx('{amount} rep on {ladder} ({organisation}), when {when}', {
+      amount: `${r.amount > 0 ? '+' : ''}${r.amount.toLocaleString()}`, ladder: r.ladder, organisation: r.organisation, when,
+    })));
+  }
+  if (data.pay?.reward) lines.append(el('li', null, tx('{reward}, a fixed sum in its broker record', { reward: money(data.pay.reward) })));
+  if (data.pay?.blueprint) lines.append(el('li', null, tx('A blueprint, {chance} of the time', { chance: lootPercent(data.pay.blueprint) })));
+  if (s.payouts) lines.append(el('li', null, txn(s.payouts, 'Paid {total} once in your logs', 'Paid {total} over {count} awards in your logs', { total: money(s.paid) })));
+  if (!lines.children.length) {
+    lines.append(el('li', 'muted', data.pay?.known
+      ? tx('No rep, no blueprint and no fixed sum in the game files.')
+      : tx('Your game files do not say what this one pays.')));
+  }
+  pays.append(lines);
+  if ((data.blueprints || []).length) {
+    pays.append(el('h4', 'loot-where-sub', tx('Blueprints it can give')));
+    pays.append(refLinkList(data.blueprints, (b, li) => li.append(refLink('blueprint', b.className, b.name))));
+  }
+  body.append(pays);
+
+  if (data.description) {
+    const brief = refSection(tx('Briefing'), tx('As the mobiGlas words it; ‹slots› are filled in by the game when it offers the contract.'));
+    for (const para of missionText(data.description).split(/\n{2,}/)) brief.append(el('p', 'mission-brief', para));
+    body.append(brief);
+  }
+
+  const d = data.difficulty;
+  if (d && [d.mechanical, d.mentalLoad, d.riskOfLoss, d.knowledge].some(Boolean)) {
+    // Not "out of 5": a Red Wind bulk haul rates its mental load 7.
+    const rate = refSection(tx('Difficulty'), tx('The game’s own ratings for this contract, with its words for each; higher is harder.'));
+    rate.append(refFacts([
+      [tx('Mechanical skill'), d.mechanical],
+      [tx('Mental load'), d.mentalLoad],
+      [tx('Risk of loss'), d.riskOfLoss],
+      [tx('Game knowledge'), d.knowledge],
+    ].map(([label, value]) => {
+      const r = missionRating(value);
+      return [label, r ? `${r[0]} · ${r[1]}` : null];
+    })));
+    body.append(rate);
+  }
+
+  const runs = data.runs || [];
+  if (runs.length) {
+    const yours = refSection(tx('Your runs'), tx('Every time your logs show you taking it, newest first.'));
+    const table = el('table', 'loot-where-table');
+    const head = el('tr');
+    head.append(el('th', null, tx('When')), el('th', null, tx('As shown')), el('th', null, tx('Outcome')), el('th', 'num', tx('Time')), el('th', 'num', tx('Paid')));
+    const thead = el('thead');
+    thead.append(head);
+    table.append(thead);
+    const tbody = el('tbody');
+    for (const run of runs.slice(0, 30)) {
+      const tr = el('tr');
+      tr.append(el('td', 'route-point', dateOf(run.at)));
+      tr.append(el('td', null, run.title));
+      tr.append(el('td', run.outcome === 'Completed' ? 'inward' : 'muted', MISSION_OUTCOMES[run.outcome]?.() || '—'));
+      tr.append(el('td', 'num muted', run.minutes ? `${Math.round(run.minutes)}m` : '—'));
+      tr.append(el('td', 'num', run.paid ? money(run.paid) : '—'));
+      tbody.append(tr);
+    }
+    table.append(tbody);
+    const wrap = el('div', 'table-wrap');
+    wrap.append(table);
+    yours.append(wrap);
+    if (runs.length > 30) yours.append(el('p', 'muted small', tx('And {count} earlier.', { count: runs.length - 30 })));
+    body.append(yours);
+  }
+
+  if ((data.related || []).length) {
+    const related = refSection(tx('The same job, other versions'), tx('Its handler’s other contracts on the same template: the difficulty steps and the copies for other places.'));
+    related.append(refLinkList(data.related, (r, li) => {
+      // A title the game fills in at run time is the same template on every
+      // version, so the name - which carries the region and grade - says which.
+      const templated = String(r.title || '').includes('~mission(');
+      li.append(refLink('mission', r.id, templated || !r.title ? r.name.replaceAll('_', ' ') : missionTitle(r)));
+      const where = (r.areas || []).join(', ');
+      if (where) li.append(el('span', 'muted', ` · ${where}`));
+    }));
+    body.append(related);
+  }
+
+  body.append(el('p', 'muted small ref-debug', [data.generator, data.template, data.name].filter(Boolean).join(' · ')));
+}
+
+let missionCatalogue = null;
+
+async function loadMissionsRef() {
+  try {
+    missionCatalogue = await getJson('/api/reference/missions');
+  } catch {
+    missionCatalogue = null;
+  }
+
+  const rows = missionCatalogue?.missions || [];
+  const fill = (selector, values, all) => {
+    const select = $(selector);
+    if (!select) return;
+    const previous = select.value;
+    select.textContent = '';
+    select.append(new Option(all, ''));
+    for (const v of values) select.append(new Option(v, v));
+    if (values.includes(previous)) select.value = previous;
+  };
+  const sorted = (list) => [...new Set(list.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  fill('#missions-contractor', sorted(rows.map((m) => m.contractor)), tx('Every contractor'));
+  fill('#missions-type', sorted(rows.map((m) => m.type)), tx('Every type'));
+  fill('#missions-system', sorted(rows.flatMap((m) => m.systems || [])), tx('Every system'));
+  renderMissionsRef();
+}
+
+/** The most a page draws at once; the filters narrow the rest. */
+const MISSIONS_SHOWN = 300;
+
+function renderMissionsRef() {
+  const body = $('#missions-table tbody');
+  if (!body) return;
+  body.textContent = '';
+  const counter = $('#missions-count');
+
+  if (!missionCatalogue?.ready) {
+    if (counter) counter.textContent = tx('Waiting for catalogue');
+    const tr = el('tr');
+    const td = el('td', 'muted', tx('Your game files have not given any contracts yet.'));
+    td.colSpan = 7;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  const term = ($('#missions-search')?.value || '').trim().toLowerCase().replaceAll('_', ' ');
+  const contractor = $('#missions-contractor')?.value || '';
+  const type = $('#missions-type')?.value || '';
+  const system = $('#missions-system')?.value || '';
+  const mine = $('#missions-flown')?.checked;
+
+  const rows = missionCatalogue.missions.filter((m) =>
+    (!contractor || m.contractor === contractor)
+    && (!type || m.type === type)
+    && (!system || (m.systems || []).includes(system))
+    && (!mine || m.taken > 0)
+    && (!term || [missionTitle(m), m.name.replaceAll('_', ' '), m.contractor, m.type, ...(m.areas || [])]
+      .filter(Boolean).join(' ').toLowerCase().includes(term)))
+    // What you have flown first, most first; then by contractor and title.
+    .sort((a, b) => (b.taken - a.taken) || String(a.contractor).localeCompare(String(b.contractor)) || missionTitle(a).localeCompare(missionTitle(b)));
+
+  if (counter) {
+    counter.textContent = !rows.length ? tx('No matches')
+      : rows.length > MISSIONS_SHOWN
+        ? tx('{shown} of {count} contracts; narrow it with the filters', { shown: MISSIONS_SHOWN, count: rows.length.toLocaleString() })
+        : txn(rows.length, '{count} contract', '{count} contracts', { count: rows.length.toLocaleString() });
+  }
+
+  for (const m of rows.slice(0, MISSIONS_SHOWN)) {
+    const tr = el('tr', 'mission-row');
+    const name = el('td');
+    name.append(rowMissionLink(missionTitle(m), m.id));
+    name.append(el('div', 'armoury-kind', m.name.replaceAll('_', ' ')));
+    tr.append(name);
+    tr.append(el('td', null, m.contractor || '—'));
+    tr.append(el('td', 'muted', [m.type, m.illegal ? tx('illegal') : null].filter(Boolean).join(' · ') || '—'));
+    tr.append(el('td', 'muted', (m.areas || []).join(', ') || '—'));
+    tr.append(el('td', 'muted', m.rank ? missionGate({ organisation: '', ladder: m.rank.ladder, min: m.rank.min, max: m.rank.max })?.replace(/^ · /, '') || '—' : '—'));
+
+    const pays = el('td');
+    if (m.rep) pays.append(el('span', 'tag-rep', tx('{rep} rep', { rep: m.rep.toLocaleString() })));
+    if (m.blueprint) {
+      const chip = el('span', 'tag-bp', 'BP');
+      chip.title = blueprintChipTitle(m.blueprint);
+      pays.append(chip);
+    }
+    if (m.reward) pays.append(el('span', 'muted', ` ${money(m.reward)}`));
+    if (!pays.children.length && !m.reward) pays.append(el('span', 'muted', '—'));
+    tr.append(pays);
+
+    tr.append(el('td', m.taken ? 'num' : 'num muted', m.taken ? `${m.completed} / ${m.taken}` : '—'));
+    tr.addEventListener('click', () => openRefDetail('mission', m.id));
+    body.append(tr);
+  }
+}
+
+onInput('#missions-search', renderMissionsRef);
+for (const id of ['#missions-contractor', '#missions-type', '#missions-system', '#missions-flown']) {
+  $(id)?.addEventListener('change', renderMissionsRef);
+}
+
+/* ---------- Reference: encounters ---------- */
+
+let encounterModel = null;
+/** The encounter whose waves are open, by name; one at a time, as Climate opens one body. */
+let encounterOpen = null;
+
+/**
+ * The mission scripts that name encounters, by where they sit under
+ * Libs/Subsumption. Measured on 4.10.2 these four are every script that names
+ * one; a script a patch adds still shows, by its own folder.
+ */
+const ENCOUNTER_SCRIPTS = [
+  ['Missions/EnvironmentalMissionScenarios/LawEMs/', 'Stanton law missions: wanted policing, security patrols, bounty hunters'],
+  ['Missions/EnvironmentalMissionScenarios/SB_CombatAssist_NPCRequest/', 'Service beacon: combat assist'],
+  ['Missions/EnvironmentalMissionScenarios/FreighterDerelict/', 'Derelict freighter'],
+  ['Missions/AC/', 'Arena Commander: Swarm'],
+];
+
+/**
+ * Where the game files an encounter, the more particular folder first. This is
+ * the game's own filing, which says what kind of work an encounter belongs to
+ * but not that any one contract spawns it.
+ */
+const ENCOUNTER_FOLDERS = [
+  ['pu/mission/ai_bounty', 'Bounty missions'],
+  ['pu/mission/ai_assassination', 'Assassination missions'],
+  ['pu/mission/ai_recovery', 'Recovery missions'],
+  ['pu/mission/ai_steal', 'Steal missions'],
+  ['pu/mission/ai_destroy_satellite', 'Satellite missions'],
+  ['pu/mission/ai_escort', 'Escort missions'],
+  ['pu/mission/ai_hijackedships', 'Hijacked ships'],
+  ['pu/mission/ai_hijacking', 'Hijacking'],
+  ['pu/mission/ai_sb_combatassist', 'Service beacon: combat assist'],
+  ['pu/mission/ai_sb_refuel', 'Service beacon: refuel'],
+  ['pu/mission/ai_emscenarios', 'Space encounters'],
+  ['pu/mission/ai_derelict', 'Derelicts'],
+  ['pu/mission/ai_idrisfight', 'Idris fight'],
+  ['pu/mission/ai_miningactivity', 'Mining activity'],
+  ['pu/mission/pu_mining', 'Mining activity'],
+  ['pu/mission/ai_patrol', 'Patrols'],
+  ['pu/mission/ai_scramble', 'Scramble'],
+  ['pu/mission/ai_spaceporttraffic', 'Spaceport traffic'],
+  ['pu/mission/dynamic_events/pirate_raids', 'Pirate raids'],
+  ['pu/mission/we_ntlockdown', 'Nine Tails Lockdown'],
+  ['pu/mission/we_convoyassemble', 'Convoy'],
+  ['pu/mission/fleetweektest', 'Fleet Week'],
+  ['pu/fleetweek', 'Fleet Week'],
+  ['pu/reinforcement', 'Reinforcements'],
+  ['pu/faction/single', 'Lone ships'],
+  ['ea', 'Arena Commander'],
+];
+
+/** "Bounty missions", or the folder itself for one this table has not met. */
+function encounterFolderLabel(folder) {
+  const f = String(folder || '').toLowerCase();
+  const hit = ENCOUNTER_FOLDERS.find(([prefix]) => f === prefix || f.startsWith(`${prefix}/`));
+  return hit ? tx(hit[1]) : f || tx('Other');
+}
+
+/** The mission a script naming an encounter belongs to, or its folder. */
+function encounterScriptLabel(path) {
+  const hit = ENCOUNTER_SCRIPTS.find(([prefix]) => String(path).startsWith(prefix));
+  return hit ? tx(hit[1]) : String(path).split('/').slice(0, -1).join('/');
+}
+
+const ENCOUNTER_BODIES = { 1: 'Hurston', 2: 'Crusader', 3: 'ArcCorp', 4: 'microTech' };
+
+/** The strength words 4.10.2's encounter names use, as words. */
+const ENCOUNTER_LEVELS = {
+  Easy: 'easy', Medium: 'medium', Hard: 'hard',
+  Weak: 'weak', Strong: 'strong', VeryStrong: 'very strong', Neutral: 'neutral',
+};
+
+/**
+ * What an encounter's name says - "hard", "Crusader", "the target" - for the
+ * ones no script names. Read from the name only, and the page says so.
+ */
+function encounterNameSays(name) {
+  const words = [];
+  const tokens = String(name).split('_');
+  const level = tokens.find((t) => ENCOUNTER_LEVELS[t]);
+  if (level) words.push(tx(ENCOUNTER_LEVELS[level]));
+  const body = tokens.map((t) => /^Stanton(\d)$/.exec(t)).find(Boolean);
+  if (body && ENCOUNTER_BODIES[body[1]]) words.push(ENCOUNTER_BODIES[body[1]]);
+  else if (tokens.includes('Stanton')) words.push('Stanton');
+  if (tokens.includes('Target')) words.push(tx('the target'));
+  return words;
+}
+
+/** How many of one ship a member spawns: its count, else its range written as one. */
+function encounterCount(s) {
+  if (s.amount > 0) return { most: s.amount, text: String(s.amount) };
+  if (s.minAmount != null || s.maxAmount != null) {
+    const lo = s.minAmount ?? 0;
+    const hi = s.maxAmount ?? lo;
+    return { most: hi, text: lo === hi ? String(hi) : `${lo}–${hi}` };
+  }
+  return { most: 0, text: '0' };
+}
+
+/**
+ * What one ship's hold is spawned with, at its fullest: SCU and aUEC. Null
+ * when it carries no list, or the list names nothing, or the hull has no hold
+ * to put it in. The SCU is the fill times the hold, rounded down, since a hold
+ * is loaded in whole SCU.
+ */
+function encounterLoad(ship, names, manifests) {
+  const hold = ship?.hold;
+  if (!hold || !names?.length) return null;
+  let best = null;
+  for (const name of names) {
+    const m = manifests?.[name];
+    if (!m?.goods?.length) continue;
+    const scu = Math.floor(hold * m.maxFill);
+    const prices = m.goods.map((g) => g.price).filter((p) => p > 0);
+    const worth = prices.length ? scu * Math.max(...prices) : null;
+    if (!best || scu > best.scu) best = { scu, worth };
+  }
+  return best;
+}
+
+/** "Distilled Spirits", or "Processed Food 50% · Waste 25% · …" when the list names several. */
+function encounterGoods(m) {
+  const goods = m?.goods || [];
+  if (goods.length < 2) return goods.map((g) => g.commodity).join('');
+  const total = goods.reduce((n, g) => n + (g.probability || 0), 0) || 1;
+  return goods.map((g) => `${g.commodity} ${Math.round(100 * (g.probability || 0) / total)}%`).join(' · ');
+}
+
+/** "25%", or "1–25%" when the hold is spawned somewhere in a range. */
+function encounterFill(m) {
+  const lo = Math.round(100 * (m.minFill || 0));
+  const hi = Math.round(100 * (m.maxFill || 0));
+  return lo === hi ? `${hi}%` : `${lo}–${hi}%`;
+}
+
+/**
+ * One ship's cargo as lines, one per distinct load, or the one line saying why
+ * there is none to speak of. Two lists can load the same - Criminal_25_High
+ * and Criminal_25_Medium are both a quarter of the hold in spirits - and a
+ * card repeating it is noise, so a line is written once.
+ */
+function encounterCargoLines(ship, names, manifests, uex) {
+  if (!names?.length) return [];
+  const lists = names.map((n) => manifests?.[n]).filter(Boolean);
+  if (!lists.length) return [];
+  if (lists.every((m) => !m.goods?.length)) return [tx('Its cargo list names no commodity.')];
+  if (!ship?.hold) return [tx('Its cargo list has nothing to fill: the files give this hull no cargo grid.')];
+
+  const lines = lists.filter((m) => m.goods?.length).map((m) => {
+    const scu = Math.floor(ship.hold * m.maxFill);
+    const values = { goods: encounterGoods(m), fill: encounterFill(m), hold: fmtInt(ship.hold), scu: fmtInt(scu) };
+    // A 1% list in a 46 SCU hold is under one box: no load to price.
+    if (scu < 1) return tx('{goods}, {fill} of a {hold} SCU hold: under 1 SCU', values);
+    const line = tx('{goods}, {fill} of a {hold} SCU hold: up to {scu} SCU', values);
+    if (!uex) return line;
+    const prices = m.goods.map((g) => g.price).filter((p) => p > 0);
+    return prices.length
+      ? `${line}, ${tx('worth up to {worth} at the best UEX sell', { worth: money(scu * Math.max(...prices)) })}`
+      : `${line}, ${tx('no UEX sell price')}`;
+  });
+  return [...new Set(lines)];
+}
+
+async function loadEncounters() {
+  try {
+    encounterModel = await getJson('/api/reference/encounters');
+  } catch {
+    encounterModel = null;
+  }
+  renderEncounters();
+}
+
+/** Who flies one: the class's crew ("Nine Tails · Elite"), else the faction the record names. */
+function encounterCrew(s) {
+  return s.ship?.crew ? s.ship.crew.split(' · ').map((w) => tx(w)).join(' · ') : s.flown;
+}
+
+/** Every ship in an encounter, across its waves. */
+function encounterShips(e) {
+  return (e.waves || []).flatMap((w) => w.ships || []);
+}
+
+function encounterMatches(e, kind, term) {
+  if (kind === 'arena') { if (!e.arena) return false; }
+  else if (e.arena && kind !== 'all') return false;
+  if (kind === 'script' && !e.scripts?.length) return false;
+  if (kind === 'cargo' && !encounterShips(e).some((s) => s.cargo?.length)) return false;
+  if (!term) return true;
+  // The page writes names with spaces, so what a reader copies off a row -
+  // "Bounty Wave Hard" - has to find the record written with underscores.
+  const hay = [e.name, encounterFolderLabel(e.folder), ...(e.scripts || []).map(encounterScriptLabel),
+    ...encounterShips(e).flatMap((s) => [s.ship?.name, s.ship?.crew, s.flown])].filter(Boolean).join(' ')
+    .replaceAll('_', ' ').toLowerCase();
+  return hay.includes(term.replaceAll('_', ' '));
+}
+
+function renderEncounters() {
+  const body = $('#encounters-table tbody');
+  if (!body) return;
+  body.textContent = '';
+
+  const model = encounterModel;
+  const note = $('#encounters-note');
+  const counter = $('#encounters-count');
+  if (!model?.ready) {
+    if (note) note.textContent = tx('Your game files have not given any encounters yet.');
+    if (counter) counter.textContent = tx('Waiting for catalogue');
+    return;
+  }
+
+  const all = model.encounters || [];
+  const universe = all.filter((e) => !e.arena);
+  if (note) {
+    note.textContent = tx('{total} groups of NPC ships in your game files, {arena} of them Arena Commander’s. {linked} of the {universe} in the universe are named by a mission script the game ships, so which mission spawns them is in the files. The other {rest} are named by no script: the server picks them, and only the folder the game files each under and its name say what it is for. The logs never mention an NPC’s cargo, so none of this is checked against your play.', {
+      total: all.length, arena: all.length - universe.length, universe: universe.length,
+      linked: universe.filter((e) => e.scripts?.length).length,
+      rest: universe.filter((e) => !e.scripts?.length).length,
+    });
+  }
+
+  const kind = $('#encounters-kind')?.value || '';
+  const term = ($('#encounters-search')?.value || '').trim().toLowerCase();
+  const rows = all.filter((e) => encounterMatches(e, kind, term));
+  if (counter) {
+    counter.textContent = rows.length
+      ? txn(rows.length, '{count} encounter', '{count} encounters', { count: rows.length.toLocaleString() })
+      : tx('No matches');
+  }
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', tx('No encounters match that filter.'));
+    td.colSpan = 7;
+    tr.append(td);
+    body.append(tr);
+  }
+
+  for (const e of rows) {
+    const ships = encounterShips(e);
+    const tr = el('tr', 'encounter-row');
+    tr.dataset.encounter = e.name;
+    if (encounterOpen === e.name) tr.classList.add('open');
+
+    const name = el('td');
+    const toggleEncounter = () => {
+      encounterOpen = encounterOpen === e.name ? null : e.name;
+      renderEncounters();
+      const updated = [...body.children].find((row) => row.dataset.encounter === e.name);
+      updated?.querySelector('.encounter-toggle')?.focus?.({ preventScroll: true });
+    };
+    const toggle = el('button', 'place-link encounter-toggle', e.name.replaceAll('_', ' '));
+    toggle.type = 'button';
+    toggle.title = tx('Details');
+    toggle.setAttribute('aria-expanded', String(encounterOpen === e.name));
+    toggle.addEventListener('click', (event) => {
+      event?.stopPropagation?.();
+      toggleEncounter();
+    });
+    name.append(toggle);
+    name.append(el('div', 'armoury-kind', encounterFolderLabel(e.folder)));
+    tr.append(name);
+
+    const mission = el('td');
+    if (e.scripts?.length) {
+      mission.append(document.createTextNode([...new Set(e.scripts.map(encounterScriptLabel))].join(' · ')));
+    } else {
+      const says = encounterNameSays(e.name);
+      mission.append(el('span', 'muted', says.length
+        ? tx('No script names it; its name says {words}', { words: says.join(' · ') })
+        : tx('No script names it')));
+    }
+    tr.append(mission);
+
+    tr.append(el('td', 'num', String((e.waves || []).length)));
+    tr.append(el('td', 'num', String(ships.reduce((n, s) => n + encounterCount(s).most, 0))));
+    tr.append(el('td', null, [...new Set(ships.map((s) => encounterCrew(s)).filter(Boolean))].join(', ')));
+
+    let scu = 0;
+    let worth = 0;
+    let priced = false;
+    for (const s of ships) {
+      const load = encounterLoad(s.ship, s.cargo, model.manifests);
+      if (!load) continue;
+      const n = encounterCount(s).most;
+      scu += load.scu * n;
+      if (load.worth != null) { worth += load.worth * n; priced = true; }
+    }
+    tr.append(el('td', 'num', scu > 0 ? `${fmtInt(scu)} SCU` : '—'));
+    tr.append(el('td', 'num', scu > 0 && priced ? money(worth) : '—'));
+
+    tr.addEventListener('click', toggleEncounter);
+    body.append(tr);
+
+    if (encounterOpen === e.name) body.append(armouryExpansion(renderEncounterDetail(e, model), 7));
+  }
+
+  renderEncounterUnused(model);
+}
+
+/** One encounter's waves, ship by ship, with what each hold is spawned with. */
+function renderEncounterDetail(e, model) {
+  const inner = el('div', 'armoury-detail');
+  inner.append(el('div', 'panel-title', e.name.replaceAll('_', ' ')));
+  inner.append(el('div', 'panel-sub', e.scripts?.length
+    ? txn(e.scripts.length, 'Filed under {folder} · named by {count} mission script', 'Filed under {folder} · named by {count} mission scripts', { folder: e.folder, count: e.scripts.length })
+    : tx('Filed under {folder} · named by no mission script the game ships', { folder: e.folder })));
+
+  for (const w of e.waves || []) {
+    inner.append(el('h4', 'loot-where-sub', tx('Wave {id}', { id: w.id })));
+    const list = el('ul', 'encounter-ships');
+    for (const s of w.ships || []) {
+      const li = el('li');
+      li.append(document.createTextNode(`${encounterCount(s).text} × `));
+      if (s.ship) li.append(rowRefLink('ship', s.ship.className, s.ship.name));
+      else li.append(el('span', null, tx('a ship the files do not name')));
+      const who = encounterCrew(s);
+      const facts = [who, s.skill ? tx('pilot {skill}', { skill: s.skill.replace(/^HumanPilot/, '') }) : null].filter(Boolean);
+      if (facts.length) li.append(el('span', 'muted', ` · ${facts.join(' · ')}`));
+      for (const line of encounterCargoLines(s.ship, s.cargo, model.manifests, model.uex)) {
+        li.append(el('div', 'muted small', line));
+      }
+      list.append(li);
+    }
+    inner.append(list);
+  }
+
+  if (e.scripts?.length) {
+    const scripts = el('ul', 'encounter-scripts muted small');
+    for (const path of e.scripts) scripts.append(el('li', null, path));
+    inner.append(scripts);
+  }
+  if (encounterShips(e).some((s) => s.ship?.holdFrom === 'community')) {
+    inner.append(el('p', 'muted small', tx('A hold the install gives no cargo grid for is the community dataset’s capacity.')));
+  }
+  return inner;
+}
+
+/** The cargo lists no encounter carries: in the files, used by nothing the client has. */
+function renderEncounterUnused(model) {
+  const box = $('#encounters-unused');
+  if (!box) return;
+  const unused = model?.unused || [];
+  box.hidden = !unused.length;
+  if (!unused.length) return;
+  $('#encounters-unused-summary').textContent = txn(unused.length,
+    '{count} cargo list no encounter carries',
+    '{count} cargo lists no encounter carries', { count: unused.length });
+  const list = $('#encounters-unused-list');
+  list.textContent = '';
+  for (const m of unused) {
+    const li = el('li');
+    li.append(el('code', null, m.name));
+    const goods = encounterGoods(m);
+    li.append(el('span', 'muted', ` · ${encounterFill(m)}${goods ? ` · ${goods}` : ''}`));
+    list.append(li);
+  }
+}
+
+/** Opens the Encounters page on one encounter, from a ship's card. */
+function openEncounter(name, arena = false) {
+  closeRefDetail();
+  encounterOpen = name;
+  const search = $('#encounters-search');
+  if (search) search.value = '';
+  const kind = $('#encounters-kind');
+  if (kind) kind.value = arena ? 'arena' : '';
+  showView('encounters');
+}
+
+onInput('#encounters-search', renderEncounters);
+$('#encounters-kind')?.addEventListener('change', renderEncounters);
 
 async function loadPartsRef() {
   try {
@@ -7310,14 +8095,181 @@ async function loadSalvage() {
   renderMiningWorkspaceHeader();
 }
 
-/* ---------- the Mining page's four panes ---------- */
+/* ---------- Mining → Radar: what a ping is ---------- */
 
 /**
- * Prospecting, mining fit, haul and refinery, salvage: four questions that
- * had grown into one long page. The pane is remembered in this browser, and the
- * deposit filters in the header belong to the first alone.
+ * The most rocks a ping is read as. A ship-rock cluster rarely passes a dozen;
+ * hand-mining patches run larger, and twenty keeps 3000 × 20 in reach without
+ * every big number matching something.
  */
-const MINING_PANES = ['go', 'crack', 'runs', 'salvage'];
+const RADAR_MOST_ROCKS = 20;
+
+let radarModel = null;
+
+/**
+ * Every way a ping is a whole number of one kind of rock.
+ *
+ * Exact only: the files give whole figures and the radar prints whole figures,
+ * so a ping that is 15 off is a different ore, not a near miss. Fewest rocks
+ * first, as the likelier reading.
+ */
+function radarMatches(ping, rows) {
+  if (!(ping > 0)) return [];
+  const found = [];
+  for (const row of rows || []) {
+    const count = Math.round(ping / row.signature);
+    if (count < 1 || count > RADAR_MOST_ROCKS) continue;
+    if (Math.abs(ping - count * row.signature) < 0.5) found.push({ row, count });
+  }
+  return found.sort((a, b) => a.count - b.count || a.row.signature - b.row.signature);
+}
+
+/**
+ * The readings nearest a ping that matches nothing, with how far off each is.
+ * A typo or a scanner that adds something both look like this, and the
+ * offset says which rows were close enough to be what was meant.
+ */
+function radarNearest(ping, rows, take = 3) {
+  if (!(ping > 0)) return [];
+  const near = [];
+  for (const row of rows || []) {
+    for (const count of [Math.floor(ping / row.signature), Math.ceil(ping / row.signature)]) {
+      if (count < 1 || count > RADAR_MOST_ROCKS) continue;
+      near.push({ row, count, off: ping - count * row.signature });
+    }
+  }
+  return near.sort((a, b) => Math.abs(a.off) - Math.abs(b.off) || a.count - b.count).slice(0, take);
+}
+
+/** The rock as the page names it; ship rocks by their ore, which the game does not translate. */
+function radarRockName(row) {
+  if (row.kind === 'ship') return row.name;
+  if (row.kind === 'asteroid') return tx('{type}-type asteroid', { type: row.name.charAt(0) });
+  if (row.kind === 'hand') return tx('Hand-mining deposit');
+  if (row.kind === 'ground') return tx('Ground-vehicle deposit');
+  return tx('Older deposit rock');
+}
+
+/** Written out so the catalogue test can see each one; a tx(variable) is invisible to it. */
+function radarTier(tier) {
+  switch (tier) {
+    case 'Common': return tx('Common');
+    case 'Uncommon': return tx('Uncommon');
+    case 'Rare': return tx('Rare');
+    case 'Epic': return tx('Epic');
+    case 'Legendary': return tx('Legendary');
+    default: return tier || '';
+  }
+}
+
+function radarFound(row) {
+  if (row.surface && row.asteroid) return tx('Surface & asteroid fields');
+  return row.asteroid ? tx('Asteroid fields') : tx('Surface');
+}
+
+/**
+ * What the rock holds, where the figure does not say: the choice it cannot
+ * make. A ship rock's ore is already its name, so it gets nothing here.
+ */
+function radarHolds(row) {
+  if (row.kind === 'ship') return '';
+  const ores = row.ores.join(', ');
+  return row.ores.length > 1 ? tx('one of {ores}', { ores }) : ores;
+}
+
+async function loadRadar() {
+  if (!$('#mining-pane-radar')) return;
+  try {
+    radarModel = await getJson('/api/mining/signatures');
+  } catch {
+    radarModel = null;
+  }
+  renderRadar();
+}
+
+function renderRadar() {
+  const unready = $('#radar-unready');
+  const table = $('#radar-table');
+  if (!table) return;
+
+  if (!radarModel?.ready) {
+    if (unready) {
+      unready.hidden = false;
+      unready.textContent = gameDataExcuse() || tx('The install has not been read yet - Settings says when the game data is ready.');
+    }
+    table.hidden = true;
+    $('#radar-matches').textContent = '';
+    $('#radar-note').textContent = '';
+    renderMiningWorkspaceHeader();
+    return;
+  }
+  if (unready) unready.hidden = true;
+  table.hidden = false;
+
+  const body = $('#radar-table tbody');
+  body.textContent = '';
+  for (const row of radarModel.rows) {
+    const tr = el('tr');
+    tr.dataset.kind = row.kind;
+    tr.append(el('td', 'num', fmtInt(row.signature)));
+    tr.append(el('td', null, radarRockName(row)));
+    tr.append(el('td', null, radarHolds(row)));
+    tr.append(el('td', null, radarTier(row.tier)));
+    tr.append(el('td', null, radarFound(row)));
+    for (let n = 2; n <= 6; n++) tr.append(el('td', 'num', fmtInt(row.signature * n)));
+    body.append(tr);
+  }
+
+  $('#radar-note').textContent = tx('{rows} rows from {read} rocks in the install. {unplaced} more are templates, test rocks or rocks no deposit places, and are left out.',
+    { rows: radarModel.rows.length, read: radarModel.read, unplaced: radarModel.unplaced });
+  renderRadarMatches();
+  renderMiningWorkspaceHeader();
+}
+
+function renderRadarMatches() {
+  const box = $('#radar-matches');
+  if (!box) return;
+  box.textContent = '';
+  const ping = Number($('#radar-ping')?.value);
+  if (!radarModel?.ready || !(ping > 0)) return;
+
+  const line = (m, extra) => {
+    const li = el('li', `radar-match radar-${m.row.kind}`);
+    li.append(el('b', 'radar-count', `${m.count} ×`));
+    li.append(el('span', 'radar-rock', ` ${radarRockName(m.row)}`));
+    const tier = radarTier(m.row.tier);
+    const detail = [tier, radarHolds(m.row), extra].filter(Boolean).join(' · ');
+    if (detail) li.append(el('span', 'muted', ` — ${detail}`));
+    return li;
+  };
+
+  const exact = radarMatches(ping, radarModel.rows);
+  if (exact.length) {
+    const list = el('ul', 'radar-match-list');
+    for (const m of exact) list.append(line(m));
+    box.append(list);
+    if (exact.length > 1)
+      box.append(el('p', 'muted small', tx('{count} readings fit {ping}; the figure alone cannot tell them apart.', { count: exact.length, ping: fmtInt(ping) })));
+    return;
+  }
+
+  box.append(el('p', 'muted small', tx('No rock count reads exactly {ping}. Closest:', { ping: fmtInt(ping) })));
+  const list = el('ul', 'radar-match-list');
+  for (const m of radarNearest(ping, radarModel.rows))
+    list.append(line(m, tx('{offset} from {total}', { offset: `${m.off > 0 ? '+' : '−'}${fmtInt(Math.abs(m.off))}`, total: fmtInt(m.count * m.row.signature) })));
+  box.append(list);
+}
+
+$('#radar-ping')?.addEventListener('input', renderRadarMatches);
+
+/* ---------- the Mining page's five panes ---------- */
+
+/**
+ * Prospecting, the radar, mining fit, haul and refinery, salvage: questions
+ * that had grown into one long page. The pane is remembered in this browser,
+ * and the deposit filters in the header belong to the first alone.
+ */
+const MINING_PANES = ['go', 'radar', 'crack', 'runs', 'salvage'];
 let miningPane = 'go';
 let miningReferenceMatches = null;
 let miningPendingJobs = null;
@@ -7332,7 +8284,7 @@ function showMiningPane(name) {
   miningPane = name;
   try { localStorage.setItem('qw-mining-pane', name); } catch { /* as above */ }
 
-  for (const id of ['#mining-pane-go', '#mining-pane-crack', '#mining-pane-runs', '#mining-pane-salvage']) {
+  for (const id of ['#mining-pane-go', '#mining-pane-radar', '#mining-pane-crack', '#mining-pane-runs', '#mining-pane-salvage']) {
     const pane = $(id);
     if (pane) pane.classList.toggle('active', id === `#mining-pane-${name}`);
   }
@@ -7377,6 +8329,16 @@ function renderMiningWorkspaceHeader() {
         ? txn(miningPendingJobs.length, '{count} refinery job awaits your update.', '{count} refinery jobs await your update.')
         : tx('No refinery jobs await your update.');
     status.textContent = waiting ? `${waiting}. ${jobs}` : jobs;
+    return;
+  }
+
+  if (miningPane === 'radar') {
+    heading.textContent = tx('Radar');
+    bar.dataset.workspace = tx('RADAR');
+    bar.dataset.workspaceIcon = '';
+    status.textContent = radarModel?.ready
+      ? tx('{values} signatures from the install.', { values: new Set(radarModel.rows.map((r) => r.signature)).size })
+      : tx('What each rock reads on the mining radar.');
     return;
   }
 
@@ -8142,9 +9104,11 @@ $('#mining-system')?.addEventListener('change', renderMiningRef);
 let armouryModel = null;
 let armouryPane = 'guns';
 let armouryOpenGun = null;
+/** A gun to bring into view once, after something outside the page opened it - a kit. */
+let armouryRevealGun = null;
 let armouryOpenSet = null;
 
-const ARMOURY_PANES = ['guns', 'armour', 'attachments', 'grenades', 'knives'];
+const ARMOURY_PANES = ['guns', 'armour', 'attachments', 'grenades', 'knives', 'climate', 'bench'];
 try {
   const kept = localStorage.getItem('qw-armoury-pane');
   if (ARMOURY_PANES.includes(kept)) armouryPane = kept;
@@ -8160,9 +9124,12 @@ function showArmouryPane(name) {
   }
   for (const button of $('#armoury-tabs')?.querySelectorAll('button') || [])
     button.classList.toggle('active', button.dataset.pane === name);
-  const deck = name === 'guns' ? 'guns' : name === 'armour' ? 'armour' : 'kit';
+  const deck = name === 'guns' || name === 'bench' ? 'guns' : name === 'armour' || name === 'climate' ? 'armour' : 'kit';
   for (const key of ['guns', 'armour', 'kit'])
     $(`#armoury-open-${key}`)?.classList.toggle('active', key === deck);
+  if (name === 'bench') renderArmouryBench();
+  else ++armouryBenchTurn;
+  if (name === 'guns') renderArmouryGuns();
 }
 
 $('#armoury-tabs')?.addEventListener('click', (e) => {
@@ -8245,9 +9212,151 @@ async function loadArmoury() {
 
   renderArmouryBrief();
   showArmouryPane(armouryPane);
-  renderArmouryGuns();
   renderArmouryArmour();
   renderArmouryKit();
+  renderArmouryClimate();
+}
+
+/* ---------- climate ----------
+   Each planet and moon's baseline from the game files against every armour
+   set's temperature range. A baseline and said to be one everywhere: biome,
+   altitude, caves and night all move the ground's temperature, and Daymar's
+   reads 160 °C. Pieces of one set carry one range - every Testudo piece is
+   -50 to 80 °C - so a set is judged by the narrowest of its worn pieces; how
+   the game combines pieces of different sets is not in the files, and a mixed
+   outfit is not judged at all. */
+
+let armouryOpenBody = null;
+
+/**
+ * Every armour set's range: the narrowest across the pieces it is worn as.
+ * `body` says whether it covers the body - a core or an undersuit - because a
+ * helmet alone keeps nobody alive on Euterpe, and the install names a suit's
+ * helmet and its undersuit as two families ("Novikov", "Novikov Exploration")
+ * that nothing in the files pairs.
+ */
+function armourySetRanges() {
+  const sets = new Map();
+  for (const a of armouryModel?.armour || []) {
+    if (a.slot === 'Backpack' || (!a.temperatureMin && !a.temperatureMax)) continue;
+    const s = sets.get(a.family) || { family: a.family, min: -Infinity, max: Infinity, slots: new Set(), piece: a.pieces?.[0]?.class };
+    s.min = Math.max(s.min, a.temperatureMin);
+    s.max = Math.min(s.max, a.temperatureMax);
+    s.slots.add(a.slot);
+    sets.set(a.family, s);
+  }
+  return [...sets.values()].map((s) => ({ ...s, body: s.slots.has('Core') || s.slots.has('Undersuit') }));
+}
+
+/** Whether a range in °C takes in a body's baseline. */
+function climateCovers(min, max, body) {
+  return min <= body.celsius && body.celsius <= max;
+}
+
+/** "-7 °C", the baseline as a suit's range is written. */
+function climateDegrees(celsius) {
+  return tx('{value} °C', { value: fmtInt(celsius) });
+}
+
+function renderArmouryClimate() {
+  const body = $('#armoury-climate tbody');
+  if (!body || !armouryModel?.ready) return;
+  body.textContent = '';
+
+  const climate = armouryModel.climate;
+  const note = $('#armoury-climate-note');
+  if (!climate?.bodies?.length) {
+    if (note) note.textContent = tx('Your game files have not given any planet or moon climates yet.');
+    return;
+  }
+
+  const all = armourySetRanges();
+  const sets = all.filter((s) => s.body);
+  if (note) {
+    note.textContent = tx("Each planet and moon's baseline temperature in your game files, set against every armour set's temperature range. A baseline, not the weather: biome, altitude, caves and night all move it, and the files give a night cooling rate, not a night temperature. An unprotected body is comfortable from {min} to {max} °C. A set is judged by the narrowest of its pieces; how the game combines pieces of different sets is not in the files, so a mixed outfit is not judged.", {
+      min: fmtInt(climate.bodyMin), max: fmtInt(climate.bodyMax),
+    });
+  }
+
+  for (const b of climate.bodies) {
+    const rated = sets.filter((s) => climateCovers(s.min, s.max, b));
+    const tr = el('tr');
+    tr.dataset.body = b.id;
+    if (armouryOpenBody === b.id) tr.classList.add('open');
+
+    const name = el('td');
+    name.append(document.createTextNode(b.name));
+    if (b.parent) name.append(el('div', 'armoury-kind', tx('moon of {planet}', { planet: b.parent })));
+    tr.append(name);
+    tr.append(el('td', null, b.system));
+    tr.append(el('td', 'num', climateDegrees(b.celsius)));
+    tr.append(el('td', 'num', String(b.pressure)));
+    tr.append(el('td', 'num', `${Math.round(b.humidity * 100)}%`));
+    tr.append(el('td', null, climateCovers(climate.bodyMin, climate.bodyMax, b) ? tx('Comfortable') : tx('Needs a suit')));
+    tr.append(el('td', 'num', String(rated.length)));
+    tr.addEventListener('click', () => {
+      armouryOpenBody = armouryOpenBody === b.id ? null : b.id;
+      renderArmouryClimate();
+    });
+    body.append(tr);
+
+    if (armouryOpenBody === b.id) {
+      const parts = all.filter((s) => !s.body && climateCovers(s.min, s.max, b)).length;
+      body.append(armouryExpansion(renderArmouryClimateDetail(b, rated, sets, parts), 7));
+    }
+  }
+}
+
+/** The sets rated for one body, the roomiest first, or why there are none. */
+function renderArmouryClimateDetail(b, rated, sets, parts = 0) {
+  const inner = el('div', 'armoury-detail');
+  inner.append(el('div', 'panel-title', b.parent ? `${b.name} · ${b.parent}` : b.name));
+  inner.append(el('div', 'panel-sub', tx('Baseline {degrees} · pressure {pressure} · humidity {humidity}% · from your game files', {
+    degrees: climateDegrees(b.celsius), pressure: b.pressure, humidity: Math.round(b.humidity * 100),
+  })));
+
+  if (!rated.length) {
+    const hottest = Math.max(...sets.map((s) => s.max));
+    const coldest = Math.min(...sets.map((s) => s.min));
+    inner.append(el('p', 'muted small', tx('No armour set in your game files is rated for this baseline. The hottest-rated reaches {hot}, the coldest {cold}.', {
+      hot: climateDegrees(hottest), cold: climateDegrees(coldest),
+    })));
+    return inner;
+  }
+
+  // The roomiest first: the set with the most margin on its nearer side is
+  // the one that copes when the ground is hotter or colder than the baseline.
+  const margin = (s) => Math.min(b.celsius - s.min, s.max - b.celsius);
+  const shown = [...rated].sort((x, y) => margin(y) - margin(x) || x.family.localeCompare(y.family)).slice(0, 24);
+  const list = el('ul', 'armoury-climate-sets');
+  for (const s of shown) {
+    const li = el('li');
+    li.append(s.piece ? rowRefLink('item', s.piece, s.family) : document.createTextNode(s.family));
+    li.append(el('span', 'muted', ` · ${tx('{min} to {max} °C', { min: fmtInt(s.min), max: fmtInt(s.max) })} · ${[...s.slots].join(', ')}`));
+    list.append(li);
+  }
+  inner.append(list);
+  if (rated.length > shown.length) {
+    inner.append(el('p', 'muted small', tx('And {count} more, with less room either side.', { count: rated.length - shown.length })));
+  }
+  if (parts > 0) {
+    inner.append(el('p', 'muted small', txn(parts,
+      '{count} helmet or other piece is rated on its own as well; it does not cover the body, so it is not counted as a set.',
+      '{count} helmets and other pieces are rated on their own as well; they do not cover the body, so they are not counted as sets.',
+      { count: parts })));
+  }
+  return inner;
+}
+
+/** The bodies whose baseline one armour row's range takes in, for its detail. */
+function armouryClimateLine(a) {
+  const bodies = armouryModel?.climate?.bodies || [];
+  if (!bodies.length || (!a.temperatureMin && !a.temperatureMax)) return null;
+  const covered = bodies.filter((b) => climateCovers(a.temperatureMin, a.temperatureMax, b));
+  if (!covered.length) return tx('Its range takes in the baseline of none of the {total} planets and moons.', { total: bodies.length });
+  return tx('Its range takes in the baseline of {count} of the {total} planets and moons: {names}. A baseline, not the weather on the ground.', {
+    count: covered.length, total: bodies.length, names: covered.map((b) => b.name).join(', '),
+  });
 }
 
 /* ---------- attachments, grenades, knives ---------- */
@@ -8787,6 +9896,10 @@ function renderArmouryGuns() {
     });
     body.append(tr);
     if (armouryOpenGun === w.class) body.append(armouryExpansion(renderArmouryGunDetail(w), 11));
+    if (armouryRevealGun === w.class) {
+      armouryRevealGun = null;
+      tr.scrollIntoView({ block: 'start' });
+    }
   }
 }
 
@@ -8832,6 +9945,17 @@ function renderArmouryGunDetail(w) {
   }
   table.append(tb);
   inner.append(table);
+  inner.append(armouryFitSection(w));
+  const testFit = el('button', 'ghost small', tx('Test this fit'));
+  testFit.type = 'button';
+  testFit.addEventListener('click', (e) => {
+    e.stopPropagation();
+    armouryBenchGun = w.class;
+    armouryBenchMode = 0;
+    showArmouryPane('bench');
+    $('#armoury-bench-weapon')?.focus();
+  });
+  inner.append(testFit);
 
   const notes = [];
   notes.push(tx('Projectile {speed} m/s for {seconds} s ({range} m before it is gone).',
@@ -8869,6 +9993,542 @@ function renderArmouryGunDetail(w) {
     inner.append(el('p', 'muted small', tx('A finish is the same gun in another colour: same figures, its own price.')));
   }
   return inner;
+}
+
+/* ---------- fitting ----------
+   A gun with a sight, a barrel piece and an underbarrel piece on it. The
+   server says which pieces go in which slot, by the files' own rule of
+   size and tags (a stabiliser is for energy guns, a compensator for
+   ballistic ones), and does the arithmetic (Armoury.Fitted), so the page
+   only picks and compares. The choice is kept per gun for the session, so
+   closing and reopening a row, or re-sorting the table, keeps it. */
+
+/** Gun class → { Sight, Barrel, Underbarrel } → the chosen piece's class, or ''. */
+const armouryFits = {};
+let armouryFitTurn = 0;
+
+/** The slot's word, one literal each so the catalogue check sees them. */
+function armourySlotWord(slot) {
+  switch (slot) {
+    case 'Sight': return tx('Sight');
+    case 'Barrel': return tx('Barrel');
+    case 'Underbarrel': return tx('Underbarrel');
+    default: return slot;
+  }
+}
+
+/** The pieces chosen for a gun, starting from what it ships with. */
+function armouryFitChoice(w) {
+  if (!armouryFits[w.class]) {
+    const start = {};
+    for (const p of w.ports || []) start[p.slot] = p.default || '';
+    armouryFits[w.class] = start;
+  }
+  return armouryFits[w.class];
+}
+
+/** One picker per slot the gun has, and the gun's figures with the picks on it. */
+function armouryFitSection(w) {
+  const wrap = el('div', 'armoury-fit');
+  wrap.append(el('h4', null, tx('Fit attachments')));
+  if (!w.ports?.length) {
+    wrap.append(el('p', 'muted small', tx('The files give this gun no attachment slots.')));
+    return wrap;
+  }
+  const result = el('div', 'armoury-fit-result');
+  wrap.append(armouryFitPickers(w, () => renderArmouryFit(w, result)));
+  wrap.append(result);
+  renderArmouryFit(w, result);
+  return wrap;
+}
+
+function armouryFitPickers(w, onChange) {
+  const choice = armouryFitChoice(w);
+  const pickers = el('div', 'armoury-fit-pickers');
+  for (const p of w.ports) {
+    const label = el('label', 'armoury-fit-slot');
+    label.append(el('span', 'armoury-fit-word', armourySlotWord(p.slot)));
+    const select = el('select', 'select');
+    select.dataset.slot = p.slot;
+    select.append(new Option(tx('Nothing'), ''));
+    const pieces = (p.fits || [])
+      .map((c) => (armouryModel?.attachments || []).find((a) => a.class === c))
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    for (const a of pieces)
+      select.append(new Option(a.class === p.default ? `${a.name} · ${tx('ships with it')}` : a.name, a.class));
+    select.value = choice[p.slot] || '';
+    select.disabled = !!p.fixed;
+    // The row underneath opens and closes the panel; a pick is not that.
+    select.addEventListener('click', (e) => e.stopPropagation());
+    select.addEventListener('change', () => {
+      choice[p.slot] = select.value;
+      onChange();
+    });
+    label.append(select);
+    label.append(el('span', 'muted small', tx('size {sizes}', { sizes: p.minSize === p.maxSize ? p.minSize : `${p.minSize}–${p.maxSize}` })));
+    pickers.append(label);
+  }
+  return pickers;
+}
+
+/** "162 → 149", marked as a gain or a cost when the figure moved. */
+function armouryFitDelta(bare, fitted, format, better = 'high') {
+  const td = el('td', 'num');
+  if (!(bare > 0) && !(fitted > 0)) { td.textContent = '—'; return td; }
+  const before = format(bare);
+  const after = format(fitted);
+  if (before === after) { td.textContent = after; return td; }
+  td.append(el('span', 'muted', `${before} → `));
+  const up = fitted > bare;
+  td.append(el('span', `armoury-fit-delta ${up === (better === 'high') ? 'gain' : 'cost'}`, after));
+  return td;
+}
+
+/**
+ * Asks the server for the gun with the picked pieces on it and lays the
+ * fitted figures beside the bare ones. A later pick overtakes an earlier
+ * answer still on its way, so the table never shows a choice since undone.
+ */
+async function renderArmouryFit(w, result) {
+  const choice = armouryFitChoice(w);
+  const chosen = (w.ports || []).map((p) => choice[p.slot]).filter(Boolean);
+  const turn = ++armouryFitTurn;
+  if (!chosen.length) {
+    result.textContent = '';
+    result.append(el('p', 'muted small', tx('Pick a piece for a slot to see the gun with it.')));
+    return;
+  }
+
+  let fit = null;
+  let problem = '';
+  try {
+    const response = await fetch(`/api/armoury/fit?gun=${encodeURIComponent(w.class)}&with=${chosen.map(encodeURIComponent).join(',')}`);
+    const body = await response.json().catch(() => null);
+    if (response.ok) fit = body;
+    else problem = body?.problem || `${response.status}`;
+  } catch (e) {
+    problem = e.message;
+  }
+  if (turn !== armouryFitTurn) return;
+  result.textContent = '';
+  if (!fit) {
+    result.append(el('p', 'muted small', tx('The figures could not be worked out: {problem}', { problem: serverText(problem) })));
+    return;
+  }
+
+  const table = el('table', 'armoury-fit-table');
+  const head = el('thead');
+  const hr = el('tr');
+  for (const [label, cls] of [['Mode', null], ['Per shot', 'num'], ['Sustained', 'num'], ['DPS', 'num'], ['Per mag', 'num'], ['Empties in', 'num']])
+    hr.append(el('th', cls, tx(label)));
+  head.append(hr);
+  table.append(head);
+  const tb = el('tbody');
+  const seconds = (v) => `${Math.round(v * 10) / 10} s`;
+  (fit.modes || []).forEach((m, i) => {
+    const bare = w.modes?.[i] || {};
+    const tr = el('tr');
+    tr.append(el('td', null, armouryMode(m)));
+    tr.append(armouryFitDelta(bare.damagePerShot, m.damagePerShot, fmtDamage));
+    tr.append(armouryFitDelta(bare.sustainedRoundsPerMinute, m.sustainedRoundsPerMinute, (v) => `${fmtInt(v)} rpm`));
+    tr.append(armouryFitDelta(bare.damagePerSecond, m.damagePerSecond, fmtInt));
+    tr.append(armouryFitDelta(w.magazine > 0 ? bare.damagePerMagazine : 0, w.magazine > 0 ? m.damagePerMagazine : 0, fmtInt));
+    tr.append(armouryFitDelta(bare.secondsToEmpty, m.secondsToEmpty, seconds));
+    tb.append(tr);
+  });
+  table.append(tb);
+  result.append(table);
+
+  // What the table already carries - damage, rate, heat, rounds a shot,
+  // charge, pellets, burst - is left out of the handling line.
+  const e = fit.effect || {};
+  const handling = armouryEffectWords({ ...e, damage: 1, fireRate: 1, heat: 1, ammoCost: 1, chargeTime: 1, pellets: 0, burstShots: 0 });
+  const line = el('p', 'armoury-fit-handling');
+  line.append(el('span', 'muted', `${tx('Handling')}: `));
+  if (handling.length) for (const word of handling) line.append(word);
+  else line.append(el('span', 'muted', tx('unchanged')));
+  result.append(line);
+
+  result.append(el('p', 'muted small', tx('Derived: the pieces’ multipliers from the files, applied to the gun’s own figures at the muzzle. Two pieces that move one figure are multiplied; whether the game does the same, and whether a damage multiplier also lifts the drop’s floor, is not in the files.')));
+}
+
+let armouryBenchGun = '';
+let armouryBenchMode = 0;
+let armouryBenchSeed = 1729;
+let armouryBenchTurn = 0;
+
+function armouryBenchIndex(multiplier) {
+  return (multiplier * 100).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+// One repeatable disc for both fits. These are illustrative sample points,
+// not a model of the game's shot distribution or a guessed recoil curve.
+function armouryBenchPattern(seed, count = 48) {
+  let state = seed >>> 0 || 1;
+  const random = () => {
+    state ^= state << 13; state ^= state >>> 17; state ^= state << 5;
+    return (state >>> 0) / 4294967296;
+  };
+  return Array.from({ length: count }, () => {
+    const radius = Math.sqrt(random());
+    const angle = random() * Math.PI * 2;
+    return [Math.cos(angle) * radius, Math.sin(angle) * radius];
+  });
+}
+
+function armouryBenchTarget(spread) {
+  const make = (tag, attrs = {}) => {
+    const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
+    return node;
+  };
+  const svg = make('svg', { viewBox: '0 0 400 360', role: 'img', 'aria-label': tx('Illustrative spread comparison: bare weapon and fitted weapon') });
+  for (const radius of [36, 72, 108, 144])
+    svg.append(make('circle', { cx: 200, cy: 180, r: radius, class: 'bench-target-ring' }));
+  svg.append(make('path', { d: 'M20 180H380 M200 18V342', class: 'bench-target-cross' }));
+  const bareRadius = 144 / Math.max(1, spread);
+  for (const [name, scale] of [['bare', 1], ['fitted', spread]]) {
+    const group = make('g', { class: `bench-pattern-${name}` });
+    group.append(make('circle', { cx: 200, cy: 180, r: bareRadius * scale, class: 'bench-pattern-limit' }));
+    for (const [x, y] of armouryBenchPattern(armouryBenchSeed))
+      group.append(make('circle', { cx: 200 + x * bareRadius * scale, cy: 180 + y * bareRadius * scale, r: name === 'bare' ? 2.6 : 2, class: 'bench-pattern-point' }));
+    svg.append(group);
+  }
+  svg.append(make('path', { d: 'M193 180H207 M200 173V187', class: 'bench-target-origin' }));
+  return svg;
+}
+
+function renderArmouryBench() {
+  const root = $('#armoury-bench');
+  if (!root || !armouryModel?.ready) return;
+  ++armouryBenchTurn;
+  root.textContent = '';
+  const weapons = [...(armouryModel.weapons || [])].sort((a, b) => a.name.localeCompare(b.name));
+  if (!weapons.length) {
+    root.append(el('p', 'muted', tx('No weapons were read from the install.')));
+    return;
+  }
+  const w = weapons.find((gun) => gun.class === armouryBenchGun) || weapons.find((gun) => gun.name === 'P4-AR Rifle') || weapons[0];
+  armouryBenchGun = w.class;
+  if (!w.modes?.[armouryBenchMode]) armouryBenchMode = 0;
+
+  const heading = el('div', 'bench-heading');
+  const words = el('div');
+  words.append(el('span', 'bench-eyebrow', tx('Attachment analysis')));
+  words.append(el('h3', null, tx('Weapon test bench')));
+  words.append(el('p', 'muted small', tx('Compare the same weapon before and after fitting attachments.')));
+  heading.append(words);
+  heading.append(el('span', 'bench-model-badge', tx('Relative model')));
+  root.append(heading);
+  root.append(el('p', 'bench-disclosure small', tx('The target illustrates attachment multipliers, not recorded shots. Base spread angles and recoil paths are not read, so distances and hit probabilities are not simulated.')));
+
+  const layout = el('div', 'bench-layout');
+  const controls = el('div', 'bench-controls');
+  const label = el('label', 'bench-field');
+  label.append(el('span', null, tx('Weapon')));
+  const weapon = el('select', 'select');
+  weapon.id = 'armoury-bench-weapon';
+  for (const gun of weapons) weapon.append(new Option(gun.name, gun.class));
+  weapon.value = w.class;
+  weapon.addEventListener('change', () => {
+    armouryBenchGun = weapon.value;
+    armouryBenchMode = 0;
+    renderArmouryBench();
+    $('#armoury-bench-weapon')?.focus();
+  });
+  label.append(weapon);
+  controls.append(label);
+
+  const modeLabel = el('label', 'bench-field');
+  modeLabel.append(el('span', null, tx('Fire mode')));
+  const mode = el('select', 'select');
+  mode.id = 'armoury-bench-mode';
+  (w.modes || []).forEach((m, i) => mode.append(new Option(armouryMode(m), String(i))));
+  mode.value = String(armouryBenchMode);
+  mode.disabled = !w.modes?.length;
+  modeLabel.append(mode);
+  controls.append(modeLabel);
+  controls.append(el('h4', null, tx('Fit attachments')));
+  const result = el('div', 'bench-readout');
+  result.id = 'armoury-bench-result';
+  result.setAttribute('aria-live', 'polite');
+  let currentFit = null;
+  const request = async () => {
+    const turn = ++armouryBenchTurn;
+    currentFit = null;
+    result.textContent = '';
+    result.setAttribute('aria-busy', 'true');
+    result.append(el('p', 'muted', tx('Calculating this fit…')));
+    const choice = armouryFitChoice(w);
+    const chosen = (w.ports || []).map((port) => choice[port.slot]).filter(Boolean);
+    let fit, problem;
+    try {
+      const response = await fetch(`/api/armoury/fit?gun=${encodeURIComponent(w.class)}&with=${chosen.map(encodeURIComponent).join(',')}`);
+      const body = await response.json().catch(() => null);
+      if (response.ok && body?.gun === w.class) fit = body;
+      else problem = body?.problem || String(response.status);
+    } catch (e) { problem = e.message; }
+    if (turn !== armouryBenchTurn) return;
+    result.setAttribute('aria-busy', 'false');
+    if (!fit) {
+      result.textContent = '';
+      result.append(el('p', 'muted', tx('The figures could not be worked out: {problem}', { problem: serverText(problem || tx('No fit was returned.')) })));
+      return;
+    }
+    currentFit = fit;
+    renderArmouryBenchReadout(w, fit, result);
+  };
+  mode.addEventListener('change', () => {
+    armouryBenchMode = Number(mode.value);
+    if (currentFit) renderArmouryBenchReadout(w, currentFit, result);
+  });
+  if (w.ports?.length) controls.append(armouryFitPickers(w, request));
+  else controls.append(el('p', 'muted small', tx('The files give this gun no attachment slots.')));
+  const choice = armouryFitChoice(w);
+  const spreadExample = (w.ports || []).filter((port) => !port.fixed && !choice[port.slot])
+    .flatMap((port) => (port.fits || []).map((key) => ({
+      slot: port.slot,
+      piece: armouryModel.attachments?.find((item) => item.class === key)
+    })))
+    .filter(({ piece }) => piece?.effect?.spread > 0 && piece.effect.spread !== 1)
+    .sort((a, b) => a.piece.effect.spread - b.piece.effect.spread)[0];
+  if (spreadExample) {
+    const example = el('button', 'ghost small bench-example', tx('Try {attachment}', { attachment: spreadExample.piece.name }));
+    example.type = 'button';
+    example.addEventListener('click', () => {
+      choice[spreadExample.slot] = spreadExample.piece.class;
+      renderArmouryBench();
+      $('#armoury-bench-weapon')?.focus();
+    });
+    controls.append(example);
+  }
+  const reset = el('button', 'ghost small', tx('Factory fit'));
+  reset.type = 'button';
+  reset.addEventListener('click', () => {
+    delete armouryFits[w.class];
+    renderArmouryBench();
+    $('#armoury-bench-weapon')?.focus();
+  });
+  controls.append(reset);
+  controls.append(el('p', 'muted small', tx('Only compatible pieces are listed. Factory fit restores the attachments the gun ships with.')));
+  layout.append(controls, result);
+  root.append(layout);
+  request();
+}
+
+function armouryBenchScope(effect, canPlot) {
+  const scope = el('details', 'bench-scope');
+  scope.append(el('summary', null, tx('Scope view')));
+  if (!(effect.zoom > 0)) {
+    scope.append(el('p', 'muted small', tx('Fit a sight with known magnification to preview it.')));
+    return { scope, redraw() {} };
+  }
+  const label = el('label', 'bench-field');
+  label.append(el('span', null, tx('Zoom')));
+  const zoom = el('select', 'select');
+  const levels = [...new Set([effect.zoom, effect.secondZoom].filter((value) => value > 0))];
+  for (const level of levels) zoom.append(new Option(`×${level}`, String(level)));
+  zoom.value = String(levels[0]);
+  label.append(zoom);
+  scope.append(label);
+  const lens = el('div', 'bench-scope-lens');
+  lens.setAttribute('aria-hidden', 'true');
+  scope.append(lens);
+  const redraw = () => {
+    lens.textContent = '';
+    const scene = armouryBenchTarget(canPlot ? effect.spread : 1);
+    if (!canPlot) scene.setAttribute('class', 'bench-scope-grid-only');
+    scene.style.transform = `scale(${Number(zoom.value)})`;
+    lens.append(scene);
+  };
+  zoom.addEventListener('change', redraw);
+  redraw();
+  if (Number.isFinite(effect.zoomTime))
+    scope.append(el('p', 'small', `${tx('Aim time')} · ${tx('{value} · bare = 100', { value: armouryBenchIndex(effect.zoomTime) })}`));
+  if (effect.zeroingMax > 0) {
+    const max = fmtInt(effect.zeroingMax);
+    scope.append(el('p', 'small', effect.zeroingStep > 0
+      ? tx('zero to {max} m by {step}', { max, step: fmtInt(effect.zeroingStep) })
+      : `${tx('Zeroes to')} ${max} m`));
+  }
+  scope.append(el('p', 'muted small', tx('Illustrative magnification with a generic reticle and field of view.')));
+  return { scope, redraw };
+}
+
+function armouryBenchContributions(fit) {
+  const section = el('section', 'bench-contributions');
+  section.append(el('h4', null, tx('Attachment contributions')));
+  const pieces = (fit.pieces || []).map((piece) => ({
+    name: piece.name,
+    effect: armouryModel?.attachments?.find((item) => item.class === piece.class)?.effect
+  }));
+  if (!pieces.length) {
+    section.append(el('p', 'muted small', tx('Fit attachments to see how their effects combine.')));
+    return section;
+  }
+  const metrics = [
+    ['spread', tx('Spread')], ['recoilStrength', tx('Recoil strength')], ['recoilTime', tx('Recoil recovery')],
+    ['sound', tx('Sound radius')], ['zoomTime', tx('Aim time')], ['damage', tx('Damage')],
+    ['fireRate', tx('Fire rate')], ['heat', tx('Heat')], ['ammoCost', tx('Ammo cost')],
+    ['chargeTime', tx('Charge time')], ['projectileSpeed', tx('Projectile speed')],
+    ['pellets', tx('Pellets'), true], ['burstShots', tx('Burst shots'), true]
+  ];
+  const format = (value, additive) => additive
+    ? (value >= 0 ? `+${value}` : String(value))
+    : `×${value.toLocaleString(undefined, { maximumFractionDigits: 4 })}`;
+  const list = el('dl', 'bench-contribution-list');
+  for (const [key, label, additive] of metrics) {
+    const total = fit.effect?.[key];
+    if (!Number.isFinite(total)) continue;
+    const neutral = additive ? 0 : 1;
+    const terms = pieces.filter((piece) => Number.isFinite(piece.effect?.[key]) && piece.effect[key] !== neutral);
+    if (!terms.length) continue;
+    const row = el('div');
+    row.append(el('dt', null, label));
+    const detail = el('dd');
+    for (const piece of terms)
+      detail.append(el('span', 'bench-factor', `${piece.name} ${format(piece.effect[key], additive)}`));
+    detail.append(el('strong', 'bench-factor-total', tx('Combined {effect}', { effect: format(total, additive) })));
+    row.append(detail);
+    list.append(row);
+  }
+  if (list.children.length) section.append(list);
+  else section.append(el('p', 'muted small', tx('The selected attachments have no stacking effects in the available figures.')));
+  section.append(el('p', 'muted small', tx('The bench multiplies modifiers and adds pellet and burst-shot changes.')));
+  return section;
+}
+
+function armouryBenchRange(w, fit, mode) {
+  const range = el('section', 'bench-range');
+  range.append(el('h4', null, tx('Range')));
+  const markers = mode?.kind === 'Beam'
+    ? [[tx('Full damage through'), mode.beamFullRange], [tx('Beam ends at'), mode.beamZeroRange]]
+    : [[tx('Falloff starts at'), w.dropStart], [tx('Damage floor at'), w.dropStart > 0 ? w.floorAt : 0],
+       [tx('Projectile travel limit'), fit.projectileSpeed * w.projectileLifetime]];
+  const list = el('dl', 'bench-range-markers');
+  for (const [label, distance] of markers) {
+    if (!Number.isFinite(distance) || distance <= 0) continue;
+    const marker = el('div');
+    marker.append(el('dt', null, label), el('dd', null, `${fmtDamage(distance)} m`));
+    list.append(marker);
+  }
+  if (list.children.length) range.append(list);
+  else range.append(el('p', 'muted small', tx('Range figures are unavailable.')));
+  if (mode?.kind !== 'Beam' && w.dropStart === 0)
+    range.append(el('p', 'muted small', tx('No damage drop with distance.')));
+  range.append(el('p', 'muted small', tx('Range figures describe damage and projectile travel. The spread target uses a relative scale.')));
+  return range;
+}
+
+function renderArmouryBenchReadout(w, fit, root) {
+  root.textContent = '';
+  const effect = fit.effect || {};
+  const bare = w.modes?.[armouryBenchMode];
+  const mode = fit.modes?.[armouryBenchMode];
+  const spreadKnown = Number.isFinite(effect.spread) && effect.spread > 0;
+  const canPlot = !!(bare && mode && mode.kind !== 'Beam' && spreadKnown);
+  const scopeView = armouryBenchScope(effect, canPlot);
+  const target = el('section', 'bench-target');
+  const title = el('div', 'bench-target-title');
+  title.append(el('h4', null, tx('Relative spread')));
+  title.append(el('span', 'bench-index', spreadKnown ? tx('{value} · bare = 100', { value: armouryBenchIndex(effect.spread) }) : '—'));
+  target.append(title);
+  target.append(armouryBenchRange(w, fit, mode || bare));
+  if (canPlot) {
+    const plot = el('div', 'bench-plot');
+    plot.append(armouryBenchTarget(effect.spread));
+    target.append(plot);
+    const legend = el('div', 'bench-legend');
+    const views = [];
+    for (const [key, label] of [['both', tx('Overlay')], ['bare', tx('Bare weapon')], ['fitted', tx('Current fit')]]) {
+      const view = el('button', `ghost tiny bench-legend-${key}`, label);
+      view.type = 'button';
+      view.setAttribute('aria-pressed', String(key === 'both'));
+      view.addEventListener('click', () => {
+        plot.dataset.layer = key;
+        for (const button of views) button.setAttribute('aria-pressed', String(button === view));
+      });
+      views.push(view);
+      legend.append(view);
+    }
+    const sample = el('button', 'ghost tiny', tx('New sample'));
+    sample.type = 'button';
+    sample.addEventListener('click', () => {
+      armouryBenchSeed = (armouryBenchSeed + 1) >>> 0;
+      plot.textContent = '';
+      plot.append(armouryBenchTarget(effect.spread));
+      scopeView.redraw();
+    });
+    legend.append(sample);
+    target.append(legend);
+    target.append(el('p', 'muted small', tx('Same sample points, scaled by the spread multiplier. Recoil, stance and distance are not modelled.')));
+    if (effect.spread === 1) target.append(el('p', 'small', tx('Spread is unchanged: the two patterns overlap. Try an attachment that changes spread.')));
+    else target.append(el('p', 'small', effect.spread < 1
+      ? tx('{percent}% narrower than bare', { percent: armouryBenchIndex(1 - effect.spread) })
+      : tx('{percent}% wider than bare', { percent: armouryBenchIndex(effect.spread - 1) })));
+  } else {
+    target.append(el('p', 'bench-no-pattern muted', mode?.kind === 'Beam'
+      ? tx('A beam has no shot pattern to plot. Compare its derived figures below.')
+      : tx('No spread comparison is available for this mode.')));
+  }
+  target.append(scopeView.scope);
+  root.append(target);
+
+  const handling = el('section', 'bench-handling');
+  handling.append(el('h4', null, tx('Handling indices')));
+  handling.append(el('p', 'muted small', tx('Bare = 100. Lower means less spread, kick, recovery time, sound radius or aim time. These indices do not compare different guns.')));
+  for (const [key, label] of [['spread', tx('Spread')], ['recoilStrength', tx('Recoil strength')], ['recoilTime', tx('Recoil recovery')], ['sound', tx('Sound radius')], ['zoomTime', tx('Aim time')]]) {
+    const value = effect[key];
+    const line = el('div', 'bench-handling-row');
+    line.append(el('span', null, label));
+    const known = Number.isFinite(value) && value > 0;
+    const track = el('span', 'bench-meter');
+    const bar = el('span', 'bench-meter-fill');
+    bar.style.width = known ? `${Math.min(value, 2) * 50}%` : '0%';
+    track.append(bar);
+    track.setAttribute('aria-hidden', 'true');
+    line.append(track);
+    line.append(el('strong', known ? value < 1 ? 'gain' : value > 1 ? 'cost' : 'muted' : 'muted', known ? armouryBenchIndex(value) : tx('Not read')));
+    handling.append(line);
+  }
+  root.append(handling);
+
+  const figures = el('section', 'bench-figures');
+  figures.append(el('h4', null, tx('Derived figures at the muzzle')));
+  if (!bare || !mode) {
+    figures.append(el('p', 'muted small', tx('No firing figures are available for this mode.')));
+  } else {
+    const table = el('table', 'bench-figures-table');
+    const head = el('thead');
+    const titles = el('tr');
+    for (const word of ['', tx('Bare weapon'), tx('Current fit')]) titles.append(el('th', null, word));
+    head.append(titles); table.append(head);
+    const body = el('tbody');
+    const seconds = (v) => `${fmtDamage(v)} s`;
+    const rows = [
+      [tx('DPS'), bare.damagePerSecond, mode.damagePerSecond, fmtInt],
+      ...(mode.kind === 'Beam' ? [] : [
+        [tx('Per shot'), bare.damagePerShot, mode.damagePerShot, fmtDamage],
+        [tx('Sustained'), bare.sustainedRoundsPerMinute, mode.sustainedRoundsPerMinute, (v) => `${fmtInt(v)} rpm`]
+      ]),
+      ...(w.magazine > 0 ? [[tx('Per mag'), bare.damagePerMagazine, mode.damagePerMagazine, fmtInt]] : []),
+      [tx('Empties in'), bare.secondsToEmpty, mode.secondsToEmpty, seconds]
+    ];
+    for (const [label, before, after, format] of rows) {
+      const tr = el('tr'); tr.append(el('th', null, label));
+      for (const value of [before, after]) tr.append(el('td', 'num', value > 0 ? format(value) : '—'));
+      body.append(tr);
+    }
+    table.append(body); figures.append(table);
+  }
+  figures.append(el('p', 'muted small', tx('Before armour and damage drop-off. Full-charge modes assume a full charge; sustained rates include burst cooldowns.')));
+  root.append(figures);
+  root.append(armouryBenchContributions(fit));
+  const source = el('details', 'bench-source');
+  source.append(el('summary', null, tx('How the comparison is calculated')));
+  source.append(el('p', 'muted small', tx('Derived: the pieces’ multipliers from the files, applied to the gun’s own figures at the muzzle. Two pieces that move one figure are multiplied; whether the game does the same, and whether a damage multiplier also lifts the drop’s floor, is not in the files.')));
+  root.append(source);
 }
 
 function armouryArmourFiltered() {
@@ -8985,6 +10645,8 @@ function renderArmouryArmourDetail(a) {
     }));
   } else facts.push(tx('No resistance block: it stops nothing.'));
   if (a.protects?.length) facts.push(tx('Covers {parts}.', { parts: a.protects.join(', ') }));
+  const climateLine = armouryClimateLine(a);
+  if (climateLine) facts.push(climateLine);
   if (a.gForceResistance) facts.push(tx('G tolerance {value}.', { value: `${a.gForceResistance > 0 ? '+' : ''}${a.gForceResistance}` }));
   if (a.motionPenalty > 0 || a.viewPenalty > 0) {
     facts.push(tx('Restriction penalty {movement}% movement, {view}% view - the game\'s own figure; what puts the piece into that state is not read.',
@@ -9081,7 +10743,7 @@ function renderCraftingRef() {
   const counter = $('#crafting-count');
   counter.textContent = rows.length > CRAFTING_CAP
     ? tx('Showing {shown} of {total} matches — refine the search or filters.', { shown: CRAFTING_CAP.toLocaleString(), total: rows.length.toLocaleString() })
-    : '';
+    : rows.length ? txn(rows.length, '{count} blueprint', '{count} blueprints') : '';
 
   if (!rows.length) {
     const tr = el('tr');
@@ -12089,7 +13751,9 @@ function eventContractsTable(event) {
   for (const c of event.contracts) {
     const tr = el('tr');
     tr.title = c.id;
-    tr.append(el('td', null, c.title));
+    const title = el('td');
+    title.append(missionLink(c.title, null, c.id));
+    tr.append(title);
     tr.append(el('td', 'muted', c.issuer || '—'));
     // The overall bar takes every contract, so naming it on every row says
     // nothing; the rows name the bar that sets them apart.
@@ -15970,8 +17634,9 @@ function saveSplitTradeRoute(route, portions) {
 /* ---------- rep runs ----------
    One small delivery flown again and again until the next rank. The rank and
    the estimate are the Reputation page's, read off the last Rep app
-   screenshot; what one delivery pays is the newest StarStrings tag on the
-   organisation's contracts, or what the pilot types. Everything past the
+   screenshot; what one delivery pays is what the installed game's contracts
+   for that rank pay - a StarStrings tag where the game has no word - or what
+   the pilot types. Everything past the
    first drop is arithmetic on those two, so the stops call it "about". */
 
 /** The most deliveries one plan writes out: a shift, not the whole climb. */
@@ -16076,11 +17741,58 @@ async function loadRepRun() {
   renderRepRun();
 }
 
+/**
+ * Where a Standing row's rep came from. Normally the installed game for every
+ * contract; a StarStrings tag only for one the game files did not know, and
+ * then the count of those is said rather than blended in.
+ */
+function repFromTitle(count, tagged) {
+  if (tagged <= 0) {
+    return txn(count, 'What the installed game says {count} finished contract paid', 'What the installed game says {count} finished contracts paid');
+  }
+  if (tagged >= count) {
+    return txn(count, 'Read from {count} contract title the StarStrings mod has annotated', 'Read from {count} contract titles the StarStrings mod has annotated');
+  }
+  return tx('{count} finished contracts: {game} by the installed game, {tagged} by a StarStrings title tag the game had no word on', {
+    count, game: count - tagged, tagged,
+  });
+}
+
+/** What the BP chip says: the game's chance when it gives one, else the tag. */
+function blueprintChipTitle(chance) {
+  if (chance == null) return tx('Tagged as awarding a blueprint');
+  if (chance >= 1) return tx('The installed game says finishing this contract awards a blueprint');
+  return tx('The installed game gives this contract a {chance} chance of a blueprint', {
+    chance: `${Math.round(chance * 100)}%`,
+  });
+}
+
 /** Where one delivery's figure came from, said beside the box it fills. */
 function repRunPaySource(org) {
   const pay = org.pay;
   if (!pay) {
-    return tx('None of their contracts in your logs carries a rep tag, so type what one delivery pays.');
+    return tx('Neither the installed game nor a rep tag in your logs says what one of their deliveries pays, so type it.');
+  }
+  if (pay.source === 'game') {
+    return tx('What a {rank} contract of theirs pays, by the installed game’s own contracts. Type over it if a delivery pays differently.', {
+      rank: pay.contract,
+    });
+  }
+  // Some organisations have two progressions in the Rep app, and their
+  // contracts can move one and not the other: Headhunters' work pays Standing,
+  // and only their Hijacked Ship contracts pay Ship Combat.
+  if (pay.source === 'game-open') {
+    if (pay.low != null && pay.high != null && pay.low !== pay.high) {
+      return tx('What most of their contracts that move this ladder pay, by the installed game: {count} contracts, from {low} to {high}. None is offered by rank. Type over it if a delivery pays differently.', {
+        count: pay.contracts, low: pay.low.toLocaleString(), high: pay.high.toLocaleString(),
+      });
+    }
+    return tx('What their contracts that move this ladder pay, by the installed game. None is offered by rank, so it is the same at every rank. Type over it if a delivery pays differently.');
+  }
+  if (pay.source === 'elsewhere') {
+    return tx('By the installed game, none of their contracts moves this ladder: their work moves {ladder}. Type what one pays here if you know.', {
+      ladder: pay.contract,
+    });
   }
   return pay.source === 'ladder'
     ? tx('The {rank} figure on the rep tag of “{contract}” — StarStrings’ research, not the game’s. Type over it if a delivery pays differently.', {
@@ -19930,7 +21642,9 @@ async function loadJobContracts() {
     const card = el('article', 'job-card');
 
     const head = el('div', 'job-head');
-    head.append(el('b', null, contract.name || `${contract.issuer} · ${contract.type}`));
+    const name = el('b');
+    name.append(missionLink(contract.name || `${contract.issuer} · ${contract.type}`, contract.definitionId, contract.contract));
+    head.append(name);
     if (contract.difficulty) head.append(el('span', 'job-kind', tx(contract.difficulty)));
     const focus = el('button', 'ghost tiny', tx('Focus'));
     focus.title = tx('Keep this contract available while you plan');
@@ -21223,6 +22937,8 @@ function applyLabelOptions(options) {
   if (!facts || !colour || !level) return;
 
   facts.checked = options ? options.facts !== false : true;
+  const routes = $('#label-routes');
+  if (routes) routes.checked = options ? options.routes !== false : true;
   colour.checked = !!(options && options.colour);
   level.value = String((options && options.level) || 3);
   level.disabled = !colour.checked;
@@ -21234,6 +22950,7 @@ async function saveLabelOptions() {
     colour: $('#label-colour').checked,
     level: Number($('#label-level').value) || 3,
     facts: $('#label-facts').checked,
+    routes: $('#label-routes') ? $('#label-routes').checked : true,
   };
 
   $('#label-level').disabled = !body.colour;
@@ -21255,7 +22972,7 @@ async function saveLabelOptions() {
   await loadTextOverlay().catch(() => {});
 }
 
-for (const id of ['#label-facts', '#label-colour', '#label-level']) {
+for (const id of ['#label-facts', '#label-routes', '#label-colour', '#label-level']) {
   $(id)?.addEventListener('change', () => { saveLabelOptions().catch(() => {}); });
 }
 
@@ -21288,6 +23005,9 @@ async function loadTextOverlay() {
     [tx('Something sells'), state.sold],
     [tx('Size or class marked'), state.annotated],
     [tx('Not gear you shop for'), state.skipped],
+    // Hauling titles are the overlay's other half: they ask the game to print
+    // a contract's places, which is how the logs come to name them at all.
+    ...(state.routed ? [[tx('Hauling titles naming places'), state.routed]] : []),
   ]);
 
   // Which file it builds on decides whether another mod survives, so it is
@@ -21760,7 +23480,6 @@ async function renderSettings() {
 
   await renderUexAuto();
   await renderUexFeeds();
-  await renderSignals();
   await renderExportPreview();
   await renderBackupPreview();
   await renderDiagnostics();
@@ -22780,6 +24499,230 @@ $('#export-save')?.addEventListener('click', () => saveExport().catch(() => {}))
  * today: someone coming back after a month away should not be told that
  * everything broke while they were gone.
  */
+/* ---------- what was read ---------- */
+
+/*
+ * Settings → What was read (0.20.36). Every place the app reads from, one
+ * card each, in the order the app trusts them: the logs, the game files, the
+ * two downloads, the screenshots, then what the pilot wrote. The pieces all
+ * existed - the Log page knew which files were read, Settings whether the
+ * dataset was on, Diagnostics the session count - but "what does this app
+ * know about me, and from where" took five pages to answer.
+ */
+async function loadDataPage() {
+  const host = $('#data-sections');
+  if (!host) return;
+  const status = $('#data-status');
+  if (!host.childElementCount) status.textContent = tx('Reading every store…');
+
+  let data;
+  try {
+    data = await getJson('/api/data');
+  } catch {
+    status.textContent = tx('The stores could not be read. Refresh after the local server reconnects.');
+    return;
+  }
+
+  status.textContent = '';
+  renderDataPage(data);
+  await renderSignals();
+}
+
+function renderDataPage(data) {
+  const host = $('#data-sections');
+  host.textContent = '';
+  const taken = $('#data-taken');
+  if (taken) taken.textContent = tx('read {when}', { when: stampOf(data.takenAt) });
+
+  host.append(
+    dataLogsCard(data.logs || {}),
+    dataGameFilesCard(data.gameFiles || {}),
+    dataCommunityCard(data.community || {}),
+    dataUexCard(data.uex || {}),
+    dataScreensCard(data.screens || {}),
+    dataYoursCard(data.yours || {}),
+  );
+  renderDataFolder(data.folder || {});
+}
+
+/** One source: its name and badge, a one-line verdict, the facts, a way on. */
+function dataCard(title, source, verdict, rows, onward = null) {
+  const card = el('section', 'card data-card');
+  const head = el('div', 'data-card-head');
+  head.append(el('h3', null, title));
+  if (source) head.append(el('span', `data-source ${source.kind}`, source.label));
+  if (onward) {
+    const go = el('button', 'ghost tiny', onward.label);
+    go.type = 'button';
+    go.addEventListener('click', onward.open);
+    head.append(go);
+  }
+  card.append(head);
+  if (verdict) card.append(el('p', verdict.ok ? 'data-verdict' : 'data-verdict muted', verdict.text));
+  card.append(refFacts(rows));
+  return card;
+}
+
+const tally = (n) => (n > 0 ? Number(n).toLocaleString() : '—');
+
+function dataLogsCard(logs) {
+  const files = logs.files || {};
+  const sessions = logs.sessions || {};
+  const verdict = !logs.found
+    ? { ok: false, text: tx('No Star Citizen install was found, so no log has been read.') }
+    : files.current > 0
+      ? { ok: true, text: tx('{sessions} sessions read from {files} log files', { sessions: tally(sessions.total), files: tally(files.current) }) }
+      : { ok: false, text: tx('Nothing read yet.') };
+
+  const states = [
+    files.changed > 0 ? txn(files.changed, '{count} changed since it was read', '{count} changed since they were read') : null,
+    files.unread > 0 ? txn(files.unread, '{count} never read', '{count} never read') : null,
+    files.gone > 0 ? txn(files.gone, '{count} read, since deleted by the game', '{count} read, since deleted by the game') : null,
+  ].filter(Boolean).join(' · ');
+
+  const wipe = logs.wipe && logs.wipe.hidden > 0
+    ? tx('{count} before your wipe of {date} are kept but not counted', { count: logs.wipe.hidden, date: dateOf(logs.wipe.at) })
+    : null;
+
+  return dataCard(tx('Your game logs'), { kind: 'game-log', label: tx('Game log') }, verdict, [
+    [tx('Game install'), logs.found ? `${logs.channel || ''} · ${logs.root || ''}` : null],
+    [tx('Log files'), logs.found ? `${tally(files.onDisk)} · ${megabytes(files.bytes || 0)}` : null],
+    [tx('State'), states || (files.current > 0 ? tx('all read, all current') : null)],
+    [tx('Sessions'), sessions.total > 0 ? `${tally(sessions.total)} · ${tx('{first} to {last}', { first: dateOf(sessions.first), last: dateOf(sessions.last) })}` : null],
+    // The five most played; a long history runs to eighteen builds, and the
+    // full list read as a wall of numbers.
+    [tx('Game builds'), (sessions.builds || []).length
+      ? [sessions.builds.slice(0, 5).map((b) => `${b.build} ×${b.sessions}`).join(', '),
+        sessions.builds.length > 5 ? tx('{count} more', { count: sessions.builds.length - 5 }) : null].filter(Boolean).join(' · ')
+      : null],
+    [tx('Wipe'), wipe],
+    [tx('Last scan'), logs.lastScan
+      ? `${stampOf(logs.lastScan.finishedAt)} · ${txn(logs.lastScan.files, '{count} file', '{count} files')}, ${txn(logs.lastScan.parsed, '{count} re-read', '{count} re-read')}${logs.lastScan.forced ? ` · ${tx('forced')}` : ''}`
+      : null],
+  ], { label: tx('Every file, on the Log page'), open: () => showView('log') });
+}
+
+function dataGameFilesCard(game) {
+  const status = game.status || {};
+  const c = game.catalogues || {};
+  const names = game.names || {};
+  const verdict = status.state === 'ready'
+    ? { ok: true, text: tx('Read in {seconds} s, {when}', { seconds: status.seconds ?? '?', when: stampOf(status.finishedAt) }) }
+    : status.state === 'reading'
+      ? { ok: false, text: tx('Reading now…') }
+      : { ok: false, text: status.problem || tx('Not read.') };
+
+  return dataCard(tx('Your game files'), { kind: 'game-install', label: tx('Game files') }, verdict, [
+    [tx('Game install'), game.root || null],
+    [tx('Names'), names.loaded ? tx('{items} items, {vehicles} vehicles, {places} places', { items: tally(names.items), vehicles: tally(names.vehicles), places: tally(names.places) }) : null],
+    [tx('Items described'), tally(c.items)],
+    [tx('Commodities'), tally(c.commodities)],
+    [tx('Vehicles'), tally(c.vehicles)],
+    [tx('Places'), tally(c.places)],
+    [tx('Recipes'), tally(c.recipes)],
+    [tx('Mineral deposits'), tally(c.deposits)],
+    [tx('Paints'), tally(c.paints)],
+    [tx('Cargo grids'), tally(c.cargoHulls)],
+    [tx('Cargo crates'), tally(c.crates)],
+    [tx('Wikelo trades'), tally(c.wikeloTrades)],
+    [tx('Guns'), tally(c.weapons)],
+    [tx('Armour pieces'), tally(c.armour)],
+  ]);
+}
+
+function dataCommunityCard(community) {
+  const verdict = community.enabled
+    ? { ok: true, text: tx('Dump {dump} · fetched {when}', { dump: community.dump || '?', when: stampOf(community.fetchedAt) }) }
+    : { ok: false, text: tx('Off. It is a download you turn on in Settings → General.') };
+
+  return dataCard(tx('Community dataset'), { kind: 'community-data', label: tx('Community data') }, verdict, community.enabled ? [
+    [tx('Commodities'), tally(community.commodities)],
+    [tx('Ships'), tally(community.ships)],
+    [tx('Items'), tally(community.items)],
+    [tx('Blueprints'), tally(community.blueprints)],
+  ] : [], { label: tx('Settings'), open: () => showView('settings') });
+}
+
+function dataUexCard(uex) {
+  const verdict = uex.enabled
+    ? { ok: true, text: txn(uex.prices, '{count} commodity price', '{count} commodity prices') }
+    : { ok: false, text: tx('Off. Prices need UEX, in Settings.') };
+
+  return dataCard(tx('UEX'), { kind: 'uex-prices', label: tx('UEX') }, verdict, [
+    [tx('Keys'), uex.hasCredentials ? tx('saved') : tx('none saved')],
+    ...(uex.feeds || []).map((f) => [tx(f.title), f.enabled
+      ? (f.fetchedAt ? tx('on · fetched {when}', { when: stampOf(f.fetchedAt) }) : tx('on'))
+      : tx('off')]),
+  ], { label: tx('Settings'), open: () => showView('settings') });
+}
+
+/* The screenshot kinds, in the page's words; the server's enum names are keys. */
+const SCREEN_KIND_WORDS = Object.freeze({
+  Tooltip: 'Item tooltips', Loadout: 'Ship loadouts', Map: 'Map footers', MobiGlas: 'mobiGlas',
+  Contracts: 'Contracts app', Fleet: 'Fleet Manager', Reputation: 'Rep app', Kiosk: 'Kiosks',
+  Mining: 'Mining scans', Refinery: 'Refinery orders', Unknown: 'Unrecognised',
+});
+
+function dataScreensCard(screens) {
+  const verdict = !screens.canRead
+    ? { ok: false, text: tx('No text reader on this machine, so screenshots cannot be read.') }
+    : screens.watching
+      ? { ok: true, text: tx('Watching your screenshot folder') }
+      : { ok: true, text: tx('Reading on request') };
+
+  return dataCard(tx('Your screenshots'), { kind: 'screenshot-ocr', label: tx('Screenshots') }, verdict, [
+    [tx('Readings'), screens.readings > 0 ? `${tally(screens.readings)} · ${tx('latest {when}', { when: stampOf(screens.latest) })}` : tx('none yet')],
+    ...(screens.byKind || []).map((k) => [SCREEN_KIND_WORDS[k.kind] ? tx(SCREEN_KIND_WORDS[k.kind]) : k.kind, `${tally(k.count)} · ${dateOf(k.last)}`]),
+    [tx('Rep readings'), tally(screens.reputation)],
+    [tx('Copied locations'), tally(screens.clipboards)],
+    [tx('Pinned'), tally(screens.pinned)],
+  ], { label: tx('Log'), open: () => showView('log') });
+}
+
+function dataYoursCard(yours) {
+  return dataCard(tx('What you wrote'), null, { ok: true, text: tx('Yours alone: nothing here is read from the game, and nothing leaves this machine.') }, [
+    [tx('Shopping lists and projects'), yours.lists > 0 ? `${tally(yours.lists)} · ${txn(yours.listsOpen, '{count} open', '{count} open')}` : '—'],
+    [tx('Checklists'), tally(yours.checklists)],
+    [tx('Flight plans'), yours.plans > 0 ? `${tally(yours.plans)} · ${txn(yours.plansFlying, '{count} flying', '{count} flying')}` : '—'],
+    [tx('Map notes'), tally(yours.mapNotes)],
+    [tx('Server notes'), tally(yours.shardNotes)],
+    [tx('Saved builds'), tally(yours.builds)],
+    [tx('Kits'), tally(yours.kits)],
+    [tx('Shared files'), tally(yours.imports)],
+    [tx('Keybinding versions'), tally(yours.keybindingVersions)],
+    [tx('Item labels'), yours.itemLabels ? tx('installed') : tx('not installed')],
+  ]);
+}
+
+/** Bytes as a reader sees them: kilobytes under a megabyte, megabytes above. */
+function fileSize(bytes) {
+  if (bytes == null) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${Math.round(bytes / 1024).toLocaleString()} KB`;
+  return megabytes(bytes);
+}
+
+function renderDataFolder(folder) {
+  const line = $('#data-folder');
+  const body = $('#data-folder-table tbody');
+  if (!line || !body) return;
+  line.textContent = folder.path
+    ? `${folder.path} · ${fileSize(folder.bytes)}${folder.relocated ? ` · ${tx('moved by --data')}` : ''}`
+    : tx('No data folder yet.');
+  body.textContent = '';
+  for (const entry of folder.entries || []) {
+    const tr = el('tr');
+    tr.append(el('td', null, entry.name));
+    tr.append(el('td', 'kind', entry.kind === 'folder' ? txn(entry.files, '{count} file', '{count} files') : tx('file')));
+    tr.append(el('td', 'num', fileSize(entry.bytes)));
+    tr.append(el('td', 'muted', stampOf(entry.modified)));
+    body.append(tr);
+  }
+}
+
+$('#data-refresh')?.addEventListener('click', () => loadDataPage().catch(() => {}));
+$('#settings-open-data')?.addEventListener('click', () => showView('data'));
+
 async function renderSignals() {
   const table = $('#signals-table');
   if (!table) return;
@@ -28524,6 +30467,8 @@ function runPlannedRow(review, stop, action) {
 
 let kits = [];
 let preparing = null;
+/** Kit id → the guns in it the Armoury knows, each with the kit's attachments that fit it. */
+let kitGuns = {};
 
 /**
  * What each holding means, in the reader's terms.
@@ -28541,7 +30486,33 @@ const KIT_HOLDING = {
 
 async function loadKits() {
   kits = await getJson('/api/kits');
+  // The guns are an extra: a list that cannot reach the Armoury still lists.
+  kitGuns = {};
+  try {
+    for (const k of await getJson('/api/kits/guns')) kitGuns[k.kitId] = k.guns || [];
+  } catch { /* the kits stand without it */ }
   renderKits();
+}
+
+/**
+ * Opens a kit's gun on the Armoury with the kit's own attachments fitted.
+ * The gun table's filters are cleared on the way, since a rifle hidden by
+ * a "pistols only" left from last time would read as the link not working.
+ */
+function openKitGun(gun) {
+  const picks = { Sight: '', Barrel: '', Underbarrel: '' };
+  for (const p of gun.with || []) picks[p.slot] = p.class;
+  armouryFits[gun.class] = picks;
+  armouryOpenGun = gun.class;
+  armouryRevealGun = gun.class;
+  armouryPane = 'guns';
+  for (const id of ['#armoury-gun-kind', '#armoury-gun-damage', '#armoury-search']) {
+    const field = $(id);
+    if (field) field.value = '';
+  }
+  const priced = $('#armoury-gun-priced');
+  if (priced) priced.checked = false;
+  showView('armoury');
 }
 
 function renderKits() {
@@ -28563,6 +30534,15 @@ function renderKits() {
     main.append(el('div', 'sub muted',
       txn(kit.items.length, '{count} item', '{count} items')));
     row.append(main);
+
+    for (const gun of kitGuns[kit.id] || []) {
+      const open = el('button', 'ghost tiny', tx('{gun} in the Armoury', { gun: gun.name }));
+      open.title = gun.with?.length
+        ? tx('Open it with {pieces} fitted', { pieces: gun.with.map((p) => p.name).join(', ') })
+        : tx('Open it on the Armoury');
+      open.addEventListener('click', () => openKitGun(gun));
+      row.append(open);
+    }
 
     const prepare = el('button', 'ghost tiny', tx('Prepare'));
     prepare.title = tx('Compare this kit with what you have');
@@ -31726,7 +33706,7 @@ const VIEW_SOURCES = {
   logs: new Set(['now', 'map', 'logbook', 'sessions', 'servers', 'places', 'points', 'crew', 'casualties',
     'contracts', 'events', 'spending', 'ledger', 'commodities', 'market', 'routes', 'fleet', 'hangar',
     'loadout', 'stash', 'loot', 'garage', 'armoury', 'wikelo', 'blueprints']),
-  gamedata: new Set(['map', 'ships', 'components', 'parts', 'mining', 'crafting', 'blueprints', 'hangar', 'armoury']),
+  gamedata: new Set(['map', 'ships', 'components', 'parts', 'mining', 'crafting', 'encounters', 'missions', 'blueprints', 'hangar', 'armoury']),
   uex: new Set(['market', 'commodity', 'components', 'routes', 'garage', 'armoury', 'jobs', 'events', 'casualties']),
   community: new Set(['market', 'commodity', 'commodities', 'components', 'parts', 'mining']),
 };

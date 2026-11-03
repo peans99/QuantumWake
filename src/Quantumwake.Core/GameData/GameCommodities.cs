@@ -31,7 +31,7 @@ namespace Quantumwake.Core.GameData;
 public sealed partial class GameCommodities
 {
     /// <summary>Bumped when the cached shape changes.</summary>
-    private const int CacheVersion = 59;
+    private const int CacheVersion = 67;
 
     private const string DataCoreEntry = @"Data\Game2.dcb";
     public const string LocalisationEntry = @"Data\Localization\english\global.ini";
@@ -335,8 +335,8 @@ public sealed partial class GameCommodities
             // archive's own listing knows they exist.
             paints.AddRange(GamePaints.Stock(p4k.List(GamePaints.RenderFolder).Select(e => e.Path), paints));
             makerLogos = GameMakerLogos.Read(core, p4k.List(GameMakerLogos.Folder).Select(e => e.Path));
-            mining = GameMining.Read(core, text, facts, result);
-            armoury = GameArmoury.Read(core, text, facts);
+            mining = GameMining.Read(core, text, facts, result) with { Signatures = GameRockSignatures.Read(core) };
+            armoury = GameArmoury.Read(core, text, facts) with { Climate = GameClimates.Read(core, text) };
             // The pictures are the archive's, not the DataCore's: only its
             // listing says which attachments have one.
             GameArmoury.StampIcons(armoury, p4k.List(GameArmoury.AttachmentIconFolder).Select(e => e.Path));
@@ -346,7 +346,7 @@ public sealed partial class GameCommodities
             scenarios = GameScenarios.Read(core, text, facts, paints);
             reputation = GameReputation.Read(core, text, p4k.List(GameMakerLogos.Folder).Select(e => e.Path));
             cargoHulls = GameCargoGrids.Read(core);
-            loot = GameLootData.Read(core, p4k, text, c => facts.TryGetValue(c, out var fact) ? fact.Type : null);
+            loot = GameLootData.Read(core, p4k, text, c => facts.TryGetValue(c, out var fact) ? fact.Type : null, result);
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {
