@@ -419,16 +419,24 @@ class MaterialBuilder {
       qwL4: { value: looks[3].colour },
       qwGlosses: { value: new THREE.Vector4(looks[0].gloss, looks[1].gloss, looks[2].gloss, looks[3].gloss) },
       qwMetals: { value: new THREE.Vector4(looks[0].metal, looks[1].metal, looks[2].metal, looks[3].metal) },
+      qwSurface0: { value: null }, qwSurface1: { value: null },
+      qwSurface2: { value: null }, qwSurface3: { value: null },
+      qwHasSurface: { value: new THREE.Vector4(0, 0, 0, 0) },
+      qwTiling: { value: new THREE.Vector4(...Array.from({ length: 4 }, (_, i) => base[i]?.tiling || 1)) },
     };
     material.userData.uniforms = uniforms;
     material.defines = { USE_UV: '' };
     material.onBeforeCompile = shader => {
       Object.assign(shader.uniforms, uniforms);
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform float qwGloss;\nuniform float qwSigned;\nuniform sampler2D qwBlend;\nuniform float qwHasBlend;\nuniform vec3 qwL2;\nuniform vec3 qwL3;\nuniform vec3 qwL4;\nuniform vec4 qwGlosses;\nuniform vec4 qwMetals;')
+        .replace('#include <common>', '#include <common>\nuniform float qwGloss;\nuniform float qwSigned;\nuniform sampler2D qwBlend;\nuniform float qwHasBlend;\nuniform vec3 qwL2;\nuniform vec3 qwL3;\nuniform vec3 qwL4;\nuniform vec4 qwGlosses;\nuniform vec4 qwMetals;\nuniform sampler2D qwSurface0;\nuniform sampler2D qwSurface1;\nuniform sampler2D qwSurface2;\nuniform sampler2D qwSurface3;\nuniform vec4 qwHasSurface;\nuniform vec4 qwTiling;')
         .replace('#include <color_fragment>', '#include <color_fragment>\n'
           + '\tvec4 qwB = qwHasBlend > 0.5 ? texture2D( qwBlend, vUv ) : vec4( 0.0 );\n'
-          + '\tdiffuseColor.rgb = mix( mix( mix( diffuseColor.rgb, qwL2, qwB.r ), qwL3, qwB.g ), qwL4, qwB.b );\n'
+          + '\tvec3 qwC0 = diffuseColor.rgb * (qwHasSurface.x > 0.5 ? texture2D(qwSurface0, vUv * qwTiling.x).rgb : vec3(1.0));\n'
+          + '\tvec3 qwC1 = qwL2 * (qwHasSurface.y > 0.5 ? texture2D(qwSurface1, vUv * qwTiling.y).rgb : vec3(1.0));\n'
+          + '\tvec3 qwC2 = qwL3 * (qwHasSurface.z > 0.5 ? texture2D(qwSurface2, vUv * qwTiling.z).rgb : vec3(1.0));\n'
+          + '\tvec3 qwC3 = qwL4 * (qwHasSurface.w > 0.5 ? texture2D(qwSurface3, vUv * qwTiling.w).rgb : vec3(1.0));\n'
+          + '\tdiffuseColor.rgb = mix( mix( mix( qwC0, qwC1, qwB.r ), qwC2, qwB.g ), qwC3, qwB.b );\n'
           + '\tfloat qwG = mix( mix( mix( qwGlosses.x, qwGlosses.y, qwB.r ), qwGlosses.z, qwB.g ), qwGlosses.w, qwB.b );')
         .replace('#include <normal_fragment_maps>', THREE.ShaderChunk.normal_fragment_maps.replace(
           'vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;',
@@ -441,17 +449,17 @@ class MaterialBuilder {
 
     const opts = { stamp: view.stamp, caps: view.caps, max: view.textureMax };
     const pending = [];
-    // The base layer's own surface: a tileable colour map that darkens and
-    // breaks up its tint. Without it a gun's "dull metal" was a flat light
-    // grey that read as white paint under studio light.
     const baseLayer = base[0];
-    if (baseLayer?.diffuse) {
-      pending.push(loadTexture(baseLayer.diffuse, { ...opts, colour: true }).then(tex => {
+    // Each blend-map channel selects a different surface. Multiplying the
+    // finished blend by the first texture paints that texture over every layer.
+    base.forEach((layer, i) => {
+      if (!layer.diffuse) return;
+      pending.push(loadTexture(layer.diffuse, { ...opts, colour: true }).then(tex => {
         if (!tex) return;
-        material.map = tiled(tex, baseLayer.tiling || 1);
-        material.needsUpdate = true;
+        uniforms[`qwSurface${i}`].value = tex;
+        uniforms.qwHasSurface.value.setComponent(i, 1);
       }));
-    }
+    });
     if (baseLayer?.normal && !Object.values(sub.textures || {}).some(file => /_ddna?\./i.test(file))) {
       pending.push(loadTexture(baseLayer.normal, opts).then(tex => {
         if (!tex || tex.userData.kind !== 'bc5') return;

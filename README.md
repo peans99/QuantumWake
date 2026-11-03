@@ -328,7 +328,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.21.0
+### 0.21.1
+
+**More distinct surfaces in the 3D view.** Layered armour and clothing now draw each surface with its own texture where the game's blend map calls for it. Fabric, padding and other materials no longer all share the first layer's texture. The view still approximates the game's materials and does not draw wear and grime.
 
 **Ships, vehicles, weapons and armour in 3D.** A new 3D view opens any ship, ground vehicle, personal weapon or piece of armour from your game install's own models, with its stock loadout fitted: gimbals and the guns on them, turrets, missile racks and their missiles, countermeasure launchers, thrusters, a rifle's magazine. Drag to turn it, scroll to zoom, jump to the front, profile, top or rear, and save a picture. Click a part on the model or in the list beside it to see which slot it sits in and what it carries. Reference → 3D models opens on the makers, Drake, RSI, Anvil and the rest, each with its logo; pick one to see its hulls in the game's own pictures of them in their paint, the one you picked on Fleet or the Garage where you did, or search across them all. A hull opens in that same paint. Armour opens as the whole suit: a helmet, torso, arms or legs brings the rest of its set, in the same colourway where the files have it, with a Full suit box to see the piece alone. The view is a click away wherever a ship or item is: a 3D view button in the Garage and the Armoury opens it with your own fit in place, marked as yours; Fleet and Hangar cards have a 3D button; and the item card that Loot, Loadout, Stash and Items open has one whenever the install holds a model for the item. The cockpit and cabin are hidden unless you tick Interior: the game lights them with the ship's own lamps, which the view does not have.
 
