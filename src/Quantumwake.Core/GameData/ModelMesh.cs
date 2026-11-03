@@ -68,7 +68,7 @@ public static class ModelMesh
     /// Raised whenever what <see cref="Build"/> writes changes, so meshes packed
     /// by an older build are packed again rather than served from disk.
     /// </summary>
-    public const int Version = 2;
+    public const int Version = 3;
 
     /// <summary>
     /// Packs the model at <paramref name="geometry"/>, or null when the archive
@@ -88,9 +88,9 @@ public static class ModelMesh
         var uvs = new List<float>();
         var indices = new List<uint>();
 
-        foreach (var (name, model, materialOverride) in parts)
+        foreach (var (name, model, materialOverride, source) in parts)
         {
-            var file = materialOverride ?? model.MaterialFile;
+            var file = Beside(materialOverride ?? model.MaterialFile, source);
             var fileIndex = -1;
             IReadOnlyList<ModelSubMaterial>? subMaterials = null;
             if (file is not null)
@@ -180,9 +180,23 @@ public static class ModelMesh
             || n.Contains("proxy") || n.Contains("physics") || n.EndsWith("_broken", StringComparison.Ordinal);
     }
 
-    private static List<(string Name, IvoModel Model, string? Material)> Parts(ModelArchive archive, string geometry)
+    /// <summary>
+    /// A material named without a folder is the engine's shorthand for one
+    /// beside the model: the KLWE flashlight's light_s01_klwe_01.cgf names
+    /// "light_s01_klwe_01", which lives in its own folder. Asked for bare it
+    /// was never found, and the part was drawn in the plain fallback grey.
+    /// </summary>
+    internal static string? Beside(string? material, string modelPath)
     {
-        var list = new List<(string, IvoModel, string?)>();
+        if (string.IsNullOrWhiteSpace(material)) return material;
+        if (material.Contains('/') || material.Contains('\\')) return material;
+        var at = modelPath.Replace('\\', '/').LastIndexOf('/');
+        return at < 0 ? material : modelPath.Replace('\\', '/')[..(at + 1)] + material;
+    }
+
+    private static List<(string Name, IvoModel Model, string? Material, string Source)> Parts(ModelArchive archive, string geometry)
+    {
+        var list = new List<(string, IvoModel, string?, string)>();
         var path = geometry.Replace('\\', '/');
         var ext = Path.GetExtension(path).ToLowerInvariant();
 
@@ -196,7 +210,7 @@ public static class ModelMesh
 
             var model = root.Element("Model");
             if ((string?)model?.Attribute("File") is { Length: > 0 } chr && Part(archive, chr) is { } body)
-                list.Add(("body", body, (string?)model.Attribute("Material")));
+                list.Add(("body", body, (string?)model.Attribute("Material"), chr));
 
             foreach (var a in root.Element("AttachmentList")?.Elements("Attachment") ?? [])
             {
@@ -206,13 +220,13 @@ public static class ModelMesh
                 var bext = Path.GetExtension(binding).ToLowerInvariant();
                 if (bext is not (".skin" or ".cgf" or ".cga")) continue;
                 if (Part(archive, binding) is { } part)
-                    list.Add(((string?)a.Attribute("AName") ?? Path.GetFileNameWithoutExtension(binding), part, (string?)a.Attribute("Material")));
+                    list.Add(((string?)a.Attribute("AName") ?? Path.GetFileNameWithoutExtension(binding), part, (string?)a.Attribute("Material"), binding));
             }
             return list;
         }
 
         if (Part(archive, path) is { } single)
-            list.Add((Path.GetFileNameWithoutExtension(path), single, null));
+            list.Add((Path.GetFileNameWithoutExtension(path), single, null, path));
         return list;
     }
 

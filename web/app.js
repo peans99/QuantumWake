@@ -20130,6 +20130,57 @@ async function openFleetInModels() {
   openModelView({ cls: fleet[0].cls, title: tx('Your fleet'), fleet });
 }
 
+/** The kinds of slot the 3D view can show a swap on: what is on the outside. */
+const MODEL_BENCH_KINDS = new Set(['WeaponGun', 'Turret', 'MissileLauncher', 'Missile', 'WeaponMining', 'SalvageHead', 'TractorBeam', 'WeaponDefensive']);
+
+/**
+ * A ship's swappable slots for the 3D view, from the Garage bench: each
+ * slot's hardpoints, what is in it, and what fits it on asking. For the ship
+ * open in the Garage the swap is the Garage's own (fitPart), folded rows and
+ * all, so the view, the bench and the build agree; for any other ship it is
+ * a try-on the view keeps to itself.
+ */
+async function modelShipBench(cls) {
+  let data;
+  try {
+    data = await getJson(`/api/garage/${encodeURIComponent(cls)}`);
+  } catch {
+    return null;
+  }
+  if (!data?.known) return null;
+  const shared = String(cls).toLowerCase() === String(garageClass || '').toLowerCase();
+  const ports = (data.ports || []).filter((p) => p.path && MODEL_BENCH_KINDS.has(p.group) && !p.fixedReason);
+  const byId = new Map(ports.map((p) => [p.portId, p]));
+  return {
+    shared,
+    ports: ports.map((p) => {
+      const current = shared ? currentClassOf(p) : p.class;
+      return {
+        portId: p.portId,
+        path: p.path,
+        // The whole chain, so a gun reads as whose gun it is:
+        // "manned turret left › weapon left › class 2", not "class 2".
+        label: p.path.split('/').map((h) => garagePortName(h)).join(' › '),
+        stock: p.stockClass,
+        current,
+        currentName: current === p.class ? p.name : current,
+      };
+    }),
+    async options(portId) {
+      const got = await getJson(`/api/garage/${encodeURIComponent(cls)}/options?port=${encodeURIComponent(portId)}`);
+      return (got.options || []).map((o) => ({ cls: o.part.class, name: o.part.name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    },
+    async choose(portId, value) {
+      if (!shared) return null;
+      const ids = siblingsOf(portId);
+      await fitPart(portId, value);
+      return ids.map((id) => byId.get(id)).filter(Boolean).map((p) => ({ path: p.path, cls: value }));
+    },
+  };
+}
+window.qwModelBench = modelShipBench;
+
 /** The Garage bench's changed ports, as the viewer's fits. */
 function garageModelFits(data) {
   return (data.ports || [])

@@ -6071,5 +6071,7 @@
   "Open alone": "Ouvrir seul",
   "None of the ships shown has a model the install can draw.": "Aucun des vaisseaux affichés n’a de modèle que l’installation sait dessiner.",
   "Fleet in 3D": "Flotte en 3D",
-  "The ships shown here, side by side in 3D": "Les vaisseaux affichés ici, côte à côte en 3D"
+  "The ships shown here, side by side in 3D": "Les vaisseaux affichés ici, côte à côte en 3D",
+  "What fits each slot, from the Garage bench. A swap here is a swap in the Garage build.": "Ce qui va dans chaque emplacement, d’après l’établi du Garage. Un échange ici est un échange dans la configuration du Garage.",
+  "What fits each slot, from the Garage bench. Swaps here are a try-on: open the ship in the Garage to keep a build.": "Ce qui va dans chaque emplacement, d’après l’établi du Garage. Les échanges ici sont un essai : ouvrez le vaisseau au Garage pour garder une configuration."
 }

@@ -639,7 +639,7 @@ class ModelView {
     this.materials = new MaterialBuilder(this);
 
     this.composer = null;
-    this.quality = opts.quality ?? true;
+    this.quality = opts.quality ?? false;
     // Drawn only when something changed. Counted, so the saving can be
     // measured: renders, and the time spent issuing them.
     this.dirty = true;
@@ -1043,6 +1043,44 @@ class ModelView {
     }
   }
 
+  /**
+   * Swaps what hangs on one slot of a ship, found by its hardpoints from the
+   * hull down - "hardpoint_cheek_weapon_left/hardpoint_class_2". What was
+   * there comes off with everything it carried; the new part is read and
+   * hung on the same node, with its own stock loadout under it.
+   */
+  async refitPath(path, cls) {
+    const keyOf = p => (p.path || [p.port]).map(x => String(x).toLowerCase()).join('/');
+    const key = path.map(x => String(x).toLowerCase()).join('/');
+    const old = this.parts.find(p => p.depth >= 0 && keyOf(p) === key);
+    let node = old?.object?.parent || null;
+    const depth = old?.depth ?? path.length - 1;
+    if (old) {
+      old.object?.removeFromParent();
+      this.parts = this.parts.filter(p => p !== old && !keyOf(p).startsWith(key + '/'));
+      if (this.selected === old) this.select(null);
+    }
+    if (!node) {
+      const parentKey = path.slice(0, -1).map(x => String(x).toLowerCase()).join('/');
+      const parentModel = parentKey ? this.parts.find(p => keyOf(p) === parentKey)?.object : this.hull;
+      node = this.findNode(parentModel, path[path.length - 1]);
+    }
+    if (cls && node) {
+      const scene = await getJson(`/api/models/scene/${encodeURIComponent(cls)}`).catch(() => null);
+      if (scene?.geometry && !this.disposed) {
+        Object.assign(this.palettes, scene.palettes || {});
+        const part = {
+          port: path[path.length - 1], path, cls: scene.cls, name: scene.name, type: scene.type,
+          geometry: scene.geometry, material: scene.material, palette: scene.palette, swapped: true,
+        };
+        const model = await this.model(part, node, false, depth);
+        if (model && scene.parts?.length) await this.attach(scene.parts, model, depth + 1, path);
+      }
+    }
+    this.invalidate();
+    this.onParts?.(this.parts);
+  }
+
   async attach(parts, parent, depth, path = []) {
     await Promise.all(parts.map(async raw => {
       const part = { ...raw, path: [...path, raw.port] };
@@ -1328,7 +1366,7 @@ function shell() {
       <div class="v3d-status" data-v3d-status></div>
     </div>
     <header class="v3d-bar">
-      <div class="v3d-title"><span class="v3d-kicker">${escHtml(t('3D view'))}</span><strong data-v3d-name></strong><span class="v3d-sub" data-v3d-sub></span></div>
+      <div class="v3d-title"><span class="v3d-brand"><img src="assets/mark.svg" alt="" width="20" height="20"><span>Quantum <b>Wake</b></span></span><span class="v3d-kicker">${escHtml(t('3D view'))}</span><strong data-v3d-name></strong><span class="v3d-sub" data-v3d-sub></span></div>
       <div class="v3d-tools">
         <div class="v3d-views" role="group" aria-label="${escHtml(t('Camera'))}">
           <button type="button" data-v3d-view="three">${escHtml(t('¾'))}</button>
@@ -1347,7 +1385,7 @@ function shell() {
           <option value="space">${escHtml(t('Deep space'))}</option>
         </select>
         <label class="v3d-toggle" title="${escHtml(t('Brightness'))}">☀ <input type="range" data-v3d-brightness min="0.5" max="2.2" step="0.05" value="1" aria-label="${escHtml(t('Brightness'))}"></label>
-        <label class="v3d-toggle" title="${escHtml(t('Ambient occlusion, glow and smoothed edges'))}"><input type="checkbox" data-v3d-quality checked> ${escHtml(t('Effects'))}</label>
+        <label class="v3d-toggle" title="${escHtml(t('Ambient occlusion, glow and smoothed edges'))}"><input type="checkbox" data-v3d-quality> ${escHtml(t('Effects'))}</label>
         <select class="v3d-select" data-v3d-textures aria-label="${escHtml(t('Texture quality'))}" title="${escHtml(t('Texture quality'))}">
           <option value="2048">${escHtml(t('High textures'))}</option>
           <option value="4096">${escHtml(t('Ultra textures'))}</option>
@@ -1363,6 +1401,11 @@ function shell() {
         <p class="v3d-note">${escHtml(t('The game tints its hulls from a palette of three colours; this draws the palette, not the wear and grime the engine adds.'))}</p>
       </section>
       <section class="v3d-detail" data-v3d-detail hidden></section>
+      <section class="v3d-attach" data-v3d-bench hidden>
+        <h3>${escHtml(t('Loadout'))}</h3>
+        <div data-v3d-bench-list></div>
+        <p class="v3d-note" data-v3d-bench-note></p>
+      </section>
       <section class="v3d-attach" data-v3d-attach hidden>
         <h3>${escHtml(t('Attachments'))}</h3>
         <div data-v3d-attach-list></div>
@@ -1425,7 +1468,15 @@ export async function openModel(opts) {
   }
   current = { host, view };
   window.QW3D.view = view;
-  view.setQuality(q('[data-v3d-quality]').checked);
+  // Effects are a choice, not the default: they double what a frame costs,
+  // and not everyone likes the glow. The pick is kept for next time.
+  let effects = opts.quality ?? false;
+  try {
+    const kept = localStorage.getItem('qw-3d-effects');
+    if (kept !== null && opts.quality === undefined) effects = kept === '1';
+  } catch { /* private browsing */ }
+  q('[data-v3d-quality]').checked = effects;
+  view.setQuality(effects);
 
   const onKey = e => { if (e.key === 'Escape') closeModel(); };
   document.addEventListener('keydown', onKey);
@@ -1433,7 +1484,10 @@ export async function openModel(opts) {
 
   q('[data-v3d-close]').addEventListener('click', closeModel);
   host.querySelectorAll('[data-v3d-view]').forEach(b => b.addEventListener('click', () => view.view(b.dataset.v3dView)));
-  q('[data-v3d-quality]').addEventListener('change', e => view.setQuality(e.target.checked));
+  q('[data-v3d-quality]').addEventListener('change', e => {
+    view.setQuality(e.target.checked);
+    try { localStorage.setItem('qw-3d-effects', e.target.checked ? '1' : '0'); } catch { /* as above */ }
+  });
   q('[data-v3d-interior]').addEventListener('change', e => view.setInterior(e.target.checked));
   q('[data-v3d-turntable]').addEventListener('change', e => view.setTurntable(e.target.checked));
   q('[data-v3d-suit]').addEventListener('change', e => view.setSuit(e.target.checked));
@@ -1483,6 +1537,12 @@ export async function openModel(opts) {
   } catch (err) {
     view.setStatus(err.message || String(err));
     return;
+  }
+
+  // A ship's slots: what fits each, from the Garage's own lists.
+  if (view.sceneInfo?.vehicle && typeof window.qwModelBench === 'function') {
+    const bench = await window.qwModelBench(view.sceneInfo.cls).catch(() => null);
+    if (bench?.ports?.length && !view.disposed) renderBench(host, view, bench);
   }
 
   // A personal weapon's slots: what fits, from the Armoury's own reading,
@@ -1552,6 +1612,48 @@ function openFleet(host, view, opts) {
   view.fleet.forEach((entry, i) => { entry.on = i < FLEET_START; });
   draw();
   for (const entry of view.fleet) if (entry.on) view.setFleetShip(entry, true);
+}
+
+function renderBench(host, view, bench) {
+  const box = host.querySelector('[data-v3d-bench]');
+  const list = host.querySelector('[data-v3d-bench-list]');
+  host.querySelector('[data-v3d-bench-note]').textContent = bench.shared
+    ? t('What fits each slot, from the Garage bench. A swap here is a swap in the Garage build.')
+    : t('What fits each slot, from the Garage bench. Swaps here are a try-on: open the ship in the Garage to keep a build.');
+  list.innerHTML = '';
+  for (const port of bench.ports) {
+    const row = document.createElement('label');
+    row.className = 'v3d-attach-slot';
+    const word = document.createElement('span');
+    word.textContent = port.label;
+    word.title = port.path;
+    const select = document.createElement('select');
+    select.append(new Option(port.currentName || port.current || t('Nothing'), port.current || ''));
+    let loaded = false;
+    const load = async () => {
+      if (loaded) return;
+      loaded = true;
+      const options = await bench.options(port.portId).catch(() => []);
+      const keep = select.value;
+      select.innerHTML = '';
+      select.append(new Option(t('Nothing'), ''));
+      for (const o of options) select.append(new Option(o.cls === port.stock ? `${o.name} · ${t('stock')}` : o.name, o.cls));
+      if (keep && ![...select.options].some(o => o.value === keep)) select.append(new Option(port.currentName || keep, keep));
+      select.value = keep;
+    };
+    select.addEventListener('focus', load);
+    select.addEventListener('pointerdown', load);
+    select.addEventListener('change', async () => {
+      const value = select.value || null;
+      const changed = await bench.choose(port.portId, value);
+      for (const c of changed || [{ path: port.path, cls: value }]) {
+        await view.refitPath(c.path.split('/'), c.cls);
+      }
+    });
+    row.append(word, select);
+    list.append(row);
+  }
+  box.hidden = false;
 }
 
 function renderAttachments(host, view, slots) {

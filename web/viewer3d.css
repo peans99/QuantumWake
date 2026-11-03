@@ -211,3 +211,12 @@ body .v3d label { text-transform: none; letter-spacing: normal; font-family: var
 .v3d-fleet button { background: none; border: 0; padding: 0; color: var(--text, #cfe4f5); text-align: left; font-size: 13px; cursor: pointer; }
 .v3d-fleet button:hover { color: var(--cyan-hot, #7fe4ff); }
 .v3d-fleet small { font: 11px var(--mono, monospace); color: var(--dim, #46617a); }
+
+.v3d-brand { display: inline-flex; align-items: center; gap: 7px; padding-right: 12px; margin-right: 2px; border-right: 1px solid var(--rule, #17293c); font-size: 14px; color: var(--text, #cfe4f5); white-space: nowrap; }
+.v3d-brand b { color: var(--cyan, #35c8f0); font-weight: 700; }
+.v3d-brand img { display: block; }
+.v3d-attach-slot { grid-template-columns: minmax(0, 120px) minmax(0, 1fr); }
+.v3d-attach-slot span { line-height: 1.25; }
+/* The brand and the name keep their room; the tools wrap below them. */
+.v3d-title { flex: 1 0 auto; min-width: min(480px, 100%); }
+.v3d-title strong { flex: 0 1 auto; min-width: 0; }

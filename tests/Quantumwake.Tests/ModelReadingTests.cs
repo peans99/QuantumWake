@@ -238,6 +238,21 @@ public class ModelReadingTests
         Assert.Equal(hidden, ModelMesh.Hidden(node));
     }
 
+    /// <summary>
+    /// A material named without a folder lives beside the model - the KLWE
+    /// flashlight names "light_s01_klwe_01.mtl" - and asked for bare it was
+    /// never found, so the part came out in the fallback grey.
+    /// </summary>
+    [Theory]
+    [InlineData("light_s01_klwe_01.mtl", "Objects/fps_weapons/attachments/flashlights/klwe/light_s01_klwe_01.cgf", "Objects/fps_weapons/attachments/flashlights/klwe/light_s01_klwe_01.mtl")]
+    [InlineData("Objects/Spaceships/Ships/DRAK/Corsair/DRAK_Corsair_Default_New", "Objects/Spaceships/Ships/DRAK/Corsair/exterior/DRAK_Corsair.cga", "Objects/Spaceships/Ships/DRAK/Corsair/DRAK_Corsair_Default_New")]
+    [InlineData("bare.mtl", "model.cgf", "bare.mtl")]
+    [InlineData(null, "a/b.cgf", null)]
+    public void A_material_named_without_a_folder_is_read_beside_its_model(string? material, string model, string? expected)
+    {
+        Assert.Equal(expected, ModelMesh.Beside(material, model));
+    }
+
     // --- textures ---------------------------------------------------------------
 
     private static byte[] Dds(int size, int mips, string fourCc)
