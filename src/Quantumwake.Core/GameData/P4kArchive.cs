@@ -169,13 +169,22 @@ public sealed class P4kArchive
     /// <summary>Every entry under a prefix, located in one walk of the directory.</summary>
     public IReadOnlyList<P4kEntry> Locate(string prefix)
     {
+        var normalised = prefix.Replace('/', '\\');
+        return Locate(name => name.Replace('/', '\\').StartsWith(normalised, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Every entry whose name passes <paramref name="keep"/>, in one walk of the
+    /// directory - for gathering several folders without a walk each.
+    /// </summary>
+    public IReadOnlyList<P4kEntry> Locate(Func<string, bool> keep)
+    {
         using var stream = File.Open(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var reader = new BinaryReader(stream);
 
         var (directoryOffset, entryCount) = FindCentralDirectory(stream, reader);
         stream.Seek(directoryOffset, SeekOrigin.Begin);
 
-        var normalised = prefix.Replace('/', '\\');
         var found = new List<P4kEntry>();
 
         for (long i = 0; i < entryCount; i++)
@@ -199,7 +208,7 @@ public sealed class P4kArchive
             var extra = reader.ReadBytes(extraLength);
             stream.Seek(commentLength, SeekOrigin.Current);
 
-            if (!name.Replace('/', '\\').StartsWith(normalised, StringComparison.OrdinalIgnoreCase))
+            if (!keep(name))
                 continue;
 
             ApplyZip64Extra(extra, ref uncompressed, ref compressed, ref localOffset);

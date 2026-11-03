@@ -99,6 +99,7 @@ public static partial class ServerHost
         if (install is not null)
             builder.Services.AddSingleton(install);
         builder.Services.AddSignalR();
+        builder.Services.AddSingleton(new ModelLibrary(install));
         builder.Services.AddSingleton<ScanStatus>();
         builder.Services.AddSingleton<ActivityBoard>();
         builder.Services.AddSingleton<LiveSessionService>();
@@ -745,6 +746,7 @@ public static partial class ServerHost
 
         ControlsEndpoints.Map(app, install);
         MapDataRead(app, install);
+        MapModels(app, install);
 
         app.MapGet("/api/now", (LiveSessionService live) => live.Current);
 
@@ -5825,6 +5827,10 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
             {
                 p.PortId, p.Hardpoint, p.Group, p.MinSize, p.MaxSize,
                 p.Class, p.Name, p.StockClass, p.Changed,
+                // The hardpoint names from the hull down - what the 3D view
+                // matches its own loadout tree on, since the ids above are
+                // positions in the dump's list rather than names.
+                path = HardpointPath(ship.Loadout, p.PortId),
                 fixedReason = FindPort(ship.Loadout, p.PortId) is { } port ? IndustrialPortNote(community, port) : null,
                 stockName = p.StockClass is not null && community.Parts.TryGetValue(p.StockClass, out var stock) ? stock.Name : null,
                 fitted = p.Class is not null && community.Parts.TryGetValue(p.Class, out var part) ? PartCard(part) : null
@@ -5887,6 +5893,16 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
     };
 
     /// <summary>A port anywhere in the tree, by the dump's id for it.</summary>
+    static string? HardpointPath(IReadOnlyList<FitPort> ports, string portId)
+    {
+        foreach (var port in ports)
+        {
+            if (port.PortId == portId) return port.Hardpoint;
+            if (HardpointPath(port.Children, portId) is { } below) return $"{port.Hardpoint}/{below}";
+        }
+        return null;
+    }
+
     static FitPort? FindPort(IReadOnlyList<FitPort> ports, string portId)
     {
         foreach (var port in ports)

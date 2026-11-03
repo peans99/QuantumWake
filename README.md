@@ -328,6 +328,18 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.21.0
+
+**Ships, vehicles and weapons in 3D.** A new 3D view opens any ship, ground vehicle or personal weapon from your game install's own models, with its stock loadout fitted: gimbals and the guns on them, turrets, missile racks and their missiles, countermeasure launchers, thrusters, a rifle's magazine. Drag to turn it, scroll to zoom, jump to the front, profile, top or rear, and save a picture. Click a part on the model or in the list beside it to see which slot it sits in and what it carries. Reference → 3D models lists every hull and personal weapon the install can draw. The Garage and the Armoury have a 3D view button that opens the ship or gun with your own fit in place, marked as yours.
+
+**Paints.** The paint picker lists every livery the game has for the hull (ten for the Corsair) and recolours the model from that livery's palette. The game paints a hull from a palette of three colours laid over tileable panel textures, and the view draws exactly that, with the panels' normal and gloss maps, image lighting and ambient occlusion. It does not draw the wear, dirt and decal stencils the engine adds, so a hull looks cleaner than it does in game.
+
+**What it reads.** Everything comes from Data.p4k on your machine; nothing is downloaded. The first model you open takes a few seconds: the app indexes the archive's model folders (about 1.5 s here) and lists what it can draw (about 3 s, then kept). Each model is packed once and kept in the app's data folder until the next game patch. It needs a browser with WebGL 2, which current Chrome, Edge and Firefox all have. Textures go to the graphics card still compressed, at most 2048 pixels across.
+
+**Reference → Items is readable again.** The list held every entity the game files type, 26,531 of them, and offered their 153 engine types as the filter, from NOITEM_Player to hair colours. A third of the entries had no name but their class, such as cds_combat_superheavy_legs_01_04_01. The page now lists the named items only, about 8,000 here, under thirteen kinds you would look for: ship weapons, missiles and countermeasures, ship components, mining and salvage, ship paints, personal weapons, weapon attachments, armour, clothing, food and drink, medical and gear, flair, and collectibles. The whole list is still there under "Everything in the files".
+
+**Fleet → Fitted, as last photographed is laid out again.** Each photographed fit had come out as four thin columns side by side. It is a card again: the ship and the date on top, then each slot with the part in it and whether it is stock.
+
 ### 0.20.66
 
 **Headhunters no longer look like they dropped a rank.** Headhunters have two ladders in the Rep app, Standing and Ship Combat, and screenshots of both were filed as one history. A Ship Combat Rank I screenshot followed by a Standing Jr. Contractor one read as a rank lost, and the trend line mixed the two. Each ladder now has its own card, named for its ladder ("HEADHUNTERS · Standing", "HEADHUNTERS · Ship Combat"), with its own history and change. The rep-run planner lets you pick which one you are climbing. The header still counts an organisation once.

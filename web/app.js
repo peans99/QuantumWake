@@ -34,7 +34,7 @@ const PAGE_GLYPHS = Object.freeze({
   jobs: '◆', routes: '↝', contracts: '◈', reputation: '▲', checklists: '☑', blueprints: '▧', wikelo: '✦', events: '✧',
   logbook: '≡', sessions: '◷', servers: '⌘', places: '⌖', points: '✣', crew: '◌', casualties: '╳',
   spending: '¤', ledger: '▥', commodities: '▰', market: '◫',
-  ships: '◁', components: '⊛', parts: '⊞', mining: '⬡', crafting: '⌬', encounters: '⊗', missions: '❖',
+  ships: '◁', components: '⊛', parts: '⊞', mining: '⬡', crafting: '⌬', encounters: '⊗', missions: '❖', models: '⬗',
   fleet: '◍', hangar: '⌂', loadout: '⊠', stash: '▣', loot: '✪', garage: '⌁', armoury: '✛',
   settings: '✥', overlay: '◱', controls: '⊹', labels: '▦', imports: '↥', data: '⊟', about: 'ⓘ',
   // Reached from another page rather than the menu, but titled like the rest.
@@ -496,6 +496,7 @@ function showView(name) {
   if (name === 'garage') loadGarage().catch(() => {});
   if (name === 'armoury') loadArmoury().catch(() => {});
   if (name === 'encounters') loadEncounters().catch(() => {});
+  if (name === 'models') loadModelsPage().catch(() => {});
   if (name === 'missions') loadMissionsRef().catch(() => {});
   if (name === 'points') loadPoints().catch(() => {});
   if (name === 'wikelo') loadWikelo().catch(() => {});
@@ -7062,6 +7063,65 @@ function openEncounter(name, arena = false) {
 onInput('#encounters-search', renderEncounters);
 $('#encounters-kind')?.addEventListener('change', renderEncounters);
 
+/**
+ * The kinds the Items page sorts by, in the order a pilot looks for them.
+ *
+ * The files type every entity they describe - 153 types on this install - and
+ * most of those are the engine's own furniture: NOITEM_Player (2,302 of
+ * them), doors, seats, shop displays, control panels, the hair and skin
+ * colours of the character editor. Offered one per line, the picker read as
+ * noise and the useful kinds were lost in it. These are the kinds a pilot
+ * buys, loots or fits; the rest stay one choice away, under "Everything in
+ * the files".
+ */
+const ITEM_KINDS = [
+  ['ship-weapons', 'Ship weapons', /^(WeaponGun|Turret|TurretBase|UtilityTurret|WeaponMount)$/],
+  ['ship-missiles', 'Missiles and countermeasures', /^(Missile|MissileLauncher|Bomb|BombLauncher|WeaponDefensive|SpaceMine|GroundVehicleMissileLauncher)$/],
+  ['ship-components', 'Ship components', /^(PowerPlant|Cooler|Shield|QuantumDrive|JumpDrive|Radar|LifeSupportGenerator|EMP|QuantumInterdictionGenerator|ExternalFuelTank|Module)$/],
+  ['mining', 'Mining and salvage', /^(WeaponMining|MiningModifier|SalvageHead|SalvageModifier|TractorBeam|TowingBeam|ToolArm)$/],
+  ['paints', 'Ship paints', /^Paints$/],
+  ['fps-weapons', 'Personal weapons', /^(WeaponPersonal|Grenade|FPS_Deployable)$/],
+  ['attachments', 'Weapon attachments', /^WeaponAttachment$/],
+  ['armour', 'Armour', /^(Char_Armor_\w+|Suit)$/],
+  ['clothing', 'Clothing', /^(Char_Clothing_\w+|Char_Accessory_\w+)$/],
+  ['food', 'Food and drink', /^(Food|Drink|Bottle)$/],
+  ['gear', 'Medical, tools and gear', /^(FPS_Consumable|Gadget|FPS_Radar|AmmoBox|RemovableChip|MobiGlas|Visor)$/],
+  ['flair', 'Flair and decorations', /^(Flair_\w+|Decal)$/],
+  // Named only, like every kind: ingots, trophies, harvestables, fuses, the
+  // Hyperion chess pieces that carry no type at all.
+  ['collectibles', 'Collectibles, loot and harvestables', /^(Misc|Cargo|Container|)$/],
+];
+
+/** Everything, the engine's own entries included: the list as the files have it. */
+const ITEM_KIND_ALL = 'everything';
+
+/**
+ * Whether an item has a name a person gave it. The install writes the class
+ * back as the name when the text table has none - 8,443 of 26,531 items here,
+ * cds_combat_superheavy_legs_01_04_01 and its kind, NPC-only pieces nobody can
+ * own - and a handful carry the writers' own "PLACEHOLDER" or "[PH]". A
+ * download item with no name at all is a curated entry and keeps its place.
+ */
+function itemNamed(p) {
+  if (!p.name) return true;
+  if (p.name.trim().toLowerCase() === String(p.className || '').toLowerCase()) return false;
+  return !/^\s*(PLACEHOLDER\b|\[PH\])/i.test(p.name);
+}
+
+/** The kind an item is listed under, or null for the engine's own entries. */
+function itemKind(p) {
+  const type = p.type || '';
+  return ITEM_KINDS.find(([, , pattern]) => pattern.test(type))?.[0] || null;
+}
+
+/** Whether an item belongs on the page under the picked kind. */
+function itemShown(p, kind) {
+  if (kind === ITEM_KIND_ALL) return true;
+  if (!itemNamed(p)) return false;
+  const own = itemKind(p);
+  return kind ? own === kind : own !== null;
+}
+
 async function loadPartsRef() {
   try {
     partCatalogue = await getJson('/api/reference/items');
@@ -7069,14 +7129,23 @@ async function loadPartsRef() {
     partCatalogue = [];
   }
 
-  const types = [...new Set(partCatalogue.map((p) => p.type).filter(Boolean))].sort();
   const select = $('#parts-type');
   const previous = select.value;
+  const named = partCatalogue.filter(itemNamed);
+  const counts = {};
+  for (const p of named) {
+    const kind = itemKind(p);
+    if (kind) counts[kind] = (counts[kind] || 0) + 1;
+  }
 
   select.textContent = '';
-  select.append(new Option(tx('All types'), ''));
-  for (const type of types) select.append(new Option(prettyType(type), type));
-  if (types.includes(previous)) select.value = previous;
+  select.append(new Option(tx('All kinds'), ''));
+  for (const [key, label] of ITEM_KINDS) {
+    if (counts[key]) select.append(new Option(tx('{kind} ({count})', { kind: tx(label), count: counts[key].toLocaleString() }), key));
+  }
+  select.append(new Option(tx('Everything in the files, unnamed included'), ITEM_KIND_ALL));
+  if ([...select.options].some((o) => o.value === previous)) select.value = previous;
+  const listed = named.filter((p) => itemKind(p)).length;
 
   // The two sources agree item for item, so the caption says which is answering
   // rather than warning about a difference there is not one of. What does
@@ -7086,7 +7155,7 @@ async function loadPartsRef() {
   if (caption && partCatalogue.length) {
     caption.textContent = partCatalogue[0].source === 'install'
       ? tx('{count} ship components and pieces of personal gear, read from your game install with type, size, grade and maker, and UEX in-game prices where a shop stocks one.',
-        { count: partCatalogue.length.toLocaleString() })
+        { count: listed.toLocaleString() })
       : tx('Every ship component and piece of personal gear in the community digest, with type, size, grade and maker, and UEX in-game prices where a shop stocks one.');
   }
 
@@ -7126,7 +7195,7 @@ function renderPartsRef() {
 
   const foundOnly = Boolean($('#parts-found')?.checked);
   const rows = partCatalogue.filter((p) =>
-    (!type || p.type === type)
+    itemShown(p, type)
     && (!foundOnly || partDrops(p))
     && (!term
       || p.className.toLowerCase().includes(term)
@@ -9956,6 +10025,7 @@ function renderArmouryGunDetail(w) {
     $('#armoury-bench-weapon')?.focus();
   });
   inner.append(testFit);
+  inner.append(modelViewButton(() => openModelView({ cls: w.class, title: w.name, fitted: armouryModelFits(w) })));
 
   const notes = [];
   notes.push(tx('Projectile {speed} m/s for {seconds} s ({range} m before it is gone).',
@@ -14562,7 +14632,9 @@ async function renderFleetFittings() {
   if (!any) return;
 
   for (const s of ships) {
-    const card = el('article', 'ship-card');
+    // Its own card, not a roster card: those are a row of logo and text, and
+    // a list of parts laid out that way came out as four thin columns.
+    const card = el('article', 'ship-card fitting-card');
     const title = el('div', 'strong');
     title.append(refLink('ship', s.ship, s.ship));
     card.append(title);
@@ -14575,12 +14647,12 @@ async function renderFleetFittings() {
       const li = el('li');
       li.append(el('span', 'what', screenText(f.slot)));
 
-      if (f.nothingRead) li.append(el('span', 'd', ` · ${tx('nothing read under it')}`));
+      if (f.nothingRead) li.append(el('span', 'd', tx('nothing read under it')));
       else if (f.name) {
-        li.append(el('span', 'd', ` · ${f.name}`));
+        li.append(el('span', 'd', f.name));
         if (f.stock === false) li.append(el('span', 'k differs', tx('not stock')));
         if (f.stock === true) li.append(el('span', 'k agrees', tx('stock')));
-      } else li.append(el('span', 'd', ` · ${tx('read “{read}”, matched nothing', { read: f.read })}`));
+      } else li.append(el('span', 'd', tx('read “{read}”, matched nothing', { read: f.read })));
 
       list.append(li);
     }
@@ -19868,10 +19940,148 @@ async function loadGarageMarket(cls) {
  * Draws the sheet. With a stock sheet to compare against, every figure that
  * moved shows the old one struck beside it.
  */
+/* ---------- 3D view ----------
+   A ship, vehicle or personal weapon drawn from the install's own models
+   (viewer3d.js). The viewer is a module with three.js behind it, 700 kB that
+   most visits never need, so it is fetched on the first click rather than
+   with the page: one script tag, one stylesheet, and the module announces
+   itself on window.QW3D. */
+
+let modelViewerLoading = null;
+let modelsStatus = null;
+
+function loadModelViewer() {
+  if (window.QW3D) return Promise.resolve(window.QW3D);
+  if (!modelViewerLoading) {
+    modelViewerLoading = new Promise((resolve, reject) => {
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = 'viewer3d.css';
+      document.head.append(css);
+      window.addEventListener('qw3d-ready', () => resolve(window.QW3D), { once: true });
+      const script = document.createElement('script');
+      script.type = 'module';
+      script.src = 'viewer3d.js';
+      script.onerror = () => {
+        modelViewerLoading = null;
+        reject(new Error(tx('The 3D view did not load.')));
+      };
+      document.head.append(script);
+    });
+  }
+  return modelViewerLoading;
+}
+
+/**
+ * Opens the 3D view over the page.
+ * @param {{cls: string, title?: string, fitted?: {path: string, cls: string|null}[]}} opts
+ */
+function openModelView(opts) {
+  loadModelViewer()
+    .then((viewer) => viewer.openModel(opts))
+    .catch((e) => toast('warn', e.message || tx('The 3D view did not load.')));
+}
+
+/** Whether the install can be read for models at all; asked once. */
+function modelsAvailable() {
+  if (!modelsStatus) {
+    modelsStatus = getJson('/api/models/status')
+      .then((s) => Boolean(s?.available))
+      .catch(() => false);
+  }
+  return modelsStatus;
+}
+
+/** A "3D view" button, hidden until the install is known to have models. */
+function modelViewButton(open, label = tx('3D view')) {
+  const button = el('button', 'ghost small model-view-button', label);
+  button.type = 'button';
+  button.hidden = true;
+  button.title = tx('Open the game’s own model, turn it and look at what is fitted');
+  button.addEventListener('click', (e) => {
+    e.stopPropagation();
+    open();
+  });
+  modelsAvailable().then((ok) => { button.hidden = !ok; });
+  return button;
+}
+
+/** The Garage bench's changed ports, as the viewer's fits. */
+function garageModelFits(data) {
+  return (data.ports || [])
+    .filter((p) => p.changed && p.path)
+    .map((p) => ({ path: p.path, cls: p.class || null }));
+}
+
+/** An Armoury gun's chosen attachments, as the viewer's fits. */
+function armouryModelFits(w) {
+  const choice = armouryFitChoice(w);
+  return (w.ports || [])
+    .filter((p) => !p.fixed && p.name)
+    .map((p) => ({ path: p.name, cls: choice[p.slot] || null }))
+    .filter((f) => f.cls || (w.ports || []).some((p) => p.name === f.path && p.default));
+}
+
+/* The 3D models page: every hull and personal weapon the install can draw. */
+
+let modelsCatalogue = null;
+
+async function loadModelsPage() {
+  const note = $('#models-note');
+  const grid = $('#models-grid');
+  if (!grid) return;
+  if (!modelsCatalogue) {
+    note.textContent = tx('Reading the install for models… the first time takes a few seconds.');
+    try {
+      modelsCatalogue = await getJson('/api/models/list');
+    } catch {
+      modelsCatalogue = null;
+      note.textContent = tx('No game install to read models from.');
+      grid.textContent = '';
+      return;
+    }
+  }
+  renderModelsPage();
+}
+
+function renderModelsPage() {
+  const grid = $('#models-grid');
+  const note = $('#models-note');
+  if (!grid || !modelsCatalogue) return;
+  const kind = $('#models-kind')?.value || 'vehicles';
+  const q = ($('#models-search')?.value || '').trim().toLowerCase();
+  const all = kind === 'weapons' ? modelsCatalogue.weapons || [] : modelsCatalogue.vehicles || [];
+  const rows = all.filter((m) => !q || `${m.name} ${m.cls} ${m.maker || ''}`.toLowerCase().includes(q));
+  note.textContent = kind === 'weapons'
+    ? txn(rows.length, '{count} personal weapon the install can draw', '{count} personal weapons the install can draw')
+    : txn(rows.length, '{count} ship or vehicle the install can draw', '{count} ships and vehicles the install can draw');
+
+  grid.textContent = '';
+  for (const m of rows.slice(0, 400)) {
+    const card = el('button', 'model-card');
+    card.type = 'button';
+    card.append(el('span', 'model-card-maker', m.maker || ''), el('strong', null, m.name),
+      el('span', 'model-card-meta', [m.cls, m.paints ? txn(m.paints, '{count} paint', '{count} paints') : null].filter(Boolean).join(' · ')));
+    card.addEventListener('click', () => openModelView({ cls: m.cls, title: m.name }));
+    grid.append(card);
+  }
+  if (rows.length > 400) grid.append(el('p', 'muted small', tx('Showing the first 400; search to narrow.')));
+}
+
+function initModelsPage() {
+  $('#models-kind')?.addEventListener('change', renderModelsPage);
+  $('#models-search')?.addEventListener('input', renderModelsPage);
+}
+
 function renderGarage(data, stock) {
   const head = $('#garage-head');
   head.hidden = false;
   $('#garage-title').textContent = data.ship.name;
+  const modelAction = $('#garage-model-action');
+  if (modelAction) {
+    modelAction.textContent = '';
+    modelAction.append(modelViewButton(() => openModelView({ cls: data.ship.class, title: data.ship.name, fitted: garageModelFits(data) })));
+  }
   const discipline = garageShipDiscipline(data.ship.career, data.ship.role);
   const sub = $('#garage-sub');
   sub.textContent = '';
@@ -33757,6 +33967,7 @@ initWipePrompt();
 initUpdates();
 initStarStrings();
 initTextOverlay();
+initModelsPage();
 
 /* ---------- scan progress ---------- */
 
@@ -33878,7 +34089,7 @@ const VIEW_SOURCES = {
   logs: new Set(['now', 'map', 'logbook', 'sessions', 'servers', 'places', 'points', 'crew', 'casualties',
     'contracts', 'events', 'spending', 'ledger', 'commodities', 'market', 'routes', 'fleet', 'hangar',
     'loadout', 'stash', 'loot', 'garage', 'armoury', 'wikelo', 'blueprints']),
-  gamedata: new Set(['map', 'ships', 'components', 'parts', 'mining', 'crafting', 'encounters', 'missions', 'blueprints', 'hangar', 'armoury']),
+  gamedata: new Set(['map', 'ships', 'components', 'parts', 'mining', 'crafting', 'encounters', 'missions', 'models', 'blueprints', 'hangar', 'armoury']),
   uex: new Set(['market', 'commodity', 'components', 'routes', 'garage', 'armoury', 'jobs', 'events', 'casualties']),
   community: new Set(['market', 'commodity', 'commodities', 'components', 'parts', 'mining']),
 };

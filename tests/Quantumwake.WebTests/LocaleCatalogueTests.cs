@@ -113,7 +113,8 @@ public class LocaleCatalogueTests
         // The MFD pages read the same catalogue, so their words count as the page's.
         var markup = Plain(File.ReadAllText(Web("index.html")) + File.ReadAllText(Web("mfd.html")) + File.ReadAllText(Web("mfd-setup.html")));
         var scripts = File.ReadAllText(Web("app.js")) + File.ReadAllText(Web("i18n.js"))
-            + File.ReadAllText(Web("mfd-core.js")) + File.ReadAllText(Web("mfd.js")) + File.ReadAllText(Web("mfd-setup.js"));
+            + File.ReadAllText(Web("mfd-core.js")) + File.ReadAllText(Web("mfd.js")) + File.ReadAllText(Web("mfd-setup.js"))
+            + File.ReadAllText(Web("viewer3d.js"));
         var server = ServerLiterals();
 
         // As a script literal, in either quote, with any apostrophe escaped.
@@ -221,5 +222,30 @@ public class LocaleCatalogueTests
         Assert.True(keys.Count > 1000, $"only {keys.Count} literals found - the pattern no longer matches the script");
         var missing = keys.Where(key => !french.ContainsKey(key)).ToList();
         Assert.True(missing.Count == 0, "app.js translates English fr.json does not have:\n  " + string.Join("\n  ", missing));
+    }
+
+    /// <summary>
+    /// The 3D view is a module of its own, loaded on first use, and calls the
+    /// page's <c>tx</c> through a one-letter <c>t</c>. Its words reach a French
+    /// pilot the same way, so they are held to the same catalogue - and so are
+    /// the part kinds it groups by, which it passes to <c>t</c> as values.
+    /// </summary>
+    [Fact]
+    public void Every_string_the_3d_view_translates_has_french()
+    {
+        var script = File.ReadAllText(Web("viewer3d.js"));
+        var french = Read("fr");
+        static string Unescape(string s) => s.Replace("\\'", "'");
+
+        var keys = Regex.Matches(script, @"\bt\('((?:[^'\\]|\\.)*)'")
+            .Select(m => Unescape(m.Groups[1].Value))
+            .Concat(Regex.Matches(script, @"\['\w+', '((?:[^'\\]|\\.)*)'\]").Select(m => Unescape(m.Groups[1].Value)))
+            .Append("Other parts")
+            .Distinct()
+            .ToList();
+
+        Assert.True(keys.Count > 20, $"only {keys.Count} literals found - the pattern no longer matches the script");
+        var missing = keys.Where(key => !french.ContainsKey(key)).ToList();
+        Assert.True(missing.Count == 0, "viewer3d.js translates English fr.json does not have:\n  " + string.Join("\n  ", missing));
     }
 }

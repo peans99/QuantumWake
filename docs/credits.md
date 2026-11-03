@@ -65,6 +65,21 @@ here. `P4kArchive.TryReadDecrypting` uses it for those files only, at
 Nicolas's decision on 2026-10-31; everything else the archive encrypts is
 still reported as unreadable.
 
+**Models, materials and textures** - since 0.21.0 the 3D view reads the
+game's `#ivo` model files (`.cga`/`.cgam`, `.cgf`/`.cgfm`, `.skin`/`.skinm`,
+`.chr`), their `.mtl` material files and their split `.dds` textures out of
+`Data.p4k`. The chunk layout of `#ivo` - the node table, the mesh chunk and its
+data streams, the compressed positions and packed normals - follows the
+open-source [CryEngine Converter](https://github.com/Markemp/Cryengine-Converter)
+by Geoff Gerber (Markemp) and contributors, read as a reference; none of its code
+is used or shipped. `GameData/IvoModel.cs` is a reader of its own, checked
+against this install's files, and two things were found here that the converter
+did not have: the 68-byte skeleton layout FPS weapons use, and the gloss
+textures (`.dds.a`) that open without the `DDS ` magic. The ships' vehicle
+definition files are among the archive's encrypted entries and are not opened;
+a ship is assembled from its model's own hardpoint nodes and the DataCore
+loadout instead.
+
 **Star Citizen Wiki** ([starcitizen.tools](https://starcitizen.tools)) is
 where the Garage's pictures of parts come from, and the logo of the odd maker
 the game files lack one for: once the community dataset is switched on, the
@@ -123,6 +138,7 @@ outside request to draw them.
 | [Microsoft.ML.OnnxRuntime](https://onnxruntime.ai) | Microsoft | Runs the text-recognition models where Windows OCR is not available: Linux, and a Windows machine with no English language pack | MIT |
 | [SkiaSharp](https://github.com/mono/SkiaSharp) | Mono Project, .NET Foundation | Decoding, cropping and scaling screenshots for that reader; `System.Drawing` has been Windows-only since .NET 6 | MIT |
 | [Jint](https://github.com/sebastienros/jint) | Sebastien Ros and contributors | Runs `web/app.js` under test | BSD-2-Clause |
+| [three.js](https://threejs.org) r170 | three.js authors | Draws the 3D view: WebGL, orbit controls, image lighting, ambient occlusion. Vendored in `web/vendor/three/` with one local fix, described in the README there | MIT |
 
 ### Text-recognition models
 

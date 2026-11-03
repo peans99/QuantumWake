@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css?v=0.20.66">
+  <link rel="stylesheet" href="app.css?v=0.21.0">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -77,6 +77,7 @@
         <button data-view="loot">Loot</button>
         <button data-view="encounters">Encounters</button>
         <button data-view="missions">Missions</button>
+        <button data-view="models">3D models</button>
         <button data-view="mining">Mining</button>
         <button data-view="crafting">Crafting</button>
       </div>
@@ -2435,6 +2436,32 @@
   </section>
 
   <!-- REFERENCE: every contract the installed game defines -->
+  <section id="view-models" class="view">
+    <div class="section-bar reference-toolbar-bar">
+      <div class="reference-title">
+        <span class="page-kicker">Reference</span>
+        <h2>3D models</h2>
+      </div>
+      <div class="controls reference-toolbar">
+        <select id="models-kind" class="select" title="Which models">
+          <option value="vehicles">Ships and vehicles</option>
+          <option value="weapons">Personal weapons</option>
+        </select>
+        <input type="search" id="models-search" class="search" placeholder="Search by name, class or maker…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p>Every ship, ground vehicle and personal weapon your game install can draw, opened in
+        3D from the game's own models with its stock loadout fitted. Models, paints and parts are
+        read from your install the first time one is opened; nothing is downloaded. The Garage
+        and the Armoury open the same view with your own fit in place.</p>
+    </details>
+    <p class="muted caption" id="models-note"></p>
+    <div class="models-grid" id="models-grid"></div>
+  </section>
+
   <section id="view-missions" class="view">
     <div class="section-bar reference-toolbar-bar">
       <div class="reference-title">
@@ -3160,6 +3187,7 @@
 
     <div id="garage-head" class="garage-head" hidden>
       <div class="garage-title" id="garage-title"></div>
+      <div class="garage-model-action" id="garage-model-action"></div>
       <div class="muted" id="garage-sub"></div>
       <div class="muted small" id="garage-source"></div>
       <div class="garage-duty-legend" aria-label="Ship discipline legend">
@@ -4970,6 +4998,6 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.20.66"></script>
+<script src="app.js?v=0.21.0"></script>
 </body>
 </html>

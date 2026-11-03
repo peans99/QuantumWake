@@ -8631,3 +8631,52 @@ body:not(.overlay) .itinerary-plan {
   padding: 8px 10px;
   transition: background-color .14s ease, border-color .14s ease;
 }
+
+
+/* ---------- 3D models ----------
+   Reference -> 3D models: a card per hull or weapon the install can draw.
+   The view itself is styled in viewer3d.css, loaded with it. */
+.models-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+.model-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: linear-gradient(160deg, var(--panel-2), var(--panel));
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .14s ease, transform .14s ease;
+}
+body .model-card { text-transform: none; letter-spacing: normal; }
+.model-card:hover,
+.model-card:focus-visible { border-color: var(--cyan); transform: translateY(-1px); }
+.model-card strong { font-size: 14px; font-weight: 600; }
+.model-card-maker { font: 600 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--cyan); }
+.model-card-meta { font: 11px var(--mono); color: var(--dim); }
+.garage-model-action { margin: 4px 0 2px; }
+.garage-model-action:empty { display: none; }
+.armoury-detail .model-view-button { margin-left: 8px; }
+
+/* Fleet -> Fitted, as last photographed. A roster card is a row of logo and
+   text; a fit is a heading and a list, so it stacks, and each part reads as
+   its slot over the part with the stock verdict beside it. */
+.ship-card.fitting-card { flex-direction: column; align-items: stretch; gap: 4px; }
+.fitting-card .feed.screen-fittings li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 10px;
+  row-gap: 1px;
+  align-items: center;
+}
+.fitting-card .feed.screen-fittings .what { grid-column: 1 / -1; color: var(--muted); font-size: 11px; }
+.fitting-card .feed.screen-fittings .d { min-width: 0; color: var(--text); }
+.fitting-card .feed.screen-fittings .k { justify-self: end; }
