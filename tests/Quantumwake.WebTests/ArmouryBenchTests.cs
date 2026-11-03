@@ -68,6 +68,32 @@ public class ArmouryBenchTests
         Assert.Contains("500 m by 100", page.Text("optic.scope.textContent"));
         page.Do("var opticZoom = optic.scope.descendants().find(n => n.tagName === 'select'); opticZoom.value = '8'; opticZoom.fire('change');");
         Assert.Equal("scale(8)", page.Text("optic.scope.byClass('bench-scope-lens')[0].children[0].style.transform"));
+
+        // The crosshair is its own layer over the scene and is not magnified with it.
+        var reticle = "optic.scope.byClass('bench-scope-lens')[0].children[1]";
+        Assert.Equal("bench-scope-reticle", page.Text($"{reticle}.getAttribute('class')"));
+        Assert.Equal("", page.Text($"{reticle}.style.transform || ''"));
+    }
+
+    /// <summary>
+    /// The face says which way the fit went before the number does: narrower
+    /// keeps the cyan and green, wider turns the pattern and verdict amber, and
+    /// a line joins each sample point to where the fit moves it.
+    /// </summary>
+    [Fact]
+    public void The_target_and_verdict_say_which_way_the_spread_moved()
+    {
+        var page = Open(true);
+        page.Do($"{Picker("Underbarrel")}.value = 'laser'; {Picker("Underbarrel")}.fire('change');");
+
+        var svg = $"{Result}.byClass('bench-plot')[0].children[0]";
+        Assert.Equal("narrower", page.Text($"{svg}.getAttribute('data-spread')"));
+        Assert.Equal(1, page.Count($"{svg}.byClass('bench-pattern-vectors').length"));
+        Assert.Equal(1, page.Count($"{Result}.byClass('bench-spread-verdict').filter(n => n.classList.contains('gain')).length"));
+
+        page.Do("var wider = armouryBenchTarget(1.2); var same = armouryBenchTarget(1);");
+        Assert.Equal("wider", page.Text("wider.getAttribute('data-spread')"));
+        Assert.Equal(0, page.Count("same.byClass('bench-pattern-vectors').length"));
     }
 
     [Fact]
