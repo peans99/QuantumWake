@@ -8680,3 +8680,32 @@ body .model-card { text-transform: none; letter-spacing: normal; }
 .fitting-card .feed.screen-fittings .what { grid-column: 1 / -1; color: var(--muted); font-size: 11px; }
 .fitting-card .feed.screen-fittings .d { min-width: 0; color: var(--text); }
 .fitting-card .feed.screen-fittings .k { justify-self: end; }
+
+/* 3D models: makers first, then a maker's hulls with the game's silhouettes. */
+.models-grid.models-makers { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.model-maker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 12px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: linear-gradient(160deg, var(--panel-2), var(--panel));
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color .14s ease, transform .14s ease;
+}
+body .model-maker { text-transform: none; letter-spacing: normal; }
+.model-maker:hover, .model-maker:focus-visible { border-color: var(--cyan); transform: translateY(-1px); }
+.model-maker strong { font-size: 14px; font-weight: 600; text-align: center; }
+.model-maker-logo { display: flex; align-items: center; justify-content: center; width: 64px; height: 48px; }
+.model-maker-logo img { max-width: 100%; max-height: 100%; object-fit: contain; opacity: .9; }
+.model-maker-logo .mono-mark { font: 600 16px var(--mono); color: var(--cyan); }
+.models-grid:not(.models-makers) { display: block; }
+.models-back { margin: 2px 0 10px; }
+.models-maker-section { margin-bottom: 18px; }
+.models-maker-head { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; font-size: 16px; }
+.models-maker-head .model-maker-logo { width: 40px; height: 30px; }
+.models-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.model-card-outline.ship-outline { align-self: center; width: 150px; height: 84px; margin: 2px 0 6px; cursor: inherit; }

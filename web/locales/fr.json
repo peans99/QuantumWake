@@ -6012,7 +6012,7 @@
   "Personal weapons": "Armes personnelles",
   "Search by name, class or maker…": "Chercher par nom, classe ou fabricant…",
   "Which models": "Quels modèles",
-  "Every ship, ground vehicle and personal weapon your game install can draw, opened in 3D from the game's own models with its stock loadout fitted. Models, paints and parts are read from your install the first time one is opened; nothing is downloaded. The Garage and the Armoury open the same view with your own fit in place.": "Chaque vaisseau, véhicule terrestre et arme personnelle que votre installation sait dessiner, ouvert en 3D depuis les modèles du jeu avec son équipement d’origine monté. Modèles, peintures et pièces sont lus dans votre installation la première fois qu’on en ouvre un ; rien n’est téléchargé. Le Garage et l’Armurerie ouvrent la même vue avec votre propre montage en place.",
+  "Every ship, ground vehicle, personal weapon and piece of armour your game install can draw, opened in 3D from the game's own models with its stock loadout fitted. Models, paints and parts are read from your install the first time one is opened; nothing is downloaded. The Garage and the Armoury open the same view with your own fit in place.": "Chaque vaisseau, véhicule terrestre, arme personnelle et pièce d’armure que votre installation sait dessiner, ouvert en 3D depuis les modèles du jeu avec son équipement d’origine monté. Modèles, peintures et pièces sont lus dans votre installation la première fois qu’on en ouvre un ; rien n’est téléchargé. Le Garage et l’Armurerie ouvrent la même vue avec votre propre montage en place.",
   "{kind} ({count})": "{kind} ({count})",
   "Everything in the files, unnamed included": "Tout ce que contiennent les fichiers, sans nom compris",
   "Missiles and countermeasures": "Missiles et contre-mesures",
@@ -6024,5 +6024,29 @@
   "Medical, tools and gear": "Soins, outils et équipement",
   "Flair and decorations": "Décorations",
   "Collectibles, loot and harvestables": "Objets de collection, butin et récoltes",
-  "Interior": "Intérieur"
+  "Interior": "Intérieur",
+  "All makers": "Tous les fabricants",
+  "Open {name} in 3D": "Ouvrir {name} en 3D",
+  "{count} matches": {
+    "one": "{count} résultat",
+    "other": "{count} résultats"
+  },
+  "{count} weapons": {
+    "one": "{count} arme",
+    "other": "{count} armes"
+  },
+  "{count} ships and vehicles": {
+    "one": "{count} vaisseau ou véhicule",
+    "other": "{count} vaisseaux et véhicules"
+  },
+  "{count} armour pieces the install can draw": {
+    "one": "{count} pièce d’armure que l’installation sait dessiner",
+    "other": "{count} pièces d’armure que l’installation sait dessiner"
+  },
+  "{count} pieces": {
+    "one": "{count} pièce",
+    "other": "{count} pièces"
+  },
+  "3D": "3D",
+  "The install holds no model for {ship}.": "L’installation ne contient aucun modèle pour {ship}."
 }

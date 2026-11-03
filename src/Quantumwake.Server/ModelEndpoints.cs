@@ -161,6 +161,7 @@ public static partial class ServerHost
                     cls = e.Class,
                     name = names.Vehicle(e.Class)?.Name is { Length: > 0 } n ? n : lib.ItemName(e.Class),
                     maker = e.Class.Split('_')[0],
+                    makerName = MakerName(names, e.Class),
                     paints = e.Paints.Count,
                 })
                 .OrderBy(e => e.name, StringComparer.OrdinalIgnoreCase)
@@ -172,17 +173,56 @@ public static partial class ServerHost
                     cls = e.Class,
                     name = lib.ItemName(e.Class),
                     maker = e.Class.Split('_')[0].ToUpperInvariant(),
+                    makerName = MakerName(names, e.Class),
                     paints = e.Paints.Count,
                 })
                 .Where(e => !e.name.Equals(e.cls, StringComparison.OrdinalIgnoreCase))
                 // A finish is the same gun in another colour, on the same
                 // model: list the gun once, under its plainest class.
-                .GroupBy(e => entities.First(x => x.Class == e.cls).Geometry, StringComparer.OrdinalIgnoreCase)
+                .GroupBy(e => models.Catalogue.Find(e.cls)!.Geometry, StringComparer.OrdinalIgnoreCase)
                 .Select(g => g.OrderBy(e => e.cls.Length).First())
                 .OrderBy(e => e.name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
-            return Results.Ok(new { stamp = models.Stamp, vehicles, weapons });
+            // Armour pieces, the same way: named, and one per model, the
+            // colourways of a set folded onto its plainest class.
+            var armour = entities
+                .Where(e => e.Type?.StartsWith("Char_Armor_", StringComparison.OrdinalIgnoreCase) == true && !Unflown(e.Class))
+                .Select(e => new
+                {
+                    cls = e.Class,
+                    name = lib.ItemName(e.Class),
+                    maker = e.Class.Split('_')[0].ToUpperInvariant(),
+                    makerName = MakerName(names, e.Class),
+                    paints = e.Paints.Count,
+                })
+                .Where(e => !e.name.Equals(e.cls, StringComparison.OrdinalIgnoreCase))
+                .GroupBy(e => models.Catalogue.Find(e.cls)!.Geometry, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.OrderBy(e => e.cls.Length).First())
+                .OrderBy(e => e.name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            return Results.Ok(new { stamp = models.Stamp, vehicles, weapons, armour });
         });
+
+        // Whether something has a model the view can open, by class or by
+        // the name a page shows: a Reference ship card is opened by the
+        // ship's name ("Origin 315p"), an item card by its class. Pages ask
+        // before they offer a 3D button, so the button is never a dead end.
+        app.MapGet("/api/models/find", (string? id, ModelLibrary models, LogLibrary lib) =>
+        {
+            if (!models.Available || string.IsNullOrWhiteSpace(id)) return Results.NotFound();
+            var catalogue = models.Catalogue;
+            var wanted = id.Trim();
+            if (catalogue.Find(wanted) is { } direct)
+                return Results.Ok(new { cls = direct.Class, name = ModelName(direct, lib) });
+
+            var named = catalogue.Entities.Values
+                .Where(e => e.Vehicle && !Unflown(e.Class))
+                .FirstOrDefault(e => string.Equals(ModelName(e, lib), wanted, StringComparison.OrdinalIgnoreCase));
+            return named is null ? Results.NotFound() : Results.Ok(new { cls = named.Class, name = ModelName(named, lib) });
+        });
+
+        static string ModelName(ModelEntity e, LogLibrary lib) =>
+            e.Vehicle && lib.GameCommodities.Vehicle(e.Class)?.Name is { Length: > 0 } n ? n : lib.ItemName(e.Class);
 
         app.MapGet("/api/models/scene/{cls}", (string cls, ModelLibrary models, LogLibrary lib) =>
         {
@@ -312,6 +352,11 @@ public static partial class ServerHost
                 || c.Contains("_display") || c.Contains("debris") || c.Contains("salvageable") || c.Contains("_hangar")
                 || c.EndsWith("_pu", StringComparison.Ordinal) || c.Contains("_temp");
         }
+
+        // The maker as the game names it on the item, when the item has one:
+        // a rifle's name does not start with its maker the way a hull's does.
+        static string? MakerName(GameCommodities names, string cls) =>
+            names.Item(cls)?.Manufacturer is { Length: > 0 } m && !m.StartsWith('@') ? m : null;
 
         // Paint_Corsair_Black_Black_Red -> "Black Black Red".
         static string PaintName(string tag, string cls)

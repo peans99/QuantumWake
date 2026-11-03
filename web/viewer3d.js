@@ -290,6 +290,10 @@ class MaterialBuilder {
       }));
     }
 
+    if (/^LayerBlend/i.test(sub.shader || '') && sub.layers?.some(l => /^BaseLayer/i.test(l.name))) {
+      return this.inside(sub, this.layerBlend(sub, palette));
+    }
+
     const layer = sub.layers?.[0];
     let colour, spec, gloss, paletteDriven = false;
     if (layer && layer.paletteTint >= 1 && layer.paletteTint <= 3 && palette) {
@@ -356,6 +360,87 @@ class MaterialBuilder {
     material.userData.wanted = material.visible;
     material.visible = material.visible && this.view.interior;
     this.view.interiorMaterials.add(material);
+    return material;
+  }
+
+  /**
+   * LayerBlend: how armour, clothing and FPS weapons are painted. Up to four
+   * base layers, each a tinted tileable surface, mixed per pixel by the
+   * object's blend map - its red, green and blue lift the second, third and
+   * fourth layer over the first - over the object's own normal map. The wear
+   * layers and their mask are the engine's scuffing and are left out, as on
+   * hulls. A layer the palette tints takes the palette's colour.
+   */
+  layerBlend(sub, palette) {
+    const { view } = this;
+    const base = sub.layers.filter(l => /^BaseLayer/i.test(l.name)).slice(0, 4);
+    const colourOf = l => {
+      if (l.paletteTint >= 1 && l.paletteTint <= 3 && palette) {
+        const entry = palette[['a', 'b', 'c'][l.paletteTint - 1]];
+        return { colour: srgb(entry.tint), gloss: entry.gloss / 255 };
+      }
+      return { colour: linear(l.tint).multiply(linear(l.colour)), gloss: (l.gloss ?? 0.5) * (l.glossMult ?? 1) };
+    };
+    const looks = base.map(colourOf);
+    while (looks.length < 4) looks.push(looks[looks.length - 1]);
+
+    const material = new THREE.MeshStandardMaterial({
+      color: looks[0].colour,
+      metalness: 0.1,
+      roughness: 1,
+    });
+    material.userData.sub = sub.name;
+    const uniforms = {
+      qwGloss: { value: 1 },
+      qwSigned: { value: 0 },
+      qwBlend: { value: null },
+      qwHasBlend: { value: 0 },
+      qwL2: { value: looks[1].colour },
+      qwL3: { value: looks[2].colour },
+      qwL4: { value: looks[3].colour },
+      qwGlosses: { value: new THREE.Vector4(looks[0].gloss, looks[1].gloss, looks[2].gloss, looks[3].gloss) },
+    };
+    material.userData.uniforms = uniforms;
+    material.defines = { USE_UV: '' };
+    material.onBeforeCompile = shader => {
+      Object.assign(shader.uniforms, uniforms);
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float qwGloss;\nuniform float qwSigned;\nuniform sampler2D qwBlend;\nuniform float qwHasBlend;\nuniform vec3 qwL2;\nuniform vec3 qwL3;\nuniform vec3 qwL4;\nuniform vec4 qwGlosses;')
+        .replace('#include <color_fragment>', '#include <color_fragment>\n'
+          + '\tvec4 qwB = qwHasBlend > 0.5 ? texture2D( qwBlend, vUv ) : vec4( 0.0 );\n'
+          + '\tdiffuseColor.rgb = mix( mix( mix( diffuseColor.rgb, qwL2, qwB.r ), qwL3, qwB.g ), qwL4, qwB.b );\n'
+          + '\tfloat qwG = mix( mix( mix( qwGlosses.x, qwGlosses.y, qwB.r ), qwGlosses.z, qwB.g ), qwGlosses.w, qwB.b );')
+        .replace('#include <normal_fragment_maps>', THREE.ShaderChunk.normal_fragment_maps.replace(
+          'vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;',
+          'vec2 qwN = texture2D( normalMap, vNormalMapUv ).xy; qwN = qwSigned > 0.5 ? qwN : qwN * 2.0 - 1.0;\n'
+          + '\tvec3 mapN = vec3( qwN, sqrt( max( 0.0, 1.0 - dot( qwN, qwN ) ) ) );'))
+        .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = clamp( 1.0 - qwG, 0.08, 1.0 );');
+    };
+    material.customProgramCacheKey = () => 'qw-layerblend';
+
+    const opts = { stamp: view.stamp, caps: view.caps, max: view.textureMax };
+    const pending = [];
+    const blendPath = Object.entries(sub.textures || {}).find(([, file]) => /_blend\./i.test(file))?.[1];
+    if (blendPath) {
+      pending.push(loadTexture(blendPath, opts).then(tex => {
+        if (!tex || tex.userData.kind === 'bc4' || tex.userData.kind === 'bc5') return;
+        tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+        uniforms.qwBlend.value = tex;
+        uniforms.qwHasBlend.value = 1;
+        material.needsUpdate = true;
+      }));
+    }
+    const normalPath = Object.values(sub.textures || {}).find(file => /_ddna?\./i.test(file));
+    if (normalPath) {
+      pending.push(loadTexture(normalPath, opts).then(tex => {
+        if (!tex || tex.userData.kind !== 'bc5') return;
+        material.normalMap = tex;
+        uniforms.qwSigned.value = tex.userData.signed ? 1 : 0;
+        material.normalScale.set(1, -1);
+        material.needsUpdate = true;
+      }));
+    }
+    view.pending(pending);
     return material;
   }
 

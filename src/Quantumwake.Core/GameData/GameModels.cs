@@ -56,13 +56,13 @@ public sealed record ModelPalette(ModelTint A, ModelTint B, ModelTint C, int[] G
 /// </para>
 /// <para>
 /// Only entities whose model sits under a folder <see cref="ModelArchive"/>
-/// indexes are kept - ships, ground vehicles, ship parts and FPS weapons - so
+/// indexes are kept - ships, ground vehicles, ship parts, FPS weapons and armour - so
 /// every entry here is one the view can actually open.
 /// </para>
 /// </remarks>
 public sealed class GameModelCatalogue
 {
-    public const int CacheVersion = 2;
+    public const int CacheVersion = 3;
 
     public static readonly GameModelCatalogue Empty = new([], []);
 
@@ -78,7 +78,7 @@ public sealed class GameModelCatalogue
 
     public ModelEntity? Find(string cls) => Entities.GetValueOrDefault(cls);
 
-    private static readonly string[] Folders = ["objects/spaceships/", "objects/vehicles/", "objects/fps_weapons/"];
+    private static readonly string[] Folders = ["objects/spaceships/", "objects/vehicles/", "objects/fps_weapons/", "objects/characters/"];
 
     /// <summary>Reads the catalogue, or loads it from <paramref name="cachePath"/> when the archive has not changed.</summary>
     public static GameModelCatalogue Load(string archivePath, string cachePath)

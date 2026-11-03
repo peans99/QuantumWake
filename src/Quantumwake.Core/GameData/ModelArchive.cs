@@ -17,7 +17,8 @@ namespace Quantumwake.Core.GameData;
 /// <para>
 /// Only the folders a view can need are kept: <c>Objects\Spaceships</c>
 /// (296k entries), <c>Objects\Vehicles</c>, <c>Objects\fps_weapons</c>,
-/// <c>Materials</c> and <c>Textures</c>, without the lower levels of detail
+/// <c>Objects\Characters</c> (armour and clothing, 147k), <c>Materials</c> and
+/// <c>Textures</c>, without the lower levels of detail
 /// nobody asks for. Entries are keyed by a 64-bit hash of the folded path, not
 /// the path itself, which keeps the index to a few megabytes.
 /// </para>
@@ -29,7 +30,7 @@ public sealed class ModelArchive
 
     private static readonly string[] Folders =
     [
-        @"data\objects\spaceships\", @"data\objects\vehicles\", @"data\objects\fps_weapons\",
+        @"data\objects\spaceships\", @"data\objects\vehicles\", @"data\objects\fps_weapons\", @"data\objects\characters\",
         @"data\materials\", @"data\textures\",
     ];
 

@@ -11,12 +11,13 @@ public class ModelViewTests
         {
           "stamp": "8df295d25b39ca0",
           "vehicles": [
-            {"cls":"DRAK_Corsair","name":"Drake Corsair","maker":"DRAK","paints":10},
-            {"cls":"ANVL_Hornet_F7C_Mk2","name":"Anvil F7C Hornet Mk II","maker":"ANVL","paints":14},
-            {"cls":"TMBL_Cyclone","name":"Tumbril Cyclone","maker":"TMBL","paints":0}
+            {"cls":"DRAK_Corsair","name":"Drake Corsair","maker":"DRAK","makerName":"Drake Interplanetary","paints":10},
+            {"cls":"DRAK_Cutlass_Black","name":"Drake Cutlass Black","maker":"DRAK","makerName":"Drake Interplanetary","paints":12},
+            {"cls":"ANVL_Hornet_F7C_Mk2","name":"Anvil F7C Hornet Mk II","maker":"ANVL","makerName":"Anvil Aerospace","paints":14},
+            {"cls":"TMBL_Cyclone","name":"Tumbril Cyclone","maker":"TMBL","makerName":null,"paints":0}
           ],
           "weapons": [
-            {"cls":"behr_rifle_ballistic_01","name":"P4-AR Rifle","maker":"BEHR","paints":8}
+            {"cls":"behr_rifle_ballistic_01","name":"P4-AR Rifle","maker":"BEHR","makerName":"Behring","paints":8}
           ]
         }
         """;
@@ -29,45 +30,70 @@ public class ModelViewTests
         return page;
     }
 
+    /// <summary>
+    /// Three hundred hulls in one grid gave no way in, so the page opens on
+    /// the makers - by the game's own name for them where the files carry it,
+    /// by the app's table where they do not - with how many each builds.
+    /// </summary>
     [Fact]
-    public void The_page_lists_the_hulls_the_install_can_draw()
+    public void The_page_opens_on_the_makers()
     {
         var page = Loaded();
 
         var grid = page.NodeText("#models-grid");
-        Assert.Contains("Drake Corsair", grid);
-        Assert.Contains("Tumbril Cyclone", grid);
-        Assert.Contains("10 paints", grid);
-        Assert.DoesNotContain("P4-AR Rifle", grid);
-        Assert.Contains("3 ships and vehicles", page.NodeText("#models-note"));
+        Assert.Contains("Drake Interplanetary", grid);
+        Assert.Contains("2 ships and vehicles", grid);
+        Assert.Contains("Anvil Aerospace", grid);
+        Assert.Contains("Tumbril", grid);
+        Assert.DoesNotContain("Corsair", grid);
+        Assert.Contains("4 ships and vehicles", page.NodeText("#models-note"));
     }
 
+    /// <summary>Under its maker a hull is named without the maker again.</summary>
+    [Fact]
+    public void A_maker_opens_its_own_models()
+    {
+        var page = Loaded();
+
+        page.Do("modelsMaker = 'DRAK'; renderModelsPage();");
+
+        var grid = page.NodeText("#models-grid");
+        Assert.Contains("Corsair", grid);
+        Assert.Contains("Cutlass Black", grid);
+        Assert.DoesNotContain("Drake Corsair", grid);
+        Assert.DoesNotContain("Hornet", grid);
+        Assert.Contains("All makers", grid);
+    }
+
+    /// <summary>A rifle's name does not start with its maker, so the game's word for the maker is what heads it.</summary>
     [Fact]
     public void Personal_weapons_are_the_other_list()
     {
         var page = Loaded();
 
         page.Do("__dom.node('#models-kind').value = 'weapons'; renderModelsPage();");
+        Assert.Contains("Behring", page.NodeText("#models-grid"));
+        Assert.DoesNotContain("Drake", page.NodeText("#models-grid"));
 
-        var grid = page.NodeText("#models-grid");
-        Assert.Contains("P4-AR Rifle", grid);
-        Assert.DoesNotContain("Drake Corsair", grid);
-        Assert.Contains("1 personal weapon", page.NodeText("#models-note"));
+        page.Do("modelsMaker = 'BEHR'; renderModelsPage();");
+        Assert.Contains("P4-AR Rifle", page.NodeText("#models-grid"));
     }
 
-    /// <summary>By name, by class and by maker - the class is what a log line or a dump calls it.</summary>
+    /// <summary>A search skips the makers and answers across all of them, by name, class or maker.</summary>
     [Fact]
-    public void The_list_narrows_by_name_class_or_maker()
+    public void A_search_answers_across_every_maker()
     {
         var page = Loaded();
 
-        page.Do("__dom.node('#models-search').value = 'anvl'; renderModelsPage();");
+        page.Do("__dom.node('#models-search').value = 'hornet'; renderModelsPage();");
         var grid = page.NodeText("#models-grid");
-        Assert.Contains("Hornet", grid);
+        Assert.Contains("F7C Hornet Mk II", grid);
+        Assert.Contains("Anvil Aerospace", grid);
         Assert.DoesNotContain("Corsair", grid);
 
         page.Do("__dom.node('#models-search').value = 'drak_corsair'; renderModelsPage();");
-        Assert.Contains("Drake Corsair", page.NodeText("#models-grid"));
+        Assert.Contains("Corsair", page.NodeText("#models-grid"));
+        Assert.Contains("1 match", page.NodeText("#models-note"));
     }
 
     [Fact]

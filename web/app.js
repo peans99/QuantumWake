@@ -5959,6 +5959,7 @@ async function openRefDetail(kind, id, { push = true } = {}) {
   else if (kind === 'mission') renderMissionDetail(body, data);
   else renderItemDetail(body, data);
   body.scrollTop = 0;
+  if (kind === 'ship' || kind === 'item') refModelButton(body, kind === 'item' ? (data.className || id) : id, ticket);
   return true;
 }
 
@@ -5972,6 +5973,28 @@ function rowRefLink(kind, id, label) {
   const link = refLink(kind, id, label);
   link.addEventListener('click', (event) => event.stopPropagation());
   return link;
+}
+
+/**
+ * The card's 3D button: the item or hull in the 3D view. Loot, Loadout, Stash
+ * and Items all open this card, so this is how each of them reaches a model.
+ * Asked first, so a thing with nothing to draw - a commodity, a drink with no
+ * model the view reads - gets no button rather than a dead one.
+ */
+async function refModelButton(body, id, ticket) {
+  if (!id || !(await modelsAvailable())) return;
+  let found;
+  try {
+    found = await getJson(`/api/models/find?id=${encodeURIComponent(id)}`);
+  } catch {
+    return;
+  }
+  if (ticket !== refTicket || !found?.cls) return;
+  const bar = el('div', 'ref-model-action');
+  const button = modelViewButton(() => openModelView({ cls: found.cls, title: found.name }));
+  button.hidden = false;
+  bar.append(button);
+  body.prepend(bar);
 }
 
 function closeRefDetail() {
@@ -12733,6 +12756,7 @@ function renderHangarGallery(canvas, ships) {
       garage.addEventListener('click', () => openGarageFor(ship.className || ship.name));
       body.append(garage);
     }
+    body.append(shipModelButton(ship.className || ship.name, ship.name));
     card.append(body);
     grid.append(card);
   }
@@ -14719,6 +14743,7 @@ async function renderFleetBerths() {
       garage.title = tx('{ship}\'s numbers, what fits it, and what a part would change', { ship: row.ship });
       garage.addEventListener('click', () => openGarageFor(row.className));
       body.append(garage);
+      body.append(shipModelButton(row.className, row.ship));
     }
     card.append(body);
     grid.append(card);
@@ -19993,8 +20018,8 @@ function modelsAvailable() {
 }
 
 /** A "3D view" button, hidden until the install is known to have models. */
-function modelViewButton(open, label = tx('3D view')) {
-  const button = el('button', 'ghost small model-view-button', label);
+function modelViewButton(open, label = tx('3D view'), className = 'ghost small') {
+  const button = el('button', `${className} model-view-button`, label);
   button.type = 'button';
   button.hidden = true;
   button.title = tx('Open the game’s own model, turn it and look at what is fitted');
@@ -20004,6 +20029,24 @@ function modelViewButton(open, label = tx('3D view')) {
   });
   modelsAvailable().then((ok) => { button.hidden = !ok; });
   return button;
+}
+
+/**
+ * A ship card's 3D button. Fleet and Hangar know a hull by its class when the
+ * logs gave one and by its name when they did not, so the model is looked up
+ * on the click rather than assumed.
+ */
+function shipModelButton(classOrName, name) {
+  return modelViewButton(async () => {
+    let found = null;
+    try {
+      found = await getJson(`/api/models/find?id=${encodeURIComponent(classOrName)}`);
+    } catch {
+      found = null;
+    }
+    if (found?.cls) openModelView({ cls: found.cls, title: name || found.name });
+    else toast('warn', tx('The install holds no model for {ship}.', { ship: name || classOrName }));
+  }, tx('3D'), 'ghost tiny ship-model');
 }
 
 /** The Garage bench's changed ports, as the viewer's fits. */
@@ -20022,9 +20065,14 @@ function armouryModelFits(w) {
     .filter((f) => f.cls || (w.ports || []).some((p) => p.name === f.path && p.default));
 }
 
-/* The 3D models page: every hull and personal weapon the install can draw. */
+/* The 3D models page: every hull and personal weapon the install can draw.
+   Three hundred cards in one grid gave no way in, so it opens on the makers -
+   a tile each, with its logo and how many it builds - and a maker opens its
+   own models, each card carrying the game's silhouette of the hull. A search
+   skips the makers and answers across all of them, still grouped by maker. */
 
 let modelsCatalogue = null;
+let modelsMaker = null;
 
 async function loadModelsPage() {
   const note = $('#models-note');
@@ -20044,32 +20092,169 @@ async function loadModelsPage() {
   renderModelsPage();
 }
 
+/**
+ * A maker's name, from the app's table when it knows the code, else from the
+ * names of its models: every Aegis hull is named "Aegis …", so the word they
+ * share is the maker as the game prints it.
+ */
+function modelsMakerName(code, rows) {
+  // The game's own word for the maker, as most of its models carry it.
+  const said = {};
+  for (const m of rows) if (m.makerName) said[m.makerName] = (said[m.makerName] || 0) + 1;
+  const best = Object.entries(said).sort((x, y) => y[1] - x[1])[0]?.[0];
+  if (best) return best;
+  if (MANUFACTURERS[code]) return MANUFACTURERS[code];
+  const first = rows.map((m) => String(m.name || '').split(' ')[0]).filter(Boolean);
+  const common = first.length > 1 && first.every((w) => w === first[0]) ? first[0] : null;
+  return common || code;
+}
+
+/** "Drake Corsair" under Drake reads "Corsair": the maker is already the heading. */
+function modelsShortName(name, makerName) {
+  const word = String(makerName || '').split(' ')[0];
+  return word && name.startsWith(`${word} `) ? name.slice(word.length + 1) : name;
+}
+
+function modelsMakerLogo(code, name) {
+  if (MANUFACTURER_LOGOS.has(code)) {
+    const img = document.createElement('img');
+    img.src = `assets/manufacturers/${code}.png`;
+    img.alt = '';
+    img.loading = 'lazy';
+    return img;
+  }
+  const img = document.createElement('img');
+  img.className = 'maker-pic';
+  img.alt = '';
+  img.loading = 'lazy';
+  img.src = `/api/garage/maker/${encodeURIComponent(code)}`;
+  img.addEventListener('error', () => img.replaceWith(el('span', 'mono-mark', monogram(code, name))));
+  return img;
+}
+
+function modelsGroups(rows, kind) {
+  const groups = new Map();
+  for (const m of rows) {
+    // Hulls and guns start their class with the maker's code, which also
+    // names its logo; armour classes do not, so armour goes by the game's name.
+    const code = (kind === 'armour' && m.makerName) || String(m.maker || '').toUpperCase() || '?';
+    if (!groups.has(code)) groups.set(code, []);
+    groups.get(code).push(m);
+  }
+  // Two codes can be one maker - Aopoa's hulls are AOPO and XNAA - so the
+  // groups are merged by the name a pilot reads.
+  const byName = new Map();
+  for (const [code, list] of groups) {
+    const name = modelsMakerName(code, list);
+    const known = byName.get(name);
+    if (known) known.list.push(...list);
+    else byName.set(name, { code, list: [...list], name, logo: String(list[0].maker || '').toUpperCase() });
+  }
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function modelsCard(m, makerName, kind) {
+  const card = el('button', 'model-card');
+  card.type = 'button';
+  if (kind === 'vehicles') {
+    const outline = el('span', 'ship-outline model-card-outline');
+    outline.style.setProperty('--tint', makerTint(String(m.maker || '').toUpperCase()));
+    outline.style.setProperty('--outline', `url("/api/fleet/icons/${encodeURIComponent(m.cls)}")`);
+    card.append(outline);
+  }
+  card.append(el('strong', null, modelsShortName(m.name, makerName)),
+    el('span', 'model-card-meta', [m.cls, m.paints ? txn(m.paints, '{count} paint', '{count} paints') : null].filter(Boolean).join(' · ')));
+  card.title = tx('Open {name} in 3D', { name: m.name });
+  card.addEventListener('click', () => openModelView({ cls: m.cls, title: m.name }));
+  return card;
+}
+
 function renderModelsPage() {
   const grid = $('#models-grid');
   const note = $('#models-note');
   if (!grid || !modelsCatalogue) return;
   const kind = $('#models-kind')?.value || 'vehicles';
   const q = ($('#models-search')?.value || '').trim().toLowerCase();
-  const all = kind === 'weapons' ? modelsCatalogue.weapons || [] : modelsCatalogue.vehicles || [];
-  const rows = all.filter((m) => !q || `${m.name} ${m.cls} ${m.maker || ''}`.toLowerCase().includes(q));
-  note.textContent = kind === 'weapons'
-    ? txn(rows.length, '{count} personal weapon the install can draw', '{count} personal weapons the install can draw')
-    : txn(rows.length, '{count} ship or vehicle the install can draw', '{count} ships and vehicles the install can draw');
+  const all = (kind === 'weapons' ? modelsCatalogue.weapons : kind === 'armour' ? modelsCatalogue.armour : modelsCatalogue.vehicles) || [];
+  const groups = modelsGroups(all, kind);
+  if (modelsMaker && !groups.some((g) => g.code === modelsMaker)) modelsMaker = null;
 
   grid.textContent = '';
-  for (const m of rows.slice(0, 400)) {
-    const card = el('button', 'model-card');
-    card.type = 'button';
-    card.append(el('span', 'model-card-maker', m.maker || ''), el('strong', null, m.name),
-      el('span', 'model-card-meta', [m.cls, m.paints ? txn(m.paints, '{count} paint', '{count} paints') : null].filter(Boolean).join(' · ')));
-    card.addEventListener('click', () => openModelView({ cls: m.cls, title: m.name }));
-    grid.append(card);
+  grid.className = 'models-grid';
+
+  // No search, no maker: the makers themselves.
+  if (!q && !modelsMaker) {
+    note.textContent = kind === 'weapons'
+      ? txn(all.length, '{count} personal weapon the install can draw', '{count} personal weapons the install can draw')
+      : kind === 'armour'
+        ? txn(all.length, '{count} armour piece the install can draw', '{count} armour pieces the install can draw')
+        : txn(all.length, '{count} ship or vehicle the install can draw', '{count} ships and vehicles the install can draw');
+    grid.classList.add('models-makers');
+    for (const g of groups) {
+      const tile = el('button', 'model-maker');
+      tile.type = 'button';
+      const logo = el('span', 'model-maker-logo');
+      logo.append(modelsMakerLogo(g.logo, g.name));
+      tile.append(logo);
+      tile.append(el('strong', null, g.name), el('span', 'model-card-meta', kind === 'weapons'
+        ? txn(g.list.length, '{count} weapon', '{count} weapons')
+        : kind === 'armour'
+          ? txn(g.list.length, '{count} piece', '{count} pieces')
+          : txn(g.list.length, '{count} ship or vehicle', '{count} ships and vehicles')));
+      tile.addEventListener('click', () => {
+        modelsMaker = g.code;
+        renderModelsPage();
+      });
+      grid.append(tile);
+    }
+    return;
   }
-  if (rows.length > 400) grid.append(el('p', 'muted small', tx('Showing the first 400; search to narrow.')));
+
+  const shown = q
+    ? groups.map((g) => ({ ...g, list: g.list.filter((m) => `${m.name} ${m.cls} ${g.name} ${g.code}`.toLowerCase().includes(q)) }))
+      .filter((g) => g.list.length)
+    : groups.filter((g) => g.code === modelsMaker);
+  const total = shown.reduce((n, g) => n + g.list.length, 0);
+  note.textContent = q
+    ? txn(total, '{count} match', '{count} matches')
+    : '';
+
+  if (!q) {
+    const back = el('button', 'ghost small models-back', tx('All makers'));
+    back.type = 'button';
+    back.addEventListener('click', () => {
+      modelsMaker = null;
+      renderModelsPage();
+    });
+    grid.append(back);
+  }
+
+  let drawn = 0;
+  for (const g of shown) {
+    const section = el('section', 'models-maker-section');
+    const head = el('h3', 'models-maker-head');
+    const logo = el('span', 'model-maker-logo');
+    logo.append(modelsMakerLogo(g.logo, g.name));
+    head.append(logo);
+    head.append(el('span', null, g.name), el('span', 'model-card-meta', String(g.list.length)));
+    section.append(head);
+    const cards = el('div', 'models-cards');
+    for (const m of g.list) {
+      if (drawn >= 400) break;
+      cards.append(modelsCard(m, g.name, kind));
+      drawn += 1;
+    }
+    section.append(cards);
+    grid.append(section);
+  }
+  if (total > drawn) grid.append(el('p', 'muted small', tx('Showing the first 400; search to narrow.')));
 }
 
 function initModelsPage() {
-  $('#models-kind')?.addEventListener('change', renderModelsPage);
+  $('#models-kind')?.addEventListener('change', () => {
+    modelsMaker = null;
+    renderModelsPage();
+  });
   $('#models-search')?.addEventListener('input', renderModelsPage);
 }
 
@@ -26336,6 +26521,7 @@ function renderFleetShips() {
       garage.addEventListener('click', () => openGarageFor(ship.className || ship.name));
       actions.append(garage);
     }
+    actions.append(shipModelButton(ship.className || ship.name, ship.name));
 
     const compare = el('button', hangarComparison.has(ship.name) ? 'ghost tiny ship-compare active' : 'ghost tiny ship-compare', hangarComparison.has(ship.name) ? tx('Selected to compare') : tx('Compare'));
     compare.type = 'button';
