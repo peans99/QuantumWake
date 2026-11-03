@@ -53,6 +53,13 @@ public sealed record GameReputationCatalogue(
     public IReadOnlyDictionary<string, string>? HaulTitles { get; init; }
 
     /// <summary>
+    /// What the contracts under each title key pay on completion, for the
+    /// [100 Rep] the item labels write on contract titles; see
+    /// <see cref="GameMissions.TitleRewards"/>. Null in a cache written before it was read.
+    /// </summary>
+    public IReadOnlyDictionary<string, GameTitleReward>? TitleRewards { get; init; }
+
+    /// <summary>
     /// Every contract's details besides its pay - who offers it, its title and
     /// briefing, where, at what CrimeStat and rank, how long - for the Missions
     /// page and the mission window; see <see cref="GameMissionDetails"/>. Null in
@@ -172,12 +179,14 @@ public static class GameReputation
                 [.. ranks.OrderBy(r => r.MinReputation)]));
         }
 
+        var missions = GameMissions.Read(core, byId, standings);
         return new GameReputationCatalogue(
             [.. read.OrderBy(s => s.Id, StringComparer.Ordinal)],
             Organisations(core, text, organisations, logoEntries ?? []))
         {
-            Missions = GameMissions.Read(core, byId, standings),
+            Missions = missions,
             HaulTitles = GameMissions.HaulTitles(core, byId, text.Keys),
+            TitleRewards = GameMissions.TitleRewards(core, byId, missions),
             Details = GameMissionDetails.Read(core, byId, standings, text),
         };
     }

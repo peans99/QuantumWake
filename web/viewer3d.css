@@ -188,3 +188,13 @@ body .v3d label { text-transform: none; letter-spacing: normal; font-family: var
   font: normal 600 10px/1.4 var(--mono, monospace);
   letter-spacing: .04em;
 }
+
+.v3d-select {
+  background: rgba(14, 25, 38, .9);
+  color: var(--text, #cfe4f5);
+  border: 1px solid var(--rule-hot, #1e4763);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font: 12px var(--display, sans-serif);
+}
+.v3d-toggle input[type="range"] { width: 90px; accent-color: var(--cyan, #35c8f0); }

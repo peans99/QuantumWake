@@ -23,7 +23,12 @@ namespace Quantumwake.Data;
 /// <c>| Port Tressler &gt; NB Int. Spaceport</c> - which is the only way a log
 /// ever names where a haul goes, and what the hauling planner reads.
 /// </param>
-public sealed record TextOverlayOptions(bool Colour = false, int Level = 3, bool Facts = true, bool Routes = true);
+/// <param name="Rewards">
+/// Whether contract titles say what finishing them pays -
+/// <c>[100 Rep]</c>, and <c>[BP]*</c> when one can award a blueprint - as
+/// StarStrings' did; see <see cref="GameMissions.TitleRewards"/>.
+/// </param>
+public sealed record TextOverlayOptions(bool Colour = false, int Level = 3, bool Facts = true, bool Routes = true, bool Rewards = true);
 
 /// <summary>What a generated text overlay would change, and the file itself.</summary>
 /// <param name="Marked">Item names that would gain the unsold mark.</param>
@@ -39,6 +44,7 @@ public sealed record TextOverlayOptions(bool Colour = false, int Level = 3, bool
 /// </param>
 /// <param name="Content">The whole localisation file, ready to write.</param>
 /// <param name="Routed">Hauling contract titles that would ask the game to print their places.</param>
+/// <param name="Rewarded">Contract titles that would say what finishing them pays.</param>
 public sealed record TextOverlayPlan(
     int Marked,
     int Sold,
@@ -46,7 +52,8 @@ public sealed record TextOverlayPlan(
     int Annotated,
     IReadOnlyList<TextOverlayLine> Changes,
     string Content,
-    int Routed = 0)
+    int Routed = 0,
+    int Rewarded = 0)
 {
     public int Considered => Marked + Sold + Skipped;
 }
@@ -159,12 +166,17 @@ public static class TextOverlay
     /// Hauling title keys and which ends each can name, from
     /// <see cref="GameReputationCatalogue.HaulTitles"/>.
     /// </param>
+    /// <param name="rewards">
+    /// What the contracts under each title key pay on completion, from
+    /// <see cref="GameReputationCatalogue.TitleRewards"/>.
+    /// </param>
     public static TextOverlayPlan Build(
         string baseIni,
         Func<string, bool> isSold,
         IReadOnlyDictionary<string, GameItem>? facts = null,
         TextOverlayOptions? options = null,
-        IReadOnlyDictionary<string, string>? routes = null)
+        IReadOnlyDictionary<string, string>? routes = null,
+        IReadOnlyDictionary<string, GameTitleReward>? rewards = null)
     {
         var settings = options ?? new TextOverlayOptions();
         var level = Math.Clamp(settings.Level, 1, 5);
@@ -173,7 +185,7 @@ public static class TextOverlay
         var output = new StringBuilder(baseIni.Length + (lines.Length / 8));
         var changes = new List<TextOverlayLine>();
 
-        int marked = 0, sold = 0, skipped = 0, annotated = 0, routed = 0;
+        int marked = 0, sold = 0, skipped = 0, annotated = 0, routed = 0, rewarded = 0;
 
         for (var i = 0; i < lines.Length; i++)
         {
@@ -187,13 +199,25 @@ public static class TextOverlay
             var split = line.IndexOf('=');
             var key = split > 0 ? line[..split].TrimStart('﻿') : string.Empty;
 
-            if (split > 0 && settings.Routes && routes is not null
-                && Route(key, line[(split + 1)..], routes) is { } titled)
+            if (split > 0)
             {
-                routed++;
-                changes.Add(new TextOverlayLine(key, titled.Was, titled.Becomes, HaulTitleCategory));
-                Emit(key + "=" + titled.Becomes + titled.Padding);
-                continue;
+                // A hauling title can take both: its places, then what it pays.
+                var titled = settings.Routes && routes is not null ? Route(key, line[(split + 1)..], routes) : null;
+                var paid = settings.Rewards && rewards is not null
+                    ? Reward(key, titled?.Becomes ?? line[(split + 1)..].TrimEnd(), rewards)
+                    : null;
+
+                if (titled is not null || paid is not null)
+                {
+                    var raw = line[(split + 1)..];
+                    var was = raw.TrimEnd();
+                    var becomes = paid ?? titled!.Value.Becomes;
+                    if (titled is not null) routed++;
+                    if (paid is not null) rewarded++;
+                    changes.Add(new TextOverlayLine(key, was, becomes, titled is not null ? HaulTitleCategory : ContractTitleCategory));
+                    Emit(key + "=" + becomes + raw[was.Length..]);
+                    continue;
+                }
             }
 
             if (split <= 0 || !key.StartsWith(ItemNamePrefix, StringComparison.OrdinalIgnoreCase))
@@ -263,11 +287,46 @@ public static class TextOverlay
             }
         }
 
-        return new TextOverlayPlan(marked, sold, skipped, annotated, changes, output.ToString(), routed);
+        return new TextOverlayPlan(marked, sold, skipped, annotated, changes, output.ToString(), routed, rewarded);
     }
 
     /// <summary>The category a rewritten hauling title is listed under.</summary>
     public const string HaulTitleCategory = "Hauling title";
+
+    /// <summary>The category any other contract title that gained its pay is listed under.</summary>
+    public const string ContractTitleCategory = "Contract title";
+
+    /// <summary>
+    /// A contract title with what finishing it pays, or null when the key is
+    /// not a rewarded title or already says it.
+    /// </summary>
+    /// <remarks>
+    /// Worded and styled as StarStrings wrote it - <c>&lt;EM4&gt;[100 Rep] [BP]*&lt;/EM4&gt;</c>,
+    /// the star saying the blueprint is a chance - because that is what
+    /// players learned to read. Contracts under one title that pay
+    /// differently say the range, <c>[100-150 Rep]</c>.
+    /// </remarks>
+    private static string? Reward(string key, string title, IReadOnlyDictionary<string, GameTitleReward> rewards)
+    {
+        var bare = key.EndsWith(",P", StringComparison.OrdinalIgnoreCase) ? key[..^2] : key;
+        if (!rewards.TryGetValue(bare, out var reward)) return null;
+
+        var trimmed = title.TrimEnd();
+        if (trimmed.Length == 0 || trimmed.Contains(" Rep]", StringComparison.Ordinal)) return null;
+
+        var parts = new List<string>();
+        if (reward.MaxRep > 0)
+        {
+            // A second ladder is said as an addition, "[200+60 Rep]", so the
+            // figure StarStrings players knew (260) is still there to add up.
+            var main = reward.MinRep == reward.MaxRep ? $"{reward.MaxRep}" : $"{reward.MinRep}-{reward.MaxRep}";
+            parts.Add(reward.Also > 0 ? $"[{main}+{reward.Also} Rep]" : $"[{main} Rep]");
+        }
+        if (reward.Blueprint) parts.Add("[BP]*");
+        if (parts.Count == 0) return null;
+
+        return $"{trimmed} <EM4>{string.Join(' ', parts)}</EM4>";
+    }
 
     /// <summary>
     /// What a ship component is listed as, by the type the install gives it.

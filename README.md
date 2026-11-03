@@ -340,6 +340,10 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 **Fleet → Fitted, as last photographed is laid out again.** Each photographed fit had come out as four thin columns side by side. It is a card again: the ship and the date on top, then each slot with the part in it and whether it is stock.
 
+**Item labels show in game again, and contract titles say their rep.** The game reads a loose text table only when `user.cfg` in the game folder sets `g_language = english`. StarStrings shipped that line in a `user.cfg` of its own, so once it was gone, the labels' file sat in the game folder unread: the item marks did not show, and nor did the rep StarStrings used to write on contract titles. Installing the labels now adds that one line when `user.cfg` names no language (it creates the file if there is none), and removing them takes back only that line. The labels also write what a contract pays on its title, the way StarStrings did: `[100 Rep]`, with `[BP]*` when it can award a blueprint. A contract that also pays on a second ladder says both, `[200+60 Rep]`, where StarStrings showed the sum. On this install that is 774 titles, and of the 523 that StarStrings' last table marked, 491 show the same figure and the other 32 show it split. Install the labels again from Settings → Item labels to get both.
+
+**Lighting in the 3D view.** A lighting picker (Studio, Hangar, Deep space) and a brightness slider. Studio, the default, lights a hull brightly from every side, so its panels can be read.
+
 ### 0.20.66
 
 **Headhunters no longer look like they dropped a rank.** Headhunters have two ladders in the Rep app, Standing and Ship Combat, and screenshots of both were filed as one history. A Ship Combat Rank I screenshot followed by a Standing Jr. Contractor one read as a rank lost, and the trend line mixed the two. Each ladder now has its own card, named for its ladder ("HEADHUNTERS · Standing", "HEADHUNTERS · Ship Combat"), with its own history and change. The rep-run planner lets you pick which one you are climbing. The header still counts an organisation once.

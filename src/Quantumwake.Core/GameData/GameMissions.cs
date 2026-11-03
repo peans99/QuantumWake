@@ -24,6 +24,17 @@ public enum MissionOutcomes
 /// <param name="When">Which endings apply it.</param>
 public sealed record GameRepLine(string Faction, string Scope, int Amount, MissionOutcomes When);
 
+/// <summary>What the contracts under one title key pay on completion.</summary>
+/// <param name="MinRep">The least reputation any of them pays, 0 when none moves a ladder.</param>
+/// <param name="MaxRep">The most.</param>
+/// <param name="Blueprint">Whether any of them can award a blueprint.</param>
+/// <param name="Also">
+/// What the same contracts pay on their other ladders, the most of them -
+/// Battaglia's science contracts pay 200 on Standing and 60 on Affinity, which
+/// StarStrings summed into one "260 Rep". Kept apart so the title can say both.
+/// </param>
+public sealed record GameTitleReward(int MinRep, int MaxRep, bool Blueprint, int Also = 0);
+
 /// <summary>What the installed game says one contract pays, besides money.</summary>
 /// <param name="Name">The contract's debug name, as the log's <c>contract [...]</c> writes it.</param>
 /// <param name="Rep">Every reputation change, in the order the contract lists them.</param>
@@ -381,6 +392,77 @@ public static partial class GameMissions
         }
 
         return titles;
+    }
+
+    /// <summary>
+    /// What the contracts under each title key pay on completion: the
+    /// reputation, lowest and highest, and whether any can award a blueprint.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// StarStrings wrote this into 1,160 contract titles -
+    /// <c>Salvager Needed (Med. Supply of RMC / UCM / Components) [100 Rep] [BP]*</c> -
+    /// and with only our own table installed now, the item labels carry it
+    /// instead. It comes from the same files the Rep page reads: each title key
+    /// is found the way <see cref="HaulTitles"/> finds it, on the contract's own
+    /// parameter overrides or else its handler's, and each contract's pay is
+    /// <see cref="Read"/>'s, by its id.
+    /// </para>
+    /// <para>
+    /// Several contracts share one title; when they pay differently the title
+    /// says the range. A title none of whose contracts moves a ladder or awards
+    /// a blueprint is left out, rather than told "0 Rep".
+    /// </para>
+    /// </remarks>
+    public static Dictionary<string, GameTitleReward> TitleRewards(
+        DataCore core, IReadOnlyDictionary<Guid, DataRecord> byId, IReadOnlyDictionary<string, GameMissionPay> pays)
+    {
+        var byKey = new Dictionary<string, List<GameMissionPay>>(StringComparer.OrdinalIgnoreCase);
+
+        void Visit(DataCore.Pointer contract, string? inherited)
+        {
+            var at = core.InstanceAt(contract);
+            var (overridesAt, overrides) = core.FieldAt(at, contract.StructIndex, "paramOverrides");
+            var key = overrides is null ? inherited : TitleKey(core, overridesAt, overrides.StructIndex) ?? inherited;
+            var (idAt, _) = core.FieldAt(at, contract.StructIndex, "id");
+
+            if (key is { Length: > 0 } && idAt >= 0 && pays.TryGetValue(ReadId(core, idAt), out var pay))
+                (byKey.TryGetValue(key, out var list) ? list : byKey[key] = []).Add(pay);
+
+            foreach (var sub in core.ClassArrayAt(at, contract.StructIndex, "subContracts")) Visit(sub, key);
+        }
+
+        foreach (var generator in byId.Values.Where(r => r.Name.StartsWith("ContractGenerator.", StringComparison.Ordinal)))
+        {
+            var generatorAt = core.InstanceAt(generator, generator.VariantIndex);
+
+            foreach (var handler in core.PointerArrayAt(generatorAt, generator.StructIndex, "generators"))
+            {
+                var handlerAt = core.InstanceAt(handler);
+                var (paramsAt, parameters) = core.FieldAt(handlerAt, handler.StructIndex, "contractParams");
+                var handlerKey = parameters is null ? null : TitleKey(core, paramsAt, parameters.StructIndex);
+
+                foreach (var array in ContractArrays)
+                    foreach (var contract in ContractsIn(core, handlerAt, handler.StructIndex, array))
+                        Visit(contract, handlerKey);
+            }
+        }
+
+        var rewards = new Dictionary<string, GameTitleReward>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, list) in byKey)
+        {
+            var reps = list.Select(p => p.OnCompletion ?? 0).Where(r => r > 0).ToList();
+            var blueprint = list.Any(p => p.Blueprint > 0);
+            if (reps.Count == 0 && !blueprint) continue;
+            // Every gain on completion beyond the largest: the other ladders.
+            var also = list.Select(p =>
+            {
+                var gains = p.Rep.Where(r => r.When.HasFlag(MissionOutcomes.Completed) && r.Amount > 0).Select(r => r.Amount).ToList();
+                return gains.Count > 1 ? gains.Sum() - gains.Max() : 0;
+            }).DefaultIfEmpty(0).Max();
+            rewards[key] = new GameTitleReward(reps.Count > 0 ? reps.Min() : 0, reps.Count > 0 ? reps.Max() : 0, blueprint, also);
+        }
+        return rewards;
     }
 
     /// <summary>

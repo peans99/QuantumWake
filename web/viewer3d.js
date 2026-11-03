@@ -543,7 +543,11 @@ class ModelView {
     this.key = key;
     const rim = new THREE.DirectionalLight(0x9fd8ff, 1.4);
     this.rim = rim;
-    scene.add(key, key.target, rim, new THREE.HemisphereLight(0xbfd9ff, 0x1a1410, 0.35));
+    const fill = new THREE.DirectionalLight(0xffffff, 1.0);
+    this.fill = fill;
+    const sky = new THREE.HemisphereLight(0xbfd9ff, 0x1a1410, 0.35);
+    this.sky = sky;
+    scene.add(key, key.target, rim, fill, sky);
 
     const floor = new THREE.Mesh(new THREE.CircleGeometry(1, 96), new THREE.ShadowMaterial({ opacity: 0.38 }));
     floor.rotation.x = -Math.PI / 2;
@@ -615,6 +619,38 @@ class ModelView {
     this.composer?.setSize(w, h);
   }
 
+  /**
+   * Lighting presets. The game lights a ship with its surroundings - a hangar's
+   * lamps, a planet's sun - and none of that comes with the model, so the view
+   * offers a few. Studio is bright and even, for reading a hull; Hangar is warm
+   * and overhead; Deep space is one hard sun and a rim, as a ship looks in
+   * flight.
+   */
+  setLighting(name) {
+    const presets = {
+      studio: { env: 1.35, key: 3.2, rim: 1.6, fill: 1.4, sky: 0.6, exposure: 1.2, keyColour: 0xffffff, rimColour: 0xbfe6ff },
+      hangar: { env: 0.85, key: 2.6, rim: 1.4, fill: 0.6, sky: 0.35, exposure: 1.05, keyColour: 0xfff1e0, rimColour: 0x9fd8ff },
+      space: { env: 0.18, key: 5.5, rim: 2.2, fill: 0.15, sky: 0.05, exposure: 1.1, keyColour: 0xfff6ea, rimColour: 0x6fa8ff },
+    };
+    const p = presets[name] || presets.studio;
+    this.lighting = name in presets ? name : 'studio';
+    this.scene.environmentIntensity = p.env;
+    this.key.intensity = p.key;
+    this.key.color.set(p.keyColour);
+    this.rim.intensity = p.rim;
+    this.rim.color.set(p.rimColour);
+    this.fill.intensity = p.fill;
+    this.sky.intensity = p.sky;
+    this.baseExposure = p.exposure;
+    this.renderer.toneMappingExposure = p.exposure * (this.brightness ?? 1);
+  }
+
+  /** The brightness slider: a multiplier on the preset's exposure. */
+  setBrightness(value) {
+    this.brightness = value;
+    this.renderer.toneMappingExposure = (this.baseExposure ?? 1.05) * value;
+  }
+
   setInterior(on) {
     this.interior = on;
     for (const m of this.interiorMaterials) m.visible = on && m.userData.wanted !== false;
@@ -640,6 +676,9 @@ class ModelView {
     if (this.disposed) return;
     requestAnimationFrame(this.frame);
     this.controls.update();
+    this.fill.position.copy(this.camera.position);
+    this.fill.target.position.copy(this.controls.target);
+    this.fill.target.updateMatrixWorld();
     if (this.quality && this.composer) this.composer.render();
     else this.renderer.render(this.scene, this.camera);
     this.placeMarkers();
@@ -1012,6 +1051,12 @@ function shell() {
         </div>
         <label class="v3d-toggle"><input type="checkbox" data-v3d-markers checked> ${escHtml(t('Slots'))}</label>
         <label class="v3d-toggle"><input type="checkbox" data-v3d-interior> ${escHtml(t('Interior'))}</label>
+        <select class="v3d-select" data-v3d-lighting aria-label="${escHtml(t('Lighting'))}" title="${escHtml(t('Lighting'))}">
+          <option value="studio">${escHtml(t('Studio light'))}</option>
+          <option value="hangar">${escHtml(t('Hangar light'))}</option>
+          <option value="space">${escHtml(t('Deep space'))}</option>
+        </select>
+        <label class="v3d-toggle" title="${escHtml(t('Brightness'))}">☀ <input type="range" data-v3d-brightness min="0.5" max="2.2" step="0.05" value="1" aria-label="${escHtml(t('Brightness'))}"></label>
         <label class="v3d-toggle"><input type="checkbox" data-v3d-quality checked> ${escHtml(t('Ambient occlusion'))}</label>
         <button type="button" class="v3d-shot" data-v3d-shot>${escHtml(t('Save picture'))}</button>
         <button type="button" class="v3d-close" data-v3d-close aria-label="${escHtml(t('Close'))}">✕</button>
@@ -1091,6 +1136,9 @@ export async function openModel(opts) {
   host.querySelectorAll('[data-v3d-view]').forEach(b => b.addEventListener('click', () => view.view(b.dataset.v3dView)));
   q('[data-v3d-quality]').addEventListener('change', e => view.setQuality(e.target.checked));
   q('[data-v3d-interior]').addEventListener('change', e => view.setInterior(e.target.checked));
+  q('[data-v3d-lighting]').addEventListener('change', e => view.setLighting(e.target.value));
+  q('[data-v3d-brightness]').addEventListener('input', e => view.setBrightness(Number(e.target.value)));
+  view.setLighting(opts.lighting || 'studio');
   q('[data-v3d-markers]').addEventListener('change', e => { q('.v3d-markers').hidden = !e.target.checked; });
   q('[data-v3d-shot]').addEventListener('click', () => {
     const a = document.createElement('a');

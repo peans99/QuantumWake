@@ -6048,5 +6048,10 @@
     "other": "{count} pièces"
   },
   "3D": "3D",
-  "The install holds no model for {ship}.": "L’installation ne contient aucun modèle pour {ship}."
+  "The install holds no model for {ship}.": "L’installation ne contient aucun modèle pour {ship}.",
+  "Lighting": "Éclairage",
+  "Studio light": "Lumière de studio",
+  "Hangar light": "Lumière de hangar",
+  "Deep space": "Espace profond",
+  "Contract title": "Titre de contrat"
 }
