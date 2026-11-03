@@ -6060,5 +6060,16 @@
   "Texture quality": "Qualité des textures",
   "High textures": "Textures hautes",
   "Ultra textures": "Textures ultra",
-  "Turntable": "Plateau tournant"
+  "Turntable": "Plateau tournant",
+  "What fits each slot, by the game files' sizes and tags. The same choice as the Armoury's.": "Ce qui va dans chaque emplacement, selon les tailles et étiquettes des fichiers du jeu. Le même choix que dans l’Armurerie.",
+  "Bringing in {ship}…": "Arrivée de {ship}…",
+  "Your fleet": "Votre flotte",
+  "Tick the ships to stand in the row. Click one, here or in the scene, to open it alone.": "Cochez les vaisseaux à aligner. Cliquez-en un, ici ou dans la scène, pour l’ouvrir seul.",
+  "Open {ship} alone": "Ouvrir {ship} seul",
+  "no model the view can read": "aucun modèle lisible",
+  "loading…": "chargement…",
+  "Open alone": "Ouvrir seul",
+  "None of the ships shown has a model the install can draw.": "Aucun des vaisseaux affichés n’a de modèle que l’installation sait dessiner.",
+  "Fleet in 3D": "Flotte en 3D",
+  "The ships shown here, side by side in 3D": "Les vaisseaux affichés ici, côte à côte en 3D"
 }

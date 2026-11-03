@@ -20060,6 +20060,76 @@ function modelPaintFor(cls) {
   return resolvedHullPaints.get(cls)?.[0]?.item || null;
 }
 
+/**
+ * A personal weapon's attachment slots for the 3D view: each slot's port,
+ * its word, what fits it and what is chosen now. The choice is the Armoury's
+ * own (armouryFits), so picking a sight in the view is picking it there too.
+ * Null for anything the Armoury does not know as a gun.
+ */
+async function modelWeaponSlots(cls) {
+  if (!armouryModel) {
+    try {
+      armouryModel = await getJson('/api/armoury');
+    } catch {
+      return null;
+    }
+  }
+  const w = (armouryModel?.weapons || []).find((x) => String(x.class).toLowerCase() === String(cls).toLowerCase());
+  if (!w?.ports?.length) return null;
+  const choice = armouryFitChoice(w);
+  return {
+    slots: w.ports.map((p) => ({
+      port: p.name,
+      slot: p.slot,
+      label: armourySlotWord(p.slot),
+      fixed: !!p.fixed,
+      default: p.default || '',
+      chosen: choice[p.slot] || '',
+      options: (p.fits || [])
+        .map((c) => (armouryModel.attachments || []).find((a) => a.class === c))
+        .filter(Boolean)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((a) => ({ cls: a.class, name: a.name })),
+    })),
+    choose(slot, value) {
+      choice[slot] = value;
+    },
+  };
+}
+window.qwModelSlots = modelWeaponSlots;
+
+/**
+ * The Fleet page's ships as they are shown now - its search, period and
+ * filter applied - and owned, for the fleet scene. Each resolved to the
+ * model the install has for it, in the paint picked for it.
+ */
+async function openFleetInModels() {
+  if (!libraryStats) return;
+  const term = ($('#fleet-search')?.value || '').trim().toLowerCase();
+  const days = Number($('#fleet-period')?.value) || 0;
+  const cutoff = days ? Date.now() - days * 86400000 : null;
+  const filter = $('#fleet-filter')?.value || 'all';
+  const ships = fleetRoster(libraryStats).filter((s) => {
+    const grounded = s.reference && !s.reference.isSpaceship;
+    if (excludedShips.has(s.name)) return false;
+    if (term && !s.name.toLowerCase().includes(term)) return false;
+    if (cutoff && new Date(s.lastFlown).getTime() < cutoff) return false;
+    if (filter === 'favourites' && !favouriteShips.has(s.name)) return false;
+    if (filter === 'recent' && !isRecentlyFlown(s)) return false;
+    if (filter === 'ships' && grounded) return false;
+    if (filter === 'ground' && !grounded) return false;
+    return true;
+  });
+  const found = await Promise.all(ships.map((s) =>
+    getJson(`/api/models/find?id=${encodeURIComponent(s.className || s.name)}`).then((m) => (m?.cls ? { cls: m.cls, name: s.name } : null)).catch(() => null)));
+  const fleet = found.filter(Boolean).map((m) => ({ ...m, paint: modelPaintFor(m.cls) }));
+  if (!fleet.length) {
+    toast('warn', tx('None of the ships shown has a model the install can draw.'));
+    return;
+  }
+  openModelView({ cls: fleet[0].cls, title: tx('Your fleet'), fleet });
+}
+
 /** The Garage bench's changed ports, as the viewer's fits. */
 function garageModelFits(data) {
   return (data.ports || [])
@@ -20282,6 +20352,8 @@ function renderModelsPage() {
 }
 
 function initModelsPage() {
+  $('#fleet-3d')?.addEventListener('click', () => openFleetInModels().catch(() => {}));
+  modelsAvailable().then((ok) => { const b = $('#fleet-3d'); if (b) b.hidden = !ok; });
   $('#models-kind')?.addEventListener('change', () => {
     modelsMaker = null;
     renderModelsPage();

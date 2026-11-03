@@ -322,7 +322,10 @@ class MaterialBuilder {
     const { base, metal } = paletteDriven
       ? (() => { const m = THREE.MathUtils.smoothstep(luminance(spec), 0.1, 0.45); return { base: colour.clone().lerp(spec, m), metal: m }; })()
       : metalFrom(colour, spec);
-    const decal = sub.decal;
+    // Guns put their decal sheets on the plain Illum shader -
+    // BEHR_LaserCannon_S4's graphic_decals and pom_decals - and drawn as
+    // ordinary surfaces they covered the gun in white panels.
+    const decal = sub.decal || /decal/i.test(sub.name || '');
     const glow = glowing(sub);
     const emissive = glow ? linear(sub.emissive) : new THREE.Color(0, 0, 0);
     // Painted panels are lacquered: a thin clear coat over the colour, which
@@ -337,7 +340,7 @@ class MaterialBuilder {
       // the map's multiplier, not the surface.
       roughness: THREE.MathUtils.clamp(1 - glossScale, 0.32, 1),
       emissive,
-      emissiveIntensity: glow ? 3.2 : 0,
+      emissiveIntensity: glow ? 2.0 : 0,
       transparent: decal || sub.opacity < 0.99,
       opacity: decal ? 1 : sub.opacity,
       alphaTest: sub.alphaTest > 0 ? sub.alphaTest : (decal ? 0.02 : 0),
@@ -385,19 +388,24 @@ class MaterialBuilder {
   layerBlend(sub, palette) {
     const { view } = this;
     const base = sub.layers.filter(l => /^BaseLayer/i.test(l.name)).slice(0, 4);
+    // Each layer is a surface of its own: a bare-metal layer is tinted black
+    // with a metal's reflectance, and drawn as a dull black plastic it made
+    // every gun look painted. Folded into colour and metalness per layer.
     const colourOf = l => {
       if (l.paletteTint >= 1 && l.paletteTint <= 3 && palette) {
         const entry = palette[['a', 'b', 'c'][l.paletteTint - 1]];
-        return { colour: srgb(entry.tint), gloss: entry.gloss / 255 };
+        const { base, metal } = metalFrom(srgb(entry.tint), srgb(entry.spec));
+        return { colour: base, gloss: entry.gloss / 255, metal };
       }
-      return { colour: linear(l.tint).multiply(linear(l.colour)), gloss: (l.gloss ?? 0.5) * (l.glossMult ?? 1) };
+      const { base, metal } = metalFrom(linear(l.tint).multiply(linear(l.colour)), linear(l.specular || [0.04, 0.04, 0.04]));
+      return { colour: base, gloss: (l.gloss ?? 0.5) * (l.glossMult ?? 1), metal };
     };
     const looks = base.map(colourOf);
     while (looks.length < 4) looks.push(looks[looks.length - 1]);
 
     const material = new THREE.MeshStandardMaterial({
       color: looks[0].colour,
-      metalness: 0.1,
+      metalness: looks[0].metal,
       roughness: 1,
     });
     material.userData.sub = sub.name;
@@ -410,13 +418,14 @@ class MaterialBuilder {
       qwL3: { value: looks[2].colour },
       qwL4: { value: looks[3].colour },
       qwGlosses: { value: new THREE.Vector4(looks[0].gloss, looks[1].gloss, looks[2].gloss, looks[3].gloss) },
+      qwMetals: { value: new THREE.Vector4(looks[0].metal, looks[1].metal, looks[2].metal, looks[3].metal) },
     };
     material.userData.uniforms = uniforms;
     material.defines = { USE_UV: '' };
     material.onBeforeCompile = shader => {
       Object.assign(shader.uniforms, uniforms);
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform float qwGloss;\nuniform float qwSigned;\nuniform sampler2D qwBlend;\nuniform float qwHasBlend;\nuniform vec3 qwL2;\nuniform vec3 qwL3;\nuniform vec3 qwL4;\nuniform vec4 qwGlosses;')
+        .replace('#include <common>', '#include <common>\nuniform float qwGloss;\nuniform float qwSigned;\nuniform sampler2D qwBlend;\nuniform float qwHasBlend;\nuniform vec3 qwL2;\nuniform vec3 qwL3;\nuniform vec3 qwL4;\nuniform vec4 qwGlosses;\nuniform vec4 qwMetals;')
         .replace('#include <color_fragment>', '#include <color_fragment>\n'
           + '\tvec4 qwB = qwHasBlend > 0.5 ? texture2D( qwBlend, vUv ) : vec4( 0.0 );\n'
           + '\tdiffuseColor.rgb = mix( mix( mix( diffuseColor.rgb, qwL2, qwB.r ), qwL3, qwB.g ), qwL4, qwB.b );\n'
@@ -425,12 +434,33 @@ class MaterialBuilder {
           'vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;',
           'vec2 qwN = texture2D( normalMap, vNormalMapUv ).xy; qwN = qwSigned > 0.5 ? qwN : qwN * 2.0 - 1.0;\n'
           + '\tvec3 mapN = vec3( qwN, sqrt( max( 0.0, 1.0 - dot( qwN, qwN ) ) ) );'))
-        .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = clamp( 1.0 - qwG, 0.08, 1.0 );');
+        .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = clamp( 1.0 - qwG, 0.08, 1.0 );')
+        .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = mix( mix( mix( qwMetals.x, qwMetals.y, qwB.r ), qwMetals.z, qwB.g ), qwMetals.w, qwB.b );');
     };
     material.customProgramCacheKey = () => 'qw-layerblend';
 
     const opts = { stamp: view.stamp, caps: view.caps, max: view.textureMax };
     const pending = [];
+    // The base layer's own surface: a tileable colour map that darkens and
+    // breaks up its tint. Without it a gun's "dull metal" was a flat light
+    // grey that read as white paint under studio light.
+    const baseLayer = base[0];
+    if (baseLayer?.diffuse) {
+      pending.push(loadTexture(baseLayer.diffuse, { ...opts, colour: true }).then(tex => {
+        if (!tex) return;
+        material.map = tiled(tex, baseLayer.tiling || 1);
+        material.needsUpdate = true;
+      }));
+    }
+    if (baseLayer?.normal && !Object.values(sub.textures || {}).some(file => /_ddna?\./i.test(file))) {
+      pending.push(loadTexture(baseLayer.normal, opts).then(tex => {
+        if (!tex || tex.userData.kind !== 'bc5') return;
+        material.normalMap = tiled(tex, baseLayer.tiling || 1);
+        uniforms.qwSigned.value = tex.userData.signed ? 1 : 0;
+        material.normalScale.set(1, -1);
+        material.needsUpdate = true;
+      }));
+    }
     const blendPath = Object.entries(sub.textures || {}).find(([, file]) => /_blend\./i.test(file))?.[1];
     if (blendPath) {
       pending.push(loadTexture(blendPath, opts).then(tex => {
@@ -675,7 +705,7 @@ class ModelView {
   setLighting(name) {
     this.invalidate();
     const presets = {
-      studio: { env: 1.35, key: 3.2, rim: 1.6, fill: 1.4, sky: 0.6, exposure: 1.2, keyColour: 0xffffff, rimColour: 0xbfe6ff },
+      studio: { env: 0.8, key: 2.6, rim: 1.3, fill: 0.8, sky: 0.4, exposure: 1.0, keyColour: 0xffffff, rimColour: 0xbfe6ff },
       hangar: { env: 0.85, key: 2.6, rim: 1.4, fill: 0.6, sky: 0.35, exposure: 1.05, keyColour: 0xfff1e0, rimColour: 0x9fd8ff },
       space: { env: 0.18, key: 5.5, rim: 2.2, fill: 0.15, sky: 0.05, exposure: 1.1, keyColour: 0xfff6ea, rimColour: 0x6fa8ff },
     };
@@ -908,6 +938,108 @@ class ModelView {
         cls: item.cls, name: item.name, type: item.type, geometry: item.geometry,
         material: item.material, palette: item.palette, helpers: item.helpers || {}, children: item.parts || [], swapped: true,
       });
+    }
+  }
+
+  /**
+   * Puts another attachment in a weapon's slot, or none: the part there now
+   * comes off, and the new one is read and hung on the slot's bone, exactly
+   * as the stock loadout was.
+   */
+  async refit(port, cls) {
+    const lower = String(port).toLowerCase();
+    const going = this.parts.filter(p => p.depth === 0 && String(p.port).toLowerCase() === lower);
+    for (const p of going) p.object?.removeFromParent();
+    this.parts = this.parts.filter(p => !going.includes(p)
+      && !going.some(g => g.object && p.object && isInside(p.object, g.object)));
+    if (this.selected && going.includes(this.selected)) this.select(null);
+    if (cls) {
+      const scene = await getJson(`/api/models/scene/${encodeURIComponent(cls)}`).catch(() => null);
+      if (scene?.geometry && !this.disposed) {
+        Object.assign(this.palettes, scene.palettes || {});
+        const helper = Object.entries(this.sceneInfo.helpers || {}).find(([k]) => k.toLowerCase() === lower)?.[1] || null;
+        await this.attach([{
+          port, helper, cls: scene.cls, name: scene.name, type: scene.type, geometry: scene.geometry,
+          material: scene.material, palette: scene.palette, children: scene.parts || [], swapped: true,
+        }], this.hull, 0);
+      }
+    }
+    this.invalidate();
+    this.onParts?.(this.parts);
+  }
+
+  /**
+   * A whole fleet in one scene: each hull with its parts, in its paint, stood
+   * side by side on one floor in a row, smallest first, like a hangar line.
+   * Ships load one at a time - each sets the view's current scene while its
+   * parts find their palettes - and the row is laid out again as each lands.
+   */
+  async loadFleetShip(entry) {
+    if (entry.group || entry.loading) return;
+    entry.loading = true;
+    this.setStatus(t('Bringing in {ship}…', { ship: entry.name }));
+    try {
+      const scene = await getJson(`/api/models/scene/${encodeURIComponent(entry.cls)}`);
+      if (this.disposed) return;
+      this.sceneInfo = scene;
+      this.stamp = scene.stamp;
+      Object.assign(this.palettes, scene.palettes || {});
+      const paint = entry.paint ? (scene.paints || []).find(p => String(p.tag).toLowerCase() === String(entry.paint).toLowerCase()) : null;
+      this.paint = paint || null;
+      const group = new THREE.Group();
+      this.root.add(group);
+      const hull = await this.model({ geometry: scene.geometry, material: scene.material, palette: scene.palette, name: scene.name, cls: scene.cls, type: scene.type, port: null }, group, true);
+      if (!hull) {
+        group.removeFromParent();
+        entry.failed = true;
+        return;
+      }
+      this.hull = hull;
+      await this.attach(scene.parts || [], hull, 0);
+      group.userData.part = { name: entry.name, cls: scene.cls, type: 'Ship', port: null, fleet: true };
+      entry.group = group;
+      this.parts.push({ ...group.userData.part, object: group, placed: true, depth: -1 });
+      this.layoutFleet();
+    } catch {
+      entry.failed = true;
+    } finally {
+      entry.loading = false;
+      this.setStatus('');
+      this.onFleet?.();
+    }
+  }
+
+  layoutFleet() {
+    const shown = (this.fleet || []).filter(e => e.group && e.group.visible);
+    const boxes = shown.map(e => {
+      e.group.position.set(0, 0, 0);
+      this.root.updateMatrixWorld(true);
+      const box = new THREE.Box3();
+      e.group.traverseVisible(o => {
+        if (o.isMesh && o.geometry.boundingBox) box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld));
+      });
+      return { e, box };
+    }).filter(x => !x.box.isEmpty())
+      .sort((a, b) => (a.box.max.z - a.box.min.z) - (b.box.max.z - b.box.min.z));
+    const widest = Math.max(1, ...boxes.map(x => x.box.max.x - x.box.min.x));
+    let cursor = 0;
+    // The root turns CryEngine's Z-up into three.js's Y-up, so a ship's local
+    // x is the row, local z is up and local y runs nose to tail.
+    for (const { e, box } of boxes) {
+      e.group.position.set(cursor - box.min.x, (box.min.z + box.max.z) / 2, -box.min.y);
+      cursor += (box.max.x - box.min.x) + widest * 0.25;
+    }
+    this.frameModel();
+  }
+
+  setFleetShip(entry, on) {
+    if (on && !entry.group) {
+      this.fleetQueue = (this.fleetQueue || Promise.resolve()).then(() => this.loadFleetShip(entry));
+      return;
+    }
+    if (entry.group) {
+      entry.group.visible = on;
+      this.layoutFleet();
     }
   }
 
@@ -1231,6 +1363,11 @@ function shell() {
         <p class="v3d-note">${escHtml(t('The game tints its hulls from a palette of three colours; this draws the palette, not the wear and grime the engine adds.'))}</p>
       </section>
       <section class="v3d-detail" data-v3d-detail hidden></section>
+      <section class="v3d-attach" data-v3d-attach hidden>
+        <h3>${escHtml(t('Attachments'))}</h3>
+        <div data-v3d-attach-list></div>
+        <p class="v3d-note">${escHtml(t('What fits each slot, by the game files\' sizes and tags. The same choice as the Armoury\'s.'))}</p>
+      </section>
       <section class="v3d-parts">
         <h3>${escHtml(t('Fitted parts'))}</h3>
         <p class="v3d-note" data-v3d-parts-note>${escHtml(t('The stock loadout the game fits. Click a part, here or on the model.'))}</p>
@@ -1336,11 +1473,113 @@ export async function openModel(opts) {
   view.onParts = parts => renderParts(host, view, parts);
   view.onSelect = part => renderDetail(host, view, part);
 
+  if (opts.fleet?.length) {
+    openFleet(host, view, opts);
+    return;
+  }
+
   try {
     await view.load(opts.cls);
   } catch (err) {
     view.setStatus(err.message || String(err));
+    return;
   }
+
+  // A personal weapon's slots: what fits, from the Armoury's own reading,
+  // shared with it so a pick here is the Armoury's pick too.
+  if (/^WeaponPersonal\//i.test(view.sceneInfo?.type || '') && typeof window.qwModelSlots === 'function') {
+    const slots = await window.qwModelSlots(view.sceneInfo.cls).catch(() => null);
+    if (slots?.slots?.length && !view.disposed) renderAttachments(host, view, slots);
+  }
+}
+
+/** How many ships a fleet scene starts with; the rest wait in the list, unticked. */
+const FLEET_START = 8;
+
+function openFleet(host, view, opts) {
+  const q = sel => host.querySelector(sel);
+  view.fleet = opts.fleet.map(e => ({ ...e }));
+  view.palettes = {};
+  view.textureMax = 1024;
+  view.sceneInfo = { palette: null, helpers: {} };
+  q('[data-v3d-sub]').textContent = t('{count} ships', { count: view.fleet.length });
+  q('[data-v3d-paints]').hidden = true;
+  q('.v3d-parts h3').textContent = t('Your fleet');
+  q('[data-v3d-parts-note]').textContent = t('Tick the ships to stand in the row. Click one, here or in the scene, to open it alone.');
+  q('.v3d-markers').hidden = true;
+
+  const list = q('[data-v3d-parts]');
+  const draw = () => {
+    list.innerHTML = '';
+    const ul = document.createElement('ul');
+    ul.className = 'v3d-fleet';
+    view.fleet.forEach(entry => {
+      const li = document.createElement('li');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = !!entry.on;
+      box.disabled = !!entry.failed;
+      box.addEventListener('change', () => {
+        entry.on = box.checked;
+        view.setFleetShip(entry, entry.on);
+      });
+      const name = document.createElement('button');
+      name.type = 'button';
+      name.textContent = entry.name;
+      name.title = t('Open {ship} alone', { ship: entry.name });
+      name.addEventListener('click', () => openModel({ cls: entry.cls, title: entry.name, paint: entry.paint }));
+      const state = document.createElement('small');
+      state.textContent = entry.failed ? t('no model the view can read') : entry.loading ? t('loading…') : '';
+      li.append(box, name, state);
+      ul.append(li);
+    });
+    list.append(ul);
+  };
+  view.onFleet = draw;
+  view.onParts = () => {};
+  view.onSelect = part => {
+    renderDetail(host, view, part?.fleet ? null : part);
+    if (part?.fleet) {
+      const detail = q('[data-v3d-detail]');
+      detail.hidden = false;
+      detail.innerHTML = `<h3>${escHtml(part.name)}</h3><button type="button" data-v3d-alone>${escHtml(t('Open alone'))}</button>`;
+      const entry = view.fleet.find(e => e.group === part.object);
+      detail.querySelector('[data-v3d-alone]').addEventListener('click', () =>
+        openModel({ cls: part.cls, title: part.name, paint: entry?.paint }));
+    }
+  };
+
+  view.fleet.forEach((entry, i) => { entry.on = i < FLEET_START; });
+  draw();
+  for (const entry of view.fleet) if (entry.on) view.setFleetShip(entry, true);
+}
+
+function renderAttachments(host, view, slots) {
+  const box = host.querySelector('[data-v3d-attach]');
+  const list = host.querySelector('[data-v3d-attach-list]');
+  list.innerHTML = '';
+  for (const slot of slots.slots) {
+    const row = document.createElement('label');
+    row.className = 'v3d-attach-slot';
+    const word = document.createElement('span');
+    word.textContent = slot.label;
+    const select = document.createElement('select');
+    select.disabled = slot.fixed;
+    select.append(new Option(t('Nothing'), ''));
+    for (const o of slot.options) select.append(new Option(o.cls === slot.default ? `${o.name} · ${t('ships with it')}` : o.name, o.cls));
+    select.value = slot.chosen || '';
+    select.addEventListener('change', () => {
+      slots.choose(slot.slot, select.value);
+      view.refit(slot.port, select.value || null);
+    });
+    row.append(word, select);
+    list.append(row);
+
+    // The Armoury's choice may already differ from the stock fit drawn.
+    const drawn = view.parts.find(p => p.depth === 0 && String(p.port).toLowerCase() === String(slot.port).toLowerCase());
+    if ((drawn?.cls || '') !== (slot.chosen || '') && !slot.fixed) view.refit(slot.port, slot.chosen || null);
+  }
+  box.hidden = false;
 }
 
 function renderParts(host, view, parts) {

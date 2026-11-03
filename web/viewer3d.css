@@ -202,3 +202,12 @@ body .v3d label { text-transform: none; letter-spacing: normal; font-family: var
 .v3d-bar { flex-wrap: wrap; row-gap: 8px; }
 .v3d-title { flex: 1 1 260px; }
 .v3d-tools { flex: 1 1 auto; row-gap: 6px; }
+
+.v3d-attach-slot { display: grid; grid-template-columns: 90px minmax(0, 1fr); align-items: center; gap: 8px; margin: 6px 0; font-size: 12px; color: var(--muted, #7796b0); }
+
+.v3d-fleet { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.v3d-fleet li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; }
+.v3d-fleet li:hover { background: rgba(30, 71, 99, .35); }
+.v3d-fleet button { background: none; border: 0; padding: 0; color: var(--text, #cfe4f5); text-align: left; font-size: 13px; cursor: pointer; }
+.v3d-fleet button:hover { color: var(--cyan-hot, #7fe4ff); }
+.v3d-fleet small { font: 11px var(--mono, monospace); color: var(--dim, #46617a); }
