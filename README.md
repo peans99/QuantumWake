@@ -328,6 +328,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.20.63
+
+The dashboard looks more like one instrument panel. Page headers, panels and pop-ups now have rounded corners and a soft top highlight. On your own history pages (Sessions, Fleet, Logbook and the like) the page header and summary figures are edged in gold; reference and planning pages stay cyan. Search boxes, drop-downs and text fields are rounded and show a clear ring when focused. Table headers are a little taller, the row under the pointer is highlighted, and numbers line up in columns. Feed tags are tinted by kind, and the main action button is filled.
+
+Fleet cards lift slightly under the pointer. Rows, cards and links that happen to be buttons, such as itinerary plans, briefing links and command results, no longer appear in spaced-out capitals. The in-game overlay is unchanged.
+
 ### 0.20.62
 
 **A quieter, easier-to-read dashboard.** The redesign's look stays; the clutter around it goes. Fleet cards drop the boxes around their status, logo, paint picker and star. Links in tables are told apart by colour and underline only when you point at them. Market's map actions and "+ list" stay grey until you point at their row. The source tags on every card (game log, screenshot, community data, UEX) are now words with a coloured mark instead of bordered chips.

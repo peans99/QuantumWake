@@ -7989,3 +7989,574 @@ body:not(.overlay) .sessions-brief-card :is(.operations-kicker, .mining-overline
    capitals, so "Gather supplies" shouted beside five quiet cards that are
    links. A card reads as a card whatever element it is. */
 body:not(.overlay) button.operation-card { letter-spacing: normal; text-transform: none; }
+
+
+/* ======================================================================
+   Unified Flight Deck Polish (0.20.63).
+   Completes the transition from the earlier rectangular/chart-paper rules
+   to a single cohesive instrument aesthetic across all 43 views:
+   - Resets base <button> uppercase, tracking and clip-path on list, card,
+     link and handle buttons (.itinerary-plan, .briefing-link, .command-result,
+     .entity-link, .controls-action-result, .build-chip, etc.).
+   - Unifies container geometry (10px primary surfaces, 8px nested cards,
+     12px modals) with subtle top-edge specular highlights.
+   - Aligns page header bars (.view > .section-bar) and summary tiles with
+     the page's provenance voice (--own gold on personal history pages,
+     --cyan on reference and planning pages).
+   - Upgrades .search, .select, and form inputs with rounded geometry,
+     inner depth, custom select chevrons, and crisp focus rings.
+   - Refines table headers, row hover gradients, tabular numerals, and
+     avionics pill badges (.feed .k, .sec, .garage-duty, .route-readiness).
+   ====================================================================== */
+
+/* -- 1. Non-action <button> reset: cards, list rows, inline links, and
+   handles that happen to be <button> elements must never inherit the base
+   button's uppercase, .12em letter-spacing, polygon clip-path, or corner
+   tick (::after). -- */
+body:not(.overlay) :is(
+  button.operation-card,
+  button.itinerary-plan,
+  button.briefing-link,
+  button.entity-link,
+  button.command-result,
+  button.controls-action-result,
+  button.controls-action-group,
+  button.controls-action-back,
+  button.build-chip,
+  button.loot-find-item,
+  button.search-hit,
+  button.now-card-action,
+  button.itinerary-grip,
+  button.itinerary-line-grip,
+  button.context-rail-clear,
+  button.entity-close,
+  button.map-info-close,
+  button.market-close,
+  button.trip-place,
+  button.trip-number,
+  button.more-toggle,
+  button.sold-chip,
+  button.why,
+  button.drill,
+  button.drop
+) {
+  text-transform: none;
+  letter-spacing: normal;
+  clip-path: none;
+  background-image: none;
+  box-shadow: none;
+}
+
+body:not(.overlay) :is(
+  button.operation-card,
+  button.itinerary-plan,
+  button.briefing-link,
+  button.entity-link,
+  button.command-result,
+  button.controls-action-result,
+  button.controls-action-group,
+  button.controls-action-back,
+  button.build-chip,
+  button.loot-find-item,
+  button.search-hit,
+  button.now-card-action,
+  button.itinerary-grip,
+  button.itinerary-line-grip,
+  button.context-rail-clear,
+  button.entity-close,
+  button.map-info-close,
+  button.market-close,
+  button.trip-place,
+  button.trip-number,
+  button.more-toggle,
+  button.sold-chip,
+  button.why,
+  button.drill,
+  button.drop
+)::after {
+  display: none;
+}
+
+/* -- 2. Topbar & Flight Telemetry Strip: deep obsidian glass with subtle
+   top specular highlight and refined active tab illumination. -- */
+body:not(.overlay) .topbar {
+  background: linear-gradient(180deg, rgba(7, 14, 24, .94), rgba(4, 8, 14, .91));
+  border-bottom: 1px solid rgba(53, 200, 240, .28);
+  box-shadow: inset 0 1px 0 rgba(127, 228, 255, .08), 0 10px 32px rgba(0, 0, 0, .36);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+
+body:not(.overlay) .tabs button {
+  transition: color .15s ease, background-color .15s ease, box-shadow .15s ease;
+}
+
+body:not(.overlay) .tabs button.active {
+  color: var(--cyan-hot);
+  background: linear-gradient(180deg, rgba(53, 200, 240, .14), rgba(53, 200, 240, .05));
+  box-shadow: inset 0 1px 0 rgba(127, 228, 255, .18);
+}
+
+body:not(.overlay) .tabs button.active::after {
+  box-shadow: 0 0 10px rgba(53, 200, 240, .65);
+}
+
+body:not(.overlay) .group-menu {
+  padding: 4px;
+  border-radius: 10px;
+  border-color: rgba(53, 200, 240, .38);
+  background: linear-gradient(165deg, rgba(10, 20, 32, .98), rgba(5, 10, 18, .99));
+  box-shadow: inset 0 1px 0 rgba(127, 228, 255, .12), 0 18px 42px rgba(0, 0, 0, .55);
+  backdrop-filter: blur(16px);
+}
+
+body:not(.overlay) .group-menu button {
+  border-radius: 6px;
+  padding: 8px 11px;
+}
+
+body:not(.overlay) .flight-telemetry {
+  background: linear-gradient(90deg, rgba(5, 11, 19, .95), rgba(9, 20, 32, .92) 50%, rgba(5, 11, 19, .95));
+  border-bottom: 1px solid rgba(53, 200, 240, .2);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .22);
+}
+
+body:not(.overlay) .telemetry-field b {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
+}
+
+/* -- 3. Page Header Bars (.view > .section-bar): rounded instrument frame
+   that harmonises with data-voice="own" (gold) vs reference/ops (cyan). -- */
+body:not(.overlay) .view > .section-bar:not(.mining-title),
+body:not(.overlay) .mining-view > .section-bar {
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  clip-path: none;
+  border: 1px solid rgba(53, 200, 240, .24);
+  border-left: 3px solid var(--cyan);
+  background:
+    linear-gradient(110deg, rgba(53, 200, 240, .11), rgba(11, 23, 36, .92) 44%, rgba(7, 13, 21, .96));
+  box-shadow: inset 0 1px 0 rgba(127, 228, 255, .1), 0 10px 26px rgba(0, 0, 0, .16);
+}
+
+body:not(.overlay) .view > .section-bar:has(> .wake-chase) {
+  padding-bottom: calc(var(--flight-lane, 32px) + 4px);
+}
+
+body:not(.overlay) .view[data-voice="own"] > .section-bar:not(.mining-title) {
+  border-color: rgba(233, 194, 125, .24);
+  border-left-color: var(--own);
+  background:
+    linear-gradient(110deg, rgba(233, 194, 125, .11), rgba(11, 22, 34, .93) 44%, rgba(7, 13, 21, .96));
+  box-shadow: inset 0 1px 0 rgba(233, 194, 125, .12), 0 10px 26px rgba(0, 0, 0, .16);
+}
+
+body:not(.overlay) .reference-toolbar-bar.section-bar {
+  padding: 0;
+  overflow: hidden;
+}
+
+body:not(.overlay) .reference-title {
+  padding: 13px 18px;
+}
+
+body:not(.overlay) .reference-toolbar {
+  padding: 12px 16px;
+  background: rgba(4, 10, 18, .36);
+  border-left-color: rgba(53, 200, 240, .18);
+}
+
+/* -- 4. Unified Surface Geometry & Specular Elevation across all views -- */
+body:not(.overlay) :is(
+  .operations-deck,
+  .operations-workspace,
+  .sessions-brief-card,
+  .sessions-workspace,
+  .logbook-brief-card,
+  .logbook-workspace,
+  .itinerary-plans,
+  .itinerary-main,
+  .itinerary-haul,
+  .garage-head,
+  .garage-rig,
+  .sheet-group,
+  .garage-optimizer,
+  .garage-photo,
+  .garage-cargo,
+  .wallet-card,
+  .log-card,
+  .log-history,
+  .point-card,
+  .option-block,
+  .settings-group,
+  .about,
+  .share-report,
+  .loot-where,
+  .checklist-card,
+  .job-card,
+  .job-form,
+  .map-wrap,
+  .fleet-history,
+  .economy-primary,
+  .economy-panel,
+  #fleet-ships .fleet-roster-card,
+  #fleet-vehicles .fleet-roster-card,
+  .ship-card,
+  .crack-fit-panel,
+  .crack-rock,
+  .radar-lookup,
+  .bench-controls,
+  .bench-target,
+  .bench-handling,
+  .bench-figures,
+  .bench-contributions,
+  .data-card,
+  .community-offer,
+  .screen-reading
+) {
+  border-radius: 10px;
+  clip-path: none;
+  box-shadow: inset 0 1px 0 rgba(145, 224, 255, .08), 0 12px 28px rgba(0, 0, 0, .16);
+}
+
+body:not(.overlay) :is(
+  .operation-card,
+  .itinerary-stop,
+  .garage-rig-slot,
+  .rep-summary,
+  .briefing-section,
+  .session-metric,
+  .share-metric,
+  .crack-head,
+  .armoury-evidence,
+  .mining-brief,
+  .mining-salvage-brief,
+  .now-trip-next,
+  .checklist-farm,
+  .bench-ports,
+  .bench-panel
+) {
+  border-radius: 8px;
+  clip-path: none;
+}
+
+body:not(.overlay) :is(
+  .ref-modal-panel,
+  .command-panel,
+  .search-results,
+  .activity-panel
+) {
+  border-radius: 12px;
+  clip-path: none;
+  border-color: rgba(53, 200, 240, .38);
+  box-shadow: inset 0 1px 0 rgba(127, 228, 255, .15), 0 24px 64px rgba(0, 0, 0, .58);
+  backdrop-filter: blur(18px);
+}
+
+/* -- 5. Summary Strip Tiles & Metric Readouts -- */
+body:not(.overlay) .summary-strip .tile {
+  background: linear-gradient(155deg, rgba(13, 28, 43, .96), rgba(7, 13, 21, .98));
+  border-color: rgba(53, 200, 240, .24);
+  box-shadow: inset 0 1px 0 rgba(127, 228, 255, .14), 0 10px 24px rgba(0, 0, 0, .15);
+  transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+
+body:not(.overlay) .summary-strip .tile:hover {
+  border-color: rgba(53, 200, 240, .44);
+  transform: translateY(-1px);
+}
+
+body:not(.overlay) .summary-strip .tile .n {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+}
+
+body:not(.overlay) .view[data-voice="own"] .summary-strip .tile {
+  border-color: rgba(233, 194, 125, .24);
+  box-shadow: inset 0 1px 0 rgba(233, 194, 125, .18), 0 10px 24px rgba(0, 0, 0, .15);
+}
+
+body:not(.overlay) .view[data-voice="own"] .summary-strip .tile:hover {
+  border-color: rgba(233, 194, 125, .46);
+}
+
+body:not(.overlay) .wallet-card {
+  border-color: rgba(233, 194, 125, .3);
+  border-left: 3px solid var(--own);
+  background: linear-gradient(110deg, rgba(233, 194, 125, .09), rgba(10, 22, 34, .96) 45%, rgba(7, 12, 20, .98));
+}
+
+body:not(.overlay) .wallet-card .n {
+  color: var(--own);
+  font-variant-numeric: tabular-nums;
+}
+
+/* -- 6. Form Controls, Selects, Inputs & Segmented Bars -- */
+body:not(.overlay) :is(
+  .search,
+  .select,
+  .job-form input,
+  .job-form textarea,
+  .checklist-composer > input,
+  .checklist-fields input,
+  .checklist-fields select,
+  .uex-creds input
+) {
+  border-radius: 7px;
+  padding: 7px 11px;
+  border: 1px solid rgba(75, 138, 175, .34);
+  background-color: rgba(5, 11, 18, .92);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .38);
+  color: var(--text);
+  transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+}
+
+body:not(.overlay) :is(
+  .search,
+  .select,
+  .job-form input,
+  .job-form textarea,
+  .checklist-composer > input,
+  .checklist-fields input,
+  .checklist-fields select,
+  .uex-creds input
+):hover:not(:disabled) {
+  border-color: rgba(53, 200, 240, .52);
+  background-color: rgba(7, 15, 24, .96);
+}
+
+body:not(.overlay) :is(
+  .search,
+  .select,
+  .job-form input,
+  .job-form textarea,
+  .checklist-composer > input,
+  .checklist-fields input,
+  .checklist-fields select,
+  .uex-creds input
+):focus {
+  border-color: var(--cyan);
+  background-color: rgba(8, 17, 28, .98);
+  box-shadow: 0 0 0 3px rgba(53, 200, 240, .15), inset 0 1px 2px rgba(0, 0, 0, .3);
+  outline: none;
+}
+
+body:not(.overlay) :is(.map-service-filter, .map-focus-filter, .map-tools .seg) {
+  border-radius: 7px;
+  overflow: hidden;
+  border-color: rgba(75, 138, 175, .34);
+  background: rgba(5, 11, 18, .85);
+}
+
+body:not(.overlay) #armoury-tabs {
+  border-radius: 9px;
+  padding: 5px;
+  border-color: rgba(53, 200, 240, .24);
+  background: rgba(6, 14, 23, .82);
+}
+
+body:not(.overlay) #armoury-tabs button {
+  border-radius: 6px;
+  clip-path: none;
+  background-image: none;
+  box-shadow: none;
+}
+
+body:not(.overlay) #armoury-tabs button::after {
+  display: none;
+}
+
+body:not(.overlay) .components-tabs button {
+  border-radius: 8px;
+  clip-path: none;
+  background-image: none;
+}
+
+body:not(.overlay) .components-tabs button::after {
+  display: none;
+}
+
+body:not(.overlay) .subtabs#mining-tabs button {
+  border-radius: 8px;
+  clip-path: none;
+  background-image: none;
+}
+
+body:not(.overlay) .subtabs#mining-tabs button::after {
+  display: none;
+}
+
+/* -- 7. Fleet Cards, Operations Deck & Reputation Polish -- */
+body:not(.overlay) #fleet-ships .fleet-roster-card,
+body:not(.overlay) #fleet-vehicles .fleet-roster-card {
+  border-color: rgba(53, 200, 240, .24);
+  background:
+    linear-gradient(165deg, rgba(16, 36, 52, .52), rgba(7, 13, 21, .96) 58%),
+    var(--deep);
+  transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+
+body:not(.overlay) #fleet-ships .fleet-roster-card:hover,
+body:not(.overlay) #fleet-vehicles .fleet-roster-card:hover {
+  border-color: rgba(53, 200, 240, .48);
+  transform: translateY(-2px);
+  box-shadow: inset 0 1px 0 rgba(145, 224, 255, .14), 0 16px 34px rgba(0, 0, 0, .26);
+}
+
+body:not(.overlay) #fleet-ships .fleet-roster-card::after,
+body:not(.overlay) #fleet-vehicles .fleet-roster-card::after {
+  border-radius: inherit;
+}
+
+body:not(.overlay) #fleet-ships .fleet-roster-card .ship-picture,
+body:not(.overlay) #fleet-vehicles .fleet-roster-card .ship-picture {
+  border-radius: 7px 7px 0 0;
+  background: radial-gradient(ellipse at 50% 65%, rgba(53, 200, 240, .18), rgba(13, 40, 58, .06) 48%, transparent 72%);
+}
+
+body:not(.overlay) .operation-card {
+  border-color: rgba(53, 200, 240, .22);
+  border-left: 3px solid var(--cyan-deep);
+  background: linear-gradient(145deg, rgba(13, 38, 54, .62), rgba(6, 13, 22, .82));
+  box-shadow: inset 0 1px 0 rgba(127, 228, 255, .07);
+}
+
+body:not(.overlay) .operation-card-primary {
+  border-left-color: var(--cyan);
+  background: linear-gradient(145deg, rgba(17, 68, 90, .68), rgba(7, 16, 26, .88));
+}
+
+body:not(.overlay) .operation-icon {
+  border-radius: 6px;
+  clip-path: none;
+}
+
+body:not(.overlay) .rep-summary {
+  overflow: hidden;
+  border-color: rgba(53, 200, 240, .2);
+  background: rgba(5, 13, 22, .62);
+}
+
+body:not(.overlay) .rep-rung-bar {
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+/* -- 8. Data Tables & Avionics Pill Badges -- */
+body:not(.overlay) thead th {
+  padding: 11px 15px;
+  background: linear-gradient(180deg, rgba(16, 31, 46, .98), rgba(11, 21, 33, .98));
+  border-bottom: 1px solid rgba(53, 200, 240, .28);
+}
+
+body:not(.overlay) tbody td {
+  padding: 9.5px 15px;
+  border-top-color: rgba(28, 52, 74, .5);
+  font-variant-numeric: tabular-nums;
+}
+
+body:not(.overlay) tbody tr {
+  transition: background-color .12s ease;
+}
+
+body:not(.overlay) tbody tr:hover {
+  background: linear-gradient(90deg, rgba(53, 200, 240, .085), rgba(53, 200, 240, .025) 65%, transparent);
+}
+
+body:not(.overlay) :is(.feed .k, .sec, .tag-rep, .tag-bp, .tag-event, .route-readiness, .garage-duty, .job-kind) {
+  border-radius: 4px;
+}
+
+body:not(.overlay) .feed .k.session,
+body:not(.overlay) .feed .k.location {
+  background: rgba(53, 200, 240, .1);
+}
+
+body:not(.overlay) .feed .k.sold,
+body:not(.overlay) .feed .k.payout,
+body:not(.overlay) .feed .k.ship {
+  background: rgba(79, 212, 138, .1);
+}
+
+body:not(.overlay) .feed .k.bought,
+body:not(.overlay) .feed .k.contract,
+body:not(.overlay) .feed .k.kill {
+  background: rgba(255, 171, 61, .1);
+}
+
+body:not(.overlay) .feed .k.loot,
+body:not(.overlay) .feed .k.quantum {
+  background: rgba(181, 140, 240, .12);
+}
+
+body:not(.overlay) .feed .k.death,
+body:not(.overlay) .feed .k.incapacitated {
+  background: rgba(255, 90, 77, .12);
+}
+
+/* -- 9. Primary Action Buttons, Sessions/Logbook Decks & Now Status Polish -- */
+body:not(.overlay) button.primary {
+  background: linear-gradient(135deg, #4ad2f7, #1fb0db);
+  border-color: #4ad2f7;
+  color: #031019;
+  font-weight: 680;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .42), 0 4px 14px rgba(53, 200, 240, .26);
+}
+
+body:not(.overlay) button.primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #7fe4ff, #35c8f0);
+  border-color: var(--cyan-hot);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 6px 18px rgba(53, 200, 240, .38);
+}
+
+body:not(.overlay) .now-focus .tiny {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+body:not(.overlay) :is(.sessions-brief-card, .logbook-brief-card) {
+  border-color: rgba(53, 200, 240, .24);
+  background: linear-gradient(155deg, rgba(14, 31, 47, .94), rgba(7, 13, 22, .97));
+  transition: border-color .15s ease, transform .15s ease;
+}
+
+body:not(.overlay) :is(.sessions-brief-card, .logbook-brief-card):hover {
+  border-color: rgba(233, 194, 125, .44);
+  transform: translateY(-1px);
+}
+
+body:not(.overlay) :is(.sessions-latest-card, .logbook-latest-card) {
+  border-left: 3px solid var(--green);
+  background: linear-gradient(145deg, rgba(22, 60, 52, .34), rgba(7, 13, 22, .97) 55%);
+}
+
+body:not(.overlay) :is(.sessions-health-card, .logbook-net-card) {
+  border-left: 3px solid var(--violet);
+  background: linear-gradient(145deg, rgba(48, 34, 74, .32), rgba(7, 13, 22, .97) 55%);
+}
+
+body:not(.overlay) :is(.sessions-workspace, .logbook-workspace) {
+  border-color: rgba(233, 194, 125, .22);
+  border-left: 3px solid rgba(233, 194, 125, .68);
+  background: linear-gradient(160deg, rgba(11, 24, 37, .92), rgba(6, 12, 20, .96));
+}
+
+body:not(.overlay) .itinerary-stop {
+  border-color: rgba(53, 200, 240, .22);
+  background: linear-gradient(155deg, rgba(13, 26, 40, .92), rgba(8, 16, 26, .96));
+  transition: border-color .14s ease, background .14s ease;
+}
+
+body:not(.overlay) .itinerary-stop.next {
+  border-left: 3px solid var(--cyan);
+  background: linear-gradient(105deg, rgba(53, 200, 240, .1), rgba(11, 23, 36, .95) 45%);
+}
+
+body:not(.overlay) .itinerary-plan {
+  border-radius: 6px;
+  padding: 8px 10px;
+  transition: background-color .14s ease, border-color .14s ease;
+}
