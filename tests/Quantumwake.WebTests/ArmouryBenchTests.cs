@@ -43,6 +43,32 @@ public class ArmouryBenchTests
     private static string Picker(string slot) => $"{Root}.descendants().find(n => n.tagName === 'select' && n.dataset.slot === '{slot}')";
 
     [Fact]
+    public void Scope_uses_both_zoom_levels_and_the_available_zeroing()
+    {
+        var page = Open();
+        page.Do("var optic = armouryBenchScope({zoom:4,secondZoom:8,zoomTime:1.25,zeroingMax:500,zeroingStep:100,spread:0.8},true);");
+        Assert.Contains("×4", page.Text("optic.scope.textContent"));
+        Assert.Contains("×8", page.Text("optic.scope.textContent"));
+        Assert.Contains("500 m by 100", page.Text("optic.scope.textContent"));
+        page.Do("var opticZoom = optic.scope.descendants().find(n => n.tagName === 'select'); opticZoom.value = '8'; opticZoom.fire('change');");
+        Assert.Equal("scale(8)", page.Text("optic.scope.byClass('bench-scope-lens')[0].children[0].style.transform"));
+    }
+
+    [Fact]
+    public void Opposing_modifiers_show_both_pieces_even_if_the_combined_result_is_neutral()
+    {
+        var page = Open();
+        page.Do("""
+            armouryModel.attachments = [{class:'a',effect:{spread:0.8}},{class:'b',effect:{spread:1.25}}];
+            var breakdown = armouryBenchContributions({pieces:[{class:'a',name:'Laser'},{class:'b',name:'Barrel'}],effect:{spread:1}});
+            """);
+        var text = page.Text("breakdown.textContent");
+        Assert.Contains("Laser ×0.8", text);
+        Assert.Contains("Barrel ×1.25", text);
+        Assert.Contains("Combined ×1", text);
+    }
+
+    [Fact]
     public void Bench_is_opt_in_and_explains_the_limits_of_its_target()
     {
         var page = new Page();

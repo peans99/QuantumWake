@@ -6802,6 +6802,19 @@ body:not(.overlay) #now-server-star::after { display: none; }
 .bench-figures > p { line-height: 1.6; margin-bottom: 0; }
 .bench-source { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
 .bench-source summary { cursor: pointer; }
+.bench-scope { margin-top: 16px; border-top: 1px solid var(--rule); padding-top: 12px; }
+.bench-scope summary { cursor: pointer; color: var(--cyan-hot); }
+.bench-scope .bench-field { margin: 12px 0; max-width: 160px; }
+.bench-scope-lens { position: relative; display: grid; place-items: center; width: min(100%, 260px); aspect-ratio: 1; margin: 12px auto; overflow: hidden; border: 2px solid var(--cyan-deep); border-radius: 50%; background: var(--deep); }
+.bench-scope-lens svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.bench-scope-lens .bench-pattern-bare, .bench-scope-lens .bench-target-origin,
+.bench-scope-grid-only .bench-pattern-fitted { display: none; }
+.bench-scope-lens::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(var(--cyan), var(--cyan)) center / 48px 1px no-repeat, linear-gradient(var(--cyan), var(--cyan)) center / 1px 48px no-repeat; pointer-events: none; }
+.bench-contributions { grid-column: 1 / -1; min-width: 0; padding: 16px; border: 1px solid var(--rule); background: rgba(7, 18, 28, .65); }
+.bench-contribution-list > div { display: grid; grid-template-columns: minmax(85px, 130px) minmax(0, 1fr); gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+.bench-contribution-list dd { display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 0; }
+.bench-factor, .bench-factor-total { padding: 2px 6px; border: 1px solid var(--rule); overflow-wrap: anywhere; }
+.bench-factor-total { color: var(--cyan-hot); }
 @media (max-width: 1200px) { .bench-readout { grid-template-columns: minmax(0, 1fr); } .bench-target { grid-row: auto; } }
 @media (max-width: 620px) { .bench-layout { grid-template-columns: minmax(0, 1fr); } .bench-heading { align-items: start; } .bench-heading h3 { font-size: 20px; } .bench-model-badge { white-space: normal; text-align: center; } }
 #armoury-pane-attachments h3.spaced { margin-top: 18px; }

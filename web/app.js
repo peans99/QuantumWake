@@ -10317,18 +10317,102 @@ function renderArmouryBench() {
   request();
 }
 
+function armouryBenchScope(effect, canPlot) {
+  const scope = el('details', 'bench-scope');
+  scope.append(el('summary', null, tx('Scope view')));
+  if (!(effect.zoom > 0)) {
+    scope.append(el('p', 'muted small', tx('Fit a sight with known magnification to preview it.')));
+    return { scope, redraw() {} };
+  }
+  const label = el('label', 'bench-field');
+  label.append(el('span', null, tx('Zoom')));
+  const zoom = el('select', 'select');
+  const levels = [...new Set([effect.zoom, effect.secondZoom].filter((value) => value > 0))];
+  for (const level of levels) zoom.append(new Option(`×${level}`, String(level)));
+  zoom.value = String(levels[0]);
+  label.append(zoom);
+  scope.append(label);
+  const lens = el('div', 'bench-scope-lens');
+  lens.setAttribute('aria-hidden', 'true');
+  scope.append(lens);
+  const redraw = () => {
+    lens.textContent = '';
+    const scene = armouryBenchTarget(canPlot ? effect.spread : 1);
+    if (!canPlot) scene.setAttribute('class', 'bench-scope-grid-only');
+    scene.style.transform = `scale(${Number(zoom.value)})`;
+    lens.append(scene);
+  };
+  zoom.addEventListener('change', redraw);
+  redraw();
+  if (Number.isFinite(effect.zoomTime))
+    scope.append(el('p', 'small', `${tx('Aim time')} · ${tx('{value} · bare = 100', { value: armouryBenchIndex(effect.zoomTime) })}`));
+  if (effect.zeroingMax > 0) {
+    const max = fmtInt(effect.zeroingMax);
+    scope.append(el('p', 'small', effect.zeroingStep > 0
+      ? tx('zero to {max} m by {step}', { max, step: fmtInt(effect.zeroingStep) })
+      : `${tx('Zeroes to')} ${max} m`));
+  }
+  scope.append(el('p', 'muted small', tx('Illustrative magnification with a generic reticle and field of view.')));
+  return { scope, redraw };
+}
+
+function armouryBenchContributions(fit) {
+  const section = el('section', 'bench-contributions');
+  section.append(el('h4', null, tx('Attachment contributions')));
+  const pieces = (fit.pieces || []).map((piece) => ({
+    name: piece.name,
+    effect: armouryModel?.attachments?.find((item) => item.class === piece.class)?.effect
+  }));
+  if (!pieces.length) {
+    section.append(el('p', 'muted small', tx('Fit attachments to see how their effects combine.')));
+    return section;
+  }
+  const metrics = [
+    ['spread', tx('Spread')], ['recoilStrength', tx('Recoil strength')], ['recoilTime', tx('Recoil recovery')],
+    ['sound', tx('Sound radius')], ['zoomTime', tx('Aim time')], ['damage', tx('Damage')],
+    ['fireRate', tx('Fire rate')], ['heat', tx('Heat')], ['ammoCost', tx('Ammo cost')],
+    ['chargeTime', tx('Charge time')], ['projectileSpeed', tx('Projectile speed')],
+    ['pellets', tx('Pellets'), true], ['burstShots', tx('Burst shots'), true]
+  ];
+  const format = (value, additive) => additive
+    ? (value >= 0 ? `+${value}` : String(value))
+    : `×${value.toLocaleString(undefined, { maximumFractionDigits: 4 })}`;
+  const list = el('dl', 'bench-contribution-list');
+  for (const [key, label, additive] of metrics) {
+    const total = fit.effect?.[key];
+    if (!Number.isFinite(total)) continue;
+    const neutral = additive ? 0 : 1;
+    const terms = pieces.filter((piece) => Number.isFinite(piece.effect?.[key]) && piece.effect[key] !== neutral);
+    if (!terms.length) continue;
+    const row = el('div');
+    row.append(el('dt', null, label));
+    const detail = el('dd');
+    for (const piece of terms)
+      detail.append(el('span', 'bench-factor', `${piece.name} ${format(piece.effect[key], additive)}`));
+    detail.append(el('strong', 'bench-factor-total', tx('Combined {effect}', { effect: format(total, additive) })));
+    row.append(detail);
+    list.append(row);
+  }
+  if (list.children.length) section.append(list);
+  else section.append(el('p', 'muted small', tx('The selected attachments have no stacking effects in the available figures.')));
+  section.append(el('p', 'muted small', tx('The bench multiplies modifiers and adds pellet and burst-shot changes.')));
+  return section;
+}
+
 function renderArmouryBenchReadout(w, fit, root) {
   root.textContent = '';
   const effect = fit.effect || {};
   const bare = w.modes?.[armouryBenchMode];
   const mode = fit.modes?.[armouryBenchMode];
   const spreadKnown = Number.isFinite(effect.spread) && effect.spread > 0;
+  const canPlot = !!(bare && mode && mode.kind !== 'Beam' && spreadKnown);
+  const scopeView = armouryBenchScope(effect, canPlot);
   const target = el('section', 'bench-target');
   const title = el('div', 'bench-target-title');
   title.append(el('h4', null, tx('Relative spread')));
   title.append(el('span', 'bench-index', spreadKnown ? tx('{value} · bare = 100', { value: armouryBenchIndex(effect.spread) }) : '—'));
   target.append(title);
-  if (bare && mode && mode.kind !== 'Beam' && spreadKnown) {
+  if (canPlot) {
     const plot = el('div', 'bench-plot');
     plot.append(armouryBenchTarget(effect.spread));
     target.append(plot);
@@ -10351,6 +10435,7 @@ function renderArmouryBenchReadout(w, fit, root) {
       armouryBenchSeed = (armouryBenchSeed + 1) >>> 0;
       plot.textContent = '';
       plot.append(armouryBenchTarget(effect.spread));
+      scopeView.redraw();
     });
     legend.append(sample);
     target.append(legend);
@@ -10364,6 +10449,7 @@ function renderArmouryBenchReadout(w, fit, root) {
       ? tx('A beam has no shot pattern to plot. Compare its derived figures below.')
       : tx('No spread comparison is available for this mode.')));
   }
+  target.append(scopeView.scope);
   root.append(target);
 
   const handling = el('section', 'bench-handling');
@@ -10415,6 +10501,7 @@ function renderArmouryBenchReadout(w, fit, root) {
   }
   figures.append(el('p', 'muted small', tx('Before armour and damage drop-off. Full-charge modes assume a full charge; sustained rates include burst cooldowns.')));
   root.append(figures);
+  root.append(armouryBenchContributions(fit));
   const source = el('details', 'bench-source');
   source.append(el('summary', null, tx('How the comparison is calculated')));
   source.append(el('p', 'muted small', tx('Derived: the pieces’ multipliers from the files, applied to the gun’s own figures at the muzzle. Two pieces that move one figure are multiplied; whether the game does the same, and whether a damage multiplier also lifts the drop’s floor, is not in the files.')));

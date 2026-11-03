@@ -5927,5 +5927,18 @@
   "Derived figures at the muzzle": "Chiffres calculés à la bouche du canon",
   "No firing figures are available for this mode.": "Aucun chiffre de tir n’est disponible pour ce mode.",
   "Before armour and damage drop-off. Full-charge modes assume a full charge; sustained rates include burst cooldowns.": "Avant l’armure et la perte de dégâts à distance. Les modes chargés supposent une charge complète ; les cadences soutenues incluent les pauses entre rafales.",
-  "How the comparison is calculated": "Comment la comparaison est calculée"
+  "How the comparison is calculated": "Comment la comparaison est calculée",
+  "Scope view": "Vue dans la lunette",
+  "Fit a sight with known magnification to preview it.": "Équipez un viseur dont le grossissement est connu pour le prévisualiser.",
+  "Illustrative magnification with a generic reticle and field of view.": "Grossissement illustratif avec un réticule et un champ de vision génériques.",
+  "Attachment contributions": "Effets des accessoires",
+  "Fit attachments to see how their effects combine.": "Équipez des accessoires pour voir comment leurs effets se combinent.",
+  "Fire rate": "Cadence de tir",
+  "Ammo cost": "Coût en munitions",
+  "Charge time": "Temps de charge",
+  "Pellets": "Projectiles par tir",
+  "Burst shots": "Tirs par rafale",
+  "Combined {effect}": "Total {effect}",
+  "The selected attachments have no stacking effects in the available figures.": "Les chiffres disponibles ne montrent aucun effet cumulable pour les accessoires sélectionnés.",
+  "The bench multiplies modifiers and adds pellet and burst-shot changes.": "Le banc multiplie les coefficients et additionne les variations du nombre de projectiles et de tirs par rafale."
 }

@@ -328,7 +328,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.20.59
+### 0.20.60
+
+The Armoury bench previews sight magnification through a generic reticle, including alternate zoom levels, aim time and available zeroing settings. The attachment breakdown shows which pieces contribute to each modifier and the combined result used by the bench.
 
 The Armoury test bench now lets you isolate either spread pattern and shows how much narrower or wider the fitted spread is. When a compatible spread-changing attachment can fill an empty slot, the bench offers it as a one-click example.
 
