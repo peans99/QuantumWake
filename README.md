@@ -328,6 +328,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.20.62
+
+**A quieter, easier-to-read dashboard.** The redesign's look stays; the clutter around it goes. Fleet cards drop the boxes around their status, logo, paint picker and star. Links in tables are told apart by colour and underline only when you point at them. Market's map actions and "+ list" stay grey until you point at their row. The source tags on every card (game log, screenshot, community data, UEX) are now words with a coloured mark instead of bordered chips.
+
+Small labels were as small as 7 px and some were too faint for small text. Everything on the page is now at least 10 px, and the faintest grey is brighter. The in-game overlay keeps its compact sizes.
+
+Section headings on Contracts, Loot, Sessions, Mining and Operations now use the page title's face, so a page reads as one design. The Armoury's three summary cards became a summary line above the tabs, Reference pages no longer split their header into a large empty half, the Fleet value no longer wraps at laptop widths, and the busy indicator in the top corner no longer cuts its own words off ("Reading game fil…").
+
 ### 0.20.61
 
 **An attachment test bench in Armoury.** Pick a weapon and compatible attachments to compare a bare and fitted spread illustration, handling indices and derived firing figures. A gun's “Test this fit” shortcut carries its attachments into the bench. The target is a relative comparison of file multipliers: it does not claim measured shot placement, base spread angles or recoil paths.
