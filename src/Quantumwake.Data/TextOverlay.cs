@@ -250,7 +250,7 @@ public static class TextOverlay
                 continue;
             }
 
-            changes.Add(new TextOverlayLine(itemClass, trimmed, rewritten, category));
+            changes.Add(new TextOverlayLine(itemClass, trimmed, rewritten, Listed(category, facts, itemClass)));
 
             Emit(key + "=" + rewritten + padding);
             continue;
@@ -268,6 +268,48 @@ public static class TextOverlay
 
     /// <summary>The category a rewritten hauling title is listed under.</summary>
     public const string HaulTitleCategory = "Hauling title";
+
+    /// <summary>
+    /// What a ship component is listed as, by the type the install gives it.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ItemCategories"/> sorts what a pilot carries, and puts every
+    /// ship part in Other - 646 of this install's 4,548 renames, coolers,
+    /// shields, missiles and guns in one heap nobody could browse. Only the list
+    /// uses this; which items are marked, and how, still follows the category.
+    /// </remarks>
+    private static readonly Dictionary<string, string> ShipKinds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["WeaponGun"] = "Ship weapons",
+        ["Turret"] = "Turrets & mounts",
+        ["TurretBase"] = "Turrets & mounts",
+        ["Missile"] = "Missiles",
+        ["MissileLauncher"] = "Missile racks",
+        ["BombLauncher"] = "Missile racks",
+        ["PowerPlant"] = "Power plants",
+        ["Cooler"] = "Coolers",
+        ["Shield"] = "Shields",
+        ["QuantumDrive"] = "Quantum drives",
+        ["Radar"] = "Radars",
+        ["WeaponDefensive"] = "Countermeasures",
+        ["MainThruster"] = "Thrusters",
+        ["ManneuverThruster"] = "Thrusters",
+        ["QuantumFuelTank"] = "Fuel tanks",
+        ["FuelTank"] = "Fuel tanks",
+        ["ExternalFuelTank"] = "Fuel tanks",
+        ["Armor"] = "Ship armour",
+        ["Module"] = "Modules",
+
+        // A hand weapon the class-name rules missed - the Copperhead grenade
+        // launcher's class reads like nothing they know.
+        ["WeaponPersonal"] = ItemCategories.Weapons,
+    };
+
+    private static string Listed(string category, IReadOnlyDictionary<string, GameItem>? facts, string itemClass) =>
+        category == ItemCategories.Other && facts is not null && Facts(facts, itemClass) is { } item
+            && ShipKinds.TryGetValue(item.Type, out var kind)
+            ? kind
+            : category;
 
     /// <summary>
     /// The placeholders, worded exactly as StarStrings words them, so a title

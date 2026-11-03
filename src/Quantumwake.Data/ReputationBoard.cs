@@ -102,9 +102,25 @@ public static class ReputationBoards
     {
         var believed = history.Where(r => !r.Dismissed && r.Reading.Organisation is { Length: > 0 }).ToList();
 
-        var organisations = believed
-            .GroupBy(r => Letters(r.Reading.Organisation!))
-            .Select(group => Organisation([.. group.OrderBy(r => r.ShotAt)], catalogue, contracts))
+        // One card per organisation per ladder. Headhunters show Standing and
+        // Ship Combat in the Rep app; filed under the name alone, a Rank I
+        // Ship Combat photograph from October and a Jr. Contractor Standing one
+        // from November were one history, and the page called it a rank lost.
+        var keyed = believed
+            .Select(r => (Sighting: r, Org: Letters(r.Reading.Organisation!), Ladder: LadderKey(r.Reading, catalogue)))
+            .ToList();
+
+        // A reading no ladder fits - ranks not read yet, or game files not
+        // read yet - stays with the ladder the organisation was last seen on,
+        // which is what the page showed it beside before there were two.
+        var lastLadder = keyed
+            .Where(k => k.Ladder is not null)
+            .GroupBy(k => k.Org)
+            .ToDictionary(g => g.Key, g => g.MaxBy(k => k.Sighting.ShotAt).Ladder);
+
+        var organisations = keyed
+            .GroupBy(k => (k.Org, Ladder: k.Ladder ?? lastLadder.GetValueOrDefault(k.Org)))
+            .Select(group => Organisation([.. group.Select(k => k.Sighting).OrderBy(r => r.ShotAt)], catalogue, contracts))
             .OrderByDescending(o => o.LastSeen)
             .ToList();
 
@@ -160,7 +176,8 @@ public static class ReputationBoards
         return new RepOrganisation(
             showing.Reading.Organisation!,
             showing.Reading.Standing,
-            scope?.Name ?? (showing.Reading.Section is { } s && !s.StartsWith('@') ? s : null),
+            scope?.Name ?? KeyHeading(scope?.NameKey)
+                ?? (showing.Reading.Section is { } s && !s.StartsWith('@') ? s : null),
             showing.Reading.Rank,
             showing.Reading.Progress,
             described.Place,
@@ -259,10 +276,20 @@ public static class ReputationBoards
         if (offered.Count > 0)
         {
             var top = offered.Max(m => m.MinRank ?? 0);
+            var pays = offered.Where(m => (m.MinRank ?? 0) == top).Select(m => m.Pays!.Value).ToList();
 
-            return new RepPay(
-                offered.Where(m => (m.MinRank ?? 0) == top).Max(m => m.Pays!.Value),
-                ContractPay.Game, place.Rank, null);
+            // One figure a rank is Red Wind's way. Headhunters pay by how hard
+            // the job is instead: the contracts opening at Jr. Contractor run
+            // from 25 to 1,200, and taking the largest priced every one of
+            // their +100 patrols as the two Hard outpost raids. A spread is said
+            // as what most of them pay, with its ends.
+            if (pays.Distinct().Count() == 1)
+                return new RepPay(pays[0], ContractPay.Game, place.Rank, null);
+
+            // A tie goes to the larger here: Red Wind's Rookie opens a 100 and a
+            // 200 haul, and 200 is the rank's figure on StarStrings' ladder.
+            return new RepPay(Common(pays, largerOnTie: true), ContractPay.Game, place.Rank, null,
+                pays.Min(), pays.Max(), pays.Count);
         }
 
         // None offered by rank at this rank, but some still pay onto the ladder
@@ -282,16 +309,18 @@ public static class ReputationBoards
 
         if (open.Count == 0) return null;
 
-        // The figure most of them pay, the smaller on a tie: open contracts are
-        // not one step of a ladder but a spread - Wikelo's run from 10 to 1,000 -
-        // and the largest would price every delivery as the rarest one.
-        var common = open.GroupBy(p => p!.Value)
-            .OrderByDescending(g => g.Count())
-            .ThenBy(g => g.Key)
-            .First().Key;
-
-        return new RepPay(common, OpenSource, place.Rank, null, open.Min(), open.Max(), open.Count);
+        // Open contracts are not one step of a ladder but a spread - Wikelo's
+        // run from 10 to 1,000 - and the largest would price every delivery as
+        // the rarest one.
+        return new RepPay(Common([.. open.Select(p => p!.Value)]), OpenSource, place.Rank, null, open.Min(), open.Max(), open.Count);
     }
+
+    /// <summary>The figure most of them pay, the smaller on a tie unless told otherwise.</summary>
+    private static int Common(IReadOnlyList<int> pays, bool largerOnTie = false) =>
+        pays.GroupBy(p => p)
+            .OrderByDescending(g => g.Count())
+            .ThenBy(g => largerOnTie ? -g.Key : g.Key)
+            .First().Key;
 
     /// <summary>Paid by the game's contracts that move this ladder whatever the rank.</summary>
     public const string OpenSource = "game-open";
@@ -358,6 +387,46 @@ public static class ReputationBoards
     /// <summary>The archive entry behind a logo address <see cref="LogoOf"/> gave out.</summary>
     public static string? LogoEntry(string id, GameReputationCatalogue catalogue) =>
         catalogue.Organisations?.FirstOrDefault(o => string.Equals(o.Id, id, StringComparison.Ordinal))?.Logo;
+
+    /// <summary>
+    /// Which ladder a reading is on, by the rank names of the one it matches;
+    /// null when none does.
+    /// </summary>
+    /// <remarks>
+    /// By the names rather than the record, because Hired Muscle and the
+    /// Headhunters' Ship Combat share every one and only the heading and perks
+    /// tell them apart - and a frame whose heading did not read could be put on
+    /// either. One organisation never shows both, so the same names are the
+    /// same ladder.
+    /// </remarks>
+    private static string? LadderKey(ReputationReading reading, GameReputationCatalogue catalogue) =>
+        ReputationLadders.Match(reading, catalogue) is { } scope
+            ? string.Join('|', scope.Ranks.Select(r => Letters(r.Name)))
+            : null;
+
+    /// <summary>
+    /// A heading from a ladder's untranslated key, for the ones the game has no
+    /// English for and shows the key in place of: "@RepScope_ShipCombat_HeadHunters_Name"
+    /// is "Ship Combat". With two Headhunters cards on the page, the one
+    /// without a heading would otherwise be told apart from Standing by
+    /// nothing at all.
+    /// </summary>
+    internal static string? KeyHeading(string? key)
+    {
+        if (key is null || !key.StartsWith("@RepScope_", StringComparison.OrdinalIgnoreCase)) return null;
+
+        var word = key["@RepScope_".Length..].Split('_')[0];
+        if (word.Length == 0) return null;
+
+        var spaced = new System.Text.StringBuilder();
+        foreach (var c in word)
+        {
+            if (char.IsUpper(c) && spaced.Length > 0) spaced.Append(' ');
+            spaced.Append(c);
+        }
+
+        return spaced.ToString();
+    }
 
     private static int? IndexOf(ReputationReading reading) =>
         reading.Rank is { } rank && reading.Ranks is { } cards

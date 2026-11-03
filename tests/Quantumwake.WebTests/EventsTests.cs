@@ -426,15 +426,56 @@ public class EventsTests
         var page = Loaded();
         Assert.DoesNotContain("tier", page.NodeText("#toasts"));
 
-        // The overall bar's first tier, 4,500, reached on the next read.
-        page.Serve("/api/events", Events.Replace(
-            "\"minPoints\":4500,\"badge\":\"R_PU_IASI_OP_1\",\"reward\":\"BriskAir IC-10 Cooler\",\"reached\":false",
-            "\"minPoints\":4500,\"badge\":\"R_PU_IASI_OP_1\",\"reward\":\"BriskAir IC-10 Cooler\",\"reached\":true"));
+        // The overall bar's first tier, 4,500, reached on the next read, by a
+        // contract handed in a minute ago.
+        page.Serve("/api/events", Crossed(DateTimeOffset.UtcNow.AddMinutes(-1)));
         page.Do("await loadEvents();");
 
         var toasts = page.NodeText("#toasts");
         Assert.Contains("Your total tier 1 reached", toasts);
         Assert.Contains("RSI Discovery Event - BriskAir IC-10 Cooler", toasts);
+    }
+
+    private static string Crossed(DateTimeOffset lastSeen) => Events
+        .Replace(
+            "\"minPoints\":4500,\"badge\":\"R_PU_IASI_OP_1\",\"reward\":\"BriskAir IC-10 Cooler\",\"reached\":false",
+            "\"minPoints\":4500,\"badge\":\"R_PU_IASI_OP_1\",\"reward\":\"BriskAir IC-10 Cooler\",\"reached\":true")
+        .Replace("\"lastSeen\":\"2026-10-09T19:00:00Z\"", $"\"lastSeen\":\"{lastSeen.UtcDateTime:yyyy-MM-ddTHH:mm:ssZ}\"");
+
+    /// <summary>
+    /// A past event read for the first time - the logs still being read when
+    /// the page opened - crosses every tier it ever reached at once. That is
+    /// history arriving, not a tier earned, and it toasted a dozen.
+    /// </summary>
+    [Fact]
+    public void Tiers_from_a_past_event_read_late_raise_no_toast()
+    {
+        var page = Loaded();
+
+        // The event's contracts are from October; the read is today.
+        page.Serve("/api/events", Crossed(new DateTimeOffset(2026, 10, 20, 2, 21, 48, TimeSpan.Zero)));
+        page.Do("await loadEvents();");
+
+        Assert.DoesNotContain("reached", page.NodeText("#toasts"));
+    }
+
+    /// <summary>Several tiers at once are one toast, so one earned is not lost among them.</summary>
+    [Fact]
+    public void Many_tiers_in_one_read_are_said_once()
+    {
+        var page = Loaded();
+        page.Do("""
+            const before = JSON.parse(JSON.stringify(eventsData));
+            const after = JSON.parse(JSON.stringify(eventsData));
+            const event = after.events[0];
+            event.lastSeen = new Date(Date.now() - 60000).toISOString();
+            for (const track of event.tracks) for (const tier of track.tiers) tier.reached = true;
+            announceEventTiers(before, after);
+            """);
+
+        var toasts = page.NodeText("#toasts");
+        Assert.Contains("event tiers reached", toasts);
+        Assert.DoesNotContain("tier 1 reached", toasts);
     }
 
     /// <summary>

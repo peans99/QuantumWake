@@ -281,6 +281,35 @@ public class MissionPayTests
         Assert.Equal((500, 100, 1000, 4), (pay.Rep, pay.Low!.Value, pay.High!.Value, pay.Contracts!.Value));
     }
 
+    /// <summary>
+    /// Headhunters pay by difficulty, not by rank: the contracts opening at Jr.
+    /// Contractor on 4.10.2 run from 25 to 1,200. The largest priced every +100
+    /// patrol as the two Hard outpost raids; the figure is now the usual one.
+    /// </summary>
+    [Fact]
+    public void Contracts_at_one_rank_that_pay_by_difficulty_give_the_common_figure_and_the_range()
+    {
+        var catalogue = HeadhuntersCatalogue(hijacked: false) with
+        {
+            Missions = new[] { (100, 1), (100, 1), (150, 1), (1200, 1), (25, 0) }
+                .Select((m, i) => new KeyValuePair<string, GameMissionPay>(
+                    $"00000000-0000-4000-8000-0000000002{i:D2}",
+                    new GameMissionPay($"HH_Pyro_{i}", [Line(Headhunters, StandingScope, m.Item1)],
+                        RankScope: StandingScope, MinRank: m.Item2, MaxRank: 6)))
+                .ToDictionary(StringComparer.OrdinalIgnoreCase),
+        };
+
+        var standing = new RepSighting("st.jpg", DateTimeOffset.UnixEpoch,
+            new ReputationReading("HEADHUNTERS", "NEUTRAL", null, [], "STANDING", null)
+                .WithBars([.. Standing.Ranks.Select((r, i) =>
+                    new RepRankCard(r.Name.ToUpperInvariant(), null, i == 0 ? 1 : i == 1 ? 0.55 : 0))]));
+
+        var pay = Assert.Single(ReputationBoards.Build([standing], catalogue, []).Organisations).Pay!;
+
+        Assert.Equal(ContractPay.Game, pay.Source);
+        Assert.Equal((100, 100, 1200, 4), (pay.Rep, pay.Low!.Value, pay.High!.Value, pay.Contracts!.Value));
+    }
+
     [Fact]
     public void A_contract_pays_one_ladder_and_not_the_other()
     {
