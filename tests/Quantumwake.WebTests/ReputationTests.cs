@@ -119,6 +119,32 @@ public class ReputationTests
         Assert.Equal(0, page.Count("__dom.node('#reputation-list').byClass('rep-section').length"));
         Assert.Contains("CareerHauling", page.NodeText("#reputation-list"));
     }
+    /// <summary>
+    /// Headhunters on two ladders: two cards, each named for its ladder, and
+    /// counted as one organisation.
+    /// </summary>
+    [Fact]
+    public void An_organisation_on_two_ladders_names_each_card_by_its_ladder()
+    {
+        var page = Loaded();
+        page.Do("""
+            const card = (section, rank) => ({
+              name: 'HEADHUNTERS', standing: 'NEUTRAL', section, rank, progress: 0.5, place: null, ladder: [],
+              lastSeen: '2026-11-03T03:15:39Z', lastShot: 'x.jpg',
+              history: [{ at: '2026-11-03T03:15:39Z', shot: 'x.jpg', rank, rankIndex: 1, progress: 0.5 }],
+              change: null, work: null
+            });
+            reputationAll = { organisations: [card('Standing', 'JR. CONTRACTOR'), card('Ship Combat', 'RANK I'),
+              { ...card('Hauling', 'MEMBER'), name: 'RED WIND LINEHAUL' }],
+              readings: 4, unmeasured: 0, canRead: true, watching: true, ladders: 46 };
+            renderReputation();
+            """);
+
+        var names = page.Text("__dom.node('#reputation-list').byClass('point-name-read').map(n => n.textContent).join('|')");
+        Assert.Equal("HEADHUNTERS · Standing|HEADHUNTERS · Ship Combat|RED WIND LINEHAUL", names);
+        Assert.StartsWith("2 organisations", page.NodeText("#reputation-count"));
+    }
+
     /// <summary>A reading from before the bars were read says so, rather than drawing an empty one.</summary>
     [Fact]
     public void A_reading_without_a_rank_says_why_and_the_notice_says_it_is_being_read_again()

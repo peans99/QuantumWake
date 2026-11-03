@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css?v=0.20.63">
+  <link rel="stylesheet" href="app.css?v=0.20.66">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -4047,6 +4047,9 @@
         <input type="search" id="labels-search" class="search"
                placeholder="Find an item, a kind, or a mark&hellip;"
                autocomplete="off" spellcheck="false">
+        <select id="labels-category" class="select" aria-label="Kind">
+          <option value="">All kinds</option>
+        </select>
       </div>
       <div class="table-wrap">
         <table id="textoverlay-table">
@@ -4967,6 +4970,6 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.20.63"></script>
+<script src="app.js?v=0.20.66"></script>
 </body>
 </html>

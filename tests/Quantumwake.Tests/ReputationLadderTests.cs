@@ -261,4 +261,61 @@ public class ReputationLadderTests
             ReputationBoards.LogoEntry("FactionReputation_Lawful_InterSecDefenseSolutions", catalogue));
         Assert.Null(ReputationBoards.LogoEntry("Data", catalogue));
     }
+
+    private static ReputationReading HeadhuntersShipCombat(string? section, double rankOne) =>
+        new ReputationReading("HEADHUNTERS", "NEUTRAL", null, [], section, null)
+            .WithBars([.. new (string, string?, double)[]
+            {
+                ("NOT ELIGIBLE", null, 0), ("APPLICANT", null, 1), ("RANK I", "ADDITIONAL CONTRACTS", rankOne),
+                ("RANK II", "ADDITIONAL CONTRACTS", 0), ("RANK III", "ADDITIONAL CONTRACTS", 0),
+                ("RANK IV", "ADDITIONAL CONTRACTS", 0), ("RANK V", "ADDITIONAL CONTRACTS", 0),
+            }.Select(c => new RepRankCard(c.Item1, c.Item2, c.Item3))]);
+
+    private static ReputationReading HeadhuntersStanding(double junior) => Reading("HEADHUNTERS", "STANDING",
+    [
+        ("NEUTRAL", null, 1), ("JR. CONTRACTOR", null, junior), ("CONTRACTOR", null, 0), ("SR. CONTRACTOR", null, 0),
+        ("VETERAN CONTRACTOR", null, 0), ("HEAD CONTRACTOR", null, 0), ("ELITE CONTRACTOR", null, 0),
+    ]);
+
+    /// <summary>
+    /// This install's four Headhunters photographs: Ship Combat Rank I on 8
+    /// September (heading unread) and 24 October, Standing Jr. Contractor twice
+    /// on 3 November. Filed as one history, the page said a rank was lost.
+    /// </summary>
+    [Fact]
+    public void Each_ladder_of_one_organisation_keeps_its_own_history()
+    {
+        var november = new DateTimeOffset(2026, 11, 3, 2, 46, 21, TimeSpan.Zero);
+        var history = new[]
+        {
+            new RepSighting("a.jpg", September, HeadhuntersShipCombat(null, 0.669)),
+            new RepSighting("b.jpg", October, HeadhuntersShipCombat("@REPSCOPE-SHIPCOMBAT-HEADHUNTERS-NAME", 0.678)),
+            new RepSighting("c.jpg", november, HeadhuntersStanding(0.266)),
+            new RepSighting("d.jpg", november.AddMinutes(29), HeadhuntersStanding(0.550)),
+        };
+
+        var board = ReputationBoards.Build(history, Catalogue, []);
+        Assert.Equal(2, board.Organisations.Count);
+
+        var standing = board.Organisations[0];
+        Assert.Equal("Standing", standing.Section);
+        Assert.Equal(2, standing.History.Count);
+        Assert.Equal(0, standing.Change!.Ranks);
+        Assert.Equal((long)Math.Round(1400 * 0.550) - (long)Math.Round(1400 * 0.266), standing.Change.Estimate);
+
+        // The September frame, its heading unread, still joins October's ladder.
+        var combat = board.Organisations[1];
+        Assert.Equal("Ship Combat", combat.Section);
+        Assert.Equal(2, combat.History.Count);
+        Assert.Equal(0, combat.Change!.Ranks);
+        Assert.All(board.Organisations, o => Assert.Equal("HEADHUNTERS", o.Name));
+    }
+
+    [Theory]
+    [InlineData("@RepScope_ShipCombat_HeadHunters_Name", "Ship Combat")]
+    [InlineData("@RepScope_Standing_Name", "Standing")]
+    [InlineData("@SomethingElse", null)]
+    [InlineData(null, null)]
+    public void A_ladder_with_no_english_heading_is_named_from_its_key(string? key, string? heading) =>
+        Assert.Equal(heading, ReputationBoards.KeyHeading(key));
 }

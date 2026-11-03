@@ -5947,5 +5947,19 @@
   "Damage floor at": "Dégâts minimaux à",
   "Projectile travel limit": "Limite de trajet du projectile",
   "Range figures are unavailable.": "Les données de portée sont indisponibles.",
-  "Range figures describe damage and projectile travel. The spread target uses a relative scale.": "La portée décrit les dégâts et le trajet du projectile. La cible de dispersion utilise une échelle relative."
+  "Range figures describe damage and projectile travel. The spread target uses a relative scale.": "La portée décrit les dégâts et le trajet du projectile. La cible de dispersion utilise une échelle relative.",
+  "Ship weapons": "Armes de vaisseau",
+  "Turrets & mounts": "Tourelles et supports",
+  "Thrusters": "Propulseurs",
+  "Fuel tanks": "Réservoirs",
+  "Ship armour": "Blindage de vaisseau",
+  "rank": "rang",
+  "cargo size": "taille de cargaison",
+  "pickup": "enlèvement",
+  "drop-off": "livraison",
+  "{count} event tiers reached": {
+    "one": "{count} palier d’événement atteint",
+    "other": "{count} paliers d’événement atteints"
+  },
+  "What most {rank} contracts of theirs pay, by the installed game: {count} contracts, from {low} to {high} depending on difficulty. Type over it if a delivery pays differently.": "Ce que rapportent la plupart de leurs contrats {rank}, selon le jeu installé : {count} contrats, de {low} à {high} selon la difficulté. Remplacez-le si une livraison rapporte autrement."
 }

@@ -185,4 +185,42 @@ public class TextOverlayPageTests
 
         Assert.Equal("", page.Text("window.__posted.join(',')"));
     }
+
+    /// <summary>
+    /// Four thousand renames across a dozen kinds: a picker narrows the list
+    /// to one, with how many each holds.
+    /// </summary>
+    [Fact]
+    public void The_list_can_be_narrowed_to_one_kind()
+    {
+        var page = Loaded();
+
+        var options = page.Text("__dom.node('#labels-category').options.map(o => o.textContent).join('|')");
+        Assert.Equal("All kinds|Attachments (1)|Weapons (1)", options);
+
+        page.Do("__dom.node('#labels-category').value = 'Weapons'; renderLabelChanges();");
+        var body = page.NodeText("#textoverlay-table tbody");
+        Assert.Contains("F55 LMG", body);
+        Assert.DoesNotContain("FieldLite", body);
+        Assert.Contains("1 of 2 renames match.", page.NodeText("#labels-count"));
+    }
+
+    /// <summary>
+    /// A hauling title is the game's template, and its rank slot listed raw -
+    /// "~mission(ReputationRank) Rank" - read like a reputation figure gone wrong.
+    /// </summary>
+    [Fact]
+    public void A_hauling_title_shows_what_the_game_fills_in_rather_than_its_tokens()
+    {
+        const string title = """{"itemClass":"Covalex_HaulCargo_AToB_title","was":"~mission(ReputationRank) Rank - Direct ~mission(CargoGradeToken) Cargo Haul","becomes":"~mission(ReputationRank) Rank - Direct ~mission(CargoGradeToken) Cargo Haul | ~mission(Location|name) > ~mission(Destination|name)","category":"Hauling title"},""";
+        const string first = """{"itemClass":"gmni_lmg_ballistic_01",""";
+        var page = Loaded(Plan.Replace(first, title + first));
+
+        var body = page.NodeText("#textoverlay-table tbody");
+        Assert.Contains("‹rank› Rank - Direct ‹cargo size› Cargo Haul | ‹pickup› > ‹drop-off›", body);
+        Assert.DoesNotContain("~mission", body);
+
+        page.Do("__dom.node('#labels-search').value = 'pickup'; renderLabelChanges();");
+        Assert.Contains("Cargo Haul", page.NodeText("#textoverlay-table tbody"));
+    }
 }

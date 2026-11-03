@@ -328,6 +328,18 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.20.66
+
+**Headhunters no longer look like they dropped a rank.** Headhunters have two ladders in the Rep app, Standing and Ship Combat, and screenshots of both were filed as one history. A Ship Combat Rank I screenshot followed by a Standing Jr. Contractor one read as a rank lost, and the trend line mixed the two. Each ladder now has its own card, named for its ladder ("HEADHUNTERS · Standing", "HEADHUNTERS · Ship Combat"), with its own history and change. The rep-run planner lets you pick which one you are climbing. The header still counts an organisation once.
+
+**What a contract pays, for organisations that pay by difficulty.** The Rep page and the rep-run planner said what one more contract pays at your rank by taking the largest figure among the contracts that open there. That suits Red Wind, which pays one figure a rank. Some open several contracts at one rank that pay different figures. Headhunters pay by difficulty: at Jr. Contractor, Headhunters contracts run from +25 to +1,200, and the page priced every one at the two Hard outpost raids' 1,200. It now gives the figure most of them pay (+100 for Headhunters, matching the 22 in these logs; InterSec and Adagio also move from 200 to 100) and says the range beside it.
+
+**Events no longer bury you in notifications.** Opening the Events page while your logs were still being read, or after an older log was read for the first time, raised a notification for every tier a past event had ever reached. A tier is now announced only when a contract you just handed in crosses it. Several at once are one notification.
+
+**Item labels by kind.** Settings → Item labels has a picker beside the search to show one kind at a time, with how many each holds. Ship parts, which were all listed under Other (about 650 of them), are now listed as ship weapons, coolers, shields, power plants, quantum drives, missiles, missile racks, turrets, countermeasures, ship armour and so on. Hauling titles show what the game fills in, such as ‹rank›, ‹pickup› and ‹drop-off›, instead of tokens like `~mission(ReputationRank)` that looked like a broken rep figure. What gets written into the game is unchanged.
+
+**A new face for the Armoury test bench.** The spread target is now drawn as an instrument: corner brackets, banded zones, a ticked bezel and range marks on the cross. A faint line joins each sample point to where the fit moves it. A narrower fit stays cyan with a green verdict under the target; a wider one turns the fitted pattern and the verdict amber. The handling meters fill green below 100 and amber above it. The scope preview has a proper reticle (rings, a crosshair broken at the centre, range marks) that stays sharp at every zoom, in place of the plain cross, and the shot marks shrink as you zoom in so they stay points rather than blobs.
+
 ### 0.20.63
 
 The dashboard looks more like one instrument panel. Page headers, panels and pop-ups now have rounded corners and a soft top highlight. On your own history pages (Sessions, Fleet, Logbook and the like) the page header and summary figures are edged in gold; reference and planning pages stay cyan. Search boxes, drop-downs and text fields are rounded and show a clear ring when focused. Table headers are a little taller, the row under the pointer is highlighted, and numbers line up in columns. Feed tags are tinted by kind, and the main action button is filled.

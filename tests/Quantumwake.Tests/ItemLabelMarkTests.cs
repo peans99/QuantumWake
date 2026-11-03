@@ -137,4 +137,19 @@ public class ItemLabelMarkTests
         Assert.Contains("item_Name_cooler_aegs_s02_arctic=Arctic\n", content);
         Assert.DoesNotContain("[S2C]", content);
     }
+
+    /// <summary>
+    /// Ship parts were all listed as Other - 646 of this install's renames in
+    /// one heap - so the list names them by the type the install gives them.
+    /// What a pilot carries keeps its own category.
+    /// </summary>
+    [Fact]
+    public void Ship_parts_are_listed_by_what_they_are()
+    {
+        var kinds = Built().Changes.ToDictionary(c => c.ItemClass, c => c.Category);
+
+        Assert.Equal("Coolers", kinds["cooler_aegs_s02_arctic"]);
+        Assert.Equal("Shields", kinds["shield_basilisk_s01"]);
+        Assert.Equal(ItemCategories.Weapons, kinds["behr_rifle_ballistic_01"]);
+    }
 }

@@ -10183,19 +10183,82 @@ function armouryBenchTarget(spread) {
     for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
     return node;
   };
-  const svg = make('svg', { viewBox: '0 0 400 360', role: 'img', 'aria-label': tx('Illustrative spread comparison: bare weapon and fitted weapon') });
+  const state = spread < 0.9999 ? 'tighter' : spread > 1.0001 ? 'wider' : 'same';
+  const svg = make('svg', {
+    viewBox: '0 0 400 360',
+    role: 'img',
+    'data-spread': state,
+    'aria-label': tx('Illustrative spread comparison: bare weapon and fitted weapon'),
+  });
+
+  // Tactical range-bay backdrop: purely angular graduations and tonal rings,
+  // with no distance labels that could suggest a physical scale in metres.
+  const frame = make('g', { class: 'bench-target-frame', 'aria-hidden': 'true' });
+  frame.append(make('path', {
+    d: 'M26 42V20H48 M352 20H374V42 M374 318V340H352 M48 340H26V318',
+    class: 'bench-target-bracket',
+  }));
+  frame.append(make('circle', { cx: 200, cy: 180, r: 156, class: 'bench-target-disc' }));
+  frame.append(make('circle', { cx: 200, cy: 180, r: 156, class: 'bench-target-bezel' }));
+  frame.append(make('circle', { cx: 200, cy: 180, r: 108, class: 'bench-target-band-outer' }));
+  frame.append(make('circle', { cx: 200, cy: 180, r: 72, class: 'bench-target-band-mid' }));
+  frame.append(make('circle', { cx: 200, cy: 180, r: 36, class: 'bench-target-band-core' }));
+  frame.append(make('circle', { cx: 200, cy: 180, r: 16, class: 'bench-target-bullseye' }));
+
+  let ticks = '';
+  for (let deg = 0; deg < 360; deg += 15) {
+    const rad = (deg * Math.PI) / 180;
+    const major = deg % 45 === 0;
+    const r0 = major ? 146 : 150;
+    const r1 = 156;
+    const x0 = (200 + Math.cos(rad) * r0).toFixed(2);
+    const y0 = (180 + Math.sin(rad) * r0).toFixed(2);
+    const x1 = (200 + Math.cos(rad) * r1).toFixed(2);
+    const y1 = (180 + Math.sin(rad) * r1).toFixed(2);
+    ticks += `M${x0} ${y0}L${x1} ${y1} `;
+  }
+  frame.append(make('path', { d: ticks.trim(), class: 'bench-target-ticks' }));
+  frame.append(make('path', {
+    d: 'M92 72L176 156 M308 72L224 156 M92 288L176 204 M308 288L224 204',
+    class: 'bench-target-diag',
+  }));
+  svg.append(frame);
+
   for (const radius of [36, 72, 108, 144])
     svg.append(make('circle', { cx: 200, cy: 180, r: radius, class: 'bench-target-ring' }));
-  svg.append(make('path', { d: 'M20 180H380 M200 18V342', class: 'bench-target-cross' }));
+  svg.append(make('path', { d: 'M24 180H376 M200 14V346', class: 'bench-target-cross' }));
+
+  let stadia = '';
+  for (const r of [36, 72, 108, 144]) {
+    stadia += `M${200 - r} 176V184 M${200 + r} 176V184 M196 ${180 - r}H204 M196 ${180 + r}H204 `;
+  }
+  svg.append(make('path', { d: stadia.trim(), class: 'bench-target-stadia', 'aria-hidden': 'true' }));
+
   const bareRadius = 144 / Math.max(1, spread);
+  const sample = armouryBenchPattern(armouryBenchSeed);
+  if (state !== 'same') {
+    let vectors = '';
+    for (const [x, y] of sample) {
+      const bx = (200 + x * bareRadius).toFixed(2);
+      const by = (180 + y * bareRadius).toFixed(2);
+      const fx = (200 + x * bareRadius * spread).toFixed(2);
+      const fy = (180 + y * bareRadius * spread).toFixed(2);
+      vectors += `M${bx} ${by}L${fx} ${fy} `;
+    }
+    svg.append(make('path', { d: vectors.trim(), class: 'bench-pattern-vectors', 'aria-hidden': 'true' }));
+  }
+
   for (const [name, scale] of [['bare', 1], ['fitted', spread]]) {
     const group = make('g', { class: `bench-pattern-${name}` });
     group.append(make('circle', { cx: 200, cy: 180, r: bareRadius * scale, class: 'bench-pattern-limit' }));
-    for (const [x, y] of armouryBenchPattern(armouryBenchSeed))
-      group.append(make('circle', { cx: 200 + x * bareRadius * scale, cy: 180 + y * bareRadius * scale, r: name === 'bare' ? 2.6 : 2, class: 'bench-pattern-point' }));
+    for (const [x, y] of sample)
+      group.append(make('circle', { cx: 200 + x * bareRadius * scale, cy: 180 + y * bareRadius * scale, r: name === 'bare' ? 3 : 2.1, class: 'bench-pattern-point' }));
     svg.append(group);
   }
-  svg.append(make('path', { d: 'M193 180H207 M200 173V187', class: 'bench-target-origin' }));
+  svg.append(make('path', {
+    d: 'M188 180H195 M205 180H212 M200 168V175 M200 185V192 M200 176.5L203.5 180L200 183.5L196.5 180Z',
+    class: 'bench-target-origin',
+  }));
   return svg;
 }
 
@@ -10337,10 +10400,29 @@ function armouryBenchScope(effect, canPlot) {
   scope.append(lens);
   const redraw = () => {
     lens.textContent = '';
+    const factor = Number(zoom.value) || 1;
     const scene = armouryBenchTarget(canPlot ? effect.spread : 1);
     if (!canPlot) scene.setAttribute('class', 'bench-scope-grid-only');
-    scene.style.transform = `scale(${Number(zoom.value)})`;
-    lens.append(scene);
+    scene.style.transform = `scale(${factor})`;
+    const pointRadius = Math.max(0.45, Math.round((2.1 / Math.pow(Math.max(1, factor), 0.82)) * 100) / 100);
+    for (const pt of scene.querySelectorAll('.bench-pattern-point'))
+      pt.setAttribute('r', String(pointRadius));
+    const makeSvg = (tag, attrs = {}) => {
+      const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, String(v));
+      return node;
+    };
+    const reticle = makeSvg('svg', { viewBox: '0 0 260 260', class: 'bench-scope-reticle', 'aria-hidden': 'true' });
+    reticle.append(makeSvg('circle', { cx: 130, cy: 130, r: 122, class: 'bench-reticle-ring-outer' }));
+    reticle.append(makeSvg('circle', { cx: 130, cy: 130, r: 38, class: 'bench-reticle-ring-inner' }));
+    reticle.append(makeSvg('path', {
+      d: 'M14 130H102 M158 130H246 M130 14V102 M130 158V246 '
+        + 'M50 127V133 M70 126V134 M90 127V133 M170 127V133 M190 126V134 M210 127V133 '
+        + 'M127 50H133 M126 70H134 M127 90H133 M126 170H134 M125 190H135 M124 210H136 '
+        + 'M126 134L130 128L134 134',
+      class: 'bench-reticle-marks',
+    }));
+    lens.append(scene, reticle);
   };
   zoom.addEventListener('change', redraw);
   redraw();
@@ -10463,8 +10545,8 @@ function renderArmouryBenchReadout(w, fit, root) {
     legend.append(sample);
     target.append(legend);
     target.append(el('p', 'muted small', tx('Same sample points, scaled by the spread multiplier. Recoil, stance and distance are not modelled.')));
-    if (effect.spread === 1) target.append(el('p', 'small', tx('Spread is unchanged: the two patterns overlap. Try an attachment that changes spread.')));
-    else target.append(el('p', 'small', effect.spread < 1
+    if (effect.spread === 1) target.append(el('p', 'small bench-spread-verdict neutral', tx('Spread is unchanged: the two patterns overlap. Try an attachment that changes spread.')));
+    else target.append(el('p', `small bench-spread-verdict ${effect.spread < 1 ? 'gain' : 'cost'}`, effect.spread < 1
       ? tx('{percent}% narrower than bare', { percent: armouryBenchIndex(1 - effect.spread) })
       : tx('{percent}% wider than bare', { percent: armouryBenchIndex(effect.spread - 1) })));
   } else {
@@ -10483,8 +10565,9 @@ function renderArmouryBenchReadout(w, fit, root) {
     const line = el('div', 'bench-handling-row');
     line.append(el('span', null, label));
     const known = Number.isFinite(value) && value > 0;
-    const track = el('span', 'bench-meter');
-    const bar = el('span', 'bench-meter-fill');
+    const state = known ? (value < 1 ? 'gain' : value > 1 ? 'cost' : 'muted') : 'muted';
+    const track = el('span', `bench-meter ${state}`);
+    const bar = el('span', `bench-meter-fill ${state}`);
     bar.style.width = known ? `${Math.min(value, 2) * 50}%` : '0%';
     track.append(bar);
     track.setAttribute('aria-hidden', 'true');
@@ -12755,8 +12838,10 @@ function renderReputation() {
 
   const count = $('#reputation-count');
   if (count) {
+    // Organisations, not cards: one with two ladders is one organisation.
+    const named = new Set(orgs.map((o) => o.name)).size;
     count.textContent = orgs.length
-      ? `${txn(orgs.length, '{count} organisation', '{count} organisations')} · ${txn(data.readings || 0, '{count} screenshot', '{count} screenshots')}`
+      ? `${txn(named, '{count} organisation', '{count} organisations')} · ${txn(data.readings || 0, '{count} screenshot', '{count} screenshots')}`
       : '';
   }
 
@@ -12774,7 +12859,7 @@ function renderReputation() {
     return;
   }
 
-  for (const org of orgs) list.append(reputationCard(org));
+  for (const org of orgs) list.append(reputationCard(org, orgs));
 }
 
 /** What the page cannot do yet and why, or null when it is all there. */
@@ -12808,7 +12893,17 @@ function reputationPercent(progress) {
   return tx('{n}%', { n: Math.round((progress || 0) * 100) });
 }
 
-function reputationCard(org) {
+/**
+ * What a card goes by: the organisation, and its ladder when the board has it
+ * on more than one. Headhunters have Standing and Ship Combat cards, and two
+ * cards both called HEADHUNTERS read as a duplicate rather than two ladders.
+ */
+function reputationLabel(org, orgs) {
+  const twins = (orgs || []).filter((o) => o.name === org.name).length > 1;
+  return twins && org.section ? `${org.name} · ${org.section}` : org.name;
+}
+
+function reputationCard(org, orgs = []) {
   const card = el('article', 'point-card rep-card');
 
   const head = el('div', 'wikelo-head');
@@ -12826,7 +12921,7 @@ function reputationCard(org) {
     title.append(logo);
   }
 
-  title.append(el('div', 'point-name-read', org.name));
+  title.append(el('div', 'point-name-read', reputationLabel(org, orgs)));
   head.append(title);
   head.append(el('div', 'muted', tx('last seen {when}', { when: ago(org.lastSeen) })));
   card.append(head);
@@ -13361,25 +13456,51 @@ function eventTiersReached(data) {
   return reached;
 }
 
+/** How recent an event's last contract must be for a tier it crossed to be news. */
+const EVENT_TIER_NEWS_MS = 30 * 60000;
+
+/** More tiers than this in one read are said in one toast rather than one each. */
+const EVENT_TIER_TOASTS = 2;
+
 /**
  * A tier crossed since the last read raises a toast with what it gives - the
- * journal moves the bar, in percent, and says nothing. Only a change between
- * two reads counts: the first read of a page load is history, and toasting
- * every tier already held would bury the one just earned.
+ * journal moves the bar, in percent, and says nothing.
+ *
+ * Only a tier earned just now counts. A change between two reads is not
+ * enough: the first read of a past event - logs still being read when the page
+ * opened, a backup read for the first time - crosses every tier it ever
+ * reached at once, and that toasted a dozen tiers from a month-old event. So
+ * the event's last contract has to be new since the previous read and from
+ * the last half hour, which is a pilot playing it, not a history arriving.
  */
-function announceEventTiers(before, after) {
+function announceEventTiers(before, after, nowMs = Date.now()) {
   if (!before?.events || !after?.events) return;
 
   const had = eventTiersReached(before);
+  const lastSeen = new Map(before.events.map((e) => [e.id, e.lastSeen || null]));
+  const earned = [];
 
   for (const event of after.events) {
+    if (!event.lastSeen || lastSeen.get(event.id) === event.lastSeen) continue;
+    if (nowMs - Date.parse(event.lastSeen) > EVENT_TIER_NEWS_MS) continue;
+
     for (const track of event.tracks) {
       track.tiers.forEach((tier, index) => {
         if (!tier.reached || had.has(`${event.id}|${track.id}|${tier.minPoints}`)) return;
-        toast('event-tier', tx('{track} tier {tier} reached', { track: track.name, tier: index + 1 }),
-          tier.reward ? `${event.title} - ${tier.reward}` : event.title);
+        earned.push({ event, track, tier, index });
       });
     }
+  }
+
+  if (earned.length > EVENT_TIER_TOASTS) {
+    toast('event-tier', txn(earned.length, '{count} event tier reached', '{count} event tiers reached'),
+      [...new Set(earned.map((e) => e.event.title))].join(', '));
+    return;
+  }
+
+  for (const { event, track, tier, index } of earned) {
+    toast('event-tier', tx('{track} tier {tier} reached', { track: track.name, tier: index + 1 }),
+      tier.reward ? `${event.title} - ${tier.reward}` : event.title);
   }
 }
 
@@ -17773,6 +17894,13 @@ function repRunPaySource(org) {
   if (!pay) {
     return tx('Neither the installed game nor a rep tag in your logs says what one of their deliveries pays, so type it.');
   }
+  // Headhunters pay by difficulty rather than by rank, so the contracts open at
+  // one rank are a spread: the figure is the usual one, and the ends are said.
+  if (pay.source === 'game' && pay.low != null && pay.high != null && pay.low !== pay.high) {
+    return tx('What most {rank} contracts of theirs pay, by the installed game: {count} contracts, from {low} to {high} depending on difficulty. Type over it if a delivery pays differently.', {
+      rank: pay.contract, count: pay.contracts, low: pay.low.toLocaleString(), high: pay.high.toLocaleString(),
+    });
+  }
   if (pay.source === 'game') {
     return tx('What a {rank} contract of theirs pays, by the installed game’s own contracts. Type over it if a delivery pays differently.', {
       rank: pay.contract,
@@ -17819,9 +17947,12 @@ function renderRepRun() {
     return;
   }
 
-  const org = candidates.find((o) => o.name === repRun.org) || candidates[0];
-  if (org.name !== repRun.org) {
-    repRun.org = org.name;
+  // Picked by name and ladder: Headhunters' Standing and Ship Combat are two
+  // climbs with different thresholds and pay, not one.
+  const label = (o) => reputationLabel(o, repRunBoard?.organisations);
+  const org = candidates.find((o) => label(o) === repRun.org) || candidates[0];
+  if (label(org) !== repRun.org) {
+    repRun.org = label(org);
     repRun.rep = '';
     repRun.count = '';
   }
@@ -17837,8 +17968,8 @@ function renderRepRun() {
   const choose = document.createElement('select');
   choose.className = 'select';
   choose.id = 'rep-run-org';
-  for (const candidate of candidates) choose.append(new Option(candidate.name, candidate.name));
-  choose.value = org.name;
+  for (const candidate of candidates) choose.append(new Option(label(candidate), label(candidate)));
+  choose.value = label(org);
   choose.addEventListener('change', () => {
     repRun.org = choose.value;
     renderRepRun();
@@ -23023,6 +23154,7 @@ async function loadTextOverlay() {
     : tx('Built on the game\'s own text.')) + filledNote;
 
   labelChanges = state.changes || [];
+  fillLabelCategories();
   renderLabelChanges();
 
   const bits = [];
@@ -23058,14 +23190,51 @@ const LABELS_CAP = 400;
  * mark itself - "[S2B]" or "[*]" - which is how you answer "what does the star
  * actually get put on?" without reading four thousand rows.
  */
-function matchingLabelChanges(term) {
+function matchingLabelChanges(term, category = '') {
   const wanted = (term || '').trim().toLowerCase();
-  if (!wanted) return labelChanges;
+  const kept = category ? labelChanges.filter((line) => line.category === category) : labelChanges;
+  if (!wanted) return kept;
 
-  return labelChanges.filter((line) =>
+  return kept.filter((line) =>
     line.was.toLowerCase().includes(wanted)
     || line.becomes.toLowerCase().includes(wanted)
+    || labelTitleText(line.becomes).toLowerCase().includes(wanted)
     || (line.category || '').toLowerCase().includes(wanted));
+}
+
+/**
+ * The game's placeholders in a hauling title, said as what the game fills in.
+ * The file holds "~mission(ReputationRank) Rank - … | ~mission(Location|name)",
+ * and listed raw the rank slot read like a reputation figure gone wrong. The
+ * file keeps them as they are: the game needs the tokens, people need the words.
+ */
+const LABEL_TOKENS = {
+  ReputationRank: 'rank',
+  CargoGradeToken: 'cargo size',
+  Location: 'pickup',
+  Destination: 'drop-off',
+};
+
+function labelTitleText(text) {
+  return String(text || '').replace(/~mission\(([A-Za-z]+)(?:\|[^)]*)?\)/g,
+    (_, token) => `‹${LABEL_TOKENS[token] ? tx(LABEL_TOKENS[token]) : token}›`);
+}
+
+/** The kind picker: every kind in the plan with its count, the choice kept across reloads of the list. */
+function fillLabelCategories() {
+  const choose = $('#labels-category');
+  if (!choose) return;
+
+  const counts = new Map();
+  for (const line of labelChanges) counts.set(line.category, (counts.get(line.category) || 0) + 1);
+
+  const kept = choose.value;
+  choose.textContent = '';
+  choose.append(new Option(tx('All kinds'), ''));
+  for (const [category, count] of [...counts].sort((a, b) => tx(a[0]).localeCompare(tx(b[0])))) {
+    choose.append(new Option(`${tx(category)} (${count.toLocaleString()})`, category));
+  }
+  choose.value = counts.has(kept) ? kept : '';
 }
 
 function renderLabelChanges() {
@@ -23073,15 +23242,17 @@ function renderLabelChanges() {
   if (!body) return;
 
   const term = $('#labels-search')?.value || '';
-  const rows = matchingLabelChanges(term);
+  const category = $('#labels-category')?.value || '';
+  const rows = matchingLabelChanges(term, category);
 
   body.textContent = '';
 
   for (const line of rows.slice(0, LABELS_CAP)) {
     const tr = el('tr');
-    tr.append(el('td', null, line.was));
+    const title = line.category === 'Hauling title';
+    tr.append(el('td', null, title ? labelTitleText(line.was) : line.was));
     tr.append(el('td', 'muted', tx(line.category)));
-    tr.append(el('td', null, line.becomes));
+    tr.append(el('td', null, title ? labelTitleText(line.becomes) : line.becomes));
     body.append(tr);
   }
 
@@ -23096,11 +23267,11 @@ function renderLabelChanges() {
   // The total is what the page is answering for, so it is always said - a bare
   // "400 rows" would read as the whole plan when it is a tenth of it.
   if (rows.length === 0) {
-    counter.textContent = tx('Nothing matches "{term}" among {total} renames.', { term: term.trim(), total: labelChanges.length.toLocaleString() });
+    counter.textContent = tx('Nothing matches "{term}" among {total} renames.', { term: term.trim() || tx(category), total: labelChanges.length.toLocaleString() });
   } else if (rows.length > LABELS_CAP) {
     counter.textContent = tx('Showing {shown} of {count} matches, out of {total} renames — narrow the search to see the rest.',
       { shown: LABELS_CAP, count: rows.length.toLocaleString(), total: labelChanges.length.toLocaleString() });
-  } else if (term.trim()) {
+  } else if (term.trim() || category) {
     counter.textContent = tx('{count} of {total} renames match.', { count: rows.length.toLocaleString(), total: labelChanges.length.toLocaleString() });
   } else {
     counter.textContent = txn(labelChanges.length, '{count} rename.', '{count} renames.', { count: labelChanges.length.toLocaleString() });
@@ -23112,6 +23283,7 @@ function initTextOverlay() {
   if (!install) return;
 
   onInput('#labels-search', renderLabelChanges);
+  $('#labels-category')?.addEventListener('change', renderLabelChanges);
 
   install.addEventListener('click', async () => {
     $('#textoverlay-status').textContent = tx('Writing…');
