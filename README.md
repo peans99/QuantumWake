@@ -328,7 +328,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.20.60
+### 0.20.61
+
+The Armoury bench shows damage falloff and the fitted projectile travel limit beside the spread target. Beam modes show their full-damage distance and where the beam ends.
 
 The Armoury bench previews sight magnification through a generic reticle, including alternate zoom levels, aim time and available zeroing settings. The attachment breakdown shows which pieces contribute to each modifier and the combined result used by the bench.
 

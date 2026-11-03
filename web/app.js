@@ -10399,6 +10399,28 @@ function armouryBenchContributions(fit) {
   return section;
 }
 
+function armouryBenchRange(w, fit, mode) {
+  const range = el('section', 'bench-range');
+  range.append(el('h4', null, tx('Range')));
+  const markers = mode?.kind === 'Beam'
+    ? [[tx('Full damage through'), mode.beamFullRange], [tx('Beam ends at'), mode.beamZeroRange]]
+    : [[tx('Falloff starts at'), w.dropStart], [tx('Damage floor at'), w.dropStart > 0 ? w.floorAt : 0],
+       [tx('Projectile travel limit'), fit.projectileSpeed * w.projectileLifetime]];
+  const list = el('dl', 'bench-range-markers');
+  for (const [label, distance] of markers) {
+    if (!Number.isFinite(distance) || distance <= 0) continue;
+    const marker = el('div');
+    marker.append(el('dt', null, label), el('dd', null, `${fmtDamage(distance)} m`));
+    list.append(marker);
+  }
+  if (list.children.length) range.append(list);
+  else range.append(el('p', 'muted small', tx('Range figures are unavailable.')));
+  if (mode?.kind !== 'Beam' && w.dropStart === 0)
+    range.append(el('p', 'muted small', tx('No damage drop with distance.')));
+  range.append(el('p', 'muted small', tx('Range figures describe damage and projectile travel. The spread target uses a relative scale.')));
+  return range;
+}
+
 function renderArmouryBenchReadout(w, fit, root) {
   root.textContent = '';
   const effect = fit.effect || {};
@@ -10412,6 +10434,7 @@ function renderArmouryBenchReadout(w, fit, root) {
   title.append(el('h4', null, tx('Relative spread')));
   title.append(el('span', 'bench-index', spreadKnown ? tx('{value} · bare = 100', { value: armouryBenchIndex(effect.spread) }) : '—'));
   target.append(title);
+  target.append(armouryBenchRange(w, fit, mode || bare));
   if (canPlot) {
     const plot = el('div', 'bench-plot');
     plot.append(armouryBenchTarget(effect.spread));

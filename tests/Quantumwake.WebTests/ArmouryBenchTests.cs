@@ -43,6 +43,22 @@ public class ArmouryBenchTests
     private static string Picker(string slot) => $"{Root}.descendants().find(n => n.tagName === 'select' && n.dataset.slot === '{slot}')";
 
     [Fact]
+    public void Range_markers_distinguish_falloff_projectile_travel_and_beam_cutoff()
+    {
+        var page = Open();
+        page.Do("""
+            var projectileRange = armouryBenchRange(armouryModel.weapons[0], {projectileSpeed:500}, {kind:'Auto'});
+            var beamRange = armouryBenchRange(armouryModel.weapons[1], {projectileSpeed:500}, armouryModel.weapons[1].modes[0]);
+            """);
+        Assert.Contains("Falloff starts at40 m", page.Text("projectileRange.textContent"));
+        Assert.Contains("Damage floor at80 m", page.Text("projectileRange.textContent"));
+        Assert.Contains("Projectile travel limit", page.Text("projectileRange.textContent"));
+        Assert.Contains("Full damage through10 m", page.Text("beamRange.textContent"));
+        Assert.Contains("Beam ends at25 m", page.Text("beamRange.textContent"));
+        Assert.DoesNotContain("Projectile travel limit", page.Text("beamRange.textContent"));
+    }
+
+    [Fact]
     public void Scope_uses_both_zoom_levels_and_the_available_zeroing()
     {
         var page = Open();

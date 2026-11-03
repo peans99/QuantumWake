@@ -5940,5 +5940,12 @@
   "Burst shots": "Tirs par rafale",
   "Combined {effect}": "Total {effect}",
   "The selected attachments have no stacking effects in the available figures.": "Les chiffres disponibles ne montrent aucun effet cumulable pour les accessoires sélectionnés.",
-  "The bench multiplies modifiers and adds pellet and burst-shot changes.": "Le banc multiplie les coefficients et additionne les variations du nombre de projectiles et de tirs par rafale."
+  "The bench multiplies modifiers and adds pellet and burst-shot changes.": "Le banc multiplie les coefficients et additionne les variations du nombre de projectiles et de tirs par rafale.",
+  "Full damage through": "Dégâts complets jusqu’à",
+  "Beam ends at": "Fin du faisceau à",
+  "Falloff starts at": "Baisse des dégâts à partir de",
+  "Damage floor at": "Dégâts minimaux à",
+  "Projectile travel limit": "Limite de trajet du projectile",
+  "Range figures are unavailable.": "Les données de portée sont indisponibles.",
+  "Range figures describe damage and projectile travel. The spread target uses a relative scale.": "La portée décrit les dégâts et le trajet du projectile. La cible de dispersion utilise une échelle relative."
 }
