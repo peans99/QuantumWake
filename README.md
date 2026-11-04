@@ -328,6 +328,8 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.22.0
+
 ### 0.21.10
 
 **The pages link to each other.** A name on one page now opens the page that knows more about it, where most were plain words. Commodities open their own page from the Ledger, Cargo, trade routes, Mining, the refinery, the radar, recipes and the kiosk readings; the Market's spelling is matched first, so "Laranite (Ore)" or a misread "Quantainium" still lands on the right one. Organisations open their Reputation card, and a Reputation card's count of their contracts opens those contracts. Contracts can be narrowed to one issuer or one contract, and the list says so above itself with the way back to all of them. Sessions open from Servers, the Log page's files, the Logbook, a blueprint's received date and a mission's runs, and Sessions can now be searched by server or by someone you flew with. The people in a session debrief, the party on Now and shared files open their row on Crew. The Reference ship card has Garage, Compare sizes and your own copy on Fleet; the item card opens the Armoury for a gun or a piece of armour, and Stash or Loadout for your own; the mission card links its organisations, places, runs and payouts. Shops and terminals across the Armoury, the crack calculator, salvage, Loot, the Reference price tables, Fleet and the Garage go to the map, and Events, haul plans and flight plans link their contracts to the mission window.
