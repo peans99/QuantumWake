@@ -6,7 +6,7 @@ to its author. This page says what it reads, what it keeps, and every
 occasion on which it talks to the internet, with the switch that controls each
 one.
 
-In force from version 0.22 (November 2026). Changes to this page are dated in
+In force from version 1.0 (November 2026). Changes to this page are dated in
 the project's history on GitHub. Questions go to the project's issue tracker,
 <https://github.com/peans99/QuantumWake/issues>.
 

@@ -1,6 +1,6 @@
 # The Windows installer
 
-Added in 0.22.3. Every release carries `QuantumWake-<version>-win-x64.msi`
+Added in 1.0. Every release carries `QuantumWake-<version>-win-x64.msi`
 beside the bare `QuantumWake.exe`: the same file, byte for byte, installed. The
 source is `installer/QuantumWake.wxs`, built by `installer/build.ps1` with WiX
 5.0.2 from the repository's tool manifest (`dotnet-tools.json`). The release
