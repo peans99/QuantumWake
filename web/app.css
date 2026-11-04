@@ -8631,3 +8631,149 @@ body:not(.overlay) .itinerary-plan {
   padding: 8px 10px;
   transition: background-color .14s ease, border-color .14s ease;
 }
+
+
+/* ---------- 3D models ----------
+   Reference -> 3D models: a card per hull or weapon the install can draw.
+   The view itself is styled in viewer3d.css, loaded with it. */
+.models-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+.model-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: linear-gradient(160deg, var(--panel-2), var(--panel));
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .14s ease, transform .14s ease;
+}
+body .model-card { text-transform: none; letter-spacing: normal; }
+.model-card:hover,
+.model-card:focus-visible { border-color: var(--cyan); transform: translateY(-1px); }
+.model-card strong { font-size: 14px; font-weight: 600; }
+.model-card-maker { font: 600 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--cyan); }
+.model-card-meta { font: 11px var(--mono); color: var(--dim); }
+.garage-model-action { margin: 4px 0 2px; }
+.garage-model-action:empty { display: none; }
+.armoury-detail .model-view-button { margin-left: 8px; }
+
+/* Fleet -> Fitted, as last photographed. A roster card is a row of logo and
+   text; a fit is a heading and a list, so it stacks, and each part reads as
+   its slot over the part with the stock verdict beside it. */
+.ship-card.fitting-card { flex-direction: column; align-items: stretch; gap: 4px; }
+.fitting-card .feed.screen-fittings li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 10px;
+  row-gap: 1px;
+  align-items: center;
+}
+.fitting-card .feed.screen-fittings .what { grid-column: 1 / -1; color: var(--muted); font-size: 11px; }
+.fitting-card .feed.screen-fittings .d { min-width: 0; color: var(--text); }
+.fitting-card .feed.screen-fittings .k { justify-self: end; }
+
+/* 3D models: makers first, then a maker's hulls with the game's silhouettes. */
+.models-grid.models-makers { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.model-maker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 12px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: linear-gradient(160deg, var(--panel-2), var(--panel));
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color .14s ease, transform .14s ease;
+}
+body .model-maker { text-transform: none; letter-spacing: normal; }
+.model-maker:hover, .model-maker:focus-visible { border-color: var(--cyan); transform: translateY(-1px); }
+.model-maker strong { font-size: 14px; font-weight: 600; text-align: center; }
+.model-maker-logo { display: flex; align-items: center; justify-content: center; width: 64px; height: 48px; }
+.model-maker-logo img { max-width: 100%; max-height: 100%; object-fit: contain; opacity: .9; }
+.model-maker-logo .mono-mark { font: 600 16px var(--mono); color: var(--cyan); }
+.models-grid:not(.models-makers) { display: block; }
+.models-back { margin: 2px 0 10px; }
+.models-maker-section { margin-bottom: 18px; }
+.models-maker-head { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; font-size: 16px; }
+.models-maker-head .model-maker-logo { width: 40px; height: 30px; }
+.models-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.model-card-outline.ship-outline { align-self: center; width: 150px; height: 84px; margin: 2px 0 6px; cursor: inherit; }
+
+/* A model card's picture: the game's render of the hull in its paint. */
+.model-card-picture { position: relative; display: flex; align-items: center; justify-content: center; align-self: stretch; height: 104px; margin: 0 0 6px; }
+.model-card-picture .model-card-outline.ship-outline { margin: 0; }
+.model-card-render { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .55)); }
+
+/* Game channels: the top-bar label opens a menu once there is somewhere to switch to. */
+.status { position: relative; }
+.status #install.install-switch { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.status #install.install-switch:hover, .status #install.install-switch:focus-visible { color: var(--text); outline: none; }
+.status #install.install-elsewhere { color: var(--amber); }
+.channel-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; min-width: 340px; max-width: min(460px, 92vw); padding: 10px; display: flex; flex-direction: column; gap: 6px; background: var(--panel, #0b1622); border: 1px solid var(--rule, #17293c); border-radius: 6px; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
+.channel-menu[hidden] { display: none; }
+.channel-menu-head { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.channel-menu-status:empty { display: none; }
+/* Narrow, so the line wraps rather than hiding when it was played and where. */
+.channel-menu .channel-row .channel-detail { white-space: normal; overflow-wrap: anywhere; }
+.channel-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 6px; }
+.channel-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 10px; padding: 7px 10px; border: 1px solid var(--rule, #17293c); border-radius: 5px; }
+.channel-row.current { border-color: var(--cyan, #35c8f0); }
+.channel-row .channel-detail { grid-column: 1; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.channel-row button { grid-column: 2; grid-row: 1 / span 2; }
+.channel-name { display: flex; align-items: baseline; gap: 8px; }
+.channel-reading, .channel-playing { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; }
+.channel-reading { color: var(--cyan, #35c8f0); border: 1px solid currentColor; }
+.channel-playing { color: var(--amber); border: 1px solid currentColor; }
+
+/* Suit calculator: what is worn on the left, what it adds up to on the right. */
+.suit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+.suit-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 1100px) { .suit-grid { grid-template-columns: minmax(0, 1fr); } }
+.suit-card { padding: 12px 14px; border: 1px solid var(--rule, #17293c); border-radius: 6px; background: var(--panel, #0a121c); min-width: 0; }
+.suit-card h3 { margin: 0 0 8px; }
+.suit-card h3.spaced { margin-top: 16px; }
+.suit-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) minmax(0, 190px); align-items: center; gap: 8px; margin: 5px 0; }
+.suit-row select { width: 100%; min-width: 0; }
+.suit-slot { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.suit-facts { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.suit-carried { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.suit-carried li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; font-size: 12.5px; }
+.suit-remove { padding: 0 6px; line-height: 1.4; }
+.suit-figure { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.suit-figure b { font-size: 22px; color: var(--cyan, #35c8f0); }
+.suit-speeds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.suit-speed { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border: 1px solid var(--rule, #17293c); border-radius: 4px; }
+.suit-meter { position: relative; height: 8px; margin: 8px 0 4px; border-radius: 4px; background: linear-gradient(90deg, #b8483a, #3a4a5a 50%, #35c8f0); }
+.suit-meter-mark { position: absolute; top: -4px; width: 3px; height: 16px; margin-left: -1px; background: var(--text, #cfe4f5); border-radius: 2px; }
+.suit-g { width: 100%; margin-top: 10px; font-size: 12.5px; border-collapse: collapse; }
+.suit-g th, .suit-g td { padding: 4px 6px; border-bottom: 1px solid var(--rule, #17293c); }
+.suit-g .suit-this { color: var(--cyan, #35c8f0); font-weight: 600; }
+
+/* ---------- cross-page links (0.21.9) ----------
+   The new links reuse .place-link's look; these are the few pieces of layout
+   they needed: a Models card's link row, the Reference card's page buttons,
+   the line above a filtered Contracts list, and the light on whatever a link
+   landed on - a Reputation card, a Crew row, a job. */
+.model-card-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.model-card-cell > .model-card { flex: 1; }
+.model-card-links { padding: 0 4px; font-size: 12px; color: var(--dim, #46617a); }
+.ref-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
+.armoury-detail-links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 6px; font-size: 12.5px; }
+.fitting-card .ship-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.contracts-only { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 8px; padding: 6px 10px; border: 1px solid var(--rule, #17293c); border-radius: 6px; font-size: 13px; }
+.landed { outline: 2px solid var(--cyan, #35c8f0); outline-offset: 2px; animation: qw-landed 2.4s ease-out 1; }
+tr.landed { outline-offset: -2px; }
+@keyframes qw-landed { from { box-shadow: 0 0 0 6px rgba(53, 200, 240, .35); } to { box-shadow: 0 0 0 0 rgba(53, 200, 240, 0); } }
+@media (prefers-reduced-motion: reduce) { .landed { animation: none; } }
+.session-metric-line .place-link, .session-metric-value .place-link { font: inherit; }

@@ -339,10 +339,19 @@ public static partial class ServerHost
         var recipe = lib.GameCommodities.Blueprints
             .FirstOrDefault(b => b.Kind == "creation" && string.Equals(b.OutputClass, cls, StringComparison.OrdinalIgnoreCase));
 
+        // Whether the Armoury has a row for it: a gun opens its base gun's row
+        // (a finish folds into it there), an armour piece its family's.
+        var armoury = lib.GameCommodities.Armoury;
+        var gun = armoury.Weapons.FirstOrDefault(w => string.Equals(w.Class, cls, StringComparison.OrdinalIgnoreCase));
+        var armourPiece = gun is null && armoury.Armour.Any(a => string.Equals(a.Class, cls, StringComparison.OrdinalIgnoreCase));
+
         return new
         {
             className = cls,
             card,
+            armoury = gun is not null ? new { kind = "gun", @class = gun.BaseClass ?? gun.Class }
+                : armourPiece ? new { kind = "armour", @class = cls }
+                : null,
             uex = uex.IsEnabled,
             shops,
             // The recipe, and the way to its blueprint card: where the

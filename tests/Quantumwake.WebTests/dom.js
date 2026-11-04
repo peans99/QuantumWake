@@ -90,8 +90,12 @@ class El {
      Pushing without detaching left the node in two places at once, so code
      that reorders by re-appending appeared to duplicate every card - a test
      failing about the stub rather than about the app. */
+  /* A string is appended as text, as a browser's append does: a line built
+     from a link and the words around it - append(link, ' · 3 SCU') - kept the
+     link and silently lost the words, so a test read half a sentence. */
   append(...nodes) {
-    for (const node of nodes) {
+    for (let node of nodes) {
+      if (typeof node === 'string' || typeof node === 'number') node = { textContent: String(node) };
       if (node instanceof El) {
         node.remove();
         node.parentElement = this;
@@ -109,6 +113,7 @@ class El {
   }
 
   prepend(node) {
+    if (typeof node === 'string' || typeof node === 'number') node = { textContent: String(node) };
     if (node instanceof El) {
       node.remove();
       node.parentElement = this;
@@ -541,3 +546,20 @@ globalThis.fetch = (url, options) => {
 };
 
 globalThis.__error = null;
+
+/* The 3D viewer unpacks a mesh header with TextDecoder, which Jint does not
+   ship. UTF-8 only, which is all a JSON header is. */
+globalThis.TextDecoder = class {
+  decode(bytes) {
+    let out = '';
+    for (let i = 0; i < bytes.length;) {
+      const b = bytes[i++];
+      if (b < 0x80) { out += String.fromCharCode(b); continue; }
+      const n = b >= 0xf0 ? 3 : b >= 0xe0 ? 2 : 1;
+      let code = b & (0x3f >> n);
+      for (let k = 0; k < n; k++) code = (code << 6) | (bytes[i++] & 0x3f);
+      out += String.fromCodePoint(code);
+    }
+    return out;
+  }
+};

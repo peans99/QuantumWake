@@ -139,7 +139,7 @@ public class GarageMarketTests
         Assert.True(page.Truth("__dom.node('#garage-market-body').descendants().some(n => n.classList.contains('part-pic') && n.src === '/api/garage/picture/c-glacier')"));
 
         page.Serve("/api/garage/AEGS_Gladius/options?port=p1", Options(Listing));
-        page.Do("await __dom.node('#garage-market-body').descendants().find(n => n.tagName === 'button').fire('click');");
+        page.Do("await __dom.node('#garage-market-body').descendants().find(n => n.tagName === 'button' && n.textContent === 'Bench').fire('click');");
         Assert.Contains("GET /api/garage/AEGS_Gladius/options?port=p1", page.Fetched());
         Assert.Contains("now fitted: Bracer", page.NodeText("#garage-bench-panel"));
     }

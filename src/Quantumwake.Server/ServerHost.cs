@@ -74,6 +74,11 @@ public static partial class ServerHost
         });
 
         var install = ResolveInstall(args, builder.Configuration);
+
+        // A folder named on the command line or in the settings file beats the
+        // remembered one, so switching channel from the page cannot take.
+        var installPinned = Array.IndexOf(args, "--path") >= 0
+            || !string.IsNullOrWhiteSpace(builder.Configuration["InstallPath"]);
         DiagnosticTrace.Mark("server", install is null ? "No game install resolved." : "Game install resolved.");
 
         // Scope the cache to the install, so a PTU channel or a simulated install never
@@ -99,6 +104,7 @@ public static partial class ServerHost
         if (install is not null)
             builder.Services.AddSingleton(install);
         builder.Services.AddSignalR();
+        builder.Services.AddSingleton(new ModelLibrary(install));
         builder.Services.AddSingleton<ScanStatus>();
         builder.Services.AddSingleton<ActivityBoard>();
         builder.Services.AddSingleton<LiveSessionService>();
@@ -160,7 +166,10 @@ public static partial class ServerHost
 
         // The keybinding profile, kept whenever the game rewrites it, and the
         // stick pictures the Controls page draws bindings on.
-        builder.Services.AddSingleton<ControlsStore>();
+        // Per channel: PTU's profile is its own, and kept in LIVE's history it
+        // would read as a change every time the other one was played.
+        var channelFolder = Core.AppPaths.ForChannel(install?.RootPath);
+        builder.Services.AddSingleton(new ControlsStore(Path.Combine(channelFolder, "controls", "backups")));
         // The sticks as Windows sees them, from the host; the bare server has none.
         builder.Services.AddSingleton<IJoystickReader>(joysticks ?? new NoJoysticks());
         builder.Services.AddSingleton<JoystickTemplates>();
@@ -183,7 +192,9 @@ public static partial class ServerHost
         // app that writes outside its own data folder.
         builder.Services.AddSingleton<StarStringsStore>();
         builder.Services.AddSingleton<StarStrings>();
-        builder.Services.AddSingleton<TextOverlayStore>();
+        // Per channel, because the record is what knows how to take the marks
+        // out again: installing on PTU over LIVE's record would strand LIVE's.
+        builder.Services.AddSingleton(new TextOverlayStore(channelFolder));
         builder.Services.AddSingleton<ItemLabelStore>();
         builder.Services.AddSingleton<GoalStore>();
         builder.Services.AddSingleton<MiningLogStore>();
@@ -745,6 +756,8 @@ public static partial class ServerHost
 
         ControlsEndpoints.Map(app, install);
         MapDataRead(app, install);
+        MapModels(app, install);
+        MapChannels(app, install, installPinned);
 
         app.MapGet("/api/now", (LiveSessionService live) => live.Current);
 
@@ -840,6 +853,15 @@ public static partial class ServerHost
             // is no friendlier one in the log - and how many the session saw.
             shard = s.Shards.Count > 0 ? s.Shards[^1].Shard : null,
             shards = s.Shards.Count,
+            // Every shard by name, and everyone the party notes name other than
+            // the pilot: what Servers and Crew search Sessions by, so a row on
+            // either page can land on the sessions it counted.
+            shardNames = s.Shards.Select(x => x.Shard).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            crew = s.PartyNotes
+                .Where(n => n.Handle is not null && !string.Equals(n.Handle, s.Handle, StringComparison.OrdinalIgnoreCase))
+                .Select(n => n.Handle!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
             ships = s.Ships.Count,
             locations = s.Locations.Count,
             jumps = s.Jumps.Count,
@@ -965,7 +987,7 @@ public static partial class ServerHost
         {
             if (install is null) return Results.NotFound();
 
-            var cacheDir = Path.Combine(Core.AppPaths.Root, cacheFolder);
+            var cacheDir = Path.Combine(Core.AppPaths.ForChannel(install.RootPath), cacheFolder);
             var cached = Path.Combine(cacheDir, Path.GetFileNameWithoutExtension(entry) + ".png");
 
             if (!File.Exists(cached))
@@ -1499,6 +1521,7 @@ public static partial class ServerHost
                         first.Family, first.Slot, first.Weight, first.Kind, first.Manufacturer, first.Resistances, first.Protects,
                         first.TemperatureMin, first.TemperatureMax, first.RadiationCapacity, first.RadiationDissipation, first.GForceResistance,
                         first.CapacityMicroScu, first.EmSignature, first.IrSignature, first.MotionPenalty, first.ViewPenalty, first.Mass,
+                        movementRecord = g.Select(a => a.MovementRecord).FirstOrDefault(m => m is not null),
                         name = first.Name,
                         pieces = priced.Select(p => new { @class = p.Class, uuid = lib.GameCommodities.ItemUuid(p.Class), name = p.Name, market = new { price = p.Market.Price, shops = p.Market.Shops } }).ToList(),
                         market = new { price = cheapest.Market.Price, shops = cheapest.Market.Shops ?? [] },
@@ -1555,6 +1578,9 @@ public static partial class ServerHost
                         climate.BodyMin, climate.BodyMax, climate.VisorFrost,
                     }
                     : null,
+                // The player's G-force profiles and standing speeds, for the
+                // suit calculator. Null until the archive has been read again.
+                body = armoury.Body,
                 itemPricesKnown = uex.IsEnabled,
                 // Pictures come from the wiki, and the wiki is asked only once the
                 // community dataset is on - the app's consent to talk to the network.
@@ -5825,6 +5851,10 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
             {
                 p.PortId, p.Hardpoint, p.Group, p.MinSize, p.MaxSize,
                 p.Class, p.Name, p.StockClass, p.Changed,
+                // The hardpoint names from the hull down - what the 3D view
+                // matches its own loadout tree on, since the ids above are
+                // positions in the dump's list rather than names.
+                path = HardpointPath(ship.Loadout, p.PortId),
                 fixedReason = FindPort(ship.Loadout, p.PortId) is { } port ? IndustrialPortNote(community, port) : null,
                 stockName = p.StockClass is not null && community.Parts.TryGetValue(p.StockClass, out var stock) ? stock.Name : null,
                 fitted = p.Class is not null && community.Parts.TryGetValue(p.Class, out var part) ? PartCard(part) : null
@@ -5887,6 +5917,16 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
     };
 
     /// <summary>A port anywhere in the tree, by the dump's id for it.</summary>
+    static string? HardpointPath(IReadOnlyList<FitPort> ports, string portId)
+    {
+        foreach (var port in ports)
+        {
+            if (port.PortId == portId) return port.Hardpoint;
+            if (HardpointPath(port.Children, portId) is { } below) return $"{port.Hardpoint}/{below}";
+        }
+        return null;
+    }
+
     static FitPort? FindPort(IReadOnlyList<FitPort> ports, string portId)
     {
         foreach (var port in ports)

@@ -266,7 +266,7 @@ public class RefineryOrdersPanelTests
         var text = page.NodeText("#refinery-orders-list");
         Assert.Contains("Nothing waiting at a refinery.", text);
         Assert.Contains("Refining", text);
-        Assert.Equal(0, page.Count("__dom.node('#refinery-orders-list').querySelectorAll('button').length"));
+        Assert.Equal(0, page.Count("__dom.node('#refinery-orders-list').querySelectorAll('.refinery-collect').length"));
     }
 
     /// <summary>Collected moves it to the history, and can be taken back: a misclick must not lose where the ore is.</summary>

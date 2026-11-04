@@ -31,7 +31,7 @@ namespace Quantumwake.Core.GameData;
 public sealed partial class GameCommodities
 {
     /// <summary>Bumped when the cached shape changes.</summary>
-    private const int CacheVersion = 67;
+    private const int CacheVersion = 70;
 
     private const string DataCoreEntry = @"Data\Game2.dcb";
     public const string LocalisationEntry = @"Data\Localization\english\global.ini";
@@ -336,7 +336,7 @@ public sealed partial class GameCommodities
             paints.AddRange(GamePaints.Stock(p4k.List(GamePaints.RenderFolder).Select(e => e.Path), paints));
             makerLogos = GameMakerLogos.Read(core, p4k.List(GameMakerLogos.Folder).Select(e => e.Path));
             mining = GameMining.Read(core, text, facts, result) with { Signatures = GameRockSignatures.Read(core) };
-            armoury = GameArmoury.Read(core, text, facts) with { Climate = GameClimates.Read(core, text) };
+            armoury = GameArmoury.Read(core, text, facts) with { Climate = GameClimates.Read(core, text), Body = GameBody.Read(core) };
             // The pictures are the archive's, not the DataCore's: only its
             // listing says which attachments have one.
             GameArmoury.StampIcons(armoury, p4k.List(GameArmoury.AttachmentIconFolder).Select(e => e.Path));

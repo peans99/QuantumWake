@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css?v=0.20.66">
+  <link rel="stylesheet" href="app.css?v=0.21.9">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -77,6 +77,7 @@
         <button data-view="loot">Loot</button>
         <button data-view="encounters">Encounters</button>
         <button data-view="missions">Missions</button>
+        <button data-view="models">3D models</button>
         <button data-view="mining">Mining</button>
         <button data-view="crafting">Crafting</button>
       </div>
@@ -134,6 +135,7 @@
       </div>
     </div>
     <span id="install" class="muted">detecting…</span>
+    <div class="channel-menu" id="channel-menu" hidden></div>
     <span id="link" class="dot" title="disconnected"></span>
   </div>
 </header>
@@ -211,6 +213,17 @@
   <!-- Notices share one quiet strip. Their detail and choices stay one click
        away, so important work remains available without displacing the page. -->
   <section class="notice-strip" aria-label="Notices">
+    <details class="notice" id="channel-notice" hidden>
+      <summary class="notice-summary">
+        <span class="notice-body">
+          <b id="channel-notice-title">Star Citizen is running on another channel</b>
+          <span class="muted" id="channel-notice-detail"></span>
+        </span>
+        <span class="notice-toggle"><span class="when-closed">Details</span><span class="when-open">Close</span></span>
+      </summary>
+      <div class="notice-actions" id="channel-notice-actions"></div>
+    </details>
+
     <details class="notice" id="stale" hidden>
       <summary class="notice-summary">
         <span class="notice-body">
@@ -1187,7 +1200,7 @@
     <section class="operations-workspace" aria-labelledby="shopping-workspace-title">
       <div class="operations-workspace-head">
         <div><span class="operations-kicker">Supplies</span><h3 id="shopping-workspace-title">Shopping lists</h3></div>
-        <span class="muted">Lists can also be filled from Market, Parts, and Mining.</span>
+        <span class="muted">Lists can also be filled from <a href="#market">Market</a>, <a href="#parts">Parts</a>, and <a href="#mining">Mining</a>.</span>
       </div>
 
     <form class="job-form" id="job-form" hidden>
@@ -1235,7 +1248,7 @@
         What you can craft, and what it still needs. Pick a blueprint — yours are
         listed first, since the game tells the logs which ones you have been
         given — and it becomes a tracked build with its materials checked against
-        your stashes. The full catalogue lives under Reference → Crafting.
+        your stashes. The full catalogue lives under <a href="#crafting">Reference → Crafting</a>.
       </p>
     </details>
     <div id="blueprints-shared"></div>
@@ -1443,7 +1456,7 @@
         <h2>Sessions</h2>
       </div>
       <div class="controls">
-        <input type="search" id="sessions-search" class="search" placeholder="Search ship or place…"
+        <input type="search" id="sessions-search" class="search" placeholder="Search ship, place, server or crew…"
                autocomplete="off" spellcheck="false">
         <label class="sessions-period-picker">
           <span>Record range</span>
@@ -1519,6 +1532,7 @@
           <option value="paint">Show game paint</option>
           <option value="tint">Use maker tint</option>
         </select>
+        <button type="button" id="fleet-3d" class="ghost small" hidden title="The ships shown here, side by side in 3D">Fleet in 3D</button>
         <span id="fleet-compare" class="fleet-compare"></span>
       </div>
     </div>
@@ -1571,7 +1585,7 @@
     <p class="muted caption">
       Worn kit, stashes and claim exposure, priced the same way. Every number
       is an estimate covering only what the price tables recognise. The install
-      identifies the gear; UEX in Settings is what prices it.
+      identifies the gear; UEX in <a href="#settings">Settings</a> is what prices it.
     </p>
     <div class="summary-strip" id="assets-summary"></div>
 
@@ -1770,7 +1784,7 @@
       <p class="muted caption">
         After a bad death, the question is which shop carries the most of what
         you were wearing. Ranked by coverage first, then by what the trip
-        costs. Needs UEX prices and the item-stock feed in Settings.
+        costs. Needs UEX prices and the item-stock feed in <a href="#settings">Settings</a>.
       </p>
       <div class="summary-strip" id="outfitting-summary"></div>
       <div class="table-wrap">
@@ -1923,7 +1937,7 @@
     <div class="view-sources source-slot" id="hangar-data-sources" data-sources="logs install"></div>
     <p class="muted caption">
       Every ship your logs say you have flown, from your installed game files. The
-      gallery shows the game's own render of a ship in the paint you chose on Fleet,
+      gallery shows the game's own render of a ship in the paint you chose on <a href="#fleet">Fleet</a>,
       or its silhouette tinted by maker; <b>To scale</b> fits that same picture inside
       the bounding box the game gives each ship. A ship the install has no icon for is
       listed below with its exact dimensions; one it has no size for is listed below
@@ -2119,6 +2133,7 @@
       and how many finished — the game never names them, so the count is the
       story: abandoned four steps in reads differently from dropped at the first.
     </p>
+    <p class="contracts-only" id="contracts-only" hidden></p>
     <p class="workspace-state" id="contracts-state" aria-live="polite">Loading contract history…</p>
     <div class="table-wrap">
       <table id="contracts-table">
@@ -2166,7 +2181,7 @@
     <div class="community-offer" id="market-offer" hidden>
       <div>
         <b>This page needs your game install, or the community dataset.</b>
-        Turn on UEX in Settings and the install names every commodity by
+        Turn on UEX in <a href="#settings">Settings</a> and the install names every commodity by
         itself; the dataset adds the facilities nobody has priced yet.
       </div>
     </div>
@@ -2320,8 +2335,8 @@
         insurance claim costs — and every other hull your game install names,
         priced at UEX in-game purchase prices where a shop sells one. Open a ship
         for what it comes with, who flies one as an NPC, and where each part
-        drops or is sold. Your own hangar lives on the Fleet page. The spec sheet
-        needs the community dataset and prices need UEX, both in Settings.</p>
+        drops or is sold. Your own hangar lives on the <a href="#fleet">Fleet</a> page. The spec sheet
+        needs the community dataset and prices need UEX, both in <a href="#settings">Settings</a>.</p>
     </details>
     <div class="reference-results">
       <div class="reference-results-head">
@@ -2372,7 +2387,7 @@
         name for where it drops, who sells it and what it comes fitted to.</p>
     </details>
     <p class="muted caption" id="components-figures-note" hidden>Turn on the community
-      dataset in Settings for the performance figures: without it this lists the
+      dataset in <a href="#settings">Settings</a> for the performance figures: without it this lists the
       parts your install names, with size, grade and maker only.</p>
     <nav class="subtabs components-tabs" id="components-tabs" aria-label="Component kinds"></nav>
     <div class="reference-results">
@@ -2435,6 +2450,33 @@
   </section>
 
   <!-- REFERENCE: every contract the installed game defines -->
+  <section id="view-models" class="view">
+    <div class="section-bar reference-toolbar-bar">
+      <div class="reference-title">
+        <span class="page-kicker">Reference</span>
+        <h2>3D models</h2>
+      </div>
+      <div class="controls reference-toolbar">
+        <select id="models-kind" class="select" title="Which models">
+          <option value="vehicles">Ships and vehicles</option>
+          <option value="weapons">Personal weapons</option>
+          <option value="armour">Armour</option>
+        </select>
+        <input type="search" id="models-search" class="search" placeholder="Search by name, class or maker…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p>Every ship, ground vehicle, personal weapon and piece of armour your game install can draw, opened in
+        3D from the game's own models with its stock loadout fitted. Models, paints and parts are
+        read from your install the first time one is opened; nothing is downloaded. The <a href="#garage">Garage</a>
+        and the <a href="#armoury">Armoury</a> open the same view with your own fit in place.</p>
+    </details>
+    <p class="muted caption" id="models-note"></p>
+    <div class="models-grid" id="models-grid"></div>
+  </section>
+
   <section id="view-missions" class="view">
     <div class="section-bar reference-toolbar-bar">
       <div class="reference-title">
@@ -3160,6 +3202,7 @@
 
     <div id="garage-head" class="garage-head" hidden>
       <div class="garage-title" id="garage-title"></div>
+      <div class="garage-model-action" id="garage-model-action"></div>
       <div class="muted" id="garage-sub"></div>
       <div class="muted small" id="garage-source"></div>
       <div class="garage-duty-legend" aria-label="Ship discipline legend">
@@ -3357,7 +3400,8 @@
       <button type="button" data-pane="grenades"><span>04</span> Grenades</button>
       <button type="button" data-pane="knives"><span>05</span> Knives</button>
       <button type="button" data-pane="climate"><span>06</span> Climate</button>
-      <button type="button" data-pane="bench"><span>07</span> Test bench</button>
+      <button type="button" data-pane="suit"><span>07</span> Suit calculator</button>
+      <button type="button" data-pane="bench"><span>08</span> Test bench</button>
     </nav>
 
     <div class="armoury-pane" id="armoury-pane-bench">
@@ -3510,6 +3554,16 @@
           <tbody></tbody>
         </table>
       </div>
+    </div>
+
+    <div class="armoury-pane" id="armoury-pane-suit">
+      <p class="muted small">
+        What a suit weighs, carries and lets you take in G, from your game
+        files. It starts from the loadout the log last saw; swap any piece,
+        strip it all, or copy the loadout back. A figure the files leave empty
+        counts as 0 and is said to.
+      </p>
+      <div id="armoury-suit"></div>
     </div>
 
     <div class="armoury-pane" id="armoury-pane-climate">
@@ -4204,6 +4258,23 @@
       <div class="settings-group-content">
     <div class="option-block">
       <div class="option-head">
+        <h3>Game channel</h3>
+        <button class="ghost" id="channel-refresh">Look again</button>
+      </div>
+      <p class="muted">
+        LIVE, PTU and the other test channels are separate installs with
+        separate logs. Quantum Wake reads one at a time and keeps each one's
+        history apart, so a PTU evening never lands in your LIVE totals.
+        Switching restarts the app on the other folder; when the game is
+        running on a channel this is not reading, the top of the page says so.
+      </p>
+      <div class="channel-list" id="channel-list"></div>
+      <p class="muted warn" id="channel-note" hidden></p>
+      <span class="muted" id="channel-status"></span>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
         <h3>Your game files</h3>
         <span class="muted" id="gamedata-state"></span>
       </div>
@@ -4712,7 +4783,7 @@
         </details>
         <details class="faq-item">
           <summary>Which screens can it read?</summary>
-          <p>An item tooltip, a ship's Vehicle Loadout Manager (which the Fleet page shows as photographed and the Garage can start a bench from), the mobiGlas map footer, the Contracts and Reputation apps, the Fleet Manager and a commodity kiosk — each checked against what the logs believed and shown with the verdict. The inventory screen cannot be read: its items are icons with no text, so a stash is confirmed one tooltip at a time. A screen it does not know goes to the review queue on the Log tab with its text, which is how each reader so far was written.</p>
+          <p>An item tooltip, a ship's Vehicle Loadout Manager (which the <a href="#fleet">Fleet</a> page shows as photographed and the <a href="#garage">Garage</a> can start a bench from), the mobiGlas map footer, the Contracts and Reputation apps, the Fleet Manager and a commodity kiosk — each checked against what the logs believed and shown with the verdict. The inventory screen cannot be read: its items are icons with no text, so a stash is confirmed one tooltip at a time. A screen it does not know goes to the review queue on the Log tab with its text, which is how each reader so far was written.</p>
         </details>
         <details class="faq-item">
           <summary>A reading is wrong. What do I do with it?</summary>
@@ -4970,6 +5041,6 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.20.66"></script>
+<script src="app.js?v=0.21.9"></script>
 </body>
 </html>

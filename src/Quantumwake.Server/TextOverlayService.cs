@@ -72,7 +72,7 @@ public sealed class TextOverlayService(
     /// <summary>Builds against the player's own choice of marks.</summary>
     private TextOverlayPlan Plan(string ini) =>
         TextOverlay.Build(ini, SoldTest(), library.GameCommodities.ItemFacts, options.Current,
-            library.GameCommodities.Reputation.HaulTitles);
+            library.GameCommodities.Reputation.HaulTitles, library.GameCommodities.Reputation.TitleRewards);
 
     private Func<string, bool> SoldTest()
     {
@@ -306,11 +306,33 @@ public sealed class TextOverlayService(
             // Recorded before the write: a write that fails partway through has
             // still changed the file, and a record added only on success would
             // leave that file - and its backup - outside the rollback.
+            // The table is only read when user.cfg names the language, and with
+            // StarStrings gone nothing else puts that line there; see
+            // GameLanguage.WithEnglish. Added after a backup, and taken back
+            // out on removal line by line, so settings written since survive.
+            List<InstalledFile> files = [new InstalledFile(target, backup)];
+            var cfgTarget = StarStringsArchive.TargetFor("user.cfg", game.RootPath);
+            var cfgNow = cfgTarget is not null && File.Exists(cfgTarget) ? File.ReadAllText(cfgTarget) : null;
+            var cfgNext = cfgTarget is null ? null : GameLanguage.WithEnglish(cfgNow);
+            if (cfgTarget is not null && cfgNext is not null)
+            {
+                string? cfgBackup = null;
+                if (cfgNow is not null)
+                {
+                    cfgBackup = Path.Combine(store.BackupRoot, stamp, "user.cfg");
+                    Directory.CreateDirectory(Path.GetDirectoryName(cfgBackup)!);
+                    File.Copy(cfgTarget, cfgBackup, overwrite: true);
+                }
+                files.Add(new InstalledFile(cfgTarget, cfgBackup));
+            }
+
             var install = new TextOverlayInstall(
-                DateTimeOffset.UtcNow, game.RootPath, plan.Marked, layered,
-                [new InstalledFile(target, backup)]);
+                DateTimeOffset.UtcNow, game.RootPath, plan.Marked, layered, files);
 
             store.Record(install);
+
+            if (cfgTarget is not null && cfgNext is not null)
+                File.WriteAllText(cfgTarget, cfgNext);
 
             // UTF-8 with the byte order mark, because that is what the game's
             // own file is and this one replaces it. The BOM used to depend on
@@ -460,6 +482,17 @@ public sealed class TextOverlayService(
         {
             try
             {
+                // user.cfg is the player's file as much as ours: only the line
+                // the install added comes out, whatever else was written since.
+                if (string.Equals(Path.GetFileName(file.Path), "user.cfg", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!File.Exists(file.Path)) continue;
+                    var rest = GameLanguage.WithoutAddedLine(File.ReadAllText(file.Path));
+                    if (rest.Length == 0 && file.Backup is null) File.Delete(file.Path);
+                    else File.WriteAllText(file.Path, rest);
+                    continue;
+                }
+
                 if (file.Backup is { } backup && File.Exists(backup))
                     File.Copy(backup, file.Path, overwrite: true);
                 else if (File.Exists(file.Path))
