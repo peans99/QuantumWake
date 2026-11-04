@@ -9448,6 +9448,17 @@ function suitSigned(n) {
 }
 
 /**
+ * "+90%", "−12.5%": the same figure the way the community wiki and guides
+ * write it - an undersuit's 0.9 is its "90%", a Tailwind suit's 0.975 its
+ * "97.5%".
+ */
+function suitPercent(n) {
+  const v = Math.round((Number(n) || 0) * 1000) / 10;
+  const text = v.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  return v > 0 ? `+${text}%` : v < 0 ? `−${text.replace('-', '')}%` : '0%';
+}
+
+/**
  * A tier between worst, usual and best by the suit's summed resistance: -1
  * is worst, 0 usual, +1 best, a straight line either side. The files give the
  * three ends and the per-piece figures; the line between is inferred.
@@ -9584,7 +9595,7 @@ function renderArmourySuit() {
     const piece = suitIndex().pieces.get(suit.slots[slot]);
     const facts = el('span', 'muted small suit-facts');
     facts.textContent = piece
-      ? `${suitKg(piece.set.mass)} · G ${suitSigned(piece.set.gForceResistance)}${piece.set.capacityMicroScu > 0 ? ` · ${fmtInt(piece.set.capacityMicroScu / 1000)} mSCU` : ''}`
+      ? `${suitKg(piece.set.mass)} · G ${suitPercent(piece.set.gForceResistance)}${piece.set.capacityMicroScu > 0 ? ` · ${fmtInt(piece.set.capacityMicroScu / 1000)} mSCU` : ''}`
       : '';
     row.append(facts);
     worn.append(row);
@@ -9650,12 +9661,12 @@ function renderArmourySuit() {
     ? tx('{pieces} names a movement record the app does not read yet ({record}); the speeds above leave it out.', {
       pieces: totals.movement.map((w) => w.piece.name).join(', '), record: totals.movement[0].piece.set.movementRecord,
     })
-    : tx('Armour and weight change these by 0%: no armour piece in this build carries a movement multiplier, and nothing in the files ties carried mass to speed.')));
+    : tx('Armour and weight change these by 0% in the game files: no armour piece in this build carries a movement multiplier, and nothing ties carried mass to speed. The community wiki says heavy armour is slower; if it is, that is decided in the game\'s code, where no number can be read.')));
 
   sums.append(el('h3', 'spaced', tx('G-force')));
   const g = el('div', 'suit-figure');
-  g.append(el('b', null, suitSigned(totals.resistance)));
-  g.append(el('span', 'muted small', tx('resistance, from -1 (worst) to +1 (best)')));
+  g.append(el('b', null, suitPercent(totals.resistance)));
+  g.append(el('span', 'muted small', tx('G resistance ({value}), from −100% (full heavy armour, worst) through 0 (unequipped) to +100% (best)', { value: suitSigned(totals.resistance) })));
   sums.append(g);
   const meter = el('div', 'suit-meter');
   const mark = el('span', 'suit-meter-mark');
@@ -9664,7 +9675,7 @@ function renderArmourySuit() {
   sums.append(meter);
   if (totals.worn.length) {
     sums.append(el('p', 'muted small', totals.worn
-      .map((w) => `${tx(w.slot)} ${suitSigned(w.piece.set.gForceResistance)}`).join(' · ')));
+      .map((w) => `${tx(w.slot)} ${suitPercent(w.piece.set.gForceResistance)}`).join(' · ')));
   }
 
   const profiles = body?.gForce || [];
@@ -9688,7 +9699,7 @@ function renderArmourySuit() {
     }
     table.append(tbody);
     sums.append(table);
-    sums.append(el('p', 'muted small', tx('Each cell is the G taken before strain starts / the G at which it builds fastest. The files hold five profiles without saying which direction each is for. They give the worst, usual and best ends; "This suit" assumes a straight line between them, which is what the pieces\' round sums suggest but the files do not state.')));
+    sums.append(el('p', 'muted small', tx('Each cell is the G taken before strain starts / the G at which it builds fastest. The pieces add up, as the 4.8 patch notes say ("partial loadouts result in proportionally adjusted tolerance") and as guides measure: a Tailwind flight suit is +97.5% and its helmet −2.5%, and together they read 95%. Unequipped is the usual column. How the game moves between the worst, usual and best columns is not published; "This suit" assumes a straight line. The files hold five profiles without saying which direction each is for.')));
   } else {
     sums.append(el('p', 'muted small', tx('The G-force profiles arrive with the next read of the game files.')));
   }
