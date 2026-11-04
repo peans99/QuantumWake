@@ -85,7 +85,21 @@ public class SuitCalculatorTests
         var page = Loaded();
 
         Assert.Equal(0.4, page.Number("suitTotals(armourySuit).resistance"), 4);
-        Assert.Contains("+0.4", page.NodeText("#armoury-suit"));
+        Assert.Contains("+40%", page.NodeText("#armoury-suit"));
+    }
+
+    /// <summary>
+    /// The check against the outside: guides give a Tailwind flight suit
+    /// 97.5% and 95% with its helmet. The files say +0.975 and -0.025.
+    /// </summary>
+    [Fact]
+    public void A_tailwind_suit_and_helmet_read_as_the_guides_say()
+    {
+        var page = Loaded();
+
+        Assert.Equal("+97.5%", page.Text("suitPercent(0.975)"));
+        Assert.Equal("+95%", page.Text("suitPercent(0.975 + -0.025)"));
+        Assert.Equal("−12.5%", page.Text("suitPercent(-0.125)"));
     }
 
     /// <summary>
@@ -102,7 +116,7 @@ public class SuitCalculatorTests
         Assert.Equal(5, page.Number($"suitBlend({profile}, 0, 'tolerance')"), 4);
         Assert.Equal(6.2, page.Number($"suitBlend({profile}, 0.4, 'tolerance')"), 4);
         Assert.Equal(12, page.Number($"suitBlend({profile}, 3, 'maxGees')"), 4);
-        Assert.Contains("do not state", page.NodeText("#armoury-suit"));
+        Assert.Contains("assumes a straight line", page.NodeText("#armoury-suit"));
     }
 
     /// <summary>What the files leave empty counts as 0, and the page says so.</summary>

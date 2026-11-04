@@ -328,7 +328,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.21.4
+### 0.21.5
 
 **More distinct surfaces in the 3D view.** Layered armour and clothing now draw each surface with its own texture where the game's blend map calls for it. Fabric, padding and other materials no longer all share the first layer's texture. The view still approximates the game's materials and does not draw wear and grime.
 
@@ -352,7 +352,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 **LIVE and PTU.** Quantum Wake now knows every channel on the machine - LIVE, PTU, EPTU, Tech Preview - and switches between them from the install label at the top of the page, or Settings → Data sources → Game channel. It reads one at a time and keeps each one's history apart, so a PTU evening never lands in your LIVE totals; switching restarts the app on the other folder. When the game is running on a channel the app is not reading, a notice at the top says so and offers the switch. Each channel keeps its own game-file caches, so going back and forth does not re-read the archive every time, and installing the item labels on PTU no longer loses track of the ones on LIVE. A channel kept in a library folder of your own naming, such as `D:siptuStarCitizenPTU`, is found too.
 
-**Suit calculator.** A new Armoury tab adds up a suit from your game files: what it weighs, how much it carries, how fast you move in it and how much G you take. It starts from the loadout the log last saw; swap any helmet, core, arms, legs, undersuit, backpack or gun, strip it all, or copy the loadout back. G resistance is each piece's own figure, and they add up to round sums - a full heavy set is exactly -1, medium -0.5, light -0.25, an undersuit +0.9 - which the page sets against the player's worst, usual and best G profiles. How the game blends between those three is not in the files, so the "this suit" column is an estimate and says so. Run speed is 5.58 m/s and sprint 7.2 in 4.10.2, and armour and weight change neither: no armour piece carries a movement multiplier yet. Anything the files leave empty counts as 0, and the page says which.
+**Suit calculator.** A new Armoury tab adds up a suit from your game files: what it weighs, how much it carries, how fast you move in it and how much G you take. It starts from the loadout the log last saw; swap any helmet, core, arms, legs, undersuit, backpack or gun, strip it all, or copy the loadout back. G resistance is each piece's own figure, shown as a percentage the way the community wiki writes it, and the pieces add up - a full heavy set is exactly -100%, medium -50%, light -25%, an undersuit +90% - which the page sets against the player's worst, usual and best G profiles. The adding up is what the 4.8 patch notes describe, and it checks out against the guides: a Tailwind flight suit is +97.5% and its helmet -2.5%, and guides measure the pair at 95%. How the game blends between those three is not in the files, so the "this suit" column is an estimate and says so. Run speed is 5.58 m/s and sprint 7.2 in 4.10.2, and armour and weight change neither: no armour piece carries a movement multiplier yet. Anything the files leave empty counts as 0, and the page says which.
 
 ### 0.20.66
 
