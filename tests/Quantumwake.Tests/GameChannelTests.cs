@@ -57,6 +57,32 @@ public class GameChannelTests
         Assert.Equal("LIVE", GameChannels.PlayingElsewhere([live, ptu], ptu, DateTimeOffset.UtcNow)?.Channel);
     }
 
+    /// <summary>
+    /// A library folder the player named themselves - D:\rsiptu\StarCitizen\PTU
+    /// on the machine this was written on - is found by its StarCitizen folder.
+    /// </summary>
+    [Fact]
+    public void A_library_folder_of_any_name_is_found()
+    {
+        var drive = Path.Combine(Path.GetTempPath(), "qw-drive-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var ptu = Path.Combine(drive, "rsiptu", "StarCitizen", "PTU");
+            Directory.CreateDirectory(ptu);
+            File.WriteAllText(Path.Combine(ptu, "Game.log"), "");
+            Directory.CreateDirectory(Path.Combine(drive, "Games", "Roberts Space Industries", "StarCitizen", "LIVE", "logbackups"));
+            Directory.CreateDirectory(Path.Combine(drive, "Other", "StarCitizen", "NotAChannel"));
+
+            var found = GameInstallLocator.ChannelsUnder(drive).Select(i => i.Channel).Order().ToList();
+
+            Assert.Equal(["LIVE", "PTU"], found);
+        }
+        finally
+        {
+            try { Directory.Delete(drive, recursive: true); } catch (IOException) { }
+        }
+    }
+
     [Fact]
     public void One_folder_is_one_key_however_it_was_written()
     {
