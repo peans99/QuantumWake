@@ -6145,5 +6145,9 @@
   "The list of ships could not be read.": "La liste des vaisseaux n’a pas pu être lue.",
   "No ship by that name in the install.": "Aucun vaisseau de ce nom dans l’installation.",
   "{length} × {beam} × {height} m": "{length} × {beam} × {height} m",
-  "Length × beam × height, overall": "Longueur × largeur × hauteur, hors tout"
+  "Length × beam × height, overall": "Longueur × largeur × hauteur, hors tout",
+  "Take {ship} out of the row": "Retirer {ship} de la rangée",
+  "Take out of the row": "Retirer de la rangée",
+  "{ship} is already in the row.": "{ship} est déjà dans la rangée.",
+  "The row is empty. Add a ship above.": "La rangée est vide. Ajoutez un vaisseau ci-dessus."
 }

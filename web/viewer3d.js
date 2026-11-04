@@ -999,7 +999,7 @@ class ModelView {
    * parts find their palettes - and the row is laid out again as each lands.
    */
   async loadFleetShip(entry) {
-    if (entry.group || entry.loading) return;
+    if (entry.group || entry.loading || entry.removed) return;
     entry.loading = true;
     this.setStatus(t('Bringing in {ship}…', { ship: entry.name }));
     try {
@@ -1020,6 +1020,12 @@ class ModelView {
       }
       this.hull = hull;
       await this.attach(scene.parts || [], hull, 0);
+      // Taken out of the row while it was still loading: it never stands in it.
+      if (entry.removed) {
+        group.removeFromParent();
+        this.parts = this.parts.filter(p => !(p.object && isInside(p.object, group)));
+        return;
+      }
       group.userData.part = { name: entry.name, cls: scene.cls, type: 'Ship', port: null, fleet: true };
       entry.group = group;
       this.parts.push({ ...group.userData.part, object: group, placed: true, depth: -1 });
@@ -1071,6 +1077,22 @@ class ModelView {
       entry.group.visible = on;
       this.layoutFleet();
     }
+  }
+
+  /** Takes a ship out of the row altogether, with every part it carried. */
+  removeFleetShip(entry) {
+    entry.removed = true;
+    this.fleet = (this.fleet || []).filter(e => e !== entry);
+    const group = entry.group;
+    if (group) {
+      const inShip = o => o && (o === group || isInside(o, group));
+      if (this.selected && inShip(this.selected.object)) this.select(null);
+      group.removeFromParent();
+      this.parts = this.parts.filter(p => !inShip(p.object));
+      entry.group = null;
+    }
+    this.layoutFleet();
+    this.invalidate();
   }
 
   /**
@@ -1630,10 +1652,21 @@ function openFleet(host, view, opts) {
   const list = q('[data-v3d-parts]');
   const adder = document.createElement('div');
   adder.className = 'v3d-fleet-add';
-  adder.innerHTML = `<input type="search" data-v3d-add list="v3d-add-list" placeholder="${escHtml(t('Add a ship to the row…'))}" aria-label="${escHtml(t('Add a ship to the row'))}"><datalist id="v3d-add-list"></datalist><small data-v3d-add-note></small>`;
+  adder.innerHTML = `<div class="v3d-fleet-add-row"><input type="search" data-v3d-add list="v3d-add-list" placeholder="${escHtml(t('Add a ship to the row…'))}" aria-label="${escHtml(t('Add a ship to the row'))}"><button type="button" data-v3d-clear>${escHtml(t('Remove all'))}</button></div><datalist id="v3d-add-list"></datalist><small data-v3d-add-note></small>`;
   list.before(adder);
   const addInput = adder.querySelector('[data-v3d-add]');
   const addNote = adder.querySelector('[data-v3d-add-note]');
+  const remove = entry => {
+    view.removeFleetShip(entry);
+    sub();
+    draw();
+  };
+  adder.querySelector('[data-v3d-clear]').addEventListener('click', () => {
+    for (const entry of [...view.fleet]) view.removeFleetShip(entry);
+    sub();
+    draw();
+    addInput.focus();
+  });
   const catalogue = getJson('/api/models/list').then(all => {
     const ships = (all?.vehicles || []).map(v => ({ cls: v.cls, name: v.name || v.cls }));
     // Several entities share a name (RSI_Constellation_Andromeda and its _GS
@@ -1658,7 +1691,8 @@ function openFleet(host, view, opts) {
     addInput.value = '';
     const already = view.fleet.find(e => e.cls.toLowerCase() === found.cls.toLowerCase());
     if (already) {
-      if (!already.on) { already.on = true; view.setFleetShip(already, true); draw(); }
+      if (already.on) addNote.textContent = t('{ship} is already in the row.', { ship: already.name });
+      else { already.on = true; view.setFleetShip(already, true); draw(); }
       return;
     }
     const entry = { cls: found.cls, name: found.name, on: true };
@@ -1698,10 +1732,23 @@ function openFleet(host, view, opts) {
         : entry.size && entry.group?.visible ? t('{length} × {beam} × {height} m', { length: metres(entry.size.length), beam: metres(entry.size.beam), height: metres(entry.size.height) })
         : '';
       if (entry.size) state.title = t('Length × beam × height, overall');
-      li.append(box, name, state);
+      const drop = document.createElement('button');
+      drop.type = 'button';
+      drop.className = 'v3d-fleet-remove';
+      drop.textContent = '✕';
+      drop.title = t('Take {ship} out of the row', { ship: entry.name });
+      drop.setAttribute('aria-label', drop.title);
+      drop.addEventListener('click', () => remove(entry));
+      li.append(box, name, state, drop);
       ul.append(li);
     });
     list.append(ul);
+    if (!view.fleet.length) {
+      const empty = document.createElement('p');
+      empty.className = 'v3d-note';
+      empty.textContent = t('The row is empty. Add a ship above.');
+      list.append(empty);
+    }
   };
   view.onFleet = draw;
   view.onParts = () => {};
@@ -1710,10 +1757,14 @@ function openFleet(host, view, opts) {
     if (part?.fleet) {
       const detail = q('[data-v3d-detail]');
       detail.hidden = false;
-      detail.innerHTML = `<h3>${escHtml(part.name)}</h3><button type="button" data-v3d-alone>${escHtml(t('Open alone'))}</button>`;
+      detail.innerHTML = `<h3>${escHtml(part.name)}</h3><button type="button" data-v3d-alone>${escHtml(t('Open alone'))}</button> <button type="button" data-v3d-drop>${escHtml(t('Take out of the row'))}</button>`;
       const entry = view.fleet.find(e => e.group === part.object);
       detail.querySelector('[data-v3d-alone]').addEventListener('click', () =>
         openModel({ cls: part.cls, title: part.name, paint: entry?.paint }));
+      detail.querySelector('[data-v3d-drop]').addEventListener('click', () => {
+        if (entry) remove(entry);
+        detail.hidden = true;
+      });
     }
   };
 
