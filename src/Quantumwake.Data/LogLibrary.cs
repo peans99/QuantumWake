@@ -419,7 +419,8 @@ public sealed record LoadoutEntry(
     string Name,
     int Count,
     DateTimeOffset LastSeen,
-    ItemInfo? Reference = null);
+    ItemInfo? Reference = null,
+    double? Mass = null);
 
 /// <summary>
 /// Groups character item ports into something a person would recognise.
@@ -2563,7 +2564,10 @@ public sealed class LogLibrary : IDisposable
                     .GroupBy(l => l.ItemClass, StringComparer.OrdinalIgnoreCase)
                     .Select(i => new LoadoutEntry(
                         ItemName(i.Key), i.Count(), i.Max(l => l.LastSeen),
-                        Community.Item(i.Key)))
+                        Community.Item(i.Key),
+                        // Kilograms from the install, for the suit calculator;
+                        // null when the install has not been read or says nothing.
+                        GameCommodities.Item(i.Key) is { Mass: > 0 } fact ? fact.Mass : null))
                     .OrderByDescending(i => i.Count)
                     .ThenByDescending(i => i.LastSeen)
                     .ToList();

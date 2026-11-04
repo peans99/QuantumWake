@@ -16,7 +16,7 @@ namespace Quantumwake.Core.GameData;
 /// </param>
 public sealed record GameItem(
     string Name, string Type, string SubType, int Size, int Grade, string Manufacturer,
-    string Description = "", string Tags = "", long MicroScu = 0);
+    string Description = "", string Tags = "", long MicroScu = 0, double Mass = 0);
 
 /// <summary>
 /// The item catalogue, read from the install instead of downloaded.
@@ -58,6 +58,7 @@ public static class GameItems
 
         var attach = core.StructIndexOf("SAttachableComponentParams");
         if (attach < 0) return items;
+        var physics = core.StructIndexOf("SEntityPhysicsControllerParams");
 
         var makers = Manufacturers(core, text);
 
@@ -66,7 +67,21 @@ public static class GameItems
             if (!record.Name.StartsWith("EntityClassDefinition.", StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            foreach (var component in core.PointerArray(record, "Components"))
+            var components = core.PointerArray(record, "Components");
+
+            // Mass sits on the physics component, beside the attach one: what a
+            // suit calculator adds up for the magazines, MedPens and tools the
+            // Armoury does not list.
+            double mass = 0;
+            foreach (var component in components)
+            {
+                if (component.StructIndex != physics) continue;
+                if (GameMining.Nested(core, core.InstanceAt(component), physics, "PhysType") is { } phys)
+                    mass = Math.Round(core.SingleAt(phys.At, phys.StructIndex, "Mass") ?? 0, 4);
+                break;
+            }
+
+            foreach (var component in components)
             {
                 if (component.StructIndex != attach) continue;
 
@@ -85,7 +100,8 @@ public static class GameItems
                     maker is not null ? makers.GetValueOrDefault(maker.Value, string.Empty) : string.Empty,
                     Localised(core, text, at, field.StructIndex, "Description") ?? string.Empty,
                     core.StringAt(at, field.StructIndex, "Tags") ?? string.Empty,
-                    Volume(core, at, field.StructIndex));
+                    Volume(core, at, field.StructIndex),
+                    mass);
 
                 break;
             }

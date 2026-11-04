@@ -1512,6 +1512,7 @@ public static partial class ServerHost
                         first.Family, first.Slot, first.Weight, first.Kind, first.Manufacturer, first.Resistances, first.Protects,
                         first.TemperatureMin, first.TemperatureMax, first.RadiationCapacity, first.RadiationDissipation, first.GForceResistance,
                         first.CapacityMicroScu, first.EmSignature, first.IrSignature, first.MotionPenalty, first.ViewPenalty, first.Mass,
+                        movementRecord = g.Select(a => a.MovementRecord).FirstOrDefault(m => m is not null),
                         name = first.Name,
                         pieces = priced.Select(p => new { @class = p.Class, uuid = lib.GameCommodities.ItemUuid(p.Class), name = p.Name, market = new { price = p.Market.Price, shops = p.Market.Shops } }).ToList(),
                         market = new { price = cheapest.Market.Price, shops = cheapest.Market.Shops ?? [] },
@@ -1568,6 +1569,9 @@ public static partial class ServerHost
                         climate.BodyMin, climate.BodyMax, climate.VisorFrost,
                     }
                     : null,
+                // The player's G-force profiles and standing speeds, for the
+                // suit calculator. Null until the archive has been read again.
+                body = armoury.Body,
                 itemPricesKnown = uex.IsEnabled,
                 // Pictures come from the wiki, and the wiki is asked only once the
                 // community dataset is on - the app's consent to talk to the network.

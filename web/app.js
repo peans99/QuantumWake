@@ -9200,7 +9200,7 @@ let armouryOpenGun = null;
 let armouryRevealGun = null;
 let armouryOpenSet = null;
 
-const ARMOURY_PANES = ['guns', 'armour', 'attachments', 'grenades', 'knives', 'climate', 'bench'];
+const ARMOURY_PANES = ['guns', 'armour', 'attachments', 'grenades', 'knives', 'climate', 'suit', 'bench'];
 try {
   const kept = localStorage.getItem('qw-armoury-pane');
   if (ARMOURY_PANES.includes(kept)) armouryPane = kept;
@@ -9216,12 +9216,13 @@ function showArmouryPane(name) {
   }
   for (const button of $('#armoury-tabs')?.querySelectorAll('button') || [])
     button.classList.toggle('active', button.dataset.pane === name);
-  const deck = name === 'guns' || name === 'bench' ? 'guns' : name === 'armour' || name === 'climate' ? 'armour' : 'kit';
+  const deck = name === 'guns' || name === 'bench' ? 'guns' : name === 'armour' || name === 'climate' || name === 'suit' ? 'armour' : 'kit';
   for (const key of ['guns', 'armour', 'kit'])
     $(`#armoury-open-${key}`)?.classList.toggle('active', key === deck);
   if (name === 'bench') renderArmouryBench();
   else ++armouryBenchTurn;
   if (name === 'guns') renderArmouryGuns();
+  if (name === 'suit') renderArmourySuit();
 }
 
 $('#armoury-tabs')?.addEventListener('click', (e) => {
@@ -9303,10 +9304,396 @@ async function loadArmoury() {
   }
 
   renderArmouryBrief();
+  armourySuitIndex = null;
   showArmouryPane(armouryPane);
   renderArmouryArmour();
   renderArmouryKit();
   renderArmouryClimate();
+}
+
+/* ---------- suit calculator ----------
+   A suit as it would be worn: what it weighs, what it carries, how fast the
+   wearer moves and how much G they take. Starts from the loadout the log last
+   saw, and every piece can be swapped, stripped or copied back.
+
+   Every figure is the game's own. G-force resistance is per piece
+   (Flight.gForceResistance) and adds up to round sums - a heavy helmet, core,
+   arms and legs are exactly -1, an undersuit +0.9 - against the player's
+   worst, usual and best G-force profiles. How the game blends between those
+   three is not in the files; the straight line through them is this app's
+   reading of the round sums, and the page says so. A field the files leave
+   empty counts as 0, and the page says that too rather than leaving a gap. */
+
+const SUIT_SLOTS = ['Helmet', 'Core', 'Arms', 'Legs', 'Undersuit', 'Backpack'];
+const SUIT_WEAPONS = ['primary', 'secondary', 'sidearm'];
+const SUIT_KEY = 'qw-armoury-suit';
+
+/** The loadout's armour types, as the Armoury names their slots. */
+const SUIT_TYPE_SLOT = {
+  Char_Armor_Helmet: 'Helmet', Char_Armor_Torso: 'Core', Char_Armor_Arms: 'Arms',
+  Char_Armor_Legs: 'Legs', Char_Armor_Undersuit: 'Undersuit', Char_Armor_Backpack: 'Backpack',
+};
+
+let armourySuit = null;
+let armourySuitIndex = null;
+
+function emptySuit() {
+  return { slots: {}, weapons: {}, carried: [], from: null };
+}
+
+function loadSuitState() {
+  try {
+    const kept = JSON.parse(localStorage.getItem(SUIT_KEY) || 'null');
+    if (kept && typeof kept === 'object' && kept.slots) return { ...emptySuit(), ...kept };
+  } catch { /* nothing kept */ }
+  return null;
+}
+
+function saveSuitState() {
+  try { localStorage.setItem(SUIT_KEY, JSON.stringify(armourySuit)); } catch { /* private window */ }
+}
+
+/**
+ * Every wearable piece, weapon and small item by class and by uuid, built
+ * once per armoury read. A loadout item carries the uuid of the finish worn,
+ * so finishes point at their family's figures - colours do not change mass.
+ */
+function suitIndex() {
+  if (armourySuitIndex?.model === armouryModel) return armourySuitIndex;
+  const pieces = new Map();
+  const byUuid = new Map();
+  for (const set of armouryModel?.armour || []) {
+    for (const p of set.pieces || []) {
+      const entry = { kind: 'armour', cls: p.class, name: p.name, set };
+      pieces.set(p.class, entry);
+      if (p.uuid) byUuid.set(p.uuid, entry);
+    }
+  }
+  const weapons = new Map();
+  const add = (map, kind, item, family) => {
+    const entry = { kind, cls: item.class, name: item.name, mass: family.mass, family };
+    map.set(item.class, entry);
+    if (item.uuid) byUuid.set(item.uuid, entry);
+  };
+  for (const w of armouryModel?.weapons || []) {
+    add(weapons, 'weapon', w, w);
+    for (const f of w.finishes || []) add(weapons, 'weapon', f, w);
+  }
+  const small = new Map();
+  for (const [kind, list] of [['attachment', armouryModel?.attachments], ['grenade', armouryModel?.throwables], ['knife', armouryModel?.melee]]) {
+    for (const x of list || []) {
+      add(small, kind, x, x);
+      for (const f of x.finishes || []) add(small, kind, f, x);
+    }
+  }
+  armourySuitIndex = { model: armouryModel, pieces, weapons, small, byUuid };
+  return armourySuitIndex;
+}
+
+/**
+ * The suit the log last saw: armour by slot, guns by holster, and everything
+ * else that has a weight in the reference as carried items. What the
+ * reference does not know is listed with no mass rather than dropped.
+ */
+async function suitFromLoadout() {
+  let loadout = [];
+  try {
+    loadout = await getJson('/api/loadout');
+  } catch {
+    return null;
+  }
+  const index = suitIndex();
+  const suit = emptySuit();
+  suit.from = 'loadout';
+  const primaries = [];
+
+  for (const slot of loadout || []) {
+    // The hook a helmet hangs on when it is off the head is not a second helmet.
+    if (/helmethook/i.test(slot.port || '')) continue;
+    for (const item of slot.items || []) {
+      const ref = item.reference || {};
+      const known = (ref.uuid && index.byUuid.get(ref.uuid)) || null;
+      const armourSlot = SUIT_TYPE_SLOT[ref.type];
+      if (armourSlot && known?.kind === 'armour') {
+        suit.slots[armourSlot] = known.cls;
+        continue;
+      }
+      if (known?.kind === 'weapon') {
+        if (/sidearm/i.test(slot.port || '') && !suit.weapons.sidearm) suit.weapons.sidearm = known.cls;
+        else primaries.push(known.cls);
+        continue;
+      }
+      if (/^default$/i.test(item.name || '')) continue;
+      const fromInstall = Number(item.mass);
+      suit.carried.push({
+        name: known?.name || item.name,
+        mass: known ? Number(known.mass) || 0 : Number.isFinite(fromInstall) && fromInstall > 0 ? fromInstall : null,
+        count: Math.max(1, Number(item.count) || 1),
+      });
+    }
+  }
+  [suit.weapons.primary, suit.weapons.secondary] = primaries;
+  return suit;
+}
+
+/** "3.5 kg", or "0 kg" for an empty field. */
+function suitKg(kg) {
+  return tx('{value} kg', { value: fmt1(Number(kg) || 0) });
+}
+
+/** "+0.9", "−0.25": signed, as the pieces add up. */
+function suitSigned(n) {
+  const v = Math.round((Number(n) || 0) * 1000) / 1000;
+  return v > 0 ? `+${v}` : v < 0 ? `−${Math.abs(v)}` : '0';
+}
+
+/**
+ * A tier between worst, usual and best by the suit's summed resistance: -1
+ * is worst, 0 usual, +1 best, a straight line either side. The files give the
+ * three ends and the per-piece figures; the line between is inferred.
+ */
+function suitBlend(profile, resistance, field) {
+  const r = Math.max(-1, Math.min(1, Number(resistance) || 0));
+  const usual = Number(profile.default?.[field]) || 0;
+  const end = Number((r < 0 ? profile.worst : profile.best)?.[field]) || 0;
+  return usual + (end - usual) * Math.abs(r);
+}
+
+/** What the chosen suit adds up to. Missing figures count as 0 and are counted. */
+function suitTotals(suit) {
+  const index = suitIndex();
+  const worn = SUIT_SLOTS.map((slot) => ({ slot, piece: index.pieces.get(suit.slots[slot]) })).filter((w) => w.piece);
+  const guns = SUIT_WEAPONS.map((w) => index.weapons.get(suit.weapons[w])).filter(Boolean);
+  const armourMass = worn.reduce((sum, w) => sum + (Number(w.piece.set.mass) || 0), 0);
+  const gunMass = guns.reduce((sum, g) => sum + (Number(g.mass) || 0), 0);
+  const carriedMass = suit.carried.reduce((sum, c) => sum + (Number(c.mass) || 0) * (c.count || 1), 0);
+  const unknown = suit.carried.filter((c) => c.mass === null || c.mass === undefined).length;
+  const capacity = worn.reduce((sum, w) => sum + (Number(w.piece.set.capacityMicroScu) || 0), 0);
+  const resistance = worn.reduce((sum, w) => sum + (Number(w.piece.set.gForceResistance) || 0), 0);
+  const movement = worn.filter((w) => w.piece.set.movementRecord);
+  return { worn, guns, armourMass, gunMass, carriedMass, unknown, capacity, resistance, movement, mass: armourMass + gunMass + carriedMass };
+}
+
+function suitPieceSelect(slot, suit) {
+  const select = el('select', 'select');
+  select.title = tx('What is worn here');
+  select.append(new Option(tx('Nothing'), ''));
+  const sets = (armouryModel?.armour || []).filter((a) => a.slot === slot);
+  const groups = new Map();
+  for (const set of sets) {
+    const key = set.weight || tx('Other');
+    if (!groups.has(key)) groups.set(key, []);
+    for (const p of set.pieces || []) groups.get(key).push({ cls: p.class, name: p.name });
+  }
+  for (const weight of ['Light', 'Medium', 'Heavy', ...[...groups.keys()].filter((k) => !['Light', 'Medium', 'Heavy'].includes(k))]) {
+    const list = groups.get(weight);
+    if (!list?.length) continue;
+    const group = document.createElement('optgroup');
+    group.label = weight;
+    for (const p of list.sort((a, b) => a.name.localeCompare(b.name))) group.append(new Option(p.name, p.cls));
+    select.append(group);
+  }
+  select.value = suit.slots[slot] || '';
+  select.addEventListener('change', () => {
+    armourySuit.slots[slot] = select.value || null;
+    armourySuit.from = 'edited';
+    saveSuitState();
+    renderArmourySuit();
+  });
+  return select;
+}
+
+function suitWeaponSelect(which, suit) {
+  const select = el('select', 'select');
+  select.append(new Option(tx('Nothing'), ''));
+  const guns = (armouryModel?.weapons || [])
+    .filter((w) => (which === 'sidearm' ? w.kind === 'Pistol' : w.kind !== 'Pistol'))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  for (const w of guns) select.append(new Option(w.name, w.class));
+  // A finish from the loadout reads as its family's name, which is the same gun.
+  const chosen = suit.weapons[which];
+  const family = chosen ? suitIndex().weapons.get(chosen)?.family?.class : '';
+  select.value = family && [...select.options].some((o) => o.value === family) ? family : '';
+  select.addEventListener('change', () => {
+    armourySuit.weapons[which] = select.value || null;
+    armourySuit.from = 'edited';
+    saveSuitState();
+    renderArmourySuit();
+  });
+  return select;
+}
+
+async function suitCopyLoadout(say) {
+  const copied = await suitFromLoadout();
+  if (!copied) {
+    say?.(tx('The loadout could not be read.'));
+    return;
+  }
+  armourySuit = copied;
+  saveSuitState();
+  renderArmourySuit();
+  if (!copied.carried.length && !Object.keys(copied.slots).length) say?.(tx('The log has not seen any equipment yet.'));
+}
+
+function renderArmourySuit() {
+  const host = $('#armoury-suit');
+  if (!host || !armouryModel?.ready) return;
+
+  if (!armourySuit) {
+    armourySuit = loadSuitState();
+    if (!armourySuit) {
+      // Nothing chosen yet: start from what the log last saw being worn.
+      armourySuit = emptySuit();
+      suitCopyLoadout();
+      return;
+    }
+  }
+
+  const suit = armourySuit;
+  const totals = suitTotals(suit);
+  host.textContent = '';
+
+  // Actions.
+  const bar = el('div', 'controls suit-actions');
+  const status = el('span', 'muted small');
+  const copy = el('button', 'ghost', tx('Copy from loadout'));
+  copy.type = 'button';
+  copy.addEventListener('click', () => suitCopyLoadout((t) => { status.textContent = t; }));
+  const strip = el('button', 'ghost', tx('Strip all'));
+  strip.type = 'button';
+  strip.addEventListener('click', () => {
+    armourySuit = emptySuit();
+    armourySuit.from = 'stripped';
+    saveSuitState();
+    renderArmourySuit();
+  });
+  bar.append(copy, strip, el('span', 'muted small', suit.from === 'loadout'
+    ? tx('Copied from the loadout the log last saw.')
+    : suit.from === 'stripped' ? tx('Stripped: nothing worn or carried.') : tx('Your own choice of pieces.')), status);
+  host.append(bar);
+
+  const grid = el('div', 'suit-grid');
+
+  // What is worn.
+  const worn = el('section', 'suit-card');
+  worn.append(el('h3', null, tx('Worn')));
+  for (const slot of SUIT_SLOTS) {
+    const row = el('label', 'suit-row');
+    row.append(el('span', 'suit-slot', tx(slot)));
+    row.append(suitPieceSelect(slot, suit));
+    const piece = suitIndex().pieces.get(suit.slots[slot]);
+    const facts = el('span', 'muted small suit-facts');
+    facts.textContent = piece
+      ? `${suitKg(piece.set.mass)} · G ${suitSigned(piece.set.gForceResistance)}${piece.set.capacityMicroScu > 0 ? ` · ${fmtInt(piece.set.capacityMicroScu / 1000)} mSCU` : ''}`
+      : '';
+    row.append(facts);
+    worn.append(row);
+  }
+  worn.append(el('h3', 'spaced', tx('Carried')));
+  for (const [which, label] of [['primary', tx('Primary')], ['secondary', tx('Second primary')], ['sidearm', tx('Sidearm')]]) {
+    const row = el('label', 'suit-row');
+    row.append(el('span', 'suit-slot', label));
+    row.append(suitWeaponSelect(which, suit));
+    const gun = suitIndex().weapons.get(suit.weapons[which]);
+    row.append(el('span', 'muted small suit-facts', gun ? suitKg(gun.mass) : ''));
+    worn.append(row);
+  }
+  if (suit.carried.length) {
+    const list = el('ul', 'suit-carried');
+    for (const c of suit.carried) {
+      const li = el('li');
+      li.append(el('span', null, c.count > 1 ? `${c.name} ×${c.count}` : c.name));
+      li.append(el('span', 'muted small', c.mass === null || c.mass === undefined
+        ? tx('mass not known - counted as 0')
+        : suitKg(c.mass * (c.count || 1))));
+      const remove = el('button', 'ghost suit-remove', '×');
+      remove.type = 'button';
+      remove.title = tx('Leave it behind');
+      remove.addEventListener('click', () => {
+        armourySuit.carried = armourySuit.carried.filter((x) => x !== c);
+        armourySuit.from = 'edited';
+        saveSuitState();
+        renderArmourySuit();
+      });
+      li.append(remove);
+      list.append(li);
+    }
+    worn.append(list);
+  }
+  grid.append(worn);
+
+  // What it adds up to.
+  const sums = el('section', 'suit-card');
+  sums.append(el('h3', null, tx('Weight')));
+  const weight = el('div', 'suit-figure');
+  weight.append(el('b', null, suitKg(totals.mass)));
+  weight.append(el('span', 'muted small', tx('armour {armour} · guns {guns} · other {other}', {
+    armour: suitKg(totals.armourMass), guns: suitKg(totals.gunMass), other: suitKg(totals.carriedMass),
+  })));
+  sums.append(weight);
+  if (totals.unknown) sums.append(el('p', 'muted small', txn(totals.unknown,
+    '{count} carried item has no known mass and counts as 0.',
+    '{count} carried items have no known mass and count as 0.')));
+  sums.append(el('p', 'muted small', tx('Carry space {space} mSCU, from the core, legs, backpack and undersuit.', { space: fmtInt(totals.capacity / 1000) })));
+
+  sums.append(el('h3', 'spaced', tx('Movement')));
+  const body = armouryModel.body;
+  const speeds = el('div', 'suit-speeds');
+  for (const [label, value] of [[tx('Walk'), body?.walkSpeed], [tx('Run'), body?.runSpeed], [tx('Sprint'), body?.sprintSpeed]]) {
+    const cell = el('div', 'suit-speed');
+    cell.append(el('span', 'muted small', label));
+    cell.append(el('b', null, tx('{value} m/s', { value: fmt1(Number(value) || 0) })));
+    speeds.append(cell);
+  }
+  sums.append(speeds);
+  sums.append(el('p', 'muted small', totals.movement.length
+    ? tx('{pieces} names a movement record the app does not read yet ({record}); the speeds above leave it out.', {
+      pieces: totals.movement.map((w) => w.piece.name).join(', '), record: totals.movement[0].piece.set.movementRecord,
+    })
+    : tx('Armour and weight change these by 0%: no armour piece in this build carries a movement multiplier, and nothing in the files ties carried mass to speed.')));
+
+  sums.append(el('h3', 'spaced', tx('G-force')));
+  const g = el('div', 'suit-figure');
+  g.append(el('b', null, suitSigned(totals.resistance)));
+  g.append(el('span', 'muted small', tx('resistance, from -1 (worst) to +1 (best)')));
+  sums.append(g);
+  const meter = el('div', 'suit-meter');
+  const mark = el('span', 'suit-meter-mark');
+  mark.style.left = `${((Math.max(-1, Math.min(1, totals.resistance)) + 1) / 2) * 100}%`;
+  meter.append(mark);
+  sums.append(meter);
+  if (totals.worn.length) {
+    sums.append(el('p', 'muted small', totals.worn
+      .map((w) => `${tx(w.slot)} ${suitSigned(w.piece.set.gForceResistance)}`).join(' · ')));
+  }
+
+  const profiles = body?.gForce || [];
+  if (profiles.length) {
+    const table = el('table', 'suit-g');
+    const head = el('tr');
+    for (const h of [tx('Profile'), tx('Worst'), tx('Usual'), tx('Best'), tx('This suit')]) head.append(el('th', h === tx('Profile') ? null : 'num', h));
+    const thead = el('thead');
+    thead.append(head);
+    table.append(thead);
+    const tbody = el('tbody');
+    const cell = (t) => `${fmt1(t?.tolerance || 0)} / ${fmt1(t?.maxGees || 0)} G`;
+    for (const p of profiles) {
+      const tr = el('tr');
+      tr.append(el('td', null, String(p.index)));
+      tr.append(el('td', 'num', cell(p.worst)));
+      tr.append(el('td', 'num', cell(p.default)));
+      tr.append(el('td', 'num', cell(p.best)));
+      tr.append(el('td', 'num suit-this', `${fmt1(suitBlend(p, totals.resistance, 'tolerance'))} / ${fmt1(suitBlend(p, totals.resistance, 'maxGees'))} G`));
+      tbody.append(tr);
+    }
+    table.append(tbody);
+    sums.append(table);
+    sums.append(el('p', 'muted small', tx('Each cell is the G taken before strain starts / the G at which it builds fastest. The files hold five profiles without saying which direction each is for. They give the worst, usual and best ends; "This suit" assumes a straight line between them, which is what the pieces\' round sums suggest but the files do not state.')));
+  } else {
+    sums.append(el('p', 'muted small', tx('The G-force profiles arrive with the next read of the game files.')));
+  }
+  grid.append(sums);
+  host.append(grid);
 }
 
 /* ---------- climate ----------
