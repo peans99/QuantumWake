@@ -64,9 +64,21 @@ in an MSIX declares it.
 `installer/msix/store-identity.json` holds the package's `Name`, `Publisher`
 and publisher display name. They are not chosen here: Partner Center assigns
 them when the name is reserved (*Product management → Product identity*), and
-a package that disagrees is refused at upload. Until they are copied in, the
-file holds placeholders; CI packs with them, the release workflow skips the
-Store package with a warning, and `build-msix.ps1 -Release` refuses them.
+a package that disagrees is refused at upload. Reserved 2026-11-04:
+
+| field | value |
+|---|---|
+| Name | `Nehkron.QuantumWake` |
+| Publisher | `CN=D89B6871-849F-42BD-BB41-E382E98406F9` |
+| Publisher display name | `Nehkron` |
+| Package family name | `Nehkron.QuantumWake_6pqy8hx358xcy` |
+| Store ID | `9NVQ4KN17KB8`, <https://apps.microsoft.com/detail/9NVQ4KN17KB8> |
+
+The family name's suffix is a hash of the Publisher, so recomputing it checks
+a Publisher copied by eye: SHA-256 of the UTF-16LE string, first 8 bytes, as
+13 characters of `0123456789abcdefghjkmnpqrstvwxyz`. The value above gives
+`6pqy8hx358xcy`, as Partner Center shows. `build-msix.ps1 -Release` still
+refuses the placeholders, should the file ever be reset to them.
 
 ## Choices in the manifest
 
