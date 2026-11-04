@@ -90,8 +90,12 @@ class El {
      Pushing without detaching left the node in two places at once, so code
      that reorders by re-appending appeared to duplicate every card - a test
      failing about the stub rather than about the app. */
+  /* A string is appended as text, as a browser's append does: a line built
+     from a link and the words around it - append(link, ' · 3 SCU') - kept the
+     link and silently lost the words, so a test read half a sentence. */
   append(...nodes) {
-    for (const node of nodes) {
+    for (let node of nodes) {
+      if (typeof node === 'string' || typeof node === 'number') node = { textContent: String(node) };
       if (node instanceof El) {
         node.remove();
         node.parentElement = this;
@@ -109,6 +113,7 @@ class El {
   }
 
   prepend(node) {
+    if (typeof node === 'string' || typeof node === 'number') node = { textContent: String(node) };
     if (node instanceof El) {
       node.remove();
       node.parentElement = this;

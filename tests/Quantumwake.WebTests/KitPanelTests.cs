@@ -93,7 +93,7 @@ public class KitPanelTests
     {
         var page = Preparing();
 
-        Assert.Equal(2, page.Count("__dom.node('#kit-prepare-table').querySelectorAll('button').length"));
+        Assert.Equal(2, page.Count("__dom.node('#kit-prepare-table').querySelectorAll('.kit-gone').length"));
         Assert.Contains("settled", page.NodeText("#kit-prepare-table"));
         Assert.Contains("on the list", page.NodeText("#kit-prepare-table"));
     }
@@ -119,7 +119,7 @@ public class KitPanelTests
     {
         var page = Preparing();
         page.Serve("/api/kits/k1/shopping?gone=MedPen", """{"job":"j1","items":2}""");
-        page.Do("__dom.node('#kit-prepare-table').querySelectorAll('button')[0].click(); await makeKitShopping();");
+        page.Do("__dom.node('#kit-prepare-table').querySelectorAll('.kit-gone')[0].click(); await makeKitShopping();");
 
         Assert.Contains(page.Fetched(), u => u.Contains("gone=MedPen"));
     }
@@ -133,7 +133,7 @@ public class KitPanelTests
     {
         var page = Preparing();
         page.Serve("/api/kits/k1/shopping", """{"job":null,"items":0}""");
-        page.Do("const b = __dom.node('#kit-prepare-table').querySelectorAll('button')[0];"
+        page.Do("const b = __dom.node('#kit-prepare-table').querySelectorAll('.kit-gone')[0];"
             + " b.click(); b.click(); await makeKitShopping();");
 
         Assert.DoesNotContain(page.Fetched(), u => u.Contains("gone="));

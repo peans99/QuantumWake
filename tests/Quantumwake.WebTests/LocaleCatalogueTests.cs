@@ -212,7 +212,8 @@ public class LocaleCatalogueTests
         var french = Read("fr");
         static string Unescape(string s) => s.Replace("\\'", "'");
 
-        var keys = Regex.Matches(script, @"\btx\('((?:[^'\\]|\\.)*)'")
+        // txLinks is tx with links put back into the sentence, so its literals count too.
+        var keys = Regex.Matches(script, @"\btx(?:Links)?\('((?:[^'\\]|\\.)*)'")
             .Select(m => Unescape(m.Groups[1].Value))
             .Concat(Regex.Matches(script, @"\btxn\([^,]+,\s*'(?:[^'\\]|\\.)*',\s*'((?:[^'\\]|\\.)*)'")
                 .Select(m => Unescape(m.Groups[1].Value)))

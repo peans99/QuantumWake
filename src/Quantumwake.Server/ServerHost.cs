@@ -853,6 +853,15 @@ public static partial class ServerHost
             // is no friendlier one in the log - and how many the session saw.
             shard = s.Shards.Count > 0 ? s.Shards[^1].Shard : null,
             shards = s.Shards.Count,
+            // Every shard by name, and everyone the party notes name other than
+            // the pilot: what Servers and Crew search Sessions by, so a row on
+            // either page can land on the sessions it counted.
+            shardNames = s.Shards.Select(x => x.Shard).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            crew = s.PartyNotes
+                .Where(n => n.Handle is not null && !string.Equals(n.Handle, s.Handle, StringComparison.OrdinalIgnoreCase))
+                .Select(n => n.Handle!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
             ships = s.Ships.Count,
             locations = s.Locations.Count,
             jumps = s.Jumps.Count,
