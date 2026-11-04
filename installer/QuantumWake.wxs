@@ -1,0 +1,81 @@
+<!--
+  The Windows installer: the same single QuantumWake.exe the release ships on
+  its own, put where an installed app belongs, with a Start menu entry and an
+  uninstaller. Built by installer/build.ps1, from the release workflow and by
+  hand alike. Why it is shaped this way: docs/installer.md.
+
+  Per-user, never per-machine. The app keeps everything in the user's profile
+  already, so a per-machine install would ask for an administrator for no gain,
+  and the in-app updater replaces the exe where it stands, which it can only do
+  in a folder the user owns.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+      Name="Quantum Wake"
+      Manufacturer="nekron"
+      Version="$(Version)"
+      UpgradeCode="66EBDDB8-1B1C-4894-A04D-7BB8AD99F1E2"
+      Scope="perUser"
+      Language="1033"
+      Compressed="yes">
+
+    <!-- The UpgradeCode above never changes: it is what makes every later
+         version replace this one instead of installing beside it. -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Quantum Wake is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="QuantumWake.ico" SourceFile="$(Icon)" />
+    <Property Id="ARPPRODUCTICON" Value="QuantumWake.ico" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/peans99/QuantumWake" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/peans99/QuantumWake/issues" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <!-- Windows Installer leaves the install location blank in Apps and
+         features unless it is told; a folder only known after costing has to
+         be set then. -->
+    <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" After="CostFinalize" />
+
+    <!-- %LOCALAPPDATA%\Programs, where per-user apps go. Spelled out rather
+         than left to ProgramFilesFolder's per-user redirection, which applies
+         only to dual-purpose packages; this one is per-user and nothing else. -->
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="Quantum Wake" />
+      </Directory>
+    </StandardDirectory>
+
+    <!-- A file in the user's profile cannot be its component's key path
+         (ICE38), so each component is keyed on a value under HKCU instead, and
+         each folder it creates is named for removal (ICE64). RemoveFolder only
+         takes a folder that is empty, so Programs survives other apps in it.
+         A component with a file and a registry key path cannot have its GUID
+         generated, so this one is fixed - and, like the UpgradeCode, never
+         changes. -->
+    <Component Id="App" Directory="INSTALLFOLDER" Guid="46812A73-0460-48C5-B51C-E111B0CB5135">
+      <File Id="QuantumWakeExe" Source="$(Exe)" Name="QuantumWake.exe" />
+      <RegistryValue Root="HKCU" Key="Software\Quantum Wake\Installer" Name="App" Type="integer" Value="1" KeyPath="yes" />
+      <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
+      <RemoveFolder Id="RemoveProgramsFolder" Directory="ProgramsFolder" On="uninstall" />
+    </Component>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="StartMenu" Guid="*">
+        <Shortcut Id="StartMenuShortcut"
+                  Name="Quantum Wake"
+                  Description="A pilot's logbook for Star Citizen"
+                  Target="[INSTALLFOLDER]QuantumWake.exe"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue Root="HKCU" Key="Software\Quantum Wake\Installer" Name="StartMenu" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+
+    <Feature Id="Main">
+      <ComponentRef Id="App" />
+      <ComponentRef Id="StartMenu" />
+    </Feature>
+
+    <!-- What uninstalling leaves behind, on purpose: %LOCALAPPDATA%\Quantumwake,
+         the app's data. It is the user's history and survives a reinstall;
+         docs/privacy.md says so and says how to delete it. -->
+  </Package>
+</Wix>

@@ -63,8 +63,13 @@ in English or French; choose under **Settings → General**.
 ### 1. Download and run
 
 **[Download QuantumWake.exe](https://github.com/peans99/QuantumWake/releases/latest)**,
-move it somewhere you keep applications, then open it. There is no installer,
-account or separate .NET download.
+move it somewhere you keep applications, then open it. There is no account or
+separate .NET download.
+
+If you would rather have it installed, download
+`QuantumWake-<version>-win-x64.msi` from the same page instead. It installs into
+your own profile without asking for an administrator, adds a Start menu entry,
+and can be removed from Apps and features. Later versions install over it.
 
 Quantum Wake starts in the notification area. Right-click its tray icon to open
 the dashboard or overlay. The dashboard is also available at
@@ -274,8 +279,9 @@ file.
 The tray icon checks for updates when you ask it to, downloads a new build and
 restarts the app. Some updates re-read your history; release notes call that out.
 
-To remove Quantum Wake, delete `QuantumWake.exe` and
-`%LOCALAPPDATA%\Quantumwake`. Remove item labels from the app first if you
+To remove Quantum Wake, delete `QuantumWake.exe`, or uninstall it from Apps and
+features if you used the installer, then delete `%LOCALAPPDATA%\Quantumwake`,
+which holds your history and is left in place so a reinstall keeps it. Remove item labels from the app first if you
 installed them. Linux removal is under [Linux](#linux).
 
 **Settings → Report a problem** makes a small diagnostic file. It contains
@@ -327,6 +333,12 @@ trademarks of Cloud Imperium Rights LLC. Quantum Wake is an unofficial fan
 project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
+
+### 0.22.3
+
+**A privacy policy.** Settings → About now links to a page that says what the app reads on your computer, what it keeps and where, and every occasion it reaches the internet, with who it contacts, what is sent and the switch that controls it. It also says plainly that UEX credentials, if you use price reporting, are kept as plain text in your user profile. The About text no longer claims that nothing is written to the game folder: installing the item labels does write there, and it now says so.
+
+**An installer, if you want one.** Each release now also carries `QuantumWake-<version>-win-x64.msi`: the same app, installed into your own profile without asking for an administrator, with a Start menu entry and an entry in Apps and features to remove it. A later version installs over an earlier one, and an older one refuses to install over a newer. Uninstalling leaves your history in `%LOCALAPPDATA%\Quantumwake`, so a reinstall picks up where you were. It also installs silently (`msiexec /i … /quiet`), which is what the Microsoft Store needs. The plain `QuantumWake.exe` is still there and still the whole app on its own.
 
 ### 0.21.10
 

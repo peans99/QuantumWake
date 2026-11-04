@@ -269,25 +269,43 @@ public static class GameLootPlaces
 
             var preset = record.Name[(record.Name.IndexOf('.') + 1)..];
 
-            var places = group
+            var places = Merge(group
                 .Select(s => new LootPlace(
                     s.Key.Place.Marker is { } m ? NameOf(m) : null,
                     BodyName(s.Key.Place),
                     s.Value,
-                    IdOf(s.Key.Place)))
-                // A marker the map leaves unnamed is still a spot on a body.
-                .GroupBy(p => (p.Name, p.Body))
-                .Select(g => new LootPlace(g.Key.Name, g.Key.Body, g.Sum(p => p.Spots), g.First().Id))
-                .Where(p => p.Name is not null || p.Body is not null)
-                .OrderBy(p => p.Name is null)
-                .ThenBy(p => p.Body, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+                    IdOf(s.Key.Place))));
 
             if (places.Count > 0) result[preset] = places;
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// One row per place a pilot would name: the spots of every marker that
+    /// shares a name and a body, summed.
+    /// </summary>
+    /// <remarks>
+    /// A merged row still needs one star-map id, the one the logs name a
+    /// destination by. It is the ordinally first of the group's, not the first
+    /// met: the order places are met in is the archive's, and the LIVE delta
+    /// patch of 2026-11-04 rebuilt that order without changing a byte of game
+    /// data, which renamed two derelict outposts' example (Monox, 39 spots
+    /// either way) and made a patch look like a change.
+    /// </remarks>
+    internal static List<LootPlace> Merge(IEnumerable<LootPlace> places)
+    {
+        return places
+            // A marker the map leaves unnamed is still a spot on a body.
+            .GroupBy(p => (p.Name, p.Body))
+            .Select(g => new LootPlace(g.Key.Name, g.Key.Body, g.Sum(p => p.Spots),
+                g.Select(p => p.Id).Where(id => id is not null).Order(StringComparer.Ordinal).FirstOrDefault()))
+            .Where(p => p.Name is not null || p.Body is not null)
+            .OrderBy(p => p.Name is null)
+            .ThenBy(p => p.Body, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     /// <summary>
