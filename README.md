@@ -328,7 +328,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.21.6
+### 0.21.7
+
+**Compare ship sizes in 3D.** A ship or vehicle open in the 3D view has a Compare sizes button: it stands the ship in a row, and a search box beside the row adds any other ship or vehicle the install can draw, owned or not. Each one is listed with its length, beam and height in metres, measured on the model as drawn with its guns and landing gear, so it can read a little over the brochure figure: the Constellation Andromeda comes out 61.6 × 26.5 × 14.3 m against the 61 × 26 × 14 RSI gives. The same search is in Fleet → 3D, so a ship you are thinking of buying can stand beside the ones you have.
 
 **The 3D view's Interior box works on most hulls, and Effects start on.** Interior used to switch only parts whose material name begins `Int_`, which most ships do not use, so on an Avenger or a Cutlass it changed nothing. It now also takes the `_INT` and `internal_` names the studios use, and leaves out the inner canopy pane that drew as a grey sheet over the cockpit. Most cockpits and cabins are not in a hull's own files at all - the game loads them separately - so the box is greyed out, with a note saying so, on a model that has nothing inside to show. Effects (shading, glow and smoothed edges) are now on when the view opens; untick them on a slower machine and the choice is kept.
 

@@ -1045,6 +1045,12 @@ class ModelView {
       return { e, box };
     }).filter(x => !x.box.isEmpty())
       .sort((a, b) => (a.box.max.z - a.box.min.z) - (b.box.max.z - b.box.min.z));
+    // Measured in world space, where the root has already stood the model up:
+    // x across, y up, z nose to tail. The game's units are metres. Fitted
+    // guns and turrets are in the box, as they are in a hangar's.
+    for (const { e, box } of boxes) {
+      e.size = { length: box.max.z - box.min.z, beam: box.max.x - box.min.x, height: box.max.y - box.min.y };
+    }
     const widest = Math.max(1, ...boxes.map(x => x.box.max.x - x.box.min.x));
     let cursor = 0;
     // The root turns CryEngine's Z-up into three.js's Y-up, so a ship's local
@@ -1414,6 +1420,7 @@ function shell() {
           <option value="2048">${escHtml(t('High textures'))}</option>
           <option value="4096">${escHtml(t('Ultra textures'))}</option>
         </select>
+        <button type="button" class="v3d-shot" data-v3d-compare hidden title="${escHtml(t('Stand other ships beside this one to see the difference in size'))}">${escHtml(t('Compare sizes'))}</button>
         <button type="button" class="v3d-shot" data-v3d-shot>${escHtml(t('Save picture'))}</button>
         <button type="button" class="v3d-close" data-v3d-close aria-label="${escHtml(t('Close'))}">✕</button>
       </div>
@@ -1565,6 +1572,19 @@ export async function openModel(opts) {
     return;
   }
 
+  // A ship or vehicle opens into a row with only itself in it, and the row's
+  // own search brings in whatever it should be measured against.
+  if (view.sceneInfo?.vehicle) {
+    const compare = q('[data-v3d-compare]');
+    compare.hidden = false;
+    compare.addEventListener('click', () => openModel({
+      cls: view.sceneInfo.cls,
+      title: t('Size comparison'),
+      compare: true,
+      fleet: [{ cls: view.sceneInfo.cls, name: view.sceneInfo.name || opts.title || view.sceneInfo.cls, paint: view.paint?.tag || opts.paint }],
+    }));
+  }
+
   // Most cabins are separate objects the game streams in, not part of the
   // hull's files; a model with no inside of its own says so rather than
   // offering a box that changes nothing.
@@ -1597,13 +1617,62 @@ function openFleet(host, view, opts) {
   view.palettes = {};
   view.textureMax = 1024;
   view.sceneInfo = { palette: null, helpers: {} };
-  q('[data-v3d-sub]').textContent = t('{count} ships', { count: view.fleet.length });
+  const sub = () => { q('[data-v3d-sub]').textContent = t('{count} ships', { count: view.fleet.length }); };
+  sub();
   q('[data-v3d-paints]').hidden = true;
-  q('.v3d-parts h3').textContent = t('Your fleet');
-  q('[data-v3d-parts-note]').textContent = t('Tick the ships to stand in the row. Click one, here or in the scene, to open it alone.');
+  q('.v3d-parts h3').textContent = opts.compare ? t('Ships in the row') : t('Your fleet');
+  q('[data-v3d-parts-note]').textContent = t('Tick the ships to stand in the row, smallest first; each is measured overall, guns included. Click one, here or in the scene, to open it alone.');
   q('.v3d-markers').hidden = true;
 
+  // Any ship or vehicle the install can draw, not only the fleet's: a row is
+  // for measuring one hull against another, and the one to measure against
+  // is usually one not owned yet.
   const list = q('[data-v3d-parts]');
+  const adder = document.createElement('div');
+  adder.className = 'v3d-fleet-add';
+  adder.innerHTML = `<input type="search" data-v3d-add list="v3d-add-list" placeholder="${escHtml(t('Add a ship to the row…'))}" aria-label="${escHtml(t('Add a ship to the row'))}"><datalist id="v3d-add-list"></datalist><small data-v3d-add-note></small>`;
+  list.before(adder);
+  const addInput = adder.querySelector('[data-v3d-add]');
+  const addNote = adder.querySelector('[data-v3d-add-note]');
+  const catalogue = getJson('/api/models/list').then(all => {
+    const ships = (all?.vehicles || []).map(v => ({ cls: v.cls, name: v.name || v.cls }));
+    // Several entities share a name (RSI_Constellation_Andromeda and its _GS
+    // twin); the list shows the name once and a pick takes the plainest.
+    ships.sort((a, b) => a.cls.length - b.cls.length);
+    adder.querySelector('datalist').innerHTML = [...new Set(ships.map(v => v.name))].sort()
+      .map(name => `<option value="${escHtml(name)}"></option>`).join('');
+    return ships;
+  }).catch(() => {
+    addNote.textContent = t('The list of ships could not be read.');
+    return [];
+  });
+  const add = async () => {
+    const wanted = addInput.value.trim().toLowerCase();
+    if (!wanted) return;
+    const found = (await catalogue).find(v => v.name.toLowerCase() === wanted || v.cls.toLowerCase() === wanted);
+    if (!found) {
+      addNote.textContent = t('No ship by that name in the install.');
+      return;
+    }
+    addNote.textContent = '';
+    addInput.value = '';
+    const already = view.fleet.find(e => e.cls.toLowerCase() === found.cls.toLowerCase());
+    if (already) {
+      if (!already.on) { already.on = true; view.setFleetShip(already, true); draw(); }
+      return;
+    }
+    const entry = { cls: found.cls, name: found.name, on: true };
+    view.fleet.push(entry);
+    sub();
+    draw();
+    view.setFleetShip(entry, true);
+  };
+  // A pick from the list fires change; Enter on a typed name does too, but
+  // only once the field loses focus, so it is caught as well.
+  addInput.addEventListener('change', add);
+  addInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+
+  const metres = n => (n >= 100 ? Math.round(n) : Math.round(n * 10) / 10).toLocaleString();
   const draw = () => {
     list.innerHTML = '';
     const ul = document.createElement('ul');
@@ -1624,7 +1693,11 @@ function openFleet(host, view, opts) {
       name.title = t('Open {ship} alone', { ship: entry.name });
       name.addEventListener('click', () => openModel({ cls: entry.cls, title: entry.name, paint: entry.paint }));
       const state = document.createElement('small');
-      state.textContent = entry.failed ? t('no model the view can read') : entry.loading ? t('loading…') : '';
+      state.textContent = entry.failed ? t('no model the view can read')
+        : entry.loading ? t('loading…')
+        : entry.size && entry.group?.visible ? t('{length} × {beam} × {height} m', { length: metres(entry.size.length), beam: metres(entry.size.beam), height: metres(entry.size.height) })
+        : '';
+      if (entry.size) state.title = t('Length × beam × height, overall');
       li.append(box, name, state);
       ul.append(li);
     });
