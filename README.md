@@ -328,7 +328,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.22.0
+### 0.22.1
 
 ### 0.21.10
 

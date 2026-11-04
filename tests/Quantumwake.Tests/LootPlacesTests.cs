@@ -126,4 +126,38 @@ public class LootPlacesTests
     {
         Assert.Equal(expected, GameLootPlaces.Normalise(path));
     }
+
+    /// <summary>
+    /// Markers sharing a name and a body are one row, whatever order the
+    /// archive lists them in. The LIVE delta patch of 2026-11-04 reordered
+    /// the archive without changing its data, and the row's id moved with it.
+    /// </summary>
+    [Fact]
+    public void A_merged_place_keeps_one_id_whatever_order_the_archive_lists_it_in()
+    {
+        LootPlace[] outposts =
+        [
+            new("Derelict Outpost", "Monox", 13, "Pyro2_Outpost_col_m_drlct_otpst_occ_003"),
+            new("Derelict Outpost", "Monox", 13, "Pyro2_Outpost_col_m_drlct_otpst_occ_001"),
+            new("Derelict Outpost", "Monox", 13, null),
+        ];
+
+        var listed = GameLootPlaces.Merge(outposts);
+        var reordered = GameLootPlaces.Merge(outposts.Reverse());
+
+        var place = Assert.Single(listed);
+        Assert.Equal(39, place.Spots);
+        Assert.Equal("Pyro2_Outpost_col_m_drlct_otpst_occ_001", place.Id);
+        Assert.Equal(listed, reordered);
+    }
+
+    /// <summary>A spot whose marker has no id still counts; it only cannot name the row.</summary>
+    [Fact]
+    public void A_place_with_no_id_anywhere_is_kept_without_one()
+    {
+        var place = Assert.Single(GameLootPlaces.Merge([new(null, "Monox", 4, null), new(null, "Monox", 2, null)]));
+
+        Assert.Equal(6, place.Spots);
+        Assert.Null(place.Id);
+    }
 }
