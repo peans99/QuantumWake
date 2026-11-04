@@ -72,25 +72,48 @@ public static partial class GameInstallLocator
             if (drive.DriveType is not (DriveType.Fixed or DriveType.Removable) || !drive.IsReady)
                 continue;
 
-            foreach (var relative in RelativeRoots)
-            {
-                var candidate = Path.Combine(drive.RootDirectory.FullName, relative);
-                if (!Directory.Exists(candidate))
-                    continue;
-
-                foreach (var channelDir in SafeEnumerateDirectories(candidate))
-                {
-                    var install = new GameInstall(Path.GetFileName(channelDir), channelDir);
-                    if (install.HasGameLog || Directory.Exists(install.LogBackupsPath))
-                    {
-                        if (seen.Add(channelDir))
-                            results.Add(install);
-                    }
-                }
-            }
+            foreach (var install in ChannelsUnder(drive.RootDirectory.FullName))
+                if (seen.Add(install.RootPath))
+                    results.Add(install);
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// The channels under one drive: the usual layouts, and any top-level
+    /// folder holding a <c>StarCitizen</c> folder.
+    /// </summary>
+    /// <remarks>
+    /// The launcher asks for a library folder per channel, and a player who
+    /// keeps PTU apart names something of their own - this machine's is
+    /// <c>D:\rsiptu\StarCitizen\PTU</c>, which no fixed list would guess. One
+    /// listing of the drive's root finds that shape for every name.
+    /// </remarks>
+    internal static IEnumerable<GameInstall> ChannelsUnder(string driveRoot)
+    {
+        var candidates = RelativeRoots.Select(relative => Path.Combine(driveRoot, relative)).ToList();
+
+        foreach (var top in SafeEnumerateDirectories(driveRoot))
+        {
+            candidates.Add(Path.Combine(top, "StarCitizen"));
+            candidates.Add(Path.Combine(top, "Roberts Space Industries", "StarCitizen"));
+        }
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var candidate in candidates)
+        {
+            if (!seen.Add(candidate) || !Directory.Exists(candidate))
+                continue;
+
+            foreach (var channelDir in SafeEnumerateDirectories(candidate))
+            {
+                var install = new GameInstall(Path.GetFileName(channelDir), channelDir);
+                if (install.HasGameLog || Directory.Exists(install.LogBackupsPath))
+                    yield return install;
+            }
+        }
     }
 
     /// <summary>
@@ -226,7 +249,8 @@ public static partial class GameInstallLocator
     {
         try
         {
-            return Directory.EnumerateDirectories(path);
+            // Listed here, inside the try: a lazy listing throws later, out of reach of the catch.
+            return [.. Directory.EnumerateDirectories(path)];
         }
         catch (Exception e) when (e is UnauthorizedAccessException or IOException)
         {

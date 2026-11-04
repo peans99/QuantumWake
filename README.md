@@ -328,7 +328,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.21.1
+### 0.21.4
 
 **More distinct surfaces in the 3D view.** Layered armour and clothing now draw each surface with its own texture where the game's blend map calls for it. Fabric, padding and other materials no longer all share the first layer's texture. The view still approximates the game's materials and does not draw wear and grime.
 
@@ -349,6 +349,10 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 **Your fleet in 3D, and attachments you can change.** Fleet has a Fleet in 3D button: the ships the page is showing, owned and through its search and filters, stand side by side on one floor, smallest first, each in the paint picked for it and with its weapons on. A list beside the scene ticks ships in and out of the row, and clicking one opens it alone. The first eight are brought in and the rest wait in the list, so a large fleet does not have to load all at once. A personal weapon's view has pickers for its sight, barrel and underbarrel, listing what fits each slot by the game files' sizes and tags. A pick fits the piece onto the gun straight away, and it is the same choice the Armoury shows. Guns also look like guns now: the layers they and armour are painted with had been drawn without their surface textures, which left most ship guns a flat light grey that read as white paint.
 
 **Swap a ship's guns in 3D.** A ship's view has a Loadout list: every gun, mount, missile rack and mining or salvage head, named by where it sits ("manned turret left › weapon left › class 2"), with what fits it from the Garage bench's own lists. Choosing one swaps it on the model. For the ship open in the Garage it is a real Garage swap, so the bench and the build follow; for any other ship it is a try-on. Effects are now off until you turn them on, and the view remembers your choice: they double what a frame costs and the glow is not to everyone's taste. Attachments whose material sits beside their model, such as the KLWE flashlights, no longer come out plain grey.
+
+**LIVE and PTU.** Quantum Wake now knows every channel on the machine - LIVE, PTU, EPTU, Tech Preview - and switches between them from the install label at the top of the page, or Settings → Data sources → Game channel. It reads one at a time and keeps each one's history apart, so a PTU evening never lands in your LIVE totals; switching restarts the app on the other folder. When the game is running on a channel the app is not reading, a notice at the top says so and offers the switch. Each channel keeps its own game-file caches, so going back and forth does not re-read the archive every time, and installing the item labels on PTU no longer loses track of the ones on LIVE. A channel kept in a library folder of your own naming, such as `D:siptuStarCitizenPTU`, is found too.
+
+**Suit calculator.** A new Armoury tab adds up a suit from your game files: what it weighs, how much it carries, how fast you move in it and how much G you take. It starts from the loadout the log last saw; swap any helmet, core, arms, legs, undersuit, backpack or gun, strip it all, or copy the loadout back. G resistance is each piece's own figure, and they add up to round sums - a full heavy set is exactly -1, medium -0.5, light -0.25, an undersuit +0.9 - which the page sets against the player's worst, usual and best G profiles. How the game blends between those three is not in the files, so the "this suit" column is an estimate and says so. Run speed is 5.58 m/s and sprint 7.2 in 4.10.2, and armour and weight change neither: no armour piece carries a movement multiplier yet. Anything the files leave empty counts as 0, and the page says which.
 
 ### 0.20.66
 

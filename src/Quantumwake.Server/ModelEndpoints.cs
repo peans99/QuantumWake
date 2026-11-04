@@ -56,7 +56,7 @@ public sealed class ModelLibrary(GameInstall? install)
             if (!Available) return GameModelCatalogue.Empty;
             lock (_gate)
                 return _catalogue ??= GameModelCatalogue.Load(
-                    P4kArchive.PathFor(install!.RootPath), AppPaths.In("models", "catalogue.json"));
+                    P4kArchive.PathFor(install!.RootPath), Path.Combine(AppPaths.ForChannel(install!.RootPath), "models", "catalogue.json"));
         }
     }
 
@@ -76,7 +76,7 @@ public sealed class ModelLibrary(GameInstall? install)
     {
         if (Archive is not { } archive) return null;
         var name = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(path.ToLowerInvariant().Replace('\\', '/'))))[..24];
-        var file = AppPaths.In("models", $"{Stamp}-{ModelMesh.Version}", name + ".qwm");
+        var file = Path.Combine(AppPaths.ForChannel(install!.RootPath), "models", $"{Stamp}-{ModelMesh.Version}", name + ".qwm");
         try
         {
             if (File.Exists(file)) return File.ReadAllBytes(file);

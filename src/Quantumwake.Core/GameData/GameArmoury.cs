@@ -180,6 +180,11 @@ public sealed record DamageResistances(
 /// <param name="IrSignature">Infrared.</param>
 /// <param name="MotionPenalty">How much a broken piece slows you, 0 to 1.</param>
 /// <param name="ViewPenalty">How much it narrows the view when broken.</param>
+/// <param name="MovementRecord">
+/// The record the piece's <c>wearMovementMultipliers</c> names, or null.
+/// Empty on every piece in 4.10.2 LIVE and the 4.10 PTU, so armour slows
+/// nobody there; kept so the page can say when that changes.
+/// </param>
 public sealed record ArmourPiece(
     string Class,
     string Name,
@@ -200,7 +205,8 @@ public sealed record ArmourPiece(
     double IrSignature,
     double MotionPenalty,
     double ViewPenalty,
-    double Mass);
+    double Mass,
+    string? MovementRecord = null);
 
 /// <summary>
 /// A knife. The blade's figures come from a <c>MeleeCombatConfig</c> record the
@@ -351,6 +357,12 @@ public sealed record GameArmouryData(
     /// there; see <see cref="GameClimates"/>. Null in a cache written before it.
     /// </summary>
     public GameClimateData? Climate { get; init; }
+
+    /// <summary>
+    /// The player's G-force profiles and standing speeds, for the suit
+    /// calculator; see <see cref="GameBody"/>. Null in a cache written before it.
+    /// </summary>
+    public GameBody? Body { get; init; }
 }
 
 /// <summary>
@@ -1248,6 +1260,7 @@ public static class GameArmoury
         DamageResistances? resistances = null;
         var protects = new List<string>();
         double tMin = 0, tMax = 0, radCap = 0, radRate = 0, g = 0, em = 0, ir = 0, motion = 0, view = 0;
+        string? movement = null;
         long capacity = 0;
         var sawArmour = false;
 
@@ -1272,6 +1285,8 @@ public static class GameArmoury
                     if (type.Equals("Electromagnetic", StringComparison.OrdinalIgnoreCase)) em += emission;
                     else if (type.Equals("Infrared", StringComparison.OrdinalIgnoreCase)) ir += emission;
                 }
+                if (core.ReferenceAt(at, s, "wearMovementMultipliers") is { } moveId)
+                    movement = byId.TryGetValue(moveId, out var moveRecord) ? moveRecord.Name : moveId.ToString();
                 if (core.ReferenceAt(at, s, "restrictedMoveViewPenalty") is { } penaltyId && byId.TryGetValue(penaltyId, out var penalty))
                 {
                     var pat = core.InstanceAt(penalty, penalty.VariantIndex);
@@ -1308,7 +1323,7 @@ public static class GameArmoury
         if (resistances?.Macro.Contains("_ai_", StringComparison.OrdinalIgnoreCase) == true) return null;
 
         return new ArmourPiece(cls, item.Name, slot, weight, kind, item.Manufacturer, Family(item.Name),
-            resistances, protects, tMin, tMax, radCap, radRate, g, capacity, em, ir, motion, view, mass);
+            resistances, protects, tMin, tMax, radCap, radRate, g, capacity, em, ir, motion, view, mass, movement);
     }
 
     /// <summary>
