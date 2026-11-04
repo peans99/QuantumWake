@@ -69,6 +69,15 @@ jobs:
           $version = ([xml](Get-Content Directory.Build.props)).SelectSingleNode('//Version').InnerText.Trim()
           ./installer/build.ps1 -Exe src/Quantumwake.Cli/bin/Release/net10.0/Quantumwake.Cli.exe -Version $version -Out artifacts/installer
 
+      # The Store package likewise, with the placeholder identity if that is
+      # what the repository holds: MakeAppx checks the manifest against the
+      # schema while packing, which is the part that can break unnoticed.
+      - name: Build the Store package
+        shell: pwsh
+        run: |
+          $version = ([xml](Get-Content Directory.Build.props)).SelectSingleNode('//Version').InnerText.Trim()
+          ./installer/build-msix.ps1 -Exe src/Quantumwake.Cli/bin/Release/net10.0/Quantumwake.Cli.exe -Version $version -Out artifacts/store
+
   # The server and dashboard are meant to run on Linux, and a green Windows run
   # says nothing about that: Path splits on '\' there and nowhere else, which
   # quietly lost the default liveries and attachment icons the first time these

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Microsoft Store package. installer/build-msix.ps1 fills in the tokens
+  and packs it around the same QuantumWake.exe the release publishes;
+  docs/store.md explains each choice below.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
+  IgnorableNamespaces="uap rescap desktop6">
+
+  <!-- Name and Publisher are the ones Partner Center assigned (Product
+       identity page); a package that disagrees with them is refused at upload. -->
+  <Identity
+    Name="{{IdentityName}}"
+    Publisher="{{Publisher}}"
+    Version="{{Version}}"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Quantum Wake</DisplayName>
+    <PublisherDisplayName>{{PublisherDisplayName}}</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+
+    <!-- Off, so the Store copy reads and writes the same %LOCALAPPDATA%\Quantumwake
+         as the downloaded exe. Left on, Windows would divert every new file
+         into the package's private folder: Explorer and the CLI would not see
+         them, and uninstalling would delete history the privacy policy says
+         survives. Needs the unvirtualizedResources capability below. -->
+    <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>
+    <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>
+  </Properties>
+
+  <!-- 19041 is the overlay's own build target; nothing older runs it. -->
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <!-- English only for now: every language declared here needs its own Store
+       listing. fr-fr goes in with a French listing. -->
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="QuantumWake" Executable="QuantumWake.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Quantum Wake"
+        Description="A pilot's logbook for Star Citizen"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png" />
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!-- Declared for the listing's sake: a full-trust app is not fenced by
+         them, but the Store shows them, and they are what the app does - the
+         optional feeds, and the dashboard served to a tablet on the LAN. -->
+    <Capability Name="internetClient" />
+    <Capability Name="privateNetworkClientServer" />
+    <rescap:Capability Name="runFullTrust" />
+    <rescap:Capability Name="unvirtualizedResources" />
+  </Capabilities>
+</Package>
