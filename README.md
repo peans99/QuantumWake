@@ -328,7 +328,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.22.1
+### 0.22.2
+
+**A privacy policy.** Settings → About now links to a page that says what the app reads on your computer, what it keeps and where, and every occasion it reaches the internet, with who it contacts, what is sent and the switch that controls it. It also says plainly that UEX credentials, if you use price reporting, are kept as plain text in your user profile. The About text no longer claims that nothing is written to the game folder: installing the item labels does write there, and it now says so.
 
 ### 0.21.10
 
