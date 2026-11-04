@@ -108,17 +108,20 @@ Pushing the tag is the trigger. Nothing else needs doing.
 3. **Publishes `QuantumWake.exe`**: self-contained, single file, compressed, with
    the dashboard embedded. It asserts the publish directory holds exactly one
    file, so the "one file, no runtime" promise cannot quietly rot.
-4. **Publishes the CLI** framework-dependent, for parser-health checks.
-5. **Publishes for Linux** from the same runner, so one Defender scan covers
-   both: the bare server as one self-contained file renamed `quantumwake`
+4. **Builds the installer** around that exe with `installer/build.ps1`:
+   `QuantumWake-<version>-win-x64.msi`, per-user, validated with the ICE
+   checks. See [installer.md](installer.md).
+5. **Publishes the CLI** framework-dependent, for parser-health checks.
+6. **Publishes for Linux** from the same runner, so one Defender scan covers
+   all of it: the bare server as one self-contained file renamed `quantumwake`
    (asserted alone in its folder, like the exe), and the CLI beside it.
-6. **Attaches all three** to the release: the bare `.exe` for one-click
-   download, a zip with the exe, the CLI, `README.md`, `LICENSE` and `NOTICE`,
-   and `QuantumWake-<version>-linux-x64.tar.gz` with the Linux pair and the
-   same three files, written with `System.Formats.Tar` so the two commands
-   keep their execute bit.
-7. **Writes the release notes**, including the SmartScreen warning and what to
-   click, since the binary is unsigned.
+7. **Attaches all four** to the release: the bare `.exe` for one-click
+   download, the `.msi`, a zip with the exe, the CLI, `README.md`, `LICENSE`
+   and `NOTICE`, and `QuantumWake-<version>-linux-x64.tar.gz` with the Linux
+   pair and the same three files, written with `System.Formats.Tar` so the two
+   commands keep their execute bit.
+8. **Writes the release notes**, including the SmartScreen warning and what to
+   click, since neither the exe nor the installer is signed yet.
 
 `workflow_dispatch` accepts a tag as input, for re-running a release that failed
 after the tag was already pushed.

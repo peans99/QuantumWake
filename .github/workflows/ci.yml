@@ -58,6 +58,17 @@ jobs:
           path: artifacts/test
           if-no-files-found: ignore
 
+      # The installer is otherwise built only on a tag, and a WiX source that
+      # no longer builds or validates would be found by a release that then
+      # ships without it. The real exe takes minutes to publish; the package
+      # does not care what it carries, so the CLI the build just made stands
+      # in, and the same script and the same validation run as at release.
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $version = ([xml](Get-Content Directory.Build.props)).SelectSingleNode('//Version').InnerText.Trim()
+          ./installer/build.ps1 -Exe src/Quantumwake.Cli/bin/Release/net10.0/Quantumwake.Cli.exe -Version $version -Out artifacts/installer
+
   # The server and dashboard are meant to run on Linux, and a green Windows run
   # says nothing about that: Path splits on '\' there and nowhere else, which
   # quietly lost the default liveries and attachment icons the first time these

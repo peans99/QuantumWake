@@ -98,6 +98,16 @@ jobs:
           $files = Get-ChildItem dist/app -File
           if ($files.Count -ne 1) { throw "expected one file, got: $($files.Name -join ', ')" }
 
+      # The same exe, installed: per-user, a Start menu entry, an uninstaller,
+      # and a silent install for the Microsoft Store. Built into dist so the
+      # Defender scan below covers it with everything else, and named with the
+      # version because the Store requires the file behind a submitted URL
+      # never to change. docs/installer.md has the rest.
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          ./installer/build.ps1 -Exe dist/app/QuantumWake.exe -Version ${{ steps.version.outputs.version }} -Out dist/installer
+
       - name: Publish the CLI
         shell: pwsh
         run: |
@@ -214,6 +224,7 @@ jobs:
           # again turns that into a clear release failure rather than allowing
           # Archive to create a partial download with no explanation.
           $expected = @('dist/app/QuantumWake.exe')
+          $expected += @("dist/installer/QuantumWake-${{ steps.version.outputs.version }}-win-x64.msi")
           $expected += @(Get-ChildItem dist/cli -File | ForEach-Object FullName)
           $expected += @('dist/linux-app/quantumwake')
           $expected += @(Get-ChildItem dist/linux-cli -File | ForEach-Object FullName)
@@ -233,6 +244,10 @@ jobs:
           # The executable ships on its own as well as in the zip: one click from
           # the releases page, nothing to unpack.
           Copy-Item dist/app/QuantumWake.exe "QuantumWake.exe"
+
+          $installer = "QuantumWake-$version-win-x64.msi"
+          Copy-Item "dist/installer/$installer" $installer
+          "installer=$installer" | Out-File $env:GITHUB_OUTPUT -Append
 
           $staging = 'dist/QuantumWake'
           New-Item -ItemType Directory -Force $staging | Out-Null
@@ -323,14 +338,19 @@ jobs:
           installation: nothing to unpack, no runtime to install, no settings to fill in.
           Your Star Citizen install is found automatically.
 
+          Or download **QuantumWake-${{ steps.version.outputs.version }}-win-x64.msi** for the
+          same app installed: it goes into your own profile without asking for an
+          administrator, adds a Start menu entry, and can be removed from Apps and
+          features. Uninstalling leaves your history in ``%LOCALAPPDATA%\Quantumwake``,
+          so a reinstall picks up where you were. Later versions install over it.
+
           Quantum Wake then sits in the notification area. Right-click it to open the
           dashboard or quit. The in-game overlay is off by default - switch it on from
           the dashboard's Settings page or the tray menu, and the choice is remembered.
           ``Ctrl+Alt+O`` toggles overlay click-through.
 
-          Windows will warn that the publisher is unknown - the executable is not code
-          signed, which costs money a free fan tool does not have. Choose **More info**,
-          then **Run anyway**.
+          Windows will warn that the publisher is unknown - neither file is code
+          signed yet. Choose **More info**, then **Run anyway**.
 
           The zip additionally contains the command-line tool, which prints per-event
           match counts and parser health; it needs the .NET 10 runtime.
@@ -367,7 +387,7 @@ jobs:
           Star Citizen must run in Borderless Windowed for the overlay to be visible.
           "@
           gh release create '${{ steps.version.outputs.tag }}' `
-            'QuantumWake.exe' '${{ steps.archive.outputs.asset }}' '${{ steps.archive.outputs.linux }}' `
+            'QuantumWake.exe' '${{ steps.archive.outputs.installer }}' '${{ steps.archive.outputs.asset }}' '${{ steps.archive.outputs.linux }}' `
             --title 'Quantum Wake ${{ steps.version.outputs.version }}' `
             --notes $notes
 
