@@ -546,3 +546,20 @@ globalThis.fetch = (url, options) => {
 };
 
 globalThis.__error = null;
+
+/* The 3D viewer unpacks a mesh header with TextDecoder, which Jint does not
+   ship. UTF-8 only, which is all a JSON header is. */
+globalThis.TextDecoder = class {
+  decode(bytes) {
+    let out = '';
+    for (let i = 0; i < bytes.length;) {
+      const b = bytes[i++];
+      if (b < 0x80) { out += String.fromCharCode(b); continue; }
+      const n = b >= 0xf0 ? 3 : b >= 0xe0 ? 2 : 1;
+      let code = b & (0x3f >> n);
+      for (let k = 0; k < n; k++) code = (code << 6) | (bytes[i++] & 0x3f);
+      out += String.fromCodePoint(code);
+    }
+    return out;
+  }
+};
