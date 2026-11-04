@@ -702,6 +702,11 @@ public static partial class ServerHost
                 result.Notes, result.PublishedAt,
                 canInstall = selfUpdate.Possible && result.Asset is not null,
 
+                // A Store copy is updated by the Store, which offers a release
+                // only once it has passed certification - a day or more after
+                // GitHub has it - so the page says where it will come from.
+                store = Core.StoreInstall.Is,
+
                 // Ninety megabytes is worth knowing before agreeing to it, not
                 // after: a metered connection is somebody's actual money.
                 downloadBytes = result.Asset?.Size,

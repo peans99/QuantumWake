@@ -35435,7 +35435,11 @@ async function runUpdateCheck({ quiet, announce = false }) {
 
   $('#update-title').textContent = tx('Quantum Wake {version} is out', { version: result.latest });
   $('#update-detail').textContent = tx('You are running {version}.', { version: result.current })
-    + (result.publishedAt ? ` ${tx('Published {date}.', { date: dayUtc(result.publishedAt) })}` : '');
+    + (result.publishedAt ? ` ${tx('Published {date}.', { date: dayUtc(result.publishedAt) })}` : '')
+    // GitHub has a release the moment it is tagged; the Store offers it only
+    // after its own certification. Without this line a Store user is told a
+    // version is out that their Store will not show them for a day or two.
+    + (result.store ? ` ${tx('The Microsoft Store installs it for you once it has passed the Store’s checks, usually a day or two after release.')}` : '');
 
   const actions = $('#update-actions');
   actions.textContent = '';
@@ -35444,11 +35448,13 @@ async function runUpdateCheck({ quiet, announce = false }) {
   // source build cannot, and a button that explains itself only after being
   // pressed is worse than one that was never there.
   if (result.canInstall) actions.append(updateNowButton(result));
+  if (result.store) actions.append(storeUpdatesButton());
 
-  const open = el('button', 'ghost', result.canInstall ? tx('Read the notes') : tx('Open the release page'));
+  const readOnly = !result.canInstall && !result.store;
+  const open = el('button', 'ghost', readOnly ? tx('Open the release page') : tx('Read the notes'));
   open.addEventListener('click', () => {
     window.open(result.url, '_blank', 'noreferrer');
-    if (!result.canInstall) notice.hidden = true;
+    if (readOnly) notice.hidden = true;
   });
 
   const later = el('button', 'ghost', tx('Later'));
@@ -35489,6 +35495,19 @@ function tellUpdateNotice(title, detail) {
  * unresponsive for a minute gets pressed again, so it disables itself and says
  * so rather than leaving the reader guessing.
  */
+/**
+ * The Store copy's way to the update: the Store's own downloads page, which
+ * also offers to fetch it straight away instead of waiting for the Store's
+ * schedule. The link names a page rather than this app, so it needs no Store
+ * id and works from a copy whose listing was never looked up.
+ */
+function storeUpdatesButton() {
+  const store = el('button', 'ghost on', tx('Get it from the Store'));
+  store.title = tx('Opens the Microsoft Store’s downloads and updates');
+  store.addEventListener('click', () => { window.open('ms-windows-store://downloadsandupdates', '_blank'); });
+  return store;
+}
+
 function updateNowButton(result) {
   // The size is on the button rather than in the detail line, because it is
   // part of what is being agreed to: on a metered connection ninety megabytes

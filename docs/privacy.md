@@ -47,6 +47,8 @@ send nothing about you.
   plans, prices you entered), caches of the game files, and its settings.
   Uninstalling the app does not delete this folder, so your history survives a
   reinstall; delete the folder to remove it.
+  The Microsoft Store edition uses this same folder, and uninstalling it
+  leaves the folder in place too.
 - **The game folder, only when you ask**: installing item labels writes a text
   table into `Data\Localization\english` and, when `user.cfg` names no
   language, adds `g_language = english` to it. Removing the labels takes back

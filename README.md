@@ -334,11 +334,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.0.0
+### 1.0.1
 
 **A privacy policy.** Settings → About now links to a page that says what the app reads on your computer, what it keeps and where, and every occasion it reaches the internet, with who it contacts, what is sent and the switch that controls it. It also says plainly that UEX credentials, if you use price reporting, are kept as plain text in your user profile. The About text no longer claims that nothing is written to the game folder: installing the item labels does write there, and it now says so.
 
 **An installer, if you want one.** Each release now also carries `QuantumWake-<version>-win-x64.msi`: the same app, installed into your own profile without asking for an administrator, with a Start menu entry and an entry in Apps and features to remove it. A later version installs over an earlier one, and an older one refuses to install over a newer. Uninstalling leaves your history in `%LOCALAPPDATA%\Quantumwake`, so a reinstall picks up where you were. It also installs silently (`msiexec /i … /quiet`), which is what the Microsoft Store needs. The plain `QuantumWake.exe` is still there and still the whole app on its own.
+
+**A Microsoft Store edition, on its way.** Quantum Wake is being packaged for the Microsoft Store. A copy installed from the Store keeps its history in the same folder as the download, so moving to it loses nothing, and when a new version is out its notice sends you to the Store, which installs it, rather than replacing the app itself.
 
 ### 0.21.10
 

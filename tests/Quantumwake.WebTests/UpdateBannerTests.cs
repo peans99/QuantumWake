@@ -50,6 +50,26 @@ public class UpdateBannerTests
         Assert.Contains("Open the release page", actions);
     }
 
+    /// <summary>
+    /// A Store copy is updated by the Store, which offers a release only after
+    /// certification: the banner sends the reader there, says why the update
+    /// may not be showing yet, and never offers to replace a packaged exe.
+    /// </summary>
+    [Fact]
+    public void A_store_copy_sends_the_reader_to_the_store()
+    {
+        var page = Announcing("""
+            {"newer":true,"current":"1.0.1","latest":"1.0.2",
+             "url":"https://example/release","canInstall":false,"store":true}
+            """);
+        var actions = page.NodeText("#update-actions");
+
+        Assert.DoesNotContain("Update to", actions);
+        Assert.Contains("Get it from the Store", actions);
+        Assert.Contains("Read the notes", actions);
+        Assert.Contains("a day or two", page.NodeText("#update-detail"));
+    }
+
     /// <summary>A release with no size reported still offers the button.</summary>
     [Fact]
     public void An_unknown_download_size_is_left_off_rather_than_guessed()

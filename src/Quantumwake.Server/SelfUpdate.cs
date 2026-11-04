@@ -59,8 +59,10 @@ public sealed class SelfUpdate(IHttpClientFactory factory, ShellBridge shell, IL
     /// different name, and swapping one file there would achieve nothing except
     /// breaking it. Offering the button in that case would be a promise the app
     /// cannot keep, so the page never sees it.
+    /// The Store copy cannot either: its package folder is read-only, and Store
+    /// policy has the Store, not the app, install a packaged app's updates.
     /// </remarks>
-    public bool Possible => Executable is not null;
+    public bool Possible => Executable is not null && !Core.StoreInstall.Is;
 
     /// <summary>The running single file, or null when this is not one.</summary>
     public static string? Executable
@@ -109,6 +111,12 @@ public sealed class SelfUpdate(IHttpClientFactory factory, ShellBridge shell, IL
             return (null, new UpdateRefusal(
                 "This build cannot replace itself. Updating in place works from the "
                 + "downloaded QuantumWake.exe, not from a source build."));
+        }
+
+        if (Core.StoreInstall.Is)
+        {
+            return (null, new UpdateRefusal(
+                "This copy came from the Microsoft Store, which installs its updates."));
         }
 
         if (!update.Newer || update.Asset is null || update.Latest is null)

@@ -1,0 +1,6 @@
+{
+  "comment": "Partner Center > Quantum Wake > Product identity. Placeholders until the product is reserved; build-msix.ps1 refuses them for -Release.",
+  "IdentityName": "PLACEHOLDER.QuantumWake",
+  "Publisher": "CN=00000000-0000-0000-0000-000000000000",
+  "PublisherDisplayName": "nekron"
+}

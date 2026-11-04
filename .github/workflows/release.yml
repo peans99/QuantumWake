@@ -108,6 +108,21 @@ jobs:
         run: |
           ./installer/build.ps1 -Exe dist/app/QuantumWake.exe -Version ${{ steps.version.outputs.version }} -Out dist/installer
 
+      # The same exe again, as the Microsoft Store's MSIX. Unsigned, because the
+      # Store signs what it accepts, so it is uploaded as a workflow artifact for
+      # Partner Center and never attached to the release, where it would install
+      # nowhere. Skipped with a warning until store-identity.json holds the
+      # identity Partner Center assigned. docs/store.md has the rest.
+      - name: Build the Store package
+        shell: pwsh
+        run: |
+          $identity = Get-Content installer/msix/store-identity.json -Raw | ConvertFrom-Json
+          if ($identity.IdentityName -like 'PLACEHOLDER*') {
+            Write-Host '::warning::installer/msix/store-identity.json holds placeholders; no Store package for this release.'
+            exit 0
+          }
+          ./installer/build-msix.ps1 -Exe dist/app/QuantumWake.exe -Version ${{ steps.version.outputs.version }} -Out dist/store -Release
+
       - name: Publish the CLI
         shell: pwsh
         run: |
@@ -228,12 +243,22 @@ jobs:
           $expected += @(Get-ChildItem dist/cli -File | ForEach-Object FullName)
           $expected += @('dist/linux-app/quantumwake')
           $expected += @(Get-ChildItem dist/linux-cli -File | ForEach-Object FullName)
+          if (Test-Path dist/store) { $expected += @("dist/store/QuantumWake-${{ steps.version.outputs.version }}-win-x64.msix") }
           $missing = $expected | Where-Object { -not (Test-Path $_) }
           if ($missing) {
             throw "Microsoft Defender removed a release file: $($missing -join ', ')"
           }
 
           Write-Host "Microsoft Defender scanned the release files in $scanPath."
+
+      # After the scan, so what goes to the Store is what Defender passed.
+      - name: Keep the Store package
+        if: ${{ hashFiles('dist/store/*.msix') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: store-package-${{ steps.version.outputs.version }}
+          path: dist/store/*.msix
+          if-no-files-found: error
 
       - name: Archive
         id: archive
