@@ -328,7 +328,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.21.5
+### 0.21.6
+
+**The 3D view's Interior box works on most hulls, and Effects start on.** Interior used to switch only parts whose material name begins `Int_`, which most ships do not use, so on an Avenger or a Cutlass it changed nothing. It now also takes the `_INT` and `internal_` names the studios use, and leaves out the inner canopy pane that drew as a grey sheet over the cockpit. Most cockpits and cabins are not in a hull's own files at all - the game loads them separately - so the box is greyed out, with a note saying so, on a model that has nothing inside to show. Effects (shading, glow and smoothed edges) are now on when the view opens; untick them on a slower machine and the choice is kept.
 
 **More distinct surfaces in the 3D view.** Layered armour and clothing now draw each surface with its own texture where the game's blend map calls for it. Fabric, padding and other materials no longer all share the first layer's texture. The view still approximates the game's materials and does not draw wear and grime.
 

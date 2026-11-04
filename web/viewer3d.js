@@ -275,6 +275,16 @@ function patchShader(material, glossScale) {
 // Decals that only carry relief (parallax panel lines, rivets) draw as flat
 // white sheets without the engine's parallax; they are left out.
 const reliefDecal = name => /pom|parallax|height/i.test(name || '');
+/**
+ * Whether a sub-material is the inside of the ship. Each studio names it its
+ * own way: an Int_ prefix (int_metal_c, Int_Decal_POM_A), an _INT suffix
+ * (Paint_DarkGrey_INT, Glass_INT on the Cutlass) or internal_ (the frame and
+ * piping in the Avenger, Cutlass, Constellation and Carrack hulls, and the
+ * Damage_Internals_ under the Avenger's panels). Matching Int_ alone
+ * left the Interior box with nothing to switch on most hulls.
+ */
+export const interiorSub = name => /^int_|_int(_|$)|(^|_)internals?(_|$)|interior/i.test(name || '');
+
 const glowing = sub => /glow|light|emissive|illum/i.test(sub.name || '') && luminance(linear(sub.emissive || [0, 0, 0])) > 0;
 
 class MaterialBuilder {
@@ -289,11 +299,13 @@ class MaterialBuilder {
 
     if (sub.glass) {
       const tint = sub.tintsGlass && palette ? srgb(palette.glass) : linear(sub.diffuse);
-      return this.inside(sub, new THREE.MeshPhysicalMaterial({
+      const glass = new THREE.MeshPhysicalMaterial({
         color: tint.lerp(new THREE.Color(0.05, 0.06, 0.07), 0.55), metalness: 0, roughness: 0.04,
         transparent: true, opacity: 0.32, depthWrite: false, envMapIntensity: 1.6,
         clearcoat: 1, clearcoatRoughness: 0.03, side: THREE.DoubleSide,
-      }));
+      });
+      glass.userData.sub = sub.name;
+      return this.inside(sub, glass);
     }
 
     if (/^LayerBlend/i.test(sub.shader || '') && sub.layers?.some(l => /^BaseLayer/i.test(l.name))) {
@@ -362,16 +374,20 @@ class MaterialBuilder {
   }
 
   /**
-   * The cabin and cockpit are in the hull model too, on sub-materials named
-   * Int_. The engine lights them with the ship's own lamps and shades them
-   * with interior shaders this view does not have, so drawn here they come out
-   * dark, flat and seen through every gap in the hull. They are hidden until
-   * the Interior box is ticked.
+   * The cabin and cockpit are in the hull model too, on their own
+   * sub-materials. The engine lights them with the ship's own lamps and
+   * shades them with interior shaders this view does not have, so drawn here
+   * they come out dark, flat and seen through every gap in the hull. They are
+   * hidden until the Interior box is ticked.
    */
   inside(sub, material) {
-    if (!/^int_/i.test(sub.name || '')) return material;
+    if (!interiorSub(sub.name)) return material;
     material.userData.interior = true;
-    material.userData.wanted = material.visible;
+    // An inner pane (the Cutlass's Glass_INT) sits just under the canopy, and
+    // the two sheets of glass stacked read as solid grey - hiding the very
+    // cockpit the box is ticked to see. The outer canopy is glass enough; the
+    // inner one stays out either way.
+    material.userData.wanted = material.visible && !/glass/i.test(sub.name || '');
     material.visible = material.visible && this.view.interior;
     this.view.interiorMaterials.add(material);
     return material;
@@ -647,7 +663,7 @@ class ModelView {
     this.materials = new MaterialBuilder(this);
 
     this.composer = null;
-    this.quality = opts.quality ?? false;
+    this.quality = opts.quality ?? true;
     // Drawn only when something changed. Counted, so the saving can be
     // measured: renders, and the time spent issuing them.
     this.dirty = true;
@@ -1476,11 +1492,13 @@ export async function openModel(opts) {
   }
   current = { host, view };
   window.QW3D.view = view;
-  // Effects are a choice, not the default: they double what a frame costs,
-  // and not everyone likes the glow. The pick is kept for next time.
-  let effects = opts.quality ?? false;
+  // Effects are on unless turned off: they double what a frame costs, but the
+  // hull reads flat without the shading. The pick is kept for next time,
+  // under a new key, because the old one remembered the old default - an off
+  // that was never chosen.
+  let effects = opts.quality ?? true;
   try {
-    const kept = localStorage.getItem('qw-3d-effects');
+    const kept = localStorage.getItem('qw-3d-effects-v2');
     if (kept !== null && opts.quality === undefined) effects = kept === '1';
   } catch { /* private browsing */ }
   q('[data-v3d-quality]').checked = effects;
@@ -1494,7 +1512,7 @@ export async function openModel(opts) {
   host.querySelectorAll('[data-v3d-view]').forEach(b => b.addEventListener('click', () => view.view(b.dataset.v3dView)));
   q('[data-v3d-quality]').addEventListener('change', e => {
     view.setQuality(e.target.checked);
-    try { localStorage.setItem('qw-3d-effects', e.target.checked ? '1' : '0'); } catch { /* as above */ }
+    try { localStorage.setItem('qw-3d-effects-v2', e.target.checked ? '1' : '0'); } catch { /* as above */ }
   });
   q('[data-v3d-interior]').addEventListener('change', e => view.setInterior(e.target.checked));
   q('[data-v3d-turntable]').addEventListener('change', e => view.setTurntable(e.target.checked));
@@ -1545,6 +1563,15 @@ export async function openModel(opts) {
   } catch (err) {
     view.setStatus(err.message || String(err));
     return;
+  }
+
+  // Most cabins are separate objects the game streams in, not part of the
+  // hull's files; a model with no inside of its own says so rather than
+  // offering a box that changes nothing.
+  if (!view.interiorMaterials.size) {
+    const box = q('[data-v3d-interior]');
+    box.disabled = true;
+    box.closest('label').title = t('This model has no interior in its own files: the game loads cabins separately.');
   }
 
   // A ship's slots: what fits each, from the Garage's own lists.
