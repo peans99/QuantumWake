@@ -28,7 +28,12 @@ namespace Quantumwake.Data;
 /// <c>[100 Rep]</c>, and <c>[BP]*</c> when one can award a blueprint - as
 /// StarStrings' did; see <see cref="GameMissions.TitleRewards"/>.
 /// </param>
-public sealed record TextOverlayOptions(bool Colour = false, int Level = 3, bool Facts = true, bool Routes = true, bool Rewards = true);
+/// <param name="Stats">
+/// Whether a ship part's description gains the figures the game leaves out of
+/// it - a shield's HP and regeneration, a cooler's output, a gun's damage and
+/// range - from <see cref="GameShipParts"/>.
+/// </param>
+public sealed record TextOverlayOptions(bool Colour = false, int Level = 3, bool Facts = true, bool Routes = true, bool Rewards = true, bool Stats = true);
 
 /// <summary>What a generated text overlay would change, and the file itself.</summary>
 /// <param name="Marked">Item names that would gain the unsold mark.</param>
@@ -45,6 +50,7 @@ public sealed record TextOverlayOptions(bool Colour = false, int Level = 3, bool
 /// <param name="Content">The whole localisation file, ready to write.</param>
 /// <param name="Routed">Hauling contract titles that would ask the game to print their places.</param>
 /// <param name="Rewarded">Contract titles that would say what finishing them pays.</param>
+/// <param name="Described">Ship part descriptions that would gain their figures.</param>
 public sealed record TextOverlayPlan(
     int Marked,
     int Sold,
@@ -53,7 +59,8 @@ public sealed record TextOverlayPlan(
     IReadOnlyList<TextOverlayLine> Changes,
     string Content,
     int Routed = 0,
-    int Rewarded = 0)
+    int Rewarded = 0,
+    int Described = 0)
 {
     public int Considered => Marked + Sold + Skipped;
 }
@@ -104,6 +111,15 @@ public static class TextOverlay
 {
     /// <summary>The prefix the game keys item names under.</summary>
     private const string ItemNamePrefix = "item_Name";
+
+    /// <summary>The prefix the game keys item descriptions under.</summary>
+    private const string ItemDescPrefix = "item_Desc";
+
+    /// <summary>The category a description that gained its figures is listed under.</summary>
+    public const string PartStatsCategory = "Part figures";
+
+    /// <summary>A line break inside one entry: the two characters backslash and n, not a newline.</summary>
+    private const string Break = "\\n";
 
     /// <summary>Nothing known to sell it.</summary>
     private const char Unsold = '*';
@@ -170,13 +186,15 @@ public static class TextOverlay
     /// What the contracts under each title key pay on completion, from
     /// <see cref="GameReputationCatalogue.TitleRewards"/>.
     /// </param>
+    /// <param name="parts">Ship parts' figures by class, from <see cref="GameShipParts"/>.</param>
     public static TextOverlayPlan Build(
         string baseIni,
         Func<string, bool> isSold,
         IReadOnlyDictionary<string, GameItem>? facts = null,
         TextOverlayOptions? options = null,
         IReadOnlyDictionary<string, string>? routes = null,
-        IReadOnlyDictionary<string, GameTitleReward>? rewards = null)
+        IReadOnlyDictionary<string, GameTitleReward>? rewards = null,
+        IReadOnlyDictionary<string, ShipPartStats>? parts = null)
     {
         var settings = options ?? new TextOverlayOptions();
         var level = Math.Clamp(settings.Level, 1, 5);
@@ -185,7 +203,8 @@ public static class TextOverlay
         var output = new StringBuilder(baseIni.Length + (lines.Length / 8));
         var changes = new List<TextOverlayLine>();
 
-        int marked = 0, sold = 0, skipped = 0, annotated = 0, routed = 0, rewarded = 0;
+        int marked = 0, sold = 0, skipped = 0, annotated = 0, routed = 0, rewarded = 0, described = 0;
+        var byKey = parts is not null && settings.Stats ? DescriptionKeys(parts) : null;
 
         for (var i = 0; i < lines.Length; i++)
         {
@@ -218,6 +237,15 @@ public static class TextOverlay
                     Emit(key + "=" + becomes + raw[was.Length..]);
                     continue;
                 }
+            }
+
+            if (split > 0 && settings.Stats && parts is not null && key.StartsWith(ItemDescPrefix, StringComparison.OrdinalIgnoreCase)
+                && Described(key, line[(split + 1)..], parts, byKey!, facts) is { } desc)
+            {
+                described++;
+                changes.Add(new TextOverlayLine(desc.Class, desc.Name, desc.Added, PartStatsCategory));
+                Emit(key + "=" + desc.Becomes);
+                continue;
             }
 
             if (split <= 0 || !key.StartsWith(ItemNamePrefix, StringComparison.OrdinalIgnoreCase))
@@ -287,8 +315,133 @@ public static class TextOverlay
             }
         }
 
-        return new TextOverlayPlan(marked, sold, skipped, annotated, changes, output.ToString(), routed, rewarded);
+        return new TextOverlayPlan(marked, sold, skipped, annotated, changes, output.ToString(), routed, rewarded, described);
     }
+
+    /// <summary>
+    /// A part's description with its figures added, or null when it is not a
+    /// part this knows or already says all of them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The game writes a part's description as a block of <c>Label: value</c>
+    /// lines - <c>Item Type: Cooler</c>, <c>Size: 1</c>, <c>Grade: C</c> - then a
+    /// blank line and the prose. The figures join the end of that block, worded
+    /// the same way, so they read as the game's own rather than as a note pinned
+    /// on. A description with no block gets one in front of the prose.
+    /// </para>
+    /// <para>
+    /// A label the description already has is left out, so a base table from
+    /// another mod that prints the same figure - or a patch that starts to -
+    /// does not get it twice.
+    /// </para>
+    /// </remarks>
+    private static (string Class, string Name, string Added, string Becomes)? Described(
+        string key, string value, IReadOnlyDictionary<string, ShipPartStats> parts,
+        IReadOnlyDictionary<string, ShipPartStats?> byKey, IReadOnlyDictionary<string, GameItem>? facts)
+    {
+        var bare = key.EndsWith(",P", StringComparison.OrdinalIgnoreCase) ? key[..^2] : key;
+        ShipPartStats? stats;
+        if (byKey.TryGetValue(bare, out var keyed))
+        {
+            // Parts under one description that would not print the same figures:
+            // the description is left as the game wrote it.
+            if (keyed is null) return null;
+            stats = keyed;
+        }
+        else
+        {
+            var cls = bare[ItemDescPrefix.Length..].TrimStart('_');
+            if (cls.Length == 0) return null;
+            stats = parts.GetValueOrDefault(cls) ?? parts.GetValueOrDefault($"{cls}_SCItem");
+            if (stats is null || stats.DescriptionKey is not null) return null;
+        }
+        var cls2 = stats.Class.EndsWith("_SCItem", StringComparison.OrdinalIgnoreCase) ? stats.Class[..^7] : stats.Class;
+
+        var trimmed = value.TrimEnd();
+        if (trimmed.Length == 0) return null;
+        var padding = value[trimmed.Length..];
+
+        var lines = PartLines(stats)
+            .Where(l => !trimmed.Contains(Break + l[..(l.IndexOf(':') + 1)], StringComparison.OrdinalIgnoreCase)
+                && !trimmed.StartsWith(l[..(l.IndexOf(':') + 1)], StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (lines.Count == 0) return null;
+
+        var block = string.Join(Break, lines);
+        var blank = trimmed.IndexOf(Break + Break, StringComparison.Ordinal);
+        var becomes = blank >= 0
+            ? trimmed[..blank] + Break + block + trimmed[blank..]
+            : block + Break + Break + trimmed;
+
+        var name = facts is not null && Facts(facts, cls2) is { Name.Length: > 0 } item ? item.Name : cls2;
+        return (cls2, name, string.Join(" · ", lines), becomes + padding);
+    }
+
+    /// <summary>
+    /// Each description key the parts name, with the part whose figures it
+    /// gains - or null where the parts sharing it would not print the same.
+    /// </summary>
+    /// <remarks>
+    /// A part's description is under the key its own entity names, which is
+    /// not always its class: a capital ship's cannon can borrow a stock gun's
+    /// text. Matching by class missed those, and sharing is only safe when
+    /// every part under the key says the same thing - otherwise the figures
+    /// would be one gun's under another's name. The exception is the part the
+    /// key is named for: <c>item_DescMISL_S02_CS_FSKI_Tempest</c> is the Tempest
+    /// II's own text, and the event copy that borrows it with other figures
+    /// (<c>_CitCon</c>) does not take it away from the missile anybody buys. On
+    /// this install the borrowers that differ are copies like that - _LowPoly,
+    /// _Turret, _Idris_M, _CitCon - not parts a pilot fits. A part that names its
+    /// key is never matched by class as well, so a key it does not use cannot
+    /// catch it.
+    /// </remarks>
+    private static Dictionary<string, ShipPartStats?> DescriptionKeys(IReadOnlyDictionary<string, ShipPartStats> parts)
+    {
+        var byKey = new Dictionary<string, ShipPartStats?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var group in parts.Values.Where(p => p.DescriptionKey is not null)
+                     .GroupBy(p => p.DescriptionKey!, StringComparer.OrdinalIgnoreCase))
+        {
+            var named = group.Key[ItemDescPrefix.Length..].TrimStart('_');
+            var owner = group.FirstOrDefault(p => p.Class.Equals(named, StringComparison.OrdinalIgnoreCase)
+                || p.Class.Equals(named + "_SCItem", StringComparison.OrdinalIgnoreCase));
+            var agreed = group.Select(p => string.Join("|", PartLines(p))).Distinct(StringComparer.Ordinal).Count() == 1;
+            byKey[group.Key] = owner ?? (agreed ? group.OrderBy(p => p.Class, StringComparer.OrdinalIgnoreCase).First() : null);
+        }
+        return byKey;
+    }
+
+    /// <summary>The figures a part's description gains, in the game's own Label: value form.</summary>
+    internal static IEnumerable<string> PartLines(ShipPartStats s)
+    {
+        if (s.ShieldHp is { } hp) yield return $"Shield HP: {N(hp)}";
+        if (s.ShieldRegen is { } regen) yield return $"Regen Rate: {N(regen)}/s";
+        if (s.DamagedDelay is { } damaged)
+            yield return s.DownedDelay is { } downed ? $"Regen Delay: {N(damaged)} s (Downed: {N(downed)} s)" : $"Regen Delay: {N(damaged)} s";
+        if (s.PowerOutput is { } power) yield return $"Power Output: {N(power)}";
+        if (s.CoolingOutput is { } cooling) yield return $"Cooling Output: {N(cooling)}";
+        if (s.QuantumSpeed is { } speed) yield return $"Quantum Speed: {N(speed / 1000, 0)} km/s";
+        if (s.SpoolTime is { } spool) yield return $"Spool Time: {N(spool)} s";
+        if (s.QuantumCooldown is { } cooldown) yield return $"Cooldown: {N(cooldown)} s";
+        if (s.Alpha is { } alpha) yield return s.DamageKind is { } kind ? $"Damage: {N(alpha)} {kind}" : $"Damage: {N(alpha)}";
+        if (s.RoundsPerMinute is { } rpm) yield return $"Fire Rate: {N(rpm)} rpm";
+        if (s.Dps is { } dps) yield return $"DPS: {N(dps)}";
+        if (s.ProjectileSpeed is { } projectile) yield return $"Projectile Speed: {N(projectile)} m/s";
+        if (s.Range is { } range) yield return $"Range: {N(range, 0)} m";
+        if (s.MissileDamage is { } blast) yield return $"Damage: {N(blast)}";
+        if (s.MissileSpeed is { } missileSpeed) yield return $"Speed: {N(missileSpeed)} m/s";
+        if (s.LockTime is { } lockTime) yield return $"Lock Time: {N(lockTime)} s";
+        if (s.LockRangeMax is { } far)
+            yield return s.LockRangeMin is { } near ? $"Lock Range: {N(near, 0)}-{N(far, 0)} m" : $"Lock Range: {N(far, 0)} m";
+    }
+
+    /// <summary>
+    /// A figure as the game's own text writes one: thousands separated, no
+    /// trailing zeros, and invariant - the table is English whatever the PC is set to.
+    /// </summary>
+    private static string N(double value, int decimals = 2) =>
+        Math.Round(value, decimals, MidpointRounding.AwayFromZero)
+            .ToString(decimals == 0 ? "#,0" : "#,0.##", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>The category a rewritten hauling title is listed under.</summary>
     public const string HaulTitleCategory = "Hauling title";

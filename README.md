@@ -352,7 +352,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.0.3
+### 1.0.4
+
+**Ship parts say what they do, in game.** With item labels installed, the description of a shield, power plant, cooler, quantum drive, ship gun or missile now lists the figures the game leaves out: shield HP, regeneration and its delays; power and cooling output; quantum speed, spool and cooldown; a gun's damage per shot, fire rate, damage a second, projectile speed and range; a missile's damage, speed, lock time and lock range. They are read from your own install and sit with the game's own Size and Grade lines, worded the same way - 477 descriptions on the current patch. Where the game files leave a figure open it is left out rather than guessed: guns whose fire rate depends on how they cycle show no rate, and charged and distortion guns show no per-shot damage. Turn it off under Settings, Item labels, then install the labels again and restart the game.
 
 **Missions no longer runs into its neighbour.** A contract with a long internal name used to print it on one line straight across the Offered by column; it now wraps inside its own cell.
 

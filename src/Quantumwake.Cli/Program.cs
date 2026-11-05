@@ -384,6 +384,52 @@ if (args.Contains("--climate", StringComparer.OrdinalIgnoreCase))
     return 0;
 }
 
+// The ship-part figures the item labels write into descriptions, held up
+// against the community dataset's own - a source the reader never uses - so a
+// field read from the wrong place shows up as a disagreement rather than as a
+// plausible number. Run with a scratch --data: it rebuilds the cache.
+if (args.Contains("--ship-parts", StringComparer.OrdinalIgnoreCase))
+{
+    var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
+    var parts = GameCommodities.Load(install.RootPath, Path.Combine(data, "commodities.json")).Armoury.ShipParts ?? [];
+    Console.WriteLine($"{parts.Count} ship parts with figures: " + string.Join(", ", parts.Values.GroupBy(p => p.Type).OrderBy(g => g.Key).Select(g => $"{g.Count()} {g.Key}")));
+
+    var digest = Path.Combine(GetOption(args, "--community") ?? Path.Combine(Quantumwake.Core.AppPaths.Root, "community"), "digest-part-stats.json");
+    if (!File.Exists(digest)) { Console.WriteLine("no community digest to check against"); return 0; }
+    using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(digest));
+
+    var checks = new Dictionary<string, (int Agree, int Differ, List<string> Examples)>();
+    void Check(string field, string cls, double? ours, double theirs)
+    {
+        if (ours is null || theirs <= 0) return;
+        var entry = checks.TryGetValue(field, out var e) ? e : (Agree: 0, Differ: 0, Examples: new List<string>());
+        if (Math.Abs(ours.Value - theirs) <= Math.Max(0.06, theirs * 0.001)) entry.Agree++;
+        else { entry.Differ++; if (entry.Examples.Count < 40) entry.Examples.Add($"{cls}: {ours} vs {theirs}  [{parts[cls].FireKind} x{parts[cls].FireModes}]"); }
+        checks[field] = entry;
+    }
+    static double Num(System.Text.Json.JsonElement e, string name) =>
+        e.ValueKind == System.Text.Json.JsonValueKind.Object && e.TryGetProperty(name, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Number ? v.GetDouble() : 0;
+
+    foreach (var entry in doc.RootElement.EnumerateObject())
+    {
+        var e = entry.Value;
+        var cls = e.TryGetProperty("Class", out var c) ? c.GetString() ?? entry.Name : entry.Name;
+        if (!parts.TryGetValue(cls, out var p)) continue;
+        if (e.TryGetProperty("Shield", out var sh)) { Check("shield HP", cls, p.ShieldHp, Num(sh, "Hp")); Check("shield regen", cls, p.ShieldRegen, Num(sh, "Regen")); Check("damaged delay", cls, p.DamagedDelay, Num(sh, "DamagedDelay")); Check("downed delay", cls, p.DownedDelay, Num(sh, "DownedDelay")); }
+        if (p.Type == "PowerPlant") Check("power output", cls, p.PowerOutput, Num(e, "PowerGen"));
+        if (p.Type == "Cooler") Check("cooling output", cls, p.CoolingOutput, Num(e, "CoolantGen"));
+        if (e.TryGetProperty("Quantum", out var q)) { Check("quantum speed", cls, p.QuantumSpeed, Num(q, "Speed")); Check("spool", cls, p.SpoolTime, Num(q, "SpoolTime")); Check("quantum cooldown", cls, p.QuantumCooldown, Num(q, "Cooldown")); }
+        if (e.TryGetProperty("Weapon", out var w)) { Check("gun alpha", cls, p.Alpha, Num(w, "Alpha")); Check("gun rpm", cls, p.RoundsPerMinute, Num(w, "RateOfFire")); Check("gun dps", cls, p.Dps, Num(w, "Dps")); Check("gun speed", cls, p.ProjectileSpeed, Num(w, "AmmoSpeed")); Check("gun range", cls, p.Range, Num(w, "Range")); }
+        if (e.TryGetProperty("Missile", out var m)) { Check("missile damage", cls, p.MissileDamage, Num(m, "Damage")); Check("missile speed", cls, p.MissileSpeed, Num(m, "Speed")); Check("lock time", cls, p.LockTime, Num(m, "LockTime")); }
+    }
+    foreach (var (field, (agree, differ, examples)) in checks.OrderBy(k => k.Key))
+    {
+        Console.WriteLine($"  {field,-16} {agree,5} agree  {differ,4} differ");
+        foreach (var x in examples) Console.WriteLine($"      {x}");
+    }
+    return 0;
+}
+
 // Every mineable rock's radar signature, grouped by value, and which counts of
 // which rocks a ping could not tell apart. The numbers behind docs/mining.md's
 // radar section.

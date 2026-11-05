@@ -552,3 +552,60 @@ card with no pick shows that one as the ship's default. In this fleet three
 hulls have one - Clipper, Hermes, Paladin; the other sixteen have no picture
 of their stock finish anywhere in the files, and for those the first paint
 stands in and the card says so.
+
+## Ship part figures in their descriptions (2026-11-05)
+
+The game describes a ship part in a block of `Label: value` lines and then
+prose. A cooler's says `Item Type`, `Manufacturer`, `Size`, `Grade` and
+`Class` and nothing about how much it cools; a personal weapon's already says
+magazine, fire rate and range. So the item labels (Settings → Item labels,
+"Add figures to ship part descriptions") add the missing figures to that block
+for shields, power plants, coolers, quantum drives, ship guns and missiles,
+worded the same way. `GameShipParts` reads them; `--ship-parts` reprints the
+count and the check below.
+
+Unlike a ship's totals (above), these are not derived: each sits on the part's
+own entity.
+
+| Part | Where | Example |
+|---|---|---|
+| Shield | `SCItemShieldGeneratorParams`: `MaxShieldHealth`, `MaxShieldRegen`, `DamagedRegenDelay`, `DownedRegenDelay` | 7MA 'Lorica': 10,000, 2,200/s, 4.58 s, 9.17 s |
+| Power plant | `ItemResourceComponentParams.states[0]`, the delta generating `Power`, `SPowerSegmentResourceUnit.units` | StarHeart: 16 |
+| Cooler | the same, generating `Coolant`, `SStandardResourceUnit.standardResourceUnits` | Bracer: 34 |
+| Quantum drive | `SCItemQuantumDriveParams.params`: `driveSpeed`, `spoolUpTime`, `cooldownTime` | Eos: 199,272,700 m/s, 5.1 s, 10.8 s |
+| Gun | the personal-weapon reader's fire modes and projectile, off the gun's own `SAmmoContainerComponentParams` | M4A: 273.4 energy, 100 rpm, 1,196 m/s, 2,165 m |
+| Missile | `SCItemMissileParams`: `explosionParams.damage`, `GCSParams.linearSpeed`, `targetingParams.lockTime`, `lockRangeMin`/`Max` | Tempest II: 1,700, 1,029 m/s, 0.1 s, 1,800-10,000 m |
+
+**Checked against the community dataset**, which the reader never uses:
+every figure agrees on every part both describe - 73 shields on all four
+figures, 83 power plants, 81 coolers, 63 quantum drives on all three, 67
+missiles on damage and speed, 66 on lock time, and 181 guns on projectile
+speed and range. The dataset's missile "range" is speed times lifetime -
+30,870 m for a Tempest that locks at 10,000 - so lock range is what is printed.
+
+**Guns are where it is not one number, and those say less.** Most ship guns
+fire through a looping sequence whose step has an RPM of its own around a
+single shot that has another. Where the two agree - the M4A's 100 and 100 -
+there is nothing to decide. Where they do not - the Behring ballistic
+repeater steps at 900 around shots rated 500 - the files do not say which the
+game obeys, and the dataset took the other side on all 34 such guns. Those
+print damage, speed and range but no fire rate and no damage a second.
+Charged guns (Tachyon, Mass Driver) print no shot damage, because the shot is
+whatever the hold made it; nor do the 11 distortion guns, whose damage is not
+on the projectile where every other gun keeps it (under a point here, 25 to
+1,040 in the dataset); nor a shell that also explodes (the Nova's 18,500 on
+contact is 32,000 there). With those held back, 137 guns print a rate and all
+137 agree with the dataset, as do 156 of 158 shot figures - the two are the
+Panther's 43.65, rounded to 43.6 and 43.7.
+
+**Which description a part gets** is the key its own entity names
+(`AttachDef.Localization.Description`), not its class: a Bengal's cannon
+borrows a stock gun's text. Where several parts share one description it is
+filled only when they would all print the same - except that the part the key
+is named for keeps it, so the Tempest II is not lost to the `_CitCon` event
+copy that borrows its text with other figures. On this install 477
+descriptions gain figures; 564 parts are read, and the rest are templates,
+NPC and low-detail copies, and capital-ship parts sharing a text nobody owns.
+
+Nothing here has been seen in game yet: whether the game renders a longer
+header block without clipping it is the thing to look at first.

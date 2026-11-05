@@ -25019,6 +25019,8 @@ function applyLabelOptions(options) {
   facts.checked = options ? options.facts !== false : true;
   const routes = $('#label-routes');
   if (routes) routes.checked = options ? options.routes !== false : true;
+  const stats = $('#label-stats');
+  if (stats) stats.checked = options ? options.stats !== false : true;
   colour.checked = !!(options && options.colour);
   level.value = String((options && options.level) || 3);
   level.disabled = !colour.checked;
@@ -25031,6 +25033,7 @@ async function saveLabelOptions() {
     level: Number($('#label-level').value) || 3,
     facts: $('#label-facts').checked,
     routes: $('#label-routes') ? $('#label-routes').checked : true,
+    stats: $('#label-stats') ? $('#label-stats').checked : true,
   };
 
   $('#label-level').disabled = !body.colour;
@@ -25052,7 +25055,7 @@ async function saveLabelOptions() {
   await loadTextOverlay().catch(() => {});
 }
 
-for (const id of ['#label-facts', '#label-routes', '#label-colour', '#label-level']) {
+for (const id of ['#label-facts', '#label-routes', '#label-stats', '#label-colour', '#label-level']) {
   $(id)?.addEventListener('change', () => { saveLabelOptions().catch(() => {}); });
 }
 
@@ -25088,6 +25091,7 @@ async function loadTextOverlay() {
     // Hauling titles are the overlay's other half: they ask the game to print
     // a contract's places, which is how the logs come to name them at all.
     ...(state.routed ? [[tx('Hauling titles naming places'), state.routed]] : []),
+    ...(state.described ? [[tx('Part descriptions with figures'), state.described]] : []),
   ]);
 
   // Which file it builds on decides whether another mod survives, so it is
