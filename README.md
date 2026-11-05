@@ -24,6 +24,11 @@ there is no account and no required online service.
     <td width="33%"><a href="docs/images/map.png"><img src="docs/images/map.png" alt="The map"></a><br><sub><b>Map</b><br>Find places you have visited and nearby refuel, repair or clinic services.</sub></td>
     <td width="33%"><a href="docs/images/itinerary.png"><img src="docs/images/itinerary.png" alt="The Itinerary page"></a><br><sub><b>Itinerary</b><br>Lay out a flight plan stop by stop, and merge a hauling run into it.</sub></td>
   </tr>
+  <tr>
+    <td width="33%"><a href="docs/images/ship3d.png"><img src="docs/images/ship3d.png" alt="A ship in the 3D view"></a><br><sub><b>3D view</b><br>Any ship, vehicle, gun or armour from your install's own models, with its loadout fitted and swappable.</sub></td>
+    <td width="33%"><a href="docs/images/fleet3d.png"><img src="docs/images/fleet3d.png" alt="The fleet in 3D"></a><br><sub><b>Fleet in 3D</b><br>The ships you own side by side on one floor, smallest first, each in its own paint.</sub></td>
+    <td width="33%"><a href="docs/images/armour3d.png"><img src="docs/images/armour3d.png" alt="An armour set in 3D"></a><br><sub><b>Armour in 3D</b><br>A whole suit in one colourway, opened from any helmet, torso, arm or leg piece.</sub></td>
+  </tr>
 </table>
 
 <details>
@@ -50,8 +55,21 @@ there is no account and no required online service.
     <td><a href="docs/images/armoury.png"><img src="docs/images/armoury.png" alt="The Armoury"></a><br><sub><b>Armoury</b><br>Guns, armour and attachments from your installed game files.</sub></td>
     <td><a href="docs/images/loot.png"><img src="docs/images/loot.png" alt="The Loot page"></a><br><sub><b>Loot</b><br>Where any item drops, read from the game's own loot tables, beside what you have found.</sub></td>
   </tr>
+  <tr>
+    <td><a href="docs/images/suit.png"><img src="docs/images/suit.png" alt="The suit calculator"></a><br><sub><b>Suit calculator</b><br>What a suit weighs, carries and lets you take in G, from the game files.</sub></td>
+    <td><a href="docs/images/climate.png"><img src="docs/images/climate.png" alt="The Climate tab"></a><br><sub><b>Climate</b><br>Which suits cope on each planet and moon, from its baseline temperature and the suits' own ranges.</sub></td>
+    <td><a href="docs/images/compare.png"><img src="docs/images/compare.png" alt="The size comparison"></a><br><sub><b>Size comparison</b><br>Ships side by side at their real size; add and remove them freely.</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/images/models.png"><img src="docs/images/models.png" alt="The 3D models page"></a><br><sub><b>3D models</b><br>Every hull the install can draw, by maker, in the game's own pictures of them.</sub></td>
+    <td><a href="docs/images/missions.png"><img src="docs/images/missions.png" alt="The Missions reference"></a><br><sub><b>Missions</b><br>Every contract in the game files, with its issuer, places and pay, beside your own runs.</sub></td>
+    <td><a href="docs/images/encounters.png"><img src="docs/images/encounters.png" alt="The Encounters reference"></a><br><sub><b>Encounters</b><br>The NPC waves and hold cargo a contract can send, from the game's mission data.</sub></td>
+  </tr>
 </table>
 </details>
+
+The 3D view reads your own Star Citizen install, `Data.p4k`, so it shows the
+models of the patch you are actually playing. Nothing is downloaded for it.
 
 The dashboard is for planning and history. The optional overlay gives the same
 short answers over the game, and the optional Cougar MFD mode keeps navigation,
@@ -111,8 +129,8 @@ QuantumWake.exe --path "D:\...\StarCitizen\LIVE"
 | Plan the work: the Command deck, a cargo or rep run, contracts, reputation, checklists, blueprints, Wikelo trades or an event | **Operations** |
 | Review a flight, session, place, server, crewmate or death | **Flight** |
 | Follow money in and out, your cargo, or commodity prices | **Economy** |
-| Look up ships, components, items, loot odds, mining or crafting | **Reference** |
-| See your ships, fittings, loadout and stash, bench a part in the Garage, or compare guns in the Armoury | **Hangar** |
+| Look up ships, components, items, missions, encounters, loot odds, mining or crafting, or open any hull in 3D | **Reference** |
+| See your ships, fittings, loadout and stash, bench a part in the Garage, or compare guns, add up a suit and check it against a climate in the Armoury | **Hangar** |
 | Keep a small answer visible in Star Citizen | **Overlay** |
 
 ## Optional extras

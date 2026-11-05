@@ -1,5 +1,7 @@
 # Suit calculator — what a suit weighs, carries and lets you take, from the files
 
+![The suit calculator tab in the Armoury](images/suit.png)
+
 Built as 0.21.3 and 0.21.4 (2026-11-03), an Armoury tab. Read from 4.10.2
 LIVE (build 12913470) and checked against the 4.10 PTU of 2026-11-03
 (4.10.199.51990), which agree on every figure below. The readers are

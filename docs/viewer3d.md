@@ -1,5 +1,13 @@
 # The 3D view — ships, vehicles, weapons and armour from the install's own models
 
+![The F7C-M Super Hornet Mk II in the 3D view, with its loadout list](images/ship3d.png)
+
+![Fleet in 3D: the owned ships side by side, smallest first](images/fleet3d.png)
+
+![The size comparison with five ships](images/compare.png)
+
+![An armour set opened from the Armoury](images/armour3d.png)
+
 Built for 0.21.0 to 0.21.9 (2026-11-03) against 4.10.2 LIVE, build 12913470.
 Everything the view draws is read out of `Data.p4k` on this machine; nothing
 is downloaded. The code is `Quantumwake.Core/GameData/GameModels.cs` (what can
@@ -33,6 +41,8 @@ of its set in the same colourway where the files have it; a Full suit box
 shows the piece alone.
 
 ## What the page lists
+
+![Reference: 3D models, by maker](images/models.png)
 
 `/api/models/list` is the hulls a pilot can fly and the personal weapons that
 have a name in the game's text. The rest - NPC variants and test pieces - share

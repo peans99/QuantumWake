@@ -1,5 +1,7 @@
 # What a contract pays, from the game files
 
+![Reference: Missions](images/missions.png)
+
 Measured on 4.10.2 against this install: 282 log files, 751 logged contracts.
 Every figure below is printed again by:
 
