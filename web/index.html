@@ -1314,6 +1314,16 @@
           <p class="muted" id="screen-status" aria-live="polite"></p>
           <div id="screen-result"></div>
         </div>
+        <div class="live-screen" id="live-block" hidden>
+          <label class="toggle">
+            <input type="checkbox" id="live-enabled">
+            <span>
+              Read the game&rsquo;s screen live
+              <em class="muted">While Star Citizen is the window in front, a frame every two seconds is read like a screenshot and thrown away. Rock scans are kept, one per rock. Nothing touches the game itself.</em>
+            </span>
+          </label>
+          <p class="muted" id="live-status" aria-live="polite"></p>
+        </div>
         </div>
       </details>
 
@@ -4986,6 +4996,34 @@
       <div class="setup-actions">
         <button id="setup-start" class="primary">Start flying</button>
         <span class="muted" id="setup-status"></span>
+      </div>
+    </div>
+  </div>
+  <!-- Asked once, at start, until answered either way: whether the screen may
+       be read live. After first flight on a new install, on the next start on
+       an existing one. Never shown where the screen cannot be read. -->
+  <div class="setup" id="live-ask" hidden role="dialog" aria-modal="true" aria-labelledby="live-ask-title">
+    <div class="setup-card">
+      <div class="setup-brand">
+        <img src="assets/mark.svg" width="30" height="30" alt="">
+        <div>
+          <b id="live-ask-title">Read the game&rsquo;s screen?</b>
+          <span>a question, once</span>
+        </div>
+      </div>
+      <p>Quantum Wake can read Star Citizen&rsquo;s screen while you play. For now that is the mining scan panel: the rock you select lands on the Mining page without a screenshot.</p>
+      <ul class="muted live-ask-list">
+        <li>Only while Star Citizen is the window in front, about once every two seconds.</li>
+        <li>It copies the pixels a screenshot would and reads them on this PC. Nothing is sent anywhere, and each frame is thrown away once read.</li>
+        <li>It never opens the game&rsquo;s process, reads its memory or sends it input.</li>
+        <li>It works in borderless or windowed mode, not exclusive fullscreen.</li>
+        <li>CIG&rsquo;s terms neither allow nor forbid reading the screen in so many words; other community tools do it.</li>
+      </ul>
+      <p class="muted">You can change this at any time on the Log page, under Read from the game.</p>
+      <div class="setup-actions">
+        <button id="live-ask-yes" class="primary">Turn it on</button>
+        <button id="live-ask-no" class="ghost">Not now</button>
+        <span class="muted" id="live-ask-status"></span>
       </div>
     </div>
   </div>

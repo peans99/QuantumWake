@@ -278,10 +278,30 @@ public sealed class ScreenInsightService(
     public async Task<ScreenSighting> ReadShotAsync(string path, CancellationToken token = default)
     {
         var info = new FileInfo(path);
-        var shotAt = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero);
+        var (sighting, read) = await ReadFrameAsync(path, info.Name, new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero), token);
 
+        // A frame the engine could not open is not kept: the watcher gives a
+        // file the game is still writing another look before it settles that.
+        if (read) readings.Add(sighting);
+        return sighting;
+    }
+
+    /// <summary>
+    /// Reads a frame copied off the screen just now, and remembers nothing:
+    /// the live loop decides what is worth keeping, because most frames are
+    /// the same frame again.
+    /// </summary>
+    /// <param name="path">Where the frame was written.</param>
+    /// <param name="shot">The name the reading goes by if it is kept - there is no file a pilot saved.</param>
+    /// <param name="shotAt">When it was copied.</param>
+    public async Task<ScreenSighting> ReadLiveAsync(string path, string shot, DateTimeOffset shotAt, CancellationToken token = default) =>
+        (await ReadFrameAsync(path, shot, shotAt, token)).Sighting;
+
+    /// <summary>A frame read through every second look; <c>Read</c> is false when the engine never got to it.</summary>
+    private async Task<(ScreenSighting Sighting, bool Read)> ReadFrameAsync(string path, string shot, DateTimeOffset shotAt, CancellationToken token)
+    {
         if (reader is null)
-            return Nothing(info.Name, shotAt, "this copy cannot read screenshots - the overlay does that");
+            return (Nothing(shot, shotAt, "this copy cannot read screenshots - the overlay does that"), false);
 
         var watch = System.Diagnostics.Stopwatch.StartNew();
         IReadOnlyList<ScreenTextLine> lines;
@@ -294,7 +314,7 @@ public sealed class ScreenInsightService(
         {
             // A half-written file is the likely one: the game is still saving
             // the shot the pilot took a moment ago.
-            return Nothing(info.Name, shotAt, $"could not read that screenshot ({e.GetType().Name})");
+            return (Nothing(shot, shotAt, $"could not read that screenshot ({e.GetType().Name})"), false);
         }
 
         // The balance is the one line the engine drops from a whole frame
@@ -315,9 +335,7 @@ public sealed class ScreenInsightService(
 
         watch.Stop();
 
-        var sighting = Understand(info.Name, shotAt, lines, watch.ElapsedMilliseconds, scan, bars);
-        readings.Add(sighting);
-        return sighting;
+        return (Understand(shot, shotAt, lines, watch.ElapsedMilliseconds, scan, bars), true);
     }
 
     /// <summary>Everything after the engine, with nothing written: what a frame's lines mean.</summary>

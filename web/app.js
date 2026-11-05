@@ -36197,14 +36197,15 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let setupWipeOffered = null;
 let setupWipePatch = 'set at first run';
 
+/** Shows first flight setup when it is due; true when it did, so nothing else asks over it. */
 async function maybeShowSetup() {
 
-  if (isOverlay) return;
+  if (isOverlay) return false;
 
   // ?setup=1 forces the wizard - a preview that skips nothing permanent.
   if (!params.has('setup')) {
-    if (isSnapshot) return;
-    if ((await getJson('/api/setup')).done) return;
+    if (isSnapshot) return false;
+    if ((await getJson('/api/setup')).done) return false;
   }
 
   const panel = $('#setup');
@@ -36346,7 +36347,106 @@ async function maybeShowSetup() {
       button.disabled = false;
     }
   });
+
+  return true;
 }
+
+/* ---------- live screen reading ---------- */
+
+let liveState = null;
+
+/**
+ * Asks once whether the screen may be read live, when the server says it can
+ * be and nobody has answered. "Not now" is an answer: it is kept, and the
+ * question does not come back on the next start - the switch on the Log page
+ * is where it is changed after that.
+ */
+async function maybeAskLive() {
+  if (isOverlay || isSnapshot) return;
+  let state;
+  try {
+    state = await getJson('/api/live');
+  } catch {
+    return;
+  }
+  if (!state.ask) return;
+
+  const panel = $('#live-ask');
+  if (!panel) return;
+  panel.hidden = false;
+
+  const answer = async (enabled) => {
+    $('#live-ask-yes').disabled = true;
+    $('#live-ask-no').disabled = true;
+    try {
+      await postLiveAnswer(enabled);
+      panel.hidden = true;
+    } catch {
+      $('#live-ask-status').textContent = tx('The answer did not save. It is asked again next start, and the Log page has the switch.');
+      $('#live-ask-yes').disabled = false;
+      $('#live-ask-no').disabled = false;
+    }
+  };
+
+  $('#live-ask-yes').onclick = () => answer(true);
+  $('#live-ask-no').onclick = () => answer(false);
+}
+
+async function postLiveAnswer(enabled) {
+  const response = await fetch('/api/live', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+  if (!response.ok) throw new Error(`live answer ${response.status}`);
+  liveState = await response.json();
+  renderLiveScreen();
+}
+
+/** The switch and its status line on the Log page; hidden where the screen cannot be read. */
+function renderLiveScreen() {
+  const block = $('#live-block');
+  if (!block) return;
+  const state = liveState;
+  block.hidden = !state?.available;
+  if (!state?.available) return;
+
+  $('#live-enabled').checked = Boolean(state.enabled);
+
+  const status = state.status || {};
+  const line = $('#live-status');
+  if (!line) return;
+  if (!state.enabled) {
+    line.textContent = tx('Off.');
+  } else if (status.state === 'reading') {
+    const when = status.lastFrameAt ? new Date(status.lastFrameAt).toLocaleTimeString(QW_DATE_LOCALES) : '';
+    line.textContent = tx('Reading: {frames} frames, {kept} rock scans kept. Last at {when}: {summary}', {
+      frames: (status.frames || 0).toLocaleString(),
+      kept: (status.kept || 0).toLocaleString(),
+      when,
+      summary: screenText(status.lastSummary || status.lastKind || ''),
+    });
+  } else {
+    line.textContent = status.why ? tx('Waiting: {why}.', { why: screenText(status.why) }) : tx('Starting…');
+  }
+}
+
+async function loadLiveScreen() {
+  try {
+    liveState = await getJson('/api/live');
+  } catch {
+    liveState = null;
+  }
+  renderLiveScreen();
+}
+
+$('#live-enabled')?.addEventListener('change', (event) => {
+  postLiveAnswer(event.target.checked).catch(() => {
+    event.target.checked = !event.target.checked;
+    const line = $('#live-status');
+    if (line) line.textContent = tx('The change did not save.');
+  });
+});
 
 async function boot() {
   decorateNavigationGlyphs();
@@ -36451,7 +36551,18 @@ async function boot() {
 
   loadWipe().catch(() => { /* Settings shows it on its next visit */ });
 
-  maybeShowSetup().catch(() => { /* wizard is a nicety, never a blocker */ });
+  // The live-reading question waits for first flight: on a new install the
+  // wizard reloads the page when it is done, and the question comes then.
+  maybeShowSetup()
+    .then((shown) => (shown ? null : maybeAskLive()))
+    .catch(() => { /* wizard and question are niceties, never blockers */ });
+
+  loadLiveScreen().catch(() => { /* the Log page shows it on its next visit */ });
+
+  // The status line moves while reading is on; nothing is polled while it is off.
+  setInterval(() => {
+    if (liveState?.enabled && document.visibilityState === 'visible') loadLiveScreen().catch(() => {});
+  }, 5000);
 
   // The first scan may still be running; retry until sessions appear.
   for (let attempt = 0; attempt < 30; attempt++) {

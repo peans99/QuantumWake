@@ -32,11 +32,16 @@ public static partial class ServerHost
     /// server is run on its own, and the screen endpoints then say so rather
     /// than failing.
     /// </param>
+    /// <param name="capture">
+    /// How to copy the game window for live reading. Supplied by the overlay on
+    /// Windows; null otherwise, and the live switch then says it is unavailable.
+    /// </param>
     public static WebApplication Build(
         string[] args,
         IScreenReader? screen = null,
         IClipboardReader? clipboard = null,
-        IJoystickReader? joysticks = null)
+        IJoystickReader? joysticks = null,
+        IGameScreenCapture? capture = null)
     {
 
         // Quantumwake server.
@@ -163,6 +168,13 @@ public static partial class ServerHost
         // Reads each screenshot as it lands, while the pilot has asked for that.
         // Idle otherwise: it checks the setting, not the folder.
         builder.Services.AddHostedService<ScreenWatchService>();
+
+        // Reads the game's screen while the pilot said yes when asked. Its own
+        // answer, so screenshot reading being on never turns this on.
+        builder.Services.AddSingleton<LiveScreenStore>();
+        if (capture is not null) builder.Services.AddSingleton(capture);
+        builder.Services.AddSingleton<LiveScreenService>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<LiveScreenService>());
 
         // The keybinding profile, kept whenever the game rewrites it, and the
         // stick pictures the Controls page draws bindings on.
@@ -3788,6 +3800,18 @@ public static partial class ServerHost
         // Nothing here reads the screen. It reads a file the pilot saved and
         // the clipboard the pilot filled, both on a button, and it says which
         // of those it is able to do at all.
+
+        // Live reading is the exception, and only after a yes: the dashboard
+        // asks at start until it has an answer, and both answers are kept.
+        app.MapGet("/api/live", (LiveScreenStore live, LiveScreenService service) => Results.Ok(service.Describe(live)));
+
+        app.MapPost("/api/live", (LiveAnswer answer, LiveScreenStore live, LiveScreenService service) =>
+        {
+            // A yes on a copy that cannot read the screen is kept as a no:
+            // nothing should come on later, on another machine, unasked.
+            live.Answer(answer.Enabled && service.Available);
+            return Results.Ok(service.Describe(live));
+        });
 
         // The install comes from the closure and not the container: on a
         // machine with none it is not registered, and a GET cannot take it

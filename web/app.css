@@ -3849,6 +3849,10 @@ tr:hover .drill, .drill:focus-visible { opacity: 1; }
 }
 
 .setup-actions { display: flex; align-items: center; gap: 15px; margin-top: 17px; }
+.live-ask-list { margin: 10px 0 12px; padding-left: 18px; font-size: 12px; line-height: 1.6; }
+.live-screen { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.live-screen[hidden] { display: none; }
+.live-screen #live-status { margin: 6px 0 0; }
 
 /* The wizard's is the same button with more air around the words. */
 .setup .primary { font-size: 13px; padding: 9px 22px; }

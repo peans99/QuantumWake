@@ -13,6 +13,13 @@ waiting on a real screenshot and is marked as waiting rather than guessed at.
 
 **The app reads a file. It never reads the screen.**
 
+> Since 1.1 this is the rule for screenshots, and no longer the rule for the
+> app: on 2026-11-05 Nicolas chose to read the screen live as well, opt-in and
+> asked at start. What changed, what did not, and why is under
+> [Reading the screen live](#reading-the-screen-live-2026-11-05) below. This
+> section is left as it was written, because the reasoning in it is what the
+> live reader is still held to.
+
 Enumerating windows, grabbing a framebuffer, or hooking a hotkey that captures
 the display is the class of thing anti-cheat exists to notice, and it is not
 worth a feature. A PNG the pilot saved is inert — reading it is the same act as
@@ -91,6 +98,82 @@ runs. The image is a file on disk like `Game.log` is a file on disk.
 
 If that ever stops being enough, the answer is to stop — not to find a cleverer
 way in.
+
+---
+
+## Reading the screen live (2026-11-05)
+
+Nicolas decided to prototype reading the screen while the game runs, on the
+`dev110` line, as a feature each pilot turns on or off and is asked about when
+the app starts. This section is the evidence that decision was made on.
+
+### The clause the table above left half-quoted
+
+The EULA's §I bullet is longer than the table quotes it. In full it opens:
+"Use any unauthorized third party software that intercepts, "mines", or
+otherwise collects information from or through the Game or the Website" - the
+part about reading RAM is its example, not its limit - and it ends by saying
+RSII "may allow certain third-party user interfaces at its discretion". That is
+broad enough to reach a screen reader. It is equally broad enough to reach what
+this app has done since its first release - read `Game.log` and `Data.p4k` -
+so reading the screen live is more of the same exposure, not a new kind. The
+Terms of Service were updated on 2026-10-30 and still say nothing about screen
+capture.
+
+### What others do, openly
+
+Smart Citizen 3.0 (released 2026-11-04) has an overlay that reads pixels under
+the radar and reads `Game.log`; its FAQ says "CIG has not said anything about
+overlays like this". SC Toolbox and SC Assistant capture the screen with
+`mss` and run OCR on it. Datarunner OCRs trading terminals for UEX. Each draws
+the same line: no memory, no injection, no input. No report of a ban for any of
+them was found - which is not evidence of safety, and is said as such to the
+pilot when asked.
+
+### The line it holds
+
+- Pixels copied from the desktop over the game's window - what a screenshot
+  key would save - and nothing else.
+- Only while Star Citizen is the window in front. Alt-tabbing stops it.
+- The game is found by its window title and class. Its process is never opened,
+  its memory never read, nothing is injected or hooked, no input is sent.
+- Each frame is overwritten by the next and deleted when reading stops. What is
+  kept is the reading, not the picture.
+- Off until the pilot says yes. The question is asked once at start - after
+  first flight on a new install, on the next start on an existing one - and
+  "Not now" is an answer that is kept.
+
+### Why GDI, and what that settles for the Store
+
+Windows.Graphics.Capture was the obvious API and the wrong one here. With a
+package identity - the Microsoft Store's MSIX - a program capturing a window on
+its own needs the `graphicsCaptureProgrammatic` capability and sits behind a
+per-app "Screenshots and screen recording" privacy switch, which has been
+reported to default to off and to turn itself off again across updates; hiding
+the yellow border needs a second capability and a second consent. All three
+capture capabilities are general-use, not restricted, so none would have needed
+Store approval - but the downloaded exe and the Store copy would have behaved
+differently, and the Store copy unreliably.
+
+`BitBlt` from the desktop needs none of it. The desktop is already composited,
+so a game in borderless or windowed mode is on it; the copy works the same in
+both editions, with no capability, no prompt and no border. The one thing it
+cannot see is exclusive fullscreen, which never reaches the desktop and copies
+as pure black - detected, and said on the page.
+
+### The prototype
+
+One screen: the mining scan panel, which the screenshot reader already reads.
+A frame every two seconds goes through exactly the screenshot path - same
+engine, same second looks - and a scan is kept as one reading a rock, updated
+while the rock stays selected (`LiveRocks`). Every other kind of frame is read
+and shown as "last seen" on the Log page, and not stored: which screens are
+worth keeping live is the next decision, one screen at a time.
+
+Not yet seen on a running game: the window class (`CryENGINE` is assumed, and a
+mismatch says what it found instead), how long the engine takes over a live
+frame at full resolution, and whether a scan read live agrees with the same
+panel screenshotted.
 
 ---
 
