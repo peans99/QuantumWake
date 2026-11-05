@@ -59,9 +59,13 @@ public sealed class LiveScreenService(
     ScreenInsightService insight,
     ScreenReadingStore readings,
     ILogger<LiveScreenService> logger,
-    IGameScreenCapture? capture = null) : BackgroundService
+    IGameScreenCapture? capture = null,
+    LiveFrameLog? frames = null) : BackgroundService
 {
     private static readonly TimeSpan Every = TimeSpan.FromSeconds(2);
+
+    /// <summary>One line a frame, in the data folder's <c>live</c> folder; see <see cref="LiveFrameLog"/>.</summary>
+    private readonly LiveFrameLog _log = frames ?? new LiveFrameLog(Core.AppPaths.In("live"));
 
     private readonly LiveRocks _rocks = new();
     private readonly Lock _gate = new();
@@ -109,6 +113,7 @@ public sealed class LiveScreenService(
                 if (!settings.Current.Enabled)
                 {
                     Set(s => s with { State = "off", Why = null });
+                    _log.Stopped();
                     Forget(frame);
                     continue;
                 }
@@ -116,6 +121,7 @@ public sealed class LiveScreenService(
                 if (Unavailable is { } why)
                 {
                     Set(s => s with { State = "unavailable", Why = why });
+                    _log.Waiting(why);
                     continue;
                 }
 
@@ -137,6 +143,7 @@ public sealed class LiveScreenService(
         Directory.CreateDirectory(Path.GetDirectoryName(frame)!);
 
         GameCapture taken;
+        var copying = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             taken = capture!.Capture(frame);
@@ -144,13 +151,17 @@ public sealed class LiveScreenService(
         catch (Exception e)
         {
             logger.LogWarning(e, "Live capture failed");
-            Set(s => s with { State = "waiting", Why = $"the screen could not be copied ({e.GetType().Name})" });
+            var failed = $"the screen could not be copied ({e.GetType().Name})";
+            Set(s => s with { State = "waiting", Why = failed });
+            _log.Waiting(failed);
             return;
         }
+        copying.Stop();
 
         if (!taken.Taken)
         {
             Set(s => s with { State = "waiting", Why = taken.Why });
+            _log.Waiting(taken.Why);
             return;
         }
 
@@ -163,16 +174,21 @@ public sealed class LiveScreenService(
         catch (ScreenEngineUnavailableException e)
         {
             Set(s => s with { State = "waiting", Why = e.Message });
+            _log.Waiting(e.Message);
             return;
         }
 
         var kept = 0;
+        string? keptAs = null;
         if (sighting.Mining is { } scan && _rocks.Keep(scan, at) is { } shot)
         {
             readings.Add(sighting with { Shot = shot });
             kept = 1;
+            keptAs = shot;
             logger.LogInformation("Live scan kept as {Shot}: {Summary}", shot, sighting.Summary);
         }
+
+        _log.Read(sighting.Kind.ToString(), copying.ElapsedMilliseconds, sighting.TookMs, taken.Width, taken.Height, keptAs);
 
         Set(s => s with
         {

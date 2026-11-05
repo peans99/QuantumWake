@@ -63,6 +63,9 @@ send nothing about you.
 - **One frame of the game's screen**, while live reading is on:
   `live\frame.bmp` in the data folder, replaced every couple of seconds and
   deleted when reading is switched off or the app closes.
+  Beside it, `live\frames-<date>.csv` notes when each frame was taken, what
+  kind of screen it was and how long reading it took - no text from the
+  screen - one file a day, a week of them kept.
 - **The game folder, only when you ask**: installing item labels writes a text
   table into `Data\Localization\english` and, when `user.cfg` names no
   language, adds `g_language = english` to it. Removing the labels takes back
