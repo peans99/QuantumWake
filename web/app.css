@@ -3477,6 +3477,7 @@ td.with-track { display: flex; align-items: center; gap: 9px; }
 .operations-live-workspace { border-left-color: var(--green); }
 .operations-workspace-head { display: flex; justify-content: space-between; gap: 16px; align-items: end; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--rule); }
 .operations-workspace-head > .muted { max-width: 56ch; font-size: 11px; line-height: 1.42; text-align: right; }
+.operations-workspace-head a { color: var(--cyan); }
 @media (max-width: 980px) { .operations-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .operations-deck-head, .operations-workspace-head { align-items: start; flex-direction: column; gap: 7px; } .operations-deck-head p, .operations-workspace-head > .muted { text-align: left; } .operations-grid { grid-template-columns: 1fr; } .operation-card { min-height: 102px; } }
 
@@ -6720,7 +6721,9 @@ body:not(.overlay) #now-server-star::after { display: none; }
 .encounter-unused { columns: 2; column-gap: 28px; font-size: 12px; }
 @media (max-width: 900px) { .encounter-unused { columns: 1; } }
 #missions-table tbody tr.mission-row { cursor: pointer; }
-#missions-table td:first-child { max-width: 360px; }
+/* tbody td is nowrap, so the capped first cell kept a long internal name on one
+   line and the sticky column painted it over Offered by. */
+#missions-table td:first-child { max-width: 360px; white-space: normal; }
 #missions-table .armoury-kind { overflow-wrap: anywhere; }
 .mission-brief { white-space: pre-line; margin: 0 0 10px; line-height: 1.55; }
 .ref-debug { margin-top: 14px; font: 11px var(--mono); overflow-wrap: anywhere; }

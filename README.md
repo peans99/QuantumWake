@@ -352,6 +352,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 1.0.3
+
+**Missions no longer runs into its neighbour.** A contract with a long internal name used to print it on one line straight across the Offered by column; it now wraps inside its own cell.
+
+**The links in the Shopping lists header are readable.** Market, Parts and Mining showed in the browser's default dark blue on the Operations command deck; they now match every other link in the app.
+
 ### 1.0.2
 
 **A privacy policy.** Settings → About now links to a page that says what the app reads on your computer, what it keeps and where, and every occasion it reaches the internet, with who it contacts, what is sent and the switch that controls it. It also says plainly that UEX credentials, if you use price reporting, are kept as plain text in your user profile. The About text no longer claims that nothing is written to the game folder: installing the item labels does write there, and it now says so.
