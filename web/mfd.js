@@ -769,7 +769,7 @@ async function bootMfd() {
      the combat pages ask for the live reading on their own, and only while
      one of them is on the glass. */
   const liveTimer = setInterval(async () => {
-    if (!['target', 'calls'].includes(screen)) return;
+    if (!['target', 'calls', 'charge'].includes(screen)) return;
     try {
       const response = await fetch('/api/live', { signal: AbortSignal.timeout(4000) });
       if (response.ok) { extra = { ...extra, live: await response.json() }; lastRows = ''; render(); }

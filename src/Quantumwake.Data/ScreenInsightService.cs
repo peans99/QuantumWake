@@ -327,6 +327,15 @@ public sealed class ScreenInsightService(
     private CommunityData? _bookFrom;
 
     /// <summary>
+    /// The fracture HUD's charge against its window, from pixels in
+    /// <paramref name="area"/> - the search area on a first look, the bar's
+    /// neighbourhood after; see <see cref="ChargeWindow"/>. About 22 ms a
+    /// frame on the 2560 stream, with no text read at all.
+    /// </summary>
+    public async Task<ChargeReading?> ReadChargeAsync(string path, ScreenPatch area, int height, CancellationToken token = default) =>
+        reader is null || await reader.PixelsAsync(path, area, token) is not { } pixels ? null : ChargeWindow.Read(pixels, height);
+
+    /// <summary>
     /// The target panel, read up close; see <see cref="TargetLook"/>. With the
     /// host's panel reader when it offers one - ONNX, when its models are on
     /// disk - because the Windows engine read the boxed HUD worst of all.

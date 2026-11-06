@@ -92,9 +92,9 @@ window.QwMfd = (() => {
   const OSBS = 20, BUTTONS = 28;
   // Keep these indices stable for displays saved before menu navigation.
   const pageIds = ['nav', 'task', 'act', 'cargo', 'contract', 'status', 'feed', 'crew', 'money', 'list',
-    'ship', 'here', 'ledger', 'mine', 'map', 'services', 'log', 'server', 'event', 'target', 'calls'];
+    'ship', 'here', 'ledger', 'mine', 'map', 'services', 'log', 'server', 'event', 'target', 'calls', 'charge'];
   const pages = ['NAV', 'TASK', 'ACT', 'CARGO', 'CONTRACT', 'STATUS', 'FEED', 'CREW', 'MONEY', 'LIST',
-    'SHIP', 'HERE', 'LEDGER', 'MINE', 'MAP', 'SERVICES', 'LOG', 'SERVER', 'EVENT', 'TARGET', 'CALLS'];
+    'SHIP', 'HERE', 'LEDGER', 'MINE', 'MAP', 'SERVICES', 'LOG', 'SERVER', 'EVENT', 'TARGET', 'CALLS', 'CHARGE'];
 
   /* One vocabulary for the display, the setup editor and the stored profile.
      Ids rather than page numbers in the file: a profile saved today still
@@ -126,6 +126,8 @@ window.QwMfd = (() => {
       icon: 'M12 3v18M5 7h14M5 12h14M5 17h14M8 5v4M16 10v4M10 15v4' },
     { id: 'target', label: 'Page · Target', caption: 'TARGET', short: 'TGT',
       icon: 'M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5M12 6.5a5.5 5.5 0 1 0 .1 0M12 11.2v1.6' },
+    { id: 'charge', label: 'Page · Fracture charge', caption: 'CHARGE', short: 'CHRG',
+      icon: 'M5 19a10 10 0 0 1 14-14M7.5 19a7.5 7.5 0 0 1 10-10M14 4h6v3h-6zM3 21h4' },
     { id: 'calls', label: 'Page · Callouts', caption: 'CALLS', short: 'CALL',
       icon: 'M4 9.5h3.5L12 5.5v13l-4.5-4H4zM15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11' },
     { id: 'status', label: 'Page · Status', caption: 'STATUS', short: 'STAT',
@@ -201,7 +203,7 @@ window.QwMfd = (() => {
     { id: 'operations', title: 'Operations', short: 'OPS', icon: 'task', hint: 'Plan, checklist, jobs',
       children: ['task', 'act', 'contract', 'event', 'list'] },
     { id: 'resources', title: 'Resources', short: 'RSRC', icon: 'cargo', hint: 'Cargo, money, mining',
-      children: ['cargo', 'ledger', 'mine', 'money'] },
+      children: ['cargo', 'ledger', 'mine', 'charge', 'money'] },
     { id: 'pilot', title: 'Pilot', short: 'PLT', icon: 'status', hint: 'Session, server, activity, crew and log',
       children: ['status', 'server', 'feed', 'crew', 'log'] },
     /* Only says anything with live reading on: the target panel is read off
@@ -212,7 +214,7 @@ window.QwMfd = (() => {
   const titles = { home: 'Cockpit', nav: 'Navigation', task: 'Mission', act: 'Checklist',
     cargo: 'Cargo & trade', contract: 'Contract', status: 'Session', feed: 'Activity', crew: 'Crew',
     money: 'Earnings', list: 'Shopping', ship: 'Ship', here: 'Local intel', ledger: 'Ledger', mine: 'Mining', map: 'System map', services: 'Nearest services', log: 'Log', event: 'Event progress',
-    server: 'Server', target: 'Target', calls: 'Callouts' };
+    server: 'Server', target: 'Target', calls: 'Callouts', charge: 'Fracture charge' };
   const menuNodes = {}, leafParents = {};
   function indexMenu(nodes, parentId = 'home') {
     for (const node of nodes) {
@@ -1040,6 +1042,27 @@ window.QwMfd = (() => {
           ['SIGNATURE', [target.em != null ? `EM ${(target.em / 1000).toFixed(1)}K` : null,
             target.ir != null ? `IR ${(target.ir / 1000).toFixed(1)}K` : null,
             target.crossSection != null ? `CS ${(target.crossSection / 1000).toFixed(1)}K` : null].filter(Boolean).join(' · ') || say('Not read')],
+        ];
+      }
+      /* The fracture HUD's charge against the laser's optimal window, read
+         off its pixels every second while a rock is being cracked. */
+      case 'charge': {
+        const live = view.extra?.live;
+        if (!live) return [['CHARGE', say('Asking the app what the screen shows…')]];
+        if (!live.available) return [['CHARGE', say('Only the Windows app can read the fracture HUD.')]];
+        if (!live.enabled) return [['CHARGE', say('Live reading is off. Turn it on under Log → Read from the game.')]];
+        const fracture = live.status?.fracture;
+        if (!fracture?.active) return [['NOT FRACTURING', fracture?.cracked
+          ? sayn(fracture.cracked, '{count} rock cracked this session', '{count} rocks cracked this session')
+          : say('Fire the mining laser at a rock and its charge is read every second.')]];
+        const fill = Math.round((fracture.fill || 0) * 100);
+        return [
+          [fracture.state === 'in' ? say('IN THE WINDOW') : fracture.state === 'above' ? say('OVERCHARGE') : say('CHARGING'),
+            fracture.state === 'in' ? say('Hold it here')
+              : fracture.state === 'above' ? say('Back off the power')
+                : fracture.belowBy != null ? say('{bars} bars under the window', { bars: fracture.belowBy.toFixed(1) }) : say('Under the window')],
+          ['CRACK', `${fill}%`],
+          ['CRACKED', String(fracture.cracked || 0)],
         ];
       }
       case 'calls': {

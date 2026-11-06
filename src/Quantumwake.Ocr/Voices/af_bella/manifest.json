@@ -11,7 +11,11 @@
     "Unknown contact": "p_unknown_contact.m4a",
     "Hostile": "p_hostile.m4a",
     "likely": "p_likely.m4a",
-    "or": "p_or.m4a"
+    "or": "p_or.m4a",
+    "In the window": "p_in_the_window.m4a",
+    "Out of the window": "p_out_of_the_window.m4a",
+    "Overcharge, back off": "p_overcharge_back_off.m4a",
+    "Rock cracked": "p_rock_cracked.m4a"
   },
   "names": {
     "Aegis Avenger Stalker": "n_aegis_avenger_stalker.m4a",

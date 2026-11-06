@@ -14,6 +14,7 @@ namespace Quantumwake.Server;
 /// <param name="LastReadMs">How long the engine took over the last frame.</param>
 /// <param name="Combat">The target panel as the combat watch has it: the lock, whether it is a fight, what was said.</param>
 /// <param name="LastPanelMs">How long the last close read of the target panel took.</param>
+/// <param name="Fracture">The fracture HUD as the mining watch has it: the charge against its window, cracks, what was said.</param>
 public sealed record LiveScreenStatus(
     string State,
     string? Why = null,
@@ -24,7 +25,8 @@ public sealed record LiveScreenStatus(
     int Kept = 0,
     long LastReadMs = 0,
     CombatPicture? Combat = null,
-    long LastPanelMs = 0);
+    long LastPanelMs = 0,
+    MiningPicture? Fracture = null);
 
 /// <summary>What <c>/api/live</c> says.</summary>
 /// <param name="Voice">Whether combat callouts are spoken.</param>
@@ -100,6 +102,8 @@ public sealed class LiveScreenService(
     private LiveScreenStatus _status = new("off");
     private CombatWatch? _combat;
     private ScreenPatch? _panel;
+    private ScreenPatch? _bar;
+    private readonly MiningWatch _mining = new();
     private int _frameHeight;
     private long _tick;
 
@@ -129,6 +133,7 @@ public sealed class LiveScreenService(
         CombatPicture? picture;
         lock (_gate) picture = _combat?.Picture(DateTimeOffset.UtcNow);
         if (picture is not null) status = status with { Combat = picture };
+        lock (_gate) status = status with { Fracture = _mining.Picture() };
 
         return new LiveScreenState(Available, Unavailable, answer.Asked, answer.Enabled, answer.AnsweredAt,
             Available && !answer.Asked, status, answer.Voice, voice is not null, voice?.Trouble);
@@ -163,6 +168,7 @@ public sealed class LiveScreenService(
                     Set(s => s with { State = "off", Why = null });
                     _log.Stopped();
                     _panel = null;
+                    _bar = null;
                     Forget(frame);
                     continue;
                 }
@@ -174,8 +180,8 @@ public sealed class LiveScreenService(
                     continue;
                 }
 
-                // Out of a fight, the pace it always had: a frame every two seconds.
-                if (_panel is null && _tick % 2 != 0)
+                // Out of a fight or a fracture, the pace it always had: a frame every two seconds.
+                if (_panel is null && _bar is null && _tick % 2 != 0)
                     continue;
 
                 await Tick(frame, stoppingToken);
@@ -226,6 +232,28 @@ public sealed class LiveScreenService(
             _combat ??= new CombatWatch(insight.SignatureBook());
             _combat.Book = insight.SignatureBook();
             if (nearby is not null) _combat.Nearby = () => nearby.Classes(DateTimeOffset.UtcNow);
+        }
+
+        // ---- the fracture HUD: pixels only, so every tick while a bar is held ----
+        var charging = System.Diagnostics.Stopwatch.StartNew();
+        var charge = _bar is { } bar
+            ? await insight.ReadChargeAsync(frame, ChargeWindow.Around(bar), taken.Height, token)
+            : null;
+        // Not where it was, or not looked for yet: the whole search area, still pixels only.
+        charge ??= await insight.ReadChargeAsync(frame, ChargeWindow.SearchArea(taken.Width, taken.Height), taken.Height, token);
+        charging.Stop();
+        _bar = charge?.Bar;
+        Fracture(charge, at);
+
+        if (charge is not null && _panel is null && _tick % WholeEvery != 0)
+        {
+            _log.Read("Fracture", copying.ElapsedMilliseconds, charging.ElapsedMilliseconds, taken.Width, taken.Height, null);
+            Set(s => s with
+            {
+                State = "reading", Why = null, LastFrameAt = at, LastKind = "Fracture",
+                LastSummary = $"charge {charge.State} the window, crack {charge.Fill:P0}", Frames = s.Frames + 1,
+            });
+            return;
         }
 
         // ---- the panel alone, while there is one to follow ----
@@ -356,6 +384,19 @@ public sealed class LiveScreenService(
         {
             // Mid-write, or gone because reading just stopped: the next ask gets the next frame.
             return null;
+        }
+    }
+
+    /// <summary>Hands a frame's charge to the mining watch, and anything it says to the voice.</summary>
+    private void Fracture(ChargeReading? charge, DateTimeOffset at)
+    {
+        IReadOnlyList<CombatCallout> said;
+        lock (_gate) said = _mining.See(charge, at);
+
+        foreach (var callout in said)
+        {
+            logger.LogInformation("Mining callout: {Text}", callout.Text);
+            if (settings.Current.Voice) voice?.Say(callout.Text);
         }
     }
 

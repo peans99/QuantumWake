@@ -321,6 +321,16 @@
            hostile, its speed and range, and what was called out. Hidden until
            live reading has seen a lock. First in the grid: when it shows, a
            fight is on, and nothing else on the page matters as much. -->
+      <!-- A rock being cracked: the charge against the laser's optimal window,
+           read off the fracture HUD's pixels, the crack's progress and the
+           rocks cracked so far. Hidden until live reading has seen a window. -->
+      <article class="card span2" id="now-fracture-card" data-card="fracture" hidden>
+        <div class="card-label" id="now-fracture-label">Fracture</div>
+        <div class="value" id="now-fracture">&mdash;</div>
+        <div class="fracture-meter" id="now-fracture-meter" hidden><span id="now-fracture-fill"></span></div>
+        <div class="muted now-target-detail" id="now-fracture-detail"></div>
+      </article>
+
       <article class="card span2" id="now-target-card" data-card="target" hidden>
         <div class="card-label" id="now-target-label">Target</div>
         <div class="value" id="now-target">&mdash;</div>

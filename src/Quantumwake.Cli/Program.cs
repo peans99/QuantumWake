@@ -50,6 +50,26 @@ if (GetOption(args, "--hull") is { } hullName)
     return 0;
 }
 
+// --charge <frames>: the fracture HUD's charge against its window, frame by
+// frame, from pixels - what the live loop reads while a rock is being cracked.
+if (GetOption(args, "--charge") is { } chargeFrames)
+{
+    using var pixels = new Quantumwake.Ocr.Onnx.OnnxScreenReader();
+    var mining = new MiningWatch();
+    var second = 0;
+    foreach (var file in Directory.GetFiles(chargeFrames, "*.jpg").Concat(Directory.GetFiles(chargeFrames, "*.png")).Order())
+    {
+        var (w, h) = ImageSize(file);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var patch = await pixels.PixelsAsync(file, ChargeWindow.SearchArea(w, h));
+        var read = patch is null ? null : ChargeWindow.Read(patch, h);
+        foreach (var callout in mining.See(read, DateTimeOffset.UnixEpoch.AddSeconds(second++)))
+            Console.WriteLine($"    >> {callout.Text}");
+        Console.WriteLine($"{Path.GetFileName(file),-12} {clock.ElapsedMilliseconds,4} ms  " + (read is null ? "-" : $"{read.State,-5} fill {read.Fill:P0}" + (read.BelowBy is { } by ? $" below by {by:0.0} bars" : "") + $"  bar {read.Bar.Left:0},{read.Bar.Top:0} {read.Bar.Width:0}x{read.Bar.Height:0}"));
+    }
+    return 0;
+}
+
 if (GetOption(args, "--target") is { } targetFrames)
     return await TargetCheck(targetFrames, GetOption(args, "--log"), GetOption(args, "--start"), GetOption(args, "--step"));
 

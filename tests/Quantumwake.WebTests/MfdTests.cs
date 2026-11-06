@@ -577,7 +577,7 @@ public class MfdTests
     public void EveryPageIsReachableThroughADeepMenuAndHasAWayBack()
     {
         var e = Engine();
-        Assert.Equal(21, e.Evaluate("QwMfd.pageIds.length").AsNumber());
+        Assert.Equal(22, e.Evaluate("QwMfd.pageIds.length").AsNumber());
         Assert.True(e.Evaluate(
             "QwMfd.pageIds.every(id => QwMfd.trail(id)[0] === 'home'"
             + " && QwMfd.trail(id)[QwMfd.trail(id).length - 1] === id"

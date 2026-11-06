@@ -325,10 +325,52 @@ those frames read as "0 kg, 0% resistance, 0 SCU", which is what is there.
 Single frames still misread a digit - 5,198 for 6,198 kg, 939 for 839 kg -
 which LiveRocks' 2% mass rule would take for a second rock.
 
-Seen on the same frames and not read yet: the fracture HUD's charge level
-against its OPTIMAL and OVERCHARGE marks and LASER INTENSITY; the laser and
+Seen on the same frames and not read yet: LASER INTENSITY; the laser and
 module stats; and the CARGO block - "CARGO 10.22 / 100.00 SCU" with each
 material's quality and SCU underneath.
+
+### The charge window (1.1.11)
+
+Same stream, 01:06:00-01:20:00 at one frame a second: 845 frames.
+
+**What the HUD draws.** Right of the reticle, two green arcs climb from
+CHARGE LEVEL: the outer one is the charge, the inner one the laser
+intensity. The optimal window is a short yellow bar, about 60 x 24 at 1440
+high, with "◄ OPTIMAL" beside it and OVERCHARGE above; the charge arc's top
+meets the bar's right end. While the charge sits in the window the bar
+turns green from the left, and when it is full the rock breaks and the bar
+goes. Red on that HUD is the overcharge zone; the bar never turned red.
+
+**Read from pixels, not words.** Windows' engine read the "OPTIMAL" label on
+none of 11 frames sampled, and "CHARGE" only as half of OVERCHARGE. So
+`ChargeWindow` finds the bar by colour - its yellow, about 230/205/70, at
+least 0.8 of its red in green and blue under 0.45 of the green, which
+Daymar's sand (232/115/53) and sky (249/179/113) both fail - then reads the
+fill as the bar's green share and the charge as the topmost green in a lane
+just right of it. About 22 ms a frame, the pixel read included. While a bar
+is held only its neighbourhood is read, so the loop takes a frame a second.
+
+**The rock at 01:09:55-01:10:28**, second by second: the tip 5.8 bar heights
+under the window, then 5.4-5.9 for fourteen seconds, 2.5, 1.5, 0.6; in the
+window from 01:10:15 with the bar filling 3%, 14%, 22%, 28%, 33%, 43%, 50%,
+57%, 66%, 73%, 79%, 87%, 91%, 96%; then no bar. Over the 845 frames the
+watch said "In the window" and "Rock cracked" eight times each, and "Out of
+the window" once. Two of the cracks, checked by eye: the rock in fragments,
+then EXTRACTION MODE.
+
+**Noise, and the rule it set.** Single frames made a bar of the ship's yellow
+floor and of the cargo arc in extraction mode, a frame each. Every change
+waits for two frames that agree, and a bar that goes away counts as a crack
+only past 85% filled - every crack measured went at 91-97%.
+
+**Not seen: an overcharge.** No frame of the stretch had the charge over the
+window; the two that read so were the floor and the cargo arc. "Overcharge,
+back off" is said on two frames of the tip above the bar, and is unproven
+until a real one is recorded.
+
+Replayed through the server (`--Replay` with the 48 frames of that rock):
+`/api/live` went charging 5.8, ... 1.4, in the window with "In the window",
+filling to 96%, then "Rock cracked" and a count of one.
 
 ---
 

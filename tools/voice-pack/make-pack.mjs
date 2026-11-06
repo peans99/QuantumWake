@@ -22,11 +22,12 @@ if (!namesFile || !outRoot) {
   process.exit(1);
 }
 
-// The pieces CombatWatch builds its sentences from; see CombatWatch.See.
+// The pieces CombatWatch and MiningWatch build their sentences from.
 const phrases = [
   'Hostile target identified', 'Target identified', 'Target disabled',
   'Hostile contact, likely', 'Unknown contact, likely', 'Hostile contact', 'Unknown contact',
   'Hostile', 'likely', 'or',
+  'In the window', 'Out of the window', 'Overcharge, back off', 'Rock cracked',
 ];
 
 // Spelled for the ear, not the eye: Mk II is "Mark Two", the C.O. hulls are
@@ -59,9 +60,14 @@ function wav(samples, rate) {
   return buffer;
 }
 
-const manifest = { voice, model: 'Kokoro-82M-v1.0 (Apache-2.0)', phrases: {}, names: {} };
+// An existing pack is added to, not remade: clips already recorded are kept,
+// so a new phrase or hull does not rewrite 2.7 MB of unchanged audio.
+const manifestPath = path.join(outDir, 'manifest.json');
+const manifest = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+  : { voice, model: 'Kokoro-82M-v1.0 (Apache-2.0)', phrases: {}, names: {} };
 async function record(text, said, kind) {
   const stem = `${kind === 'phrases' ? 'p' : 'n'}_${slug(text)}`;
+  if (manifest[kind][text] && fs.existsSync(path.join(outDir, manifest[kind][text]))) return;
   const audio = await tts.generate(said, { voice });
   const raw = path.join(outDir, stem + '.wav');
   fs.writeFileSync(raw, wav(audio.audio, audio.sampling_rate));

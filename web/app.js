@@ -11953,7 +11953,7 @@ const OVERLAY_LABELS = {
   loadout: 'Loadout', stash: 'Stash', logbook: 'Logbook', fleet: 'Fleet', places: 'Places',
   location: 'Location', ship: 'Ship', session: 'Session', handle: 'Handle',
   feed: 'Live feed', stats: 'This session', job: 'Job in hand', trade: 'Trade from here',
-  checklist: 'Checklist', refinery: 'Refinery', event: 'Event', target: 'Target',
+  checklist: 'Checklist', refinery: 'Refinery', event: 'Event', target: 'Target', fracture: 'Fracture',
   // Named as the Now page titles them, so the tick and the card read alike.
   briefing: 'What to do next', trip: 'Flight plan', respawn: 'Respawn', status: 'Current status',
 };
@@ -18466,7 +18466,8 @@ const OVERLAY_PRESETS = {
   // The event card hides itself when no event is being played, so the layouts
   // whose work pays into one carry it without costing anyone a row.
   flight: { tabs: ['now', 'map', 'logbook'], cards: ['location', 'briefing', 'ship', 'session', 'feed', 'event'], density: 'compact' },
-  mining: { tabs: ['now', 'map', 'commodities', 'market'], cards: ['location', 'briefing', 'ship', 'session', 'feed', 'trade', 'event'], density: 'compact' },
+  // The fracture card hides itself until live reading has seen a charge window.
+  mining: { tabs: ['now', 'map', 'commodities', 'market'], cards: ['fracture', 'location', 'briefing', 'ship', 'session', 'feed', 'trade', 'event'], density: 'compact' },
   // The target card hides itself until live reading has seen a lock.
   combat: { tabs: ['now', 'jobs', 'map', 'loadout', 'stash'], cards: ['target', 'location', 'briefing', 'ship', 'session', 'handle', 'feed', 'stats', 'respawn', 'event'], density: 'compact' },
   trading: { tabs: ['now', 'jobs', 'commodities', 'market'], cards: ['location', 'briefing', 'ship', 'trip', 'trade', 'event'], density: 'compact' },
@@ -36409,6 +36410,7 @@ function renderLiveScreen() {
   // The card is on Now, not the Log page, and the overlay shows it without
   // the Log page ever being opened.
   renderNowTarget();
+  renderNowFracture();
 
   const block = $('#live-block');
   if (!block) return;
@@ -36539,6 +36541,39 @@ function renderNowTarget() {
     li.append(el('span', 'd', ' · ' + new Date(call.at).toLocaleTimeString(QW_DATE_LOCALES)));
     list.append(li);
   }
+}
+
+/**
+ * The Now page's Fracture card: where the charge stands against the laser's
+ * optimal window while a rock is being cracked, the crack's progress, and
+ * the rocks cracked so far. Shown while live reading is on and has seen a
+ * charge window - a card that said "not cracking" all evening is not news.
+ */
+function renderNowFracture() {
+  const card = $('#now-fracture-card');
+  if (!card) return;
+  const fracture = liveState?.enabled ? liveState?.status?.fracture : null;
+  const calls = fracture?.callouts || [];
+  card.hidden = !fracture || !(fracture.active || fracture.cracked || calls.length);
+  if (card.hidden) return;
+
+  const state = fracture.active ? fracture.state : null;
+  card.classList.toggle('fracture-in', state === 'in');
+  card.classList.toggle('fracture-over', state === 'above');
+  $('#now-fracture-label').textContent = fracture.active ? tx('Fracture · under way') : tx('Fracture');
+  $('#now-fracture').textContent = !fracture.active
+    ? txn(fracture.cracked || 0, '{count} rock cracked', '{count} rocks cracked')
+    : state === 'in' ? tx('In the window')
+      : state === 'above' ? tx('Overcharge - back off')
+        : fracture.belowBy != null ? tx('Charging · {bars} bars under the window', { bars: fracture.belowBy.toFixed(1) })
+          : tx('Charging');
+
+  const fill = Math.round((fracture.fill || 0) * 100);
+  $('#now-fracture-meter').hidden = !fracture.active;
+  $('#now-fracture-fill').style.width = fill + '%';
+  $('#now-fracture-detail').textContent = fracture.active
+    ? tx('Crack {fill}% · {count} cracked so far', { fill, count: fracture.cracked || 0 })
+    : fracture.lastCrackAt ? tx('Last at {when}', { when: new Date(fracture.lastCrackAt).toLocaleTimeString(QW_DATE_LOCALES) }) : '';
 }
 
 $('#live-voice')?.addEventListener('change', async (event) => {
@@ -36689,7 +36724,7 @@ async function boot() {
   // A fight moves faster than that: while a lock is held the Target card is
   // asked again every second and a half, and not at all otherwise.
   setInterval(() => {
-    if (liveState?.enabled && liveState?.status?.combat?.target && document.visibilityState === 'visible')
+    if (liveState?.enabled && (liveState?.status?.combat?.target || liveState?.status?.fracture?.active) && document.visibilityState === 'visible')
       loadLiveScreen().catch(() => {});
   }, 1500);
 

@@ -352,7 +352,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.1.10
+### 1.1.11
+
+**Mining callouts while you crack a rock.** With live reading on, the fracture HUD's charge is read every second against the laser's optimal window, and Bella says "In the window" when the charge gets there, "Out of the window" if it drops out, and "Rock cracked" when it breaks. A new Fracture card on the Now page - in the overlay's Mining layout too - shows how far under the window the charge is, the crack's progress as a bar that fills like the game's, and the rocks cracked so far; the MFD has the same as a Charge page under Resources. It reads the HUD's colours rather than its words, so it costs almost nothing. Measured on a 14-minute MOLE stream it called all eight cracks. "Overcharge, back off" is there too, but no overcharge happened in that recording, so it is untested until one does.
 
 **Rock scans read far more often.** The mining scan panel is now found even when the rock's own label runs into its title, or the title is lost in the glow, and is read with the sharper of the two text engines when it is on your PC. Measured on 200 frames of a 2560×1440 MOLE stream: scans read on 128 frames where 3 were before, with every rock read at least once - live, and from screenshots alike.
 
