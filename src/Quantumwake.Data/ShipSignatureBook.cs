@@ -227,6 +227,10 @@ public sealed class ShipSignatureBook
 
         return bestDistance <= Math.Min(2, flat.Length / 5) ? best : null;
     }
+    /// <summary>Every hull name in the book, once each, as the voice would say it.</summary>
+    public IReadOnlyList<string> Names() =>
+        [.. _hulls.Select(h => h.Name).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)];
+
     /// <summary>The game's class name for a hull the book names, for its picture; null when it is not in the book.</summary>
     public string? ClassOf(string? hull) =>
         hull is null ? null : _hulls.FirstOrDefault(h => string.Equals(h.Name, hull, StringComparison.OrdinalIgnoreCase))?.Class;

@@ -35,6 +35,15 @@ if (GetOption(args, "--near") is { } nearFigure && double.TryParse(nearFigure, o
     return 0;
 }
 
+// --hull-names: every hull name the combat voice can say, one a line - the
+// list tools/voice-pack records.
+if (args.Contains("--hull-names"))
+{
+    foreach (var name in ShipSignatureBook.From(new CommunityData()).Names())
+        Console.WriteLine(name);
+    return 0;
+}
+
 if (GetOption(args, "--hull") is { } hullName)
 {
     Console.WriteLine(ShipSignatureBook.From(new CommunityData()).Hull(hullName) ?? "(no hull)");
