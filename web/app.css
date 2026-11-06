@@ -8784,3 +8784,11 @@ tr.landed { outline-offset: -2px; }
 @keyframes qw-landed { from { box-shadow: 0 0 0 6px rgba(53, 200, 240, .35); } to { box-shadow: 0 0 0 0 rgba(53, 200, 240, 0); } }
 @media (prefers-reduced-motion: reduce) { .landed { animation: none; } }
 .session-metric-line .place-link, .session-metric-value .place-link { font: inherit; }
+
+/* Combat callouts under the live switch, and the Now page's Target card. */
+.live-voice { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.live-voice[hidden] { display: none; }
+.now-target-detail { margin-top: 4px; font-size: 12px; }
+#now-target-card.target-hostile #now-target { color: var(--red); }
+#now-target-card.target-combat { border-color: var(--red); }
+.now-target-calls { margin-top: 8px; }

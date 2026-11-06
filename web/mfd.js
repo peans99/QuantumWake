@@ -703,7 +703,7 @@ async function refreshExtras() {
   };
   await Promise.all([grab('/api/earnings?days=30', 'earnings'), grab('/api/jobs', 'jobs'),
     grab('/api/respawn', 'respawn'), grab('/api/ledger?days=30', 'ledger'), grab('/api/ledger/wallet', 'wallet'),
-    grab('/api/screen/readings?take=8', 'screenLog'), grab('/api/events', 'events')]);
+    grab('/api/screen/readings?take=8', 'screenLog'), grab('/api/events', 'events'), grab('/api/live', 'live')]);
   lastRows = ''; render();
 }
 async function loadMakers() {
@@ -733,6 +733,16 @@ async function bootMfd() {
   stream = new EventSource('/api/stream');
   const briefingTimer = setInterval(refreshBriefing, 5000);
   const extraTimer = setInterval(refreshExtras, 30000);
+  /* A fight moves by the second, and the other extras by the half minute:
+     the combat pages ask for the live reading on their own, and only while
+     one of them is on the glass. */
+  const liveTimer = setInterval(async () => {
+    if (!['target', 'calls'].includes(screen)) return;
+    try {
+      const response = await fetch('/api/live', { signal: AbortSignal.timeout(4000) });
+      if (response.ok) { extra = { ...extra, live: await response.json() }; lastRows = ''; render(); }
+    } catch { /* the page says what it is missing */ }
+  }, 1500);
   /* Its own timer rather than a check inside render: the panel re-renders
      whenever anything changes, and a frame nobody is touching is exactly the
      case where nothing is changing. */
@@ -749,7 +759,7 @@ async function bootMfd() {
   };
   stream.onerror = () => { connection = state ? 'DISCONNECTED · LAST DATA' : 'SERVER UNAVAILABLE'; drawIdentity(); };
   window.addEventListener('beforeunload', () => {
-    stream.close(); clearInterval(briefingTimer); clearInterval(extraTimer); clearInterval(dozeTimer);
+    stream.close(); clearInterval(briefingTimer); clearInterval(extraTimer); clearInterval(liveTimer); clearInterval(dozeTimer);
   });
 }
 bootMfd();

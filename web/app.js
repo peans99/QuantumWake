@@ -11953,7 +11953,7 @@ const OVERLAY_LABELS = {
   loadout: 'Loadout', stash: 'Stash', logbook: 'Logbook', fleet: 'Fleet', places: 'Places',
   location: 'Location', ship: 'Ship', session: 'Session', handle: 'Handle',
   feed: 'Live feed', stats: 'This session', job: 'Job in hand', trade: 'Trade from here',
-  checklist: 'Checklist', refinery: 'Refinery', event: 'Event',
+  checklist: 'Checklist', refinery: 'Refinery', event: 'Event', target: 'Target',
   // Named as the Now page titles them, so the tick and the card read alike.
   briefing: 'What to do next', trip: 'Flight plan', respawn: 'Respawn', status: 'Current status',
 };
@@ -18467,7 +18467,8 @@ const OVERLAY_PRESETS = {
   // whose work pays into one carry it without costing anyone a row.
   flight: { tabs: ['now', 'map', 'logbook'], cards: ['location', 'briefing', 'ship', 'session', 'feed', 'event'], density: 'compact' },
   mining: { tabs: ['now', 'map', 'commodities', 'market'], cards: ['location', 'briefing', 'ship', 'session', 'feed', 'trade', 'event'], density: 'compact' },
-  combat: { tabs: ['now', 'jobs', 'map', 'loadout', 'stash'], cards: ['location', 'briefing', 'ship', 'session', 'handle', 'feed', 'stats', 'respawn', 'event'], density: 'compact' },
+  // The target card hides itself until live reading has seen a lock.
+  combat: { tabs: ['now', 'jobs', 'map', 'loadout', 'stash'], cards: ['target', 'location', 'briefing', 'ship', 'session', 'handle', 'feed', 'stats', 'respawn', 'event'], density: 'compact' },
   trading: { tabs: ['now', 'jobs', 'commodities', 'market'], cards: ['location', 'briefing', 'ship', 'trip', 'trade', 'event'], density: 'compact' },
   minimal: { tabs: ['now', 'map'], cards: ['location', 'ship', 'session'], density: 'tiny' },
   full: null,
@@ -36405,6 +36406,10 @@ async function postLiveAnswer(enabled) {
 
 /** The switch and its status line on the Log page; hidden where the screen cannot be read. */
 function renderLiveScreen() {
+  // The card is on Now, not the Log page, and the overlay shows it without
+  // the Log page ever being opened.
+  renderNowTarget();
+
   const block = $('#live-block');
   if (!block) return;
   const state = liveState;
@@ -36412,6 +36417,14 @@ function renderLiveScreen() {
   if (!state?.available) return;
 
   $('#live-enabled').checked = Boolean(state.enabled);
+
+  // The voice only where there is one, and only under a yes to reading:
+  // with reading off there is nothing for it to say.
+  const voiceRow = $('#live-voice-row');
+  if (voiceRow) {
+    voiceRow.hidden = !(state.enabled && state.canSpeak);
+    $('#live-voice').checked = Boolean(state.voice);
+  }
 
   const status = state.status || {};
   const line = $('#live-status');
@@ -36439,6 +36452,91 @@ async function loadLiveScreen() {
   }
   renderLiveScreen();
 }
+
+/** "Hostile", "Friendly"… for a stance the server sends lower-case. */
+const TARGET_STANCES = { hostile: 'Hostile', friendly: 'Friendly', neutral: 'Neutral' };
+
+/**
+ * What the Target card says the ship is: the panel's name when the game
+ * printed one, otherwise the hulls its cross-section fits - named as a
+ * guess, because a hundred on the panel can be several hulls.
+ */
+function targetTitle(target) {
+  if (!target) return tx('No target');
+  if (target.name) return target.name;
+  const hulls = (target.candidates || []).map((c) => c.name);
+  if (!hulls.length) return tx('Unknown');
+  if (hulls.length === 1) return tx('Unknown · likely {hull}', { hull: hulls[0] });
+  return tx('Unknown · signature fits {hulls}', {
+    hulls: hulls.slice(0, 3).join(', ') + (hulls.length > 3 ? ` +${hulls.length - 3}` : ''),
+  });
+}
+
+/** Speed, range, stance and signature, each only when it was read. */
+function targetDetail(target) {
+  if (!target) return '';
+  const parts = [];
+  parts.push(tx(TARGET_STANCES[target.stance] || 'Stance unread'));
+  if (target.faction) parts.push(target.faction);
+  if (target.disabled) parts.push(tx('stopped after moving'));
+  else if (target.speedMs != null) parts.push(`${Math.round(target.speedMs)} m/s`);
+  if (target.rangeKm != null) parts.push(`${target.rangeKm.toFixed(2)} km`);
+  if (target.crossSection != null) parts.push(tx('CS {figure}K', { figure: (target.crossSection / 1000).toFixed(1) }));
+  return parts.join(' · ');
+}
+
+/**
+ * The Now page's Target card. Shown only while live reading is on and has
+ * seen a lock or said something; a card that said "no target" all evening
+ * would be one more thing in the overlay that is never news.
+ */
+function renderNowTarget() {
+  const card = $('#now-target-card');
+  if (!card) return;
+  const combat = liveState?.enabled ? liveState?.status?.combat : null;
+  const target = combat?.target || null;
+  const calls = combat?.callouts || [];
+
+  card.hidden = !target && !calls.length;
+  card.classList.toggle('target-hostile', target?.stance === 'hostile');
+  card.classList.toggle('target-combat', Boolean(combat?.combat));
+  if (card.hidden) return;
+
+  $('#now-target-label').textContent = combat.combat ? tx('Target · in combat') : tx('Target');
+  $('#now-target').textContent = targetTitle(target);
+  $('#now-target-detail').textContent = target ? targetDetail(target)
+    : tx('No target held · {locks} locks this session, {hostile} hostile', { locks: combat.locks || 0, hostile: combat.hostileLocks || 0 });
+
+  const list = $('#now-target-calls');
+  list.textContent = '';
+  for (const call of calls.slice(0, 4)) {
+    const li = el('li', call.kind === 'hostile' ? 'want' : null);
+    li.append(el('span', 'what', call.text));
+    li.append(el('span', 'd', ' · ' + new Date(call.at).toLocaleTimeString(QW_DATE_LOCALES)));
+    list.append(li);
+  }
+}
+
+$('#live-voice')?.addEventListener('change', async (event) => {
+  try {
+    const response = await fetch('/api/live/voice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: event.target.checked }),
+    });
+    if (!response.ok) throw new Error(`voice ${response.status}`);
+    liveState = await response.json();
+    renderLiveScreen();
+  } catch {
+    event.target.checked = !event.target.checked;
+    const line = $('#live-status');
+    if (line) line.textContent = tx('The change did not save.');
+  }
+});
+
+$('#live-voice-test')?.addEventListener('click', () => {
+  fetch('/api/live/voice/test', { method: 'POST' }).catch(() => { /* the button is only a sample */ });
+});
 
 $('#live-enabled')?.addEventListener('change', (event) => {
   postLiveAnswer(event.target.checked).catch(() => {
@@ -36563,6 +36661,13 @@ async function boot() {
   setInterval(() => {
     if (liveState?.enabled && document.visibilityState === 'visible') loadLiveScreen().catch(() => {});
   }, 5000);
+
+  // A fight moves faster than that: while a lock is held the Target card is
+  // asked again every second and a half, and not at all otherwise.
+  setInterval(() => {
+    if (liveState?.enabled && liveState?.status?.combat?.target && document.visibilityState === 'visible')
+      loadLiveScreen().catch(() => {});
+  }, 1500);
 
   // The first scan may still be running; retry until sessions appear.
   for (let attempt = 0; attempt < 30; attempt++) {

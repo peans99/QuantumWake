@@ -92,9 +92,9 @@ window.QwMfd = (() => {
   const OSBS = 20, BUTTONS = 28;
   // Keep these indices stable for displays saved before menu navigation.
   const pageIds = ['nav', 'task', 'act', 'cargo', 'contract', 'status', 'feed', 'crew', 'money', 'list',
-    'ship', 'here', 'ledger', 'mine', 'map', 'services', 'log', 'server', 'event'];
+    'ship', 'here', 'ledger', 'mine', 'map', 'services', 'log', 'server', 'event', 'target', 'calls'];
   const pages = ['NAV', 'TASK', 'ACT', 'CARGO', 'CONTRACT', 'STATUS', 'FEED', 'CREW', 'MONEY', 'LIST',
-    'SHIP', 'HERE', 'LEDGER', 'MINE', 'MAP', 'SERVICES', 'LOG', 'SERVER', 'EVENT'];
+    'SHIP', 'HERE', 'LEDGER', 'MINE', 'MAP', 'SERVICES', 'LOG', 'SERVER', 'EVENT', 'TARGET', 'CALLS'];
 
   /* One vocabulary for the display, the setup editor and the stored profile.
      Ids rather than page numbers in the file: a profile saved today still
@@ -124,6 +124,10 @@ window.QwMfd = (() => {
       icon: 'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6' },
     { id: 'event', label: 'Page · Event progress', caption: 'EVENT', short: 'EVNT',
       icon: 'M12 3v18M5 7h14M5 12h14M5 17h14M8 5v4M16 10v4M10 15v4' },
+    { id: 'target', label: 'Page · Target', caption: 'TARGET', short: 'TGT',
+      icon: 'M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5M12 6.5a5.5 5.5 0 1 0 .1 0M12 11.2v1.6' },
+    { id: 'calls', label: 'Page · Callouts', caption: 'CALLS', short: 'CALL',
+      icon: 'M4 9.5h3.5L12 5.5v13l-4.5-4H4zM15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11' },
     { id: 'status', label: 'Page · Status', caption: 'STATUS', short: 'STAT',
       icon: 'M12 3a9 9 0 1 0 .1 0M12 7.5v.5M12 11v6' },
     { id: 'feed', label: 'Page · Feed', caption: 'FEED', short: 'FEED',
@@ -199,12 +203,16 @@ window.QwMfd = (() => {
     { id: 'resources', title: 'Resources', short: 'RSRC', icon: 'cargo', hint: 'Cargo, money, mining',
       children: ['cargo', 'ledger', 'mine', 'money'] },
     { id: 'pilot', title: 'Pilot', short: 'PLT', icon: 'status', hint: 'Session, server, activity, crew and log',
-      children: ['status', 'server', 'feed', 'crew', 'log'] }
+      children: ['status', 'server', 'feed', 'crew', 'log'] },
+    /* Only says anything with live reading on: the target panel is read off
+       the screen, and the logs know nothing of a lock. */
+    { id: 'combat', title: 'Combat', short: 'CMBT', icon: 'target', hint: 'The ship targeted and what was called out',
+      children: ['target', 'calls'] }
   ];
   const titles = { home: 'Cockpit', nav: 'Navigation', task: 'Mission', act: 'Checklist',
     cargo: 'Cargo & trade', contract: 'Contract', status: 'Session', feed: 'Activity', crew: 'Crew',
     money: 'Earnings', list: 'Shopping', ship: 'Ship', here: 'Local intel', ledger: 'Ledger', mine: 'Mining', map: 'System map', services: 'Nearest services', log: 'Log', event: 'Event progress',
-    server: 'Server' };
+    server: 'Server', target: 'Target', calls: 'Callouts' };
   const menuNodes = {}, leafParents = {};
   function indexMenu(nodes, parentId = 'home') {
     for (const node of nodes) {
@@ -235,10 +243,10 @@ window.QwMfd = (() => {
   const title = id => menuNodes[id]?.title || titles[id] || titles.home;
   const validScreen = id => id === 'home' || !!menuNodes[id] || pageIds.includes(id);
   function menuItems(screen) {
-    /* Home carries Navigation beside the four categories: it is the page a
-       pilot wants most and the fifth slot was empty, so putting it behind a
-       category would have been spending a press to save nothing. */
-    if (screen === 'home') return [...groups.map(g => g.id), 'nav'];
+    /* Home is the five categories. Navigation rode the fifth slot while there
+       were four, as the page a pilot wants most; Combat took it in 1.1.3, and
+       Navigation is Flight's first page, a press further. */
+    if (screen === 'home') return groups.map(g => g.id);
     return menuNodes[screen]?.children || menuNodes[parent(screen)]?.children || [];
   }
   /* The map is an instrument rather than a sibling-picker. Its five top
@@ -272,7 +280,7 @@ window.QwMfd = (() => {
     if (Number.isInteger(preferences?.page) && pageIds[preferences.page]) return pageIds[preferences.page];
     return validScreen(fallback) ? fallback : 'home';
   }
-  const longPages = ['act', 'feed', 'crew', 'list', 'ledger', 'mine', 'map', 'log'];
+  const longPages = ['act', 'feed', 'crew', 'list', 'ledger', 'mine', 'map', 'log', 'calls'];
   function readingView(id, rows, details) {
     // The cargo qualifier must travel with both views, never disappear behind More.
     const qualifier = rows.filter(r => r[0] === 'NOT A MANIFEST');
@@ -1000,6 +1008,44 @@ window.QwMfd = (() => {
             [say('{amount} a rock', { amount: aUEC(place.perRock) }), place.best].filter(Boolean).join(' · ')]),
           ...(mining.some(place => !place.here) ? [['NOT ALL NEARBY', say('Some are the best anywhere, not the best near you.')]] : []),
         ];
+      }
+      /* The ship in the cockpit's target panel, as live reading last saw it.
+         The name when the game printed one; otherwise the hulls the
+         cross-section fits, as a guess, because a hundred on the panel can be
+         several hulls. Says why it is empty rather than going blank. */
+      case 'target': {
+        const live = view.extra?.live;
+        if (!live) return [['TARGET', say('Asking the app what the screen shows…')]];
+        if (!live.available) return [['TARGET', say('Only the Windows app can read the target panel.')]];
+        if (!live.enabled) return [['TARGET', say('Live reading is off. Turn it on under Log → Read from the game.')]];
+        const combat = live.status?.combat;
+        const target = combat?.target;
+        if (!target) return [['NO TARGET', combat?.locks
+          ? say('{locks} locks this session, {hostile} hostile', { locks: combat.locks, hostile: combat.hostileLocks || 0 })
+          : say('Lock a ship and its panel is read every second.')]];
+        const hulls = (target.candidates || []).map(c => c.name);
+        const stance = { hostile: 'HOSTILE', friendly: 'FRIENDLY', neutral: 'NEUTRAL' }[target.stance];
+        return [
+          [combat.combat ? say('TARGET · IN COMBAT') : 'TARGET',
+            target.name || (hulls.length === 1 ? say('Unknown · likely {hull}', { hull: hulls[0] })
+              : hulls.length ? say('Unknown · fits {hulls}', { hulls: hulls.slice(0, 3).join(', ') }) : say('Unknown'))],
+          ['STANCE', [stance ? say(stance) : say('Not read'), target.faction].filter(Boolean).join(' · ')],
+          ['MOTION', [target.disabled ? say('Stopped after moving') : target.speedMs != null ? `${Math.round(target.speedMs)} m/s` : null,
+            target.rangeKm != null ? `${target.rangeKm.toFixed(2)} km` : null].filter(Boolean).join(' · ') || say('Not read')],
+          ['SIGNATURE', [target.em != null ? `EM ${(target.em / 1000).toFixed(1)}K` : null,
+            target.ir != null ? `IR ${(target.ir / 1000).toFixed(1)}K` : null,
+            target.crossSection != null ? `CS ${(target.crossSection / 1000).toFixed(1)}K` : null].filter(Boolean).join(' · ') || say('Not read')],
+        ];
+      }
+      case 'calls': {
+        const live = view.extra?.live;
+        const calls = live?.status?.combat?.callouts || [];
+        if (!live?.enabled) return [['CALLOUTS', say('Live reading is off. Turn it on under Log → Read from the game.')]];
+        if (!calls.length) return [['NOTHING CALLED', say('Identified, hostile and disabled targets are listed here as they are called.')]];
+        return calls.slice(0, 8).map(call => [
+          String(call.kind || 'call').toUpperCase(),
+          call.text,
+          call.at]);
       }
       case 'map': {
         const plan = view.map;

@@ -316,6 +316,18 @@
     </div>
     <div class="now-grid">
 
+      <!-- The ship targeted in the cockpit, as live reading last saw its
+           panel: a name or the hulls its cross-section fits, whether it is
+           hostile, its speed and range, and what was called out. Hidden until
+           live reading has seen a lock. First in the grid: when it shows, a
+           fight is on, and nothing else on the page matters as much. -->
+      <article class="card span2" id="now-target-card" data-card="target" hidden>
+        <div class="card-label" id="now-target-label">Target</div>
+        <div class="value" id="now-target">&mdash;</div>
+        <div class="muted now-target-detail" id="now-target-detail"></div>
+        <ul class="feed now-target-calls" id="now-target-calls"></ul>
+      </article>
+
       <article class="card now-status-card" id="now-status-card" data-card="status">
         <div class="card-label">Current status</div>
         <button class="now-status-config now-card-action" id="now-status-config" type="button"
@@ -1319,10 +1331,22 @@
             <input type="checkbox" id="live-enabled">
             <span>
               Read the game&rsquo;s screen live
-              <em class="muted">While Star Citizen is the window in front, a frame every two seconds is read like a screenshot and thrown away. Rock scans are kept, one per rock. Nothing touches the game itself.</em>
+              <em class="muted">While Star Citizen is the window in front, a frame every two seconds is read like a screenshot and thrown away, every second while a ship is targeted. Rock scans are kept, one per rock; the target is only shown. Nothing touches the game itself.</em>
             </span>
           </label>
           <p class="muted" id="live-status" aria-live="polite"></p>
+          <!-- Its own switch: reading the screen is one agreement, a voice in
+               the headset another, and the first never turns on the second. -->
+          <div class="live-voice" id="live-voice-row" hidden>
+            <label class="toggle">
+              <input type="checkbox" id="live-voice">
+              <span>
+                Speak combat callouts
+                <em class="muted">&ldquo;Target identified&rdquo;, &ldquo;Hostile&rdquo; and &ldquo;Target disabled&rdquo;, said with the voice Windows already has when the target panel shows them. Nothing is sent anywhere.</em>
+              </span>
+            </label>
+            <button type="button" class="ghost tiny" id="live-voice-test">Hear it</button>
+          </div>
         </div>
         </div>
       </details>
