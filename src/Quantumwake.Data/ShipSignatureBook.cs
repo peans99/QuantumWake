@@ -146,7 +146,7 @@ public sealed class ShipSignatureBook
     /// </list>
     /// </remarks>
     public IReadOnlyList<HullOdds> Weigh(
-        double crossSection, string? faction, IReadOnlySet<string> nearby, int take = 4)
+        double crossSection, string? faction, IReadOnlySet<string> nearby, int take = 4, IReadOnlySet<string>? npcs = null)
     {
         var pool = Near(crossSection, take: 12);
         if (pool.Count == 0)
@@ -163,7 +163,14 @@ public sealed class ShipSignatureBook
             var weight = inside ? 1.0 : 0.3;
             because.Add(inside ? "signature" : "signature, just outside");
 
-            if (hull.Class is { } cls && nearby.Any(seen => SameClass(seen, cls)))
+            // An NPC of this class named in the log is the mission's own spawn,
+            // and weighs twice a hull that merely streamed in near the pilot.
+            if (hull.Class is { } npcClass && npcs is not null && npcs.Any(seen => SameClass(seen, npcClass)))
+            {
+                weight *= 16;
+                because.Add("NPC in the log");
+            }
+            else if (hull.Class is { } cls && nearby.Any(seen => SameClass(seen, cls)))
             {
                 weight *= 8;
                 because.Add("seen nearby");

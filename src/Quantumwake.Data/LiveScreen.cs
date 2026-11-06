@@ -55,7 +55,23 @@ public sealed record GameCapture(bool Taken, string? Why = null, int Width = 0, 
 /// reading the screen is one agreement and a voice in the pilot's headset is
 /// another, and a yes to the first never turns on the second.
 /// </param>
-public sealed record LiveScreenSettings(bool Asked = false, bool Enabled = false, DateTimeOffset? AnsweredAt = null, bool Voice = false);
+/// <param name="VoiceCombat">
+/// Whether the voice says combat callouts. On by default under <paramref name="Voice"/>:
+/// the two below it exist so a pilot can quiet one activity without losing the
+/// other - the mining calls in a fight that started at a rock, say - and an
+/// answer saved before they existed reads as both on, which is what it meant.
+/// </param>
+/// <param name="VoiceMining">Whether the voice says mining callouts: the charge window, the crack, the radar ping.</param>
+public sealed record LiveScreenSettings(
+    bool Asked = false, bool Enabled = false, DateTimeOffset? AnsweredAt = null, bool Voice = false,
+    bool VoiceCombat = true, bool VoiceMining = true)
+{
+    /// <summary>Whether a combat callout is said now.</summary>
+    public bool SpeaksCombat => Voice && VoiceCombat;
+
+    /// <summary>Whether a mining callout is said now.</summary>
+    public bool SpeaksMining => Voice && VoiceMining;
+}
 
 /// <summary>
 /// Says a callout out loud. An interface for the same reason the capture is
@@ -111,12 +127,20 @@ public sealed class LiveScreenStore
         }
     }
 
-    /// <summary>Turns the spoken callouts on or off; the reading answer is left as it was.</summary>
-    public LiveScreenSettings SetVoice(bool on)
+    /// <summary>
+    /// Turns the spoken callouts on or off, and either kind of them when it is
+    /// named; the reading answer, and a kind left unnamed, stay as they were.
+    /// </summary>
+    public LiveScreenSettings SetVoice(bool on, bool? combat = null, bool? mining = null)
     {
         lock (_gate)
         {
-            _current = _current with { Voice = on };
+            _current = _current with
+            {
+                Voice = on,
+                VoiceCombat = combat ?? _current.VoiceCombat,
+                VoiceMining = mining ?? _current.VoiceMining,
+            };
             Save();
             return _current;
         }

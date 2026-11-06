@@ -1037,6 +1037,10 @@ window.QwMfd = (() => {
           ...(odds.length > 1 || (odds.length === 1 && odds[0].chance < 1)
             ? [[say('ROUGH ODDS'), odds.slice(0, 3).map(c => `${c.name} ${pct(c)}`).join(' · ')]] : []),
           ['STANCE', [stance ? say(stance) : say('Not read'), target.faction].filter(Boolean).join(' · ')],
+          /* From the hologram's colour - white, orange, red - so it says
+             how the hull looks, never a figure for its hit points. */
+          ...(target.hull ? [[say('HULL · LOOKS'),
+            say({ sound: 'SOUND', damaged: 'DAMAGED', critical: 'CRITICAL' }[target.hull] || 'NOT READ')]] : []),
           ['MOTION', [target.disabled ? say('Stopped after moving') : target.speedMs != null ? `${Math.round(target.speedMs)} m/s` : null,
             target.rangeKm != null ? `${target.rangeKm.toFixed(2)} km` : null].filter(Boolean).join(' · ') || say('Not read')],
           ['SIGNATURE', [target.em != null ? `EM ${(target.em / 1000).toFixed(1)}K` : null,

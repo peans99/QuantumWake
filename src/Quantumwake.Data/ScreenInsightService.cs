@@ -366,6 +366,11 @@ public sealed class ScreenInsightService(
     /// neighbourhood after; see <see cref="ChargeWindow"/>. About 22 ms a
     /// frame on the 2560 stream, with no text read at all.
     /// </summary>
+    /// <summary>The locked ship's hologram judged for damage; see <see cref="HologramDamage"/>.</summary>
+    public async Task<HologramReading?> ReadHologramAsync(string path, ScreenPatch panel, int height, CancellationToken token = default) =>
+        reader is null || await reader.PixelsAsync(path, HologramDamage.Area(panel, height), token) is not { } pixels
+            ? null : HologramDamage.Read(pixels, height);
+
     public async Task<ChargeReading?> ReadChargeAsync(string path, ScreenPatch area, int height, CancellationToken token = default) =>
         reader is null || await reader.PixelsAsync(path, area, token) is not { } pixels ? null : ChargeWindow.Read(pixels, height);
 

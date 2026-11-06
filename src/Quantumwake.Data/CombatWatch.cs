@@ -2,7 +2,7 @@ namespace Quantumwake.Data;
 
 /// <summary>One thing the combat watch said, or would have said with the voice on.</summary>
 /// <param name="At">When.</param>
-/// <param name="Kind">identified, likely, hostile, disabled.</param>
+/// <param name="Kind">identified, likely, hostile, critical, disabled.</param>
 /// <param name="Text">The sentence, as spoken.</param>
 public sealed record CombatCallout(DateTimeOffset At, string Kind, string Text);
 
@@ -28,6 +28,12 @@ public sealed record CombatCallout(DateTimeOffset At, string Kind, string Text);
 /// Null when neither, and the page draws the game's own hologram instead.
 /// </param>
 /// <param name="Likely">The class is a guess from the odds rather than a printed name.</param>
+/// <param name="Hull">
+/// sound, damaged or critical: how hurt its hologram looks, from the median of
+/// the last three reads of its colour; null until three were read. Bands and
+/// not a percentage, because the colours are what was seen and a figure would
+/// claim the game's hit points; see <see cref="HologramDamage"/>.
+/// </param>
 public sealed record CombatTarget(
     string? Name,
     IReadOnlyList<HullOdds> Candidates,
@@ -42,7 +48,8 @@ public sealed record CombatTarget(
     DateTimeOffset Since,
     DateTimeOffset SeenAt,
     string? Class = null,
-    bool Likely = false);
+    bool Likely = false,
+    string? Hull = null);
 
 /// <summary>What the combat page shows.</summary>
 /// <param name="Combat">A hostile lock has been seen in the last half minute.</param>
@@ -107,16 +114,29 @@ public sealed class CombatWatch(ShipSignatureBook book)
         public bool Moved, SaidName, SaidLikely, SaidHostile, SaidDisabled, Disabled, CountedHostile;
         public int Zeroes, HostileReads, Off, Unnamed;
         public TargetStance Stance = TargetStance.Unread;
+        public readonly List<double> Damage = [];
+        public bool SaidCritical;
+
+        /// <summary>The median of the last three hologram reads, or null before three.</summary>
+        public double? Hurt => Damage.Count < 3 ? null
+            : Damage.TakeLast(3).Order().ElementAt(1);
 
         public double? Cs => CrossSections.Count == 0 ? null
             : CrossSections.Order().ElementAt(CrossSections.Count / 2);
     }
 
+    /// <summary>A hologram this red, as the median of three reads, is said to be critical.</summary>
+    public const double Critical = 0.8;
+
+    /// <summary>Below this the hologram is still mostly white.</summary>
+    public const double Damaged = 0.3;
+
     /// <summary>
-    /// One frame's panel - null when the frame had none - and the colour of
-    /// the lock's label. Returns what is to be said now, oldest first.
+    /// One frame's panel - null when the frame had none - the colour of the
+    /// lock's label, and the colour of its hologram when that was looked at.
+    /// Returns what is to be said now, oldest first.
     /// </summary>
-    public IReadOnlyList<CombatCallout> See(TargetReading? panel, TargetStance stance, DateTimeOffset at)
+    public IReadOnlyList<CombatCallout> See(TargetReading? panel, TargetStance stance, DateTimeOffset at, HologramReading? hologram = null)
     {
         var now = new List<CombatCallout>();
 
@@ -241,6 +261,25 @@ public sealed class CombatWatch(ShipSignatureBook book)
             now.Add(Say(at, "hostile", $"Hostile target identified: {named.Text["Target identified: ".Length..]}"));
         }
 
+        // ---- hurt ----
+        // The median of three, because a single frame swings: in the
+        // 2026-11-05 Blade fight one lock read 46%, 87% and 49% on consecutive
+        // frames as the hologram turned and laser fire crossed it. Only the
+        // red end is said - an orange-lit cockpit puts an unhurt ship near
+        // 45%, and nothing but red hull puts one past 80%. A wreck locked at
+        // 0 m/s is red from the start and was never news, so a lock has to
+        // have been seen moving.
+        if (hologram is not null)
+        {
+            l.Damage.Add(hologram.Damage);
+            if (l.Damage.Count > 6) l.Damage.RemoveAt(0);
+            if (l.Hurt >= Critical && l.Moved && !l.Disabled && !l.SaidCritical)
+            {
+                l.SaidCritical = true;
+                now.Add(Say(at, "critical", "Target critical"));
+            }
+        }
+
         // ---- stopped ----
         if (panel.SpeedMs is { } speed)
         {
@@ -282,7 +321,10 @@ public sealed class CombatWatch(ShipSignatureBook book)
     /// <summary>The ship classes the log saw lately; empty when nothing supplies them.</summary>
     public Func<IReadOnlySet<string>> Nearby { get; set; } = () => new HashSet<string>();
 
-    private IReadOnlyList<HullOdds> Odds(Lock l, double cs) => Book.Weigh(cs, l.Faction, Nearby());
+    /// <summary>The NPC ship classes the log named lately; see <see cref="NearbyHulls.Npcs"/>.</summary>
+    public Func<IReadOnlySet<string>> Npcs { get; set; } = () => new HashSet<string>();
+
+    private IReadOnlyList<HullOdds> Odds(Lock l, double cs) => Book.Weigh(cs, l.Faction, Nearby(), npcs: Npcs());
 
     /// <summary>
     /// The guess as said: "likely X" at 60% or better, "X or Y" when the two
@@ -310,7 +352,8 @@ public sealed class CombatWatch(ShipSignatureBook book)
                 l.Name, odds, l.Faction,
                 l.Stance.ToString().ToLowerInvariant(),
                 l.Speed, l.Range, l.Em, l.Ir, l.Cs, l.Disabled, l.Since, l.SeenAt,
-                named ?? likely, named is null && likely is not null);
+                named ?? likely, named is null && likely is not null,
+                l.Hurt switch { null => null, >= Critical => "critical", >= Damaged => "damaged", _ => "sound" });
         }
 
         return new CombatPicture(

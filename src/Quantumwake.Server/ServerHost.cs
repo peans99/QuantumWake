@@ -3840,7 +3840,7 @@ public static partial class ServerHost
         // callouts are spoken, and it is never turned on by anything else.
         app.MapPost("/api/live/voice", (LiveVoice body, LiveScreenStore live, LiveScreenService service) =>
         {
-            live.SetVoice(body.Enabled);
+            live.SetVoice(body.Enabled, body.Combat, body.Mining);
             return Results.Ok(service.Describe(live));
         });
 

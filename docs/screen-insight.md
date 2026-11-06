@@ -404,6 +404,60 @@ minute while the figure stays. Replayed through the server, the sweep's Iron
 figures - one frame each - were not said, and the Riccite cluster the pilot
 held on for eight seconds was: "Three Riccite", then "One Riccite".
 
+### The hologram's colour (1.1.13)
+
+Measured on the 480 demo frames of the 2026-11-05 recording (3440x1440, one a
+second, 00:31:00 and 01:59:30 for 240 s each), cutting the same rectangle the
+MFD shows: from the panel's left + 120 and top + 230, 420 by 190, scaled with
+the frame's height.
+
+**What the colours mean.** Tiled side by side, every target seen at speed
+starts white and goes orange in patches, then red; every target at 0 m/s after
+moving is solid red. It is not the hostile marking: a Vanduul Blade with the
+Vanduul faction line is drawn white until it is hit, and the Paladin went
+white (a_037 to a_042, 0%) to orange (a_044, 47%) to red (a_070, 95%) over
+half a minute of the fight.
+
+**The measure.** A pixel is red with r >= 120, b < 0.55r and g < 0.45r;
+orange with the same r and b and g below 0.85r; white with every channel
+>= 150 and within 40 of each other. The nebula behind the glass is bright
+but tinted green-blue past that spread. Damage is (orange / 2 + red) over
+the lit pixels, and fewer than 400 lit pixels at 1440 lines is not judged.
+
+**Why only the red end is said.** Two things lift a sound ship off zero. A
+cockpit lit orange (b_006 to b_010) put white Blades at 41 to 55%, and one
+frame in three swings as the hologram turns or fire crosses it: one lock read
+46%, 87% and 49% on consecutive frames. So the band is the median of the
+last three reads, the voice says "Target critical" only past 80% on a lock
+seen moving, and the page shows sound (under 30%), damaged or critical
+rather than a figure.
+
+**What it said.** Seven "Target critical" calls over the 480 frames: the
+Paladin at a_051, the Scythe at b_077, Blades at b_125, b_169, b_183 and
+b_194 - every one a hologram plainly red - and a Glaive at b_236, red too.
+The one doubtful call is b_141's Blade, orange with red tracer across the
+cut. A ship already stopped when it is locked is red and never called.
+
+### NPC ships the log names (1.1.13)
+
+The same session's Game.log named nine NPC hulls by class in lines that are
+not about air traffic: a wreck's debris (`SCItem_Debris_916483015360_CRUS_Starfighter_Ion_PU_AI_CRIM_…`,
+nine wrecks between 02:24 and 03:47 UTC), physics-grid notices
+(`RSI_Scorpius_Antares_PU_AI_CRIM_…`) and hit-effect budgets
+(`Max Impacts: 'VNCL_Glaive_PU_AI_VAN_…'`). All nine are hulls fought in the
+recording; no player ship carries `_AI_`. They weigh 16 in the odds, against
+8 for a hull merely streamed in.
+
+Debris is not a kill count: the line is written only when an item has to be
+detached from a wreck, so nine wrecks were logged in a session that destroyed
+far more Blades than that. It is not used to say "destroyed".
+
+Replayed against the log, time-aligned (a frames from 02:26:25 UTC, b from
+03:54:55): the same callouts with and without the NPC list. The odds on the
+page moved only at the first lock (RSI Scorpius 75% / Ares Ion 20% / Aurora
+5% became Scorpius 75% / Ares Ion 25%), because the ATC list already held the
+same classes and a Vanduul faction settles a Blade on its own.
+
 ---
 
 ## What other people already built

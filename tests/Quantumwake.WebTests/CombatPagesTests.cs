@@ -99,6 +99,48 @@ public class CombatPagesTests
     }
 
     [Fact]
+    public void The_kind_switches_show_under_a_voice_that_is_on()
+    {
+        Assert.True(Loaded(Hostile).Truth("__dom.node('#live-voice-kinds').hidden"));
+
+        var on = Loaded(Hostile.Replace("\"voice\":false", "\"voice\":true,\"voiceCombat\":true,\"voiceMining\":false"));
+        Assert.False(on.Truth("__dom.node('#live-voice-kinds').hidden"));
+        Assert.True(on.Truth("__dom.node('#live-voice-combat').checked"));
+        Assert.False(on.Truth("__dom.node('#live-voice-mining').checked"));
+
+        // An older server's answer has neither: it spoke both.
+        var older = Loaded(Hostile.Replace("\"voice\":false", "\"voice\":true"));
+        Assert.True(older.Truth("__dom.node('#live-voice-mining').checked"));
+    }
+
+    [Fact]
+    public void Quieting_mining_posts_that_kind_alone_and_keeps_the_voice_on()
+    {
+        var voiced = Hostile.Replace("\"voice\":false", "\"voice\":true");
+        var page = Loaded(voiced);
+        page.Serve("/api/live/voice", voiced.Replace("\"voice\":true", "\"voice\":true,\"voiceMining\":false"));
+        page.Do("""
+            const box = __dom.node('#live-voice-mining');
+            box.checked = false;
+            box.fire('change');
+            await new Promise(r => setTimeout(r, 0));
+            """);
+
+        var body = page.BodyOf("/api/live/voice");
+        Assert.Contains("\"enabled\":true", body);
+        Assert.Contains("\"mining\":false", body);
+        Assert.DoesNotContain("combat", body);
+    }
+
+    [Fact]
+    public void The_card_says_how_the_hull_looks_never_a_figure()
+    {
+        var page = Loaded(Hostile.Replace("\"disabled\":false", "\"disabled\":false,\"hull\":\"critical\""));
+        Assert.Contains("hull looks critical", page.NodeText("#now-target-detail"));
+        Assert.DoesNotContain("hull looks", Loaded(Hostile).NodeText("#now-target-detail"));
+    }
+
+    [Fact]
     public void A_voice_that_could_not_speak_says_why()
     {
         var silent = Loaded(Hostile.Replace("\"voice\":false", "\"voice\":true,\"voiceTrouble\":\"the last callout could not be played (NoAudioDevice)\""));
@@ -130,6 +172,15 @@ public class CombatPagesTests
         Assert.Contains("HOSTILE · Outlaws", json);
         Assert.Contains("109 m/s · 2.43 km", json);
         Assert.Contains("CS 28.5K", json);
+        Assert.DoesNotContain("HULL", json);
+    }
+
+    [Fact]
+    public void The_target_page_gives_the_holograms_look_as_a_band()
+    {
+        var json = Mfd().Evaluate("JSON.stringify(QwMfd.rows(QwMfd.pageIds.indexOf('target'),{},null,false,{extra:{live:{...live,status:{combat:{...live.status.combat,target:{...live.status.combat.target,hull:'damaged'}}}}}}))").AsString();
+        Assert.Contains("HULL · LOOKS", json);
+        Assert.Contains("DAMAGED", json);
     }
 
     [Fact]

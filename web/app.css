@@ -8788,6 +8788,8 @@ tr.landed { outline-offset: -2px; }
 /* Combat callouts under the live switch, and the Now page's Target card. */
 .live-voice { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
 .live-voice[hidden] { display: none; }
+.live-voice-kinds { display: flex; flex-wrap: wrap; gap: 18px; margin: 6px 0 0 28px; }
+.live-voice-kinds[hidden] { display: none; }
 .now-target-detail { margin-top: 4px; font-size: 12px; }
 #now-target-card.target-hostile #now-target { color: var(--red); }
 #now-target-card.target-combat { border-color: var(--red); }

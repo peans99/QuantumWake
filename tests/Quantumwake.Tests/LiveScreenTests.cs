@@ -51,6 +51,34 @@ public sealed class LiveScreenTests : IDisposable
         Assert.NotNull(again.AnsweredAt);
     }
 
+    [Fact]
+    public void An_answer_saved_before_the_kinds_existed_speaks_both()
+    {
+        File.WriteAllText(Path.Combine(_root, "live-screen.json"), """{"Asked":true,"Enabled":true,"Voice":true}""");
+        var live = new LiveScreenStore(_root).Current;
+        Assert.True(live.SpeaksCombat);
+        Assert.True(live.SpeaksMining);
+    }
+
+    [Fact]
+    public void Mining_can_be_quieted_without_quieting_combat()
+    {
+        var store = new LiveScreenStore(_root);
+        store.Answer(true);
+        store.SetVoice(true, mining: false);
+
+        var again = new LiveScreenStore(_root).Current;
+        Assert.True(again.SpeaksCombat);
+        Assert.False(again.SpeaksMining);
+
+        // Off and on again keeps each kind as it was.
+        store.SetVoice(false);
+        Assert.False(store.Current.SpeaksCombat);
+        store.SetVoice(true);
+        Assert.True(store.Current.SpeaksCombat);
+        Assert.False(store.Current.SpeaksMining);
+    }
+
     /// <summary>A file that says on without saying it was asked is not an answer anybody gave.</summary>
     [Fact]
     public void On_without_asked_reads_as_off()

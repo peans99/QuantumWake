@@ -1352,11 +1352,17 @@
             <label class="toggle">
               <input type="checkbox" id="live-voice">
               <span>
-                Speak combat callouts
-                <em class="muted">&ldquo;Target identified&rdquo;, &ldquo;Hostile&rdquo; and &ldquo;Target disabled&rdquo;, said with the voice Windows already has when the target panel shows them. Nothing is sent anywhere.</em>
+                Speak callouts
+                <em class="muted">&ldquo;Target identified&rdquo;, &ldquo;Hostile&rdquo;, &ldquo;Target disabled&rdquo;, the charge window and the radar ping, said by a voice carried in the app. Nothing is sent anywhere.</em>
               </span>
             </label>
             <button type="button" class="ghost tiny" id="live-voice-test">Hear it</button>
+          </div>
+          <!-- One activity quieted without the other: mining calls in a fight
+               that started at a rock are noise. -->
+          <div class="live-voice-kinds" id="live-voice-kinds" hidden>
+            <label class="toggle"><input type="checkbox" id="live-voice-combat"><span>Combat</span></label>
+            <label class="toggle"><input type="checkbox" id="live-voice-mining"><span>Mining</span></label>
           </div>
           <p class="muted" id="live-voice-trouble" hidden></p>
         </div>

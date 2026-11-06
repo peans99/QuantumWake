@@ -36426,6 +36426,13 @@ function renderLiveScreen() {
   if (voiceRow) {
     voiceRow.hidden = !(state.enabled && state.canSpeak);
     $('#live-voice').checked = Boolean(state.voice);
+    const kinds = $('#live-voice-kinds');
+    if (kinds) {
+      kinds.hidden = voiceRow.hidden || !state.voice;
+      // Absent from an older server's answer, which spoke both.
+      $('#live-voice-combat').checked = state.voiceCombat !== false;
+      $('#live-voice-mining').checked = state.voiceMining !== false;
+    }
     const trouble = $('#live-voice-trouble');
     if (trouble) {
       trouble.hidden = !(state.enabled && state.voice && state.voiceTrouble);
@@ -36494,6 +36501,9 @@ function targetOdds(target) {
 }
 
 /** Speed, range, stance and signature, each only when it was read. */
+/** The hologram's colour, as the card says it. */
+const TARGET_HULLS = { sound: 'hull looks sound', damaged: 'hull looks damaged', critical: 'hull looks critical' };
+
 function targetDetail(target) {
   if (!target) return '';
   const parts = [];
@@ -36503,6 +36513,8 @@ function targetDetail(target) {
   else if (target.speedMs != null) parts.push(`${Math.round(target.speedMs)} m/s`);
   if (target.rangeKm != null) parts.push(`${target.rangeKm.toFixed(2)} km`);
   if (target.crossSection != null) parts.push(tx('CS {figure}K', { figure: (target.crossSection / 1000).toFixed(1) }));
+  // Read off the hologram's colour, so "looks": an estimate, not hit points.
+  if (TARGET_HULLS[target.hull]) parts.push(tx(TARGET_HULLS[target.hull]));
   return parts.join(' · ');
 }
 
@@ -36592,12 +36604,13 @@ function pingSaid(ping) {
   return matches.slice(0, 3).map((m) => `${m.count} × ${m.name}${m.tier ? ` (${radarTier(m.tier)})` : ''}`).join(tx(' or '));
 }
 
-$('#live-voice')?.addEventListener('change', async (event) => {
+/** Posts the voice switches; a kind left out stays as the server has it. */
+async function postLiveVoice(event, body) {
   try {
     const response = await fetch('/api/live/voice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: event.target.checked }),
+      body: JSON.stringify(body),
     });
     if (!response.ok) throw new Error(`voice ${response.status}`);
     liveState = await response.json();
@@ -36607,7 +36620,13 @@ $('#live-voice')?.addEventListener('change', async (event) => {
     const line = $('#live-status');
     if (line) line.textContent = tx('The change did not save.');
   }
-});
+}
+
+$('#live-voice')?.addEventListener('change', (event) => postLiveVoice(event, { enabled: event.target.checked }));
+$('#live-voice-combat')?.addEventListener('change', (event) =>
+  postLiveVoice(event, { enabled: Boolean(liveState?.voice), combat: event.target.checked }));
+$('#live-voice-mining')?.addEventListener('change', (event) =>
+  postLiveVoice(event, { enabled: Boolean(liveState?.voice), mining: event.target.checked }));
 
 $('#live-voice-test')?.addEventListener('click', () => {
   fetch('/api/live/voice/test', { method: 'POST' }).catch(() => { /* the button is only a sample */ });

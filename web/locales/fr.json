@@ -6193,7 +6193,7 @@
   "Starting…": "Démarrage…",
   "The change did not save.": "Le changement n’a pas été enregistré.",
   "Read the game’s screen live <em class=\"muted\">While Star Citizen is the window in front, a frame every two seconds is read like a screenshot and thrown away, every second while a ship is targeted. Rock scans are kept, one per rock; the target is only shown. Nothing touches the game itself.</em>": "Lire l’écran du jeu en direct <em class=\"muted\">Tant que Star Citizen est la fenêtre au premier plan, une image toutes les deux secondes est lue comme une capture d’écran puis jetée, chaque seconde quand un vaisseau est ciblé. Les scans de roche sont conservés, un par roche ; la cible est seulement affichée. Rien ne touche au jeu lui-même.</em>",
-  "Speak combat callouts <em class=\"muted\">“Target identified”, “Hostile” and “Target disabled”, said with the voice Windows already has when the target panel shows them. Nothing is sent anywhere.</em>": "Annoncer à voix haute en combat <em class=\"muted\">« Target identified », « Hostile » et « Target disabled », dits avec la voix déjà présente dans Windows quand le panneau de cible les affiche. Rien n’est envoyé nulle part.</em>",
+  "Speak callouts <em class=\"muted\">“Target identified”, “Hostile”, “Target disabled”, the charge window and the radar ping, said by a voice carried in the app. Nothing is sent anywhere.</em>": "Annoncer à voix haute <em class=\"muted\">« Target identified », « Hostile », « Target disabled », la fenêtre de charge et le ping radar, dits par une voix fournie avec l’application. Rien n’est envoyé nulle part.</em>",
   "Hear it": "Écouter",
   "Not heard: {why}.": "Pas entendu : {why}.",
   "No target": "Aucune cible",
@@ -6273,5 +6273,13 @@
   "Windows would not hand over the copied pixels": "Windows n’a pas rendu les pixels copiés",
   "the copy came back black - exclusive fullscreen never reaches the desktop; borderless or windowed can be read": "la copie est revenue noire - le plein écran exclusif n’atteint jamais le bureau ; le mode sans bordure ou fenêtré peut être lu",
   "only the Windows app can read the screen - this copy is the server on its own": "seule l’application Windows peut lire l’écran - cette copie est le serveur seul",
-  "this copy has no text engine to read the screen with": "cette copie n’a pas de moteur de texte pour lire l’écran"
+  "this copy has no text engine to read the screen with": "cette copie n’a pas de moteur de texte pour lire l’écran",
+  "hull looks sound": "coque apparemment intacte",
+  "hull looks damaged": "coque apparemment endommagée",
+  "hull looks critical": "coque apparemment critique",
+  "HULL · LOOKS": "COQUE · ASPECT",
+  "SOUND": "INTACTE",
+  "DAMAGED": "ENDOMMAGÉE",
+  "CRITICAL": "CRITIQUE",
+  "NOT READ": "NON LU"
 }

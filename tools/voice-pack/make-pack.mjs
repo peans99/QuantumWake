@@ -24,7 +24,7 @@ if (!namesFile || !outRoot) {
 
 // The pieces CombatWatch and MiningWatch build their sentences from.
 const phrases = [
-  'Hostile target identified', 'Target identified', 'Target disabled',
+  'Hostile target identified', 'Target identified', 'Target disabled', 'Target critical',
   'Hostile contact, likely', 'Unknown contact, likely', 'Hostile contact', 'Unknown contact',
   'Hostile', 'likely', 'or',
   'In the window', 'Out of the window', 'Overcharge, back off', 'Rock cracked',

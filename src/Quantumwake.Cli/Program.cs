@@ -71,7 +71,7 @@ if (GetOption(args, "--charge") is { } chargeFrames)
 }
 
 if (GetOption(args, "--target") is { } targetFrames)
-    return await TargetCheck(targetFrames, GetOption(args, "--log"), GetOption(args, "--start"), GetOption(args, "--step"));
+    return await TargetCheck(targetFrames, GetOption(args, "--log"), GetOption(args, "--start"), GetOption(args, "--step"), args.Contains("--no-npc"));
 
 // The screen reader run over a screenshot, or a folder of them, the way the
 // backups are run through the parser: what each frame read, how long it took,
@@ -1630,7 +1630,7 @@ static int Screen(string linesFile, string installRoot, string? catalogueQuery)
 // --log <Game.log> --start <UTC time of the first frame> [--step <seconds>]:
 // the frames are placed in that session, and the ships its log saw stream in
 // up to each frame weigh the odds for an UNKNOWN, as they would live.
-static async Task<int> TargetCheck(string target, string? logPath = null, string? start = null, string? step = null)
+static async Task<int> TargetCheck(string target, string? logPath = null, string? start = null, string? step = null, bool noNpc = false)
 {
     var files = Directory.Exists(target)
         ? Directory.GetFiles(target, "*.png").Concat(Directory.GetFiles(target, "*.jpg")).OrderBy(f => f).ToArray()
@@ -1657,6 +1657,7 @@ static async Task<int> TargetCheck(string target, string? logPath = null, string
     var seconds = double.TryParse(step, out var s1) ? s1 : 2;
     var clockAt = start is not null && DateTimeOffset.TryParse(start, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var s0) ? s0 : DateTimeOffset.UnixEpoch;
     watch.Nearby = () => nearby.Classes(clockAt);
+    if (!noNpc) watch.Npcs = () => nearby.Npcs(clockAt);
     ScreenPatch? known = null;
     var at = DateTimeOffset.UnixEpoch;
     int panels = 0, named = 0, withCs = 0, withSpeed = 0;
@@ -1684,7 +1685,10 @@ static async Task<int> TargetCheck(string target, string? logPath = null, string
         clock.Stop();
 
         known = panel?.Panel;
-        var said = watch.See(panel, stance, at);
+        HologramReading? hull = null;
+        if (panel?.Panel is { } where && await reader.PixelsAsync(file, HologramDamage.Area(where, h)) is { } pixels)
+            hull = HologramDamage.Read(pixels, h);
+        var said = watch.See(panel, stance, at, hull);
 
         if (panel is not null)
         {
@@ -1700,7 +1704,9 @@ static async Task<int> TargetCheck(string target, string? logPath = null, string
                 $"{panel.Name ?? (panel.Unknown ? "UNKNOWN" : "?"),-20} {panel.Faction ?? "",-14} " +
                 $"{panel.SpeedMs?.ToString("0") ?? "?",4} m/s {panel.RangeKm?.ToString("0.00") ?? "?",6} km  " +
                 $"EM {panel.Em?.ToString("0") ?? "?"} IR {panel.Ir?.ToString("0") ?? "?"} CS {panel.CrossSection?.ToString("0") ?? "?"}  " +
-                $"{stance,-8} {string.Join(" / ", near.Select(n => $"{n.Name} {n.Chance:P0}"))}"));
+                $"{stance,-8} " +
+                (hull is null ? "holo -  " : $"holo {hull.Damage,4:P0} w{hull.White} o{hull.Orange} r{hull.Red}  ") +
+                $"{string.Join(" / ", near.Select(n => $"{n.Name} {n.Chance:P0}"))}"));
 
         foreach (var callout in said)
             Console.WriteLine($"    >> {callout.Text}");

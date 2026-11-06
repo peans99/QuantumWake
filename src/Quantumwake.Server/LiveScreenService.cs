@@ -29,7 +29,9 @@ public sealed record LiveScreenStatus(
     MiningPicture? Fracture = null);
 
 /// <summary>What <c>/api/live</c> says.</summary>
-/// <param name="Voice">Whether combat callouts are spoken.</param>
+/// <param name="Voice">Whether callouts are spoken at all.</param>
+/// <param name="VoiceCombat">Whether combat callouts are, under it.</param>
+/// <param name="VoiceMining">Whether mining callouts are, under it.</param>
 /// <param name="CanSpeak">Whether this copy has a voice at all - the Windows app does, the server alone does not.</param>
 /// <param name="VoiceTrouble">Why the last callout was not heard, when it was not.</param>
 public sealed record LiveScreenState(
@@ -42,13 +44,17 @@ public sealed record LiveScreenState(
     LiveScreenStatus Status,
     bool Voice = false,
     bool CanSpeak = false,
-    string? VoiceTrouble = null);
+    string? VoiceTrouble = null,
+    bool VoiceCombat = true,
+    bool VoiceMining = true);
 
 /// <summary>The pilot's answer, posted to <c>/api/live</c>.</summary>
 public sealed record LiveAnswer(bool Enabled);
 
 /// <summary>The voice switch, posted to <c>/api/live/voice</c>.</summary>
-public sealed record LiveVoice(bool Enabled);
+/// <param name="Combat">The combat callouts' own switch; left as it was when not sent.</param>
+/// <param name="Mining">The mining callouts' own switch; left as it was when not sent.</param>
+public sealed record LiveVoice(bool Enabled, bool? Combat = null, bool? Mining = null);
 
 /// <summary>
 /// Reads the game's screen while the pilot has said yes to it.
@@ -136,7 +142,8 @@ public sealed class LiveScreenService(
         lock (_gate) status = status with { Fracture = _mining.Picture() };
 
         return new LiveScreenState(Available, Unavailable, answer.Asked, answer.Enabled, answer.AnsweredAt,
-            Available && !answer.Asked, status, answer.Voice, voice is not null, voice?.Trouble);
+            Available && !answer.Asked, status, answer.Voice, voice is not null, voice?.Trouble,
+            answer.VoiceCombat, answer.VoiceMining);
     }
 
     /// <summary>Says a sentence through the voice now, so the pilot can hear what it sounds like before a fight.</summary>
@@ -231,7 +238,11 @@ public sealed class LiveScreenService(
         {
             _combat ??= new CombatWatch(insight.SignatureBook());
             _combat.Book = insight.SignatureBook();
-            if (nearby is not null) _combat.Nearby = () => nearby.Classes(DateTimeOffset.UtcNow);
+            if (nearby is not null)
+            {
+                _combat.Nearby = () => nearby.Classes(DateTimeOffset.UtcNow);
+                _combat.Npcs = () => nearby.Npcs(DateTimeOffset.UtcNow);
+            }
         }
 
         // ---- the fracture HUD: pixels only, so every tick while a bar is held ----
@@ -265,7 +276,7 @@ public sealed class LiveScreenService(
 
             if (panel is not null)
             {
-                See(panel, stance, at);
+                See(panel, stance, at, await Hologram(frame, panel, taken.Height, token));
                 _log.Read("Target", copying.ElapsedMilliseconds, close.ElapsedMilliseconds, taken.Width, taken.Height, null);
                 Set(s => s with
                 {
@@ -311,7 +322,7 @@ public sealed class LiveScreenService(
             (target, var stance) = await insight.ReadTargetAsync(frame, lines, _panel, taken.Width, taken.Height, token);
             close.Stop();
             panelMs = close.ElapsedMilliseconds;
-            See(target, stance, at);
+            See(target, stance, at, await Hologram(frame, target, taken.Height, token));
         }
         else
         {
@@ -329,7 +340,7 @@ public sealed class LiveScreenService(
             foreach (var callout in pinged)
             {
                 logger.LogInformation("Ping callout: {Text}", callout.Text);
-                if (settings.Current.Voice) voice?.Say(callout.Text);
+                if (settings.Current.SpeaksMining) voice?.Say(callout.Text);
             }
         }
 
@@ -411,22 +422,41 @@ public sealed class LiveScreenService(
         foreach (var callout in said)
         {
             logger.LogInformation("Mining callout: {Text}", callout.Text);
-            if (settings.Current.Voice) voice?.Say(callout.Text);
+            if (settings.Current.SpeaksMining) voice?.Say(callout.Text);
+        }
+    }
+
+    /// <summary>
+    /// The hologram under a panel just read, judged for damage: pixels only, a
+    /// few milliseconds beside the panel read, so every frame with a panel.
+    /// </summary>
+    private async Task<HologramReading?> Hologram(string frame, TargetReading? panel, int height, CancellationToken token)
+    {
+        if (panel?.Panel is not { } where) return null;
+        try
+        {
+            return await insight.ReadHologramAsync(frame, where, height, token);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // A hologram not judged is a callout not made; the panel stands.
+            logger.LogDebug(e, "Hologram not read");
+            return null;
         }
     }
 
     /// <summary>Hands a frame's panel to the combat watch, and anything it says to the voice.</summary>
-    private void See(TargetReading? panel, TargetStance stance, DateTimeOffset at)
+    private void See(TargetReading? panel, TargetStance stance, DateTimeOffset at, HologramReading? hologram = null)
     {
         _panel = panel?.Panel;
 
         IReadOnlyList<CombatCallout> said;
-        lock (_gate) said = _combat!.See(panel, stance, at);
+        lock (_gate) said = _combat!.See(panel, stance, at, hologram);
 
         foreach (var callout in said)
         {
             logger.LogInformation("Combat callout: {Text}", callout.Text);
-            if (settings.Current.Voice) voice?.Say(callout.Text);
+            if (settings.Current.SpeaksCombat) voice?.Say(callout.Text);
         }
     }
 
