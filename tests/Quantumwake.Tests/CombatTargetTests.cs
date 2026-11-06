@@ -255,6 +255,18 @@ public sealed class CombatTargetTests
     }
 
     [Fact]
+    public void A_variant_named_apart_from_its_hull_folds_by_its_class()
+    {
+        var book = ShipSignatureBook.Of(
+        [
+            new("Drake Corsair", 29125, "DRAK_Corsair"),
+            new("Corsair PYAM Exec", 29125, "DRAK_Corsair_PYAM_Exec"),
+        ]);
+
+        Assert.Equal(["Drake Corsair"], book.Near(29100).Select(h => h.Name));
+    }
+
+    [Fact]
     public void A_variant_a_few_short_of_its_hull_is_the_hull()
     {
         // The Scorpius and the Antares are six apart; they split 45/45 before.

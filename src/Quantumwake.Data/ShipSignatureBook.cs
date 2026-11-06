@@ -107,8 +107,11 @@ public sealed class ShipSignatureBook
         foreach (var hull in near.OrderBy(h => h.Name.Length))
         {
             // Within fifty, not equal: the Scorpius and its Antares differ by six.
+            // By class as well as by name: "Corsair PYAM Exec" does not start
+            // with "Drake Corsair", but DRAK_Corsair_PYAM_Exec starts with DRAK_Corsair.
             if (!kept.Any(k => Math.Abs(k.CrossSection - hull.CrossSection) < 50
-                    && hull.Name.StartsWith(k.Name, StringComparison.OrdinalIgnoreCase)))
+                    && (hull.Name.StartsWith(k.Name, StringComparison.OrdinalIgnoreCase)
+                        || (k.Class is { } baseClass && hull.Class?.StartsWith(baseClass + "_", StringComparison.OrdinalIgnoreCase) == true))))
                 kept.Add(hull);
         }
 

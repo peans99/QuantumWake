@@ -186,6 +186,14 @@ public static partial class ServerHost
         // Reads the game's screen while the pilot said yes when asked. Its own
         // answer, so screenshot reading being on never turns this on.
         builder.Services.AddSingleton<LiveScreenStore>();
+        // A demo: recorded frames stand in for the game window, on purpose
+        // only - a command-line switch or an environment variable, never a
+        // setting. The live answer still has to be yes.
+        if (ReplayGameCapture.From(builder.Configuration["Replay"] ?? Environment.GetEnvironmentVariable("QUANTUMWAKE_REPLAY")) is { } replay)
+        {
+            capture = replay;
+            Console.WriteLine($"Replaying {replay.Count} recorded frames in place of the game window.");
+        }
         if (capture is not null) builder.Services.AddSingleton(capture);
         if (voice is not null) builder.Services.AddSingleton(voice);
         builder.Services.AddSingleton<LiveScreenService>();
