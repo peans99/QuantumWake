@@ -8,6 +8,8 @@ namespace Quantumwake.Data;
 /// <param name="Cracked">Rocks cracked since the app started.</param>
 /// <param name="LastCrackAt">When the last one cracked.</param>
 /// <param name="Callouts">The last few things said, newest first.</param>
+/// <param name="Ping">The last radar signature read and what it decodes to, while it is recent.</param>
+/// <param name="PingAt">When it was read.</param>
 public sealed record MiningPicture(
     bool Active,
     string? State,
@@ -15,7 +17,9 @@ public sealed record MiningPicture(
     double? BelowBy,
     int Cracked,
     DateTimeOffset? LastCrackAt,
-    IReadOnlyList<CombatCallout> Callouts);
+    IReadOnlyList<CombatCallout> Callouts,
+    PingReading? Ping = null,
+    DateTimeOffset? PingAt = null);
 
 /// <summary>
 /// Turns the charge read each second into the moments worth saying while a
@@ -120,7 +124,37 @@ public sealed class MiningWatch
 
     public MiningPicture Picture() => new(
         _active, _active ? _state : null, _active ? _fill : 0, _active ? _belowBy : null,
-        _cracked, _lastCrack, [.. Enumerable.Reverse(_said).Take(8)]);
+        _cracked, _lastCrack, [.. Enumerable.Reverse(_said).Take(8)], _ping, _pingAt);
+
+    private PingReading? _ping;
+    private DateTimeOffset? _pingAt;
+    private double? _pingPending;
+    private double? _pingSaid;
+    private DateTimeOffset _pingSaidAt;
+
+    /// <summary>
+    /// One frame's radar signature readout - null when the box was not on it -
+    /// decoded against <paramref name="rows"/>. A figure is said once two reads
+    /// agree on it, and not again for half a minute: the pilot sweeping across
+    /// the same cluster is not news, a different figure is.
+    /// </summary>
+    public IReadOnlyList<CombatCallout> SeePing(double? value, IReadOnlyList<Quantumwake.Core.GameData.RadarRow> rows, DateTimeOffset at)
+    {
+        var now = new List<CombatCallout>();
+        if (value is not { } v) { _pingPending = null; return now; }
+
+        if (_pingPending != v) { _pingPending = v; return now; }
+
+        _ping = new PingReading(v, PingReadout.Decode(v, rows));
+        _pingAt = at;
+        if (_pingSaid == v && at - _pingSaidAt < TimeSpan.FromSeconds(30)) return now;
+        if (PingReadout.Sentence(_ping) is not { } sentence) return now;
+
+        _pingSaid = v;
+        _pingSaidAt = at;
+        now.Add(Say(at, "ping", sentence));
+        return now;
+    }
 
     private CombatCallout Say(DateTimeOffset at, string kind, string text)
     {

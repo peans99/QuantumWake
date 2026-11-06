@@ -352,7 +352,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.1.11
+### 1.1.12
+
+**Know the rock from the ping.** After a radar ping, point at a contact and the app reads the signature figure the game shows above your compass and says what it is - "Three Riccite", "Four Iron" - from the same table as Mining → Radar, worked out from your own install. A figure that two kinds of rock share is said both ways ("Three I-type asteroid or Three Ground-vehicle deposit"), and one that is no whole number of any single rock is shown but not said. It waits for two reads that agree, so sweeping across contacts stays quiet and holding on one names it; the Fracture card and the MFD's Charge page show the last ping between rocks. Checked against a public video where the pilot's own caption gives the answer: 10,155 read as three Riccite.
 
 **Mining callouts while you crack a rock.** With live reading on, the fracture HUD's charge is read every second against the laser's optimal window, and Bella says "In the window" when the charge gets there, "Out of the window" if it drops out, and "Rock cracked" when it breaks. A new Fracture card on the Now page - in the overlay's Mining layout too - shows how far under the window the charge is, the crack's progress as a bar that fills like the game's, and the rocks cracked so far; the MFD has the same as a Charge page under Resources. It reads the HUD's colours rather than its words, so it costs almost nothing. Measured on a 14-minute MOLE stream it called all eight cracks. "Overcharge, back off" is there too, but no overcharge happened in that recording, so it is untested until one does.
 

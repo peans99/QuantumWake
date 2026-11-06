@@ -4,7 +4,7 @@
 // ~3 s a sentence for the model on the pilot's CPU (measured on 2026-11-06).
 //
 //   npm install                                    (once; fetches ~90 MB of model; needs ffmpeg on PATH)
-//   dotnet run --project ..\..\src\Quantumwake.Cli -c Release -- --hull-names > names.txt
+//   dotnet run --project ..\..\src\Quantumwake.Cli -c Release -- --voice-names > names.txt
 //   node make-pack.mjs names.txt ..\..\src\Quantumwake.Ocr\Voices af_bella
 //
 // Kokoro-82M and kokoro-js are Apache-2.0; the recordings are ours to ship.
@@ -28,6 +28,9 @@ const phrases = [
   'Hostile contact, likely', 'Unknown contact, likely', 'Hostile contact', 'Unknown contact',
   'Hostile', 'likely', 'or',
   'In the window', 'Out of the window', 'Overcharge, back off', 'Rock cracked',
+  // How many rocks a ping is: PingReadout.Sentence, up to its twenty.
+  'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+  'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen', 'Twenty',
 ];
 
 // Spelled for the ear, not the eye: Mk II is "Mark Two", the C.O. hulls are

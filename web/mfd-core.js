@@ -1052,7 +1052,13 @@ window.QwMfd = (() => {
         if (!live.available) return [['CHARGE', say('Only the Windows app can read the fracture HUD.')]];
         if (!live.enabled) return [['CHARGE', say('Live reading is off. Turn it on under Log → Read from the game.')]];
         const fracture = live.status?.fracture;
-        if (!fracture?.active) return [['NOT FRACTURING', fracture?.cracked
+        // A ping read in the last two minutes leads while no rock is being cracked.
+        const ping = fracture?.ping && fracture.pingAt && (view.now ?? Date.now()) - new Date(fracture.pingAt).getTime() < 120000 ? fracture.ping : null;
+        const pingRows = ping ? [[say('PING · {value}', { value: Math.round(ping.value).toLocaleString('en-US') }),
+          (ping.matches || []).length
+            ? ping.matches.slice(0, 3).map(m => `${m.count} × ${m.name}`).join(' · ')
+            : say('No whole number of one rock')]] : [];
+        if (!fracture?.active) return [...pingRows, ['NOT FRACTURING', fracture?.cracked
           ? sayn(fracture.cracked, '{count} rock cracked this session', '{count} rocks cracked this session')
           : say('Fire the mining laser at a rock and its charge is read every second.')]];
         const fill = Math.round((fracture.fill || 0) * 100);

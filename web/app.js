@@ -36554,14 +36554,19 @@ function renderNowFracture() {
   if (!card) return;
   const fracture = liveState?.enabled ? liveState?.status?.fracture : null;
   const calls = fracture?.callouts || [];
-  card.hidden = !fracture || !(fracture.active || fracture.cracked || calls.length);
+  // A ping read in the last two minutes is still the rock being flown to.
+  const ping = fracture?.ping && fracture.pingAt && Date.now() - new Date(fracture.pingAt).getTime() < 120000 ? fracture.ping : null;
+  card.hidden = !fracture || !(fracture.active || fracture.cracked || calls.length || ping);
   if (card.hidden) return;
 
   const state = fracture.active ? fracture.state : null;
   card.classList.toggle('fracture-in', state === 'in');
   card.classList.toggle('fracture-over', state === 'above');
-  $('#now-fracture-label').textContent = fracture.active ? tx('Fracture · under way') : tx('Fracture');
-  $('#now-fracture').textContent = !fracture.active
+  $('#now-fracture-label').textContent = fracture.active ? tx('Fracture · under way')
+    : ping ? tx('Radar ping · {value}', { value: Math.round(ping.value).toLocaleString() }) : tx('Fracture');
+  $('#now-fracture').textContent = !fracture.active && ping
+    ? pingSaid(ping)
+    : !fracture.active
     ? txn(fracture.cracked || 0, '{count} rock cracked', '{count} rocks cracked')
     : state === 'in' ? tx('In the window')
       : state === 'above' ? tx('Overcharge - back off')
@@ -36574,6 +36579,17 @@ function renderNowFracture() {
   $('#now-fracture-detail').textContent = fracture.active
     ? tx('Crack {fill}% · {count} cracked so far', { fill, count: fracture.cracked || 0 })
     : fracture.lastCrackAt ? tx('Last at {when}', { when: new Date(fracture.lastCrackAt).toLocaleTimeString(QW_DATE_LOCALES) }) : '';
+}
+
+/**
+ * What a ping is, as the card says it: every exact reading, fewest rocks
+ * first, or that it is no whole number of any one rock - a figure the Radar
+ * page can still be asked about by hand.
+ */
+function pingSaid(ping) {
+  const matches = ping.matches || [];
+  if (!matches.length) return tx('No whole number of one rock');
+  return matches.slice(0, 3).map((m) => `${m.count} × ${m.name}${m.tier ? ` (${radarTier(m.tier)})` : ''}`).join(tx(' or '));
 }
 
 $('#live-voice')?.addEventListener('change', async (event) => {

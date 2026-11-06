@@ -372,6 +372,38 @@ Replayed through the server (`--Replay` with the 48 frames of that rock):
 `/api/live` went charging 5.8, ... 1.4, in the window with "In the window",
 filling to 96%, then "Rock cracked" and a count of one.
 
+### The radar ping (1.1.12)
+
+The MOLE stream never pings, so this was measured on RisboTheBlade's "4.7
+RICCITE - How To Scan For It, Signatures, Number Of Rocks"
+(<https://www.youtube.com/watch?v=WyCv6-DQYDE>, 2560x1440), 80 frames two
+seconds apart from 02:40. Also someone else's, also kept out of the repo.
+
+**Where the figure is.** After a ping the contacts show as "UNKNOWN" with a
+range; the signature of whichever one the pilot points at is a boxed figure
+with a pin icon just above the compass heading - at 1280, 500 on every frame
+that had one, the screen's centre a third of the way down. It read 17,080,
+12,810, 25,620, 60,000, 96,000, 10,155, 47,385, 3,570 and 3,385 across the
+sweep. The video's own caption says three Riccite read 10,155, which is 3 x
+3,385 - this install's Riccite figure - so a ping is a whole number of one
+kind of rock, as the Radar page assumed and had not seen.
+
+**Read by ONNX only.** Windows' engine read nothing in that box on any of the
+80 frames; ONNX read it on every frame that had one, at about 40 ms for the
+patch. The compass headings under it - 240, 260, 280 - are three digits
+without a separator and are skipped.
+
+**What it decodes to**, against this install's 36 radar rows: 17,080 four
+Iron, 12,810 three Iron, 25,620 six Iron, 3,570 one Borase, 10,155 three
+Riccite, 60,000 fifteen I-type asteroid or ground deposit. 96,000 and
+160,000 are more than the twenty rocks the Radar page reads to; 47,385 is no
+whole number of any one rock; 3,386 is 3,385 misread. None of those is said.
+
+**When it is said.** On two reads that agree, then not again for half a
+minute while the figure stays. Replayed through the server, the sweep's Iron
+figures - one frame each - were not said, and the Riccite cluster the pilot
+held on for eight seconds was: "Three Riccite", then "One Riccite".
+
 ---
 
 ## What other people already built

@@ -318,6 +318,21 @@ public sealed class LiveScreenService(
             See(null, TargetStance.Unread, at);
         }
 
+        // The radar's signature readout, when nothing faster is going on: a
+        // ping is read while the pilot sweeps across contacts, and a fight or
+        // a fracture has the loop's attention.
+        if (target is null && charge is null && sighting.Mining is null)
+        {
+            var ping = await insight.ReadPingAsync(frame, taken.Width, taken.Height, token);
+            IReadOnlyList<CombatCallout> pinged;
+            lock (_gate) pinged = _mining.SeePing(ping, insight.RadarRows(), at);
+            foreach (var callout in pinged)
+            {
+                logger.LogInformation("Ping callout: {Text}", callout.Text);
+                if (settings.Current.Voice) voice?.Say(callout.Text);
+            }
+        }
+
         var kind = target is not null && sighting.Kind == ScreenKind.Unknown ? "Target" : sighting.Kind.ToString();
         _log.Read(kind, copying.ElapsedMilliseconds, sighting.TookMs + panelMs, taken.Width, taken.Height, keptAs);
 

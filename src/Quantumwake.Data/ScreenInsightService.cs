@@ -327,6 +327,40 @@ public sealed class ScreenInsightService(
     private CommunityData? _bookFrom;
 
     /// <summary>
+    /// The mining radar's signature readout above the compass, read up close by
+    /// the panel reader - Windows' engine read nothing in that box on 80
+    /// frames; see <see cref="PingReadout"/>. Null when the box is empty.
+    /// </summary>
+    public async Task<double?> ReadPingAsync(string path, int width, int height, CancellationToken token = default)
+    {
+        var look = panelReader?.Invoke() ?? reader;
+        if (look is null) return null;
+        try
+        {
+            return PingReadout.Value(await look.ReadAsync(path, PingReadout.Patch(width, height), new ScreenTreatment(Scale: 2, Shear: 0), token));
+        }
+        catch (Exception e) when (e is not ScreenEngineUnavailableException && !token.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>What each rock reads on the radar, from the install; empty until it has been read.</summary>
+    public IReadOnlyList<Quantumwake.Core.GameData.RadarRow> RadarRows()
+    {
+        var rocks = library.GameCommodities.Mining.Signatures;
+        if (!ReferenceEquals(rocks, _radarFrom))
+        {
+            _radar = rocks is null ? [] : Quantumwake.Core.GameData.GameRockSignatures.Radar(rocks);
+            _radarFrom = rocks;
+        }
+        return _radar;
+    }
+
+    private IReadOnlyList<Quantumwake.Core.GameData.RadarRow> _radar = [];
+    private object? _radarFrom;
+
+    /// <summary>
     /// The fracture HUD's charge against its window, from pixels in
     /// <paramref name="area"/> - the search area on a first look, the bar's
     /// neighbourhood after; see <see cref="ChargeWindow"/>. About 22 ms a

@@ -484,6 +484,39 @@ if (args.Contains("--ship-parts", StringComparer.OrdinalIgnoreCase))
 // Every mineable rock's radar signature, grouped by value, and which counts of
 // which rocks a ping could not tell apart. The numbers behind docs/mining.md's
 // radar section.
+// --voice-names: every name the voice can say - the hulls, then the rocks a
+// ping decodes to - one a line, for tools/voice-pack.
+if (args.Contains("--voice-names"))
+{
+    var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
+    foreach (var name in ShipSignatureBook.From(new CommunityData()).Names())
+        Console.WriteLine(name);
+    foreach (var name in GameRockSignatures.Radar(GameCommodities.Load(install.RootPath, Path.Combine(data, "commodities.json")).Mining.Signatures ?? []).Select(PingReadout.Spoken).Distinct())
+        Console.WriteLine(name);
+    return 0;
+}
+
+// --ping <frames>: the mining radar's signature readout read off each frame and
+// decoded against this install's rocks - what the live loop says after a ping.
+if (GetOption(args, "--ping") is { } pingFrames)
+{
+    var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
+    var radar = GameRockSignatures.Radar(GameCommodities.Load(install.RootPath, Path.Combine(data, "commodities.json")).Mining.Signatures ?? []);
+    using var engine = new Quantumwake.Ocr.Onnx.OnnxScreenReader();
+    Console.WriteLine($"{radar.Count} radar rows");
+    foreach (var file in Directory.GetFiles(pingFrames, "*.jpg").Concat(Directory.GetFiles(pingFrames, "*.png")).Order())
+    {
+        var (w, h) = ImageSize(file);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var lines = await engine.ReadAsync(file, PingReadout.Patch(w, h), new ScreenTreatment(2, 0));
+        var value = PingReadout.Value(lines);
+        clock.Stop();
+        var said = value is { } v ? PingReadout.Sentence(new PingReading(v, PingReadout.Decode(v, radar))) : null;
+        Console.WriteLine($"{Path.GetFileName(file),-12} {clock.ElapsedMilliseconds,4} ms  {(value is { } x ? x.ToString("N0") : "-"),8}  {said ?? (value is null ? "" : "no whole number of one rock")}");
+    }
+    return 0;
+}
+
 if (args.Contains("--signatures", StringComparer.OrdinalIgnoreCase))
 {
     var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;

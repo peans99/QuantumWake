@@ -48,6 +48,30 @@ public class FracturePagesTests
         Assert.True(Loaded(Never).Truth("__dom.node('#now-fracture-card').hidden"));
     }
 
+    private static string Pinged(string matches) =>
+        "{\"active\":false,\"state\":null,\"fill\":0,\"belowBy\":null,\"cracked\":0,\"lastCrackAt\":null,\"callouts\":[],"
+        + "\"ping\":{\"value\":10155,\"matches\":" + matches + "},\"pingAt\":\"" + DateTimeOffset.UtcNow.ToString("o") + "\"}";
+
+    [Fact]
+    public void A_recent_ping_leads_the_card_with_what_it_is()
+    {
+        var page = Loaded(Pinged("[{\"count\":3,\"name\":\"Riccite\",\"tier\":\"Epic\",\"signature\":3385}]"));
+        Assert.False(page.Truth("__dom.node('#now-fracture-card').hidden"));
+        Assert.Contains("10,155", page.NodeText("#now-fracture-label"));
+        Assert.Equal("3 × Riccite (Epic)", page.NodeText("#now-fracture"));
+
+        Assert.Equal("No whole number of one rock", Loaded(Pinged("[]")).NodeText("#now-fracture"));
+    }
+
+    [Fact]
+    public void The_charge_page_shows_a_recent_ping_between_rocks()
+    {
+        var json = Mfd(Pinged("[{\"count\":3,\"name\":\"Riccite\",\"tier\":\"Epic\",\"signature\":3385}]"))
+            .Evaluate("JSON.stringify(QwMfd.rows(QwMfd.pageIds.indexOf('charge'),{},null,false,{extra:{live}}))").AsString();
+        Assert.Contains("PING · 10,155", json);
+        Assert.Contains("3 × Riccite", json);
+    }
+
     private static Engine Mfd(string fracture)
     {
         var engine = new Engine();
