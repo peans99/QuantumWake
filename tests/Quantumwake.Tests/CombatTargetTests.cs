@@ -255,6 +255,33 @@ public sealed class CombatTargetTests
     }
 
     [Fact]
+    public void A_garbled_name_is_never_spoken_and_the_odds_are_said_instead()
+    {
+        var watch = new CombatWatch(Book);
+        var said = watch.See(Panel("VANDUUL BLADERCTICAE", 200, 10400, "Vanduul"), TargetStance.Hostile, T0)
+            .Concat(watch.See(Panel("VANDUUL BLADERCTICAE", 200, 10400, "Vanduul"), TargetStance.Hostile, T0.AddSeconds(1)))
+            .Select(c => c.Text).ToList();
+
+        Assert.DoesNotContain(said, s => s.Contains("BLADERCTICAE", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("Hostile contact, likely Vanduul Blade", said);
+    }
+
+    [Fact]
+    public void The_same_sentence_is_not_said_twice_in_twenty_seconds()
+    {
+        var watch = new CombatWatch(Book);
+        var said = new List<string>();
+        for (var i = 0; i < 6; i++)
+        {
+            // A new Blade each pair of frames: the pilot cycling through a swarm.
+            var cs = i % 2 == 0 ? 10400 : 35400;
+            said.AddRange(watch.See(Panel(i % 2 == 0 ? "VANDUUL BLADE" : "RSI PERSEUS", 200, cs, "Vanduul"), TargetStance.Hostile, T0.AddSeconds(i)).Select(c => c.Text));
+        }
+
+        Assert.Single(said, s => s == "Hostile Vanduul Blade");
+    }
+
+    [Fact]
     public void A_variant_named_apart_from_its_hull_folds_by_its_class()
     {
         var book = ShipSignatureBook.Of(

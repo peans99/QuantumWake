@@ -168,12 +168,14 @@ public sealed class CombatWatch(ShipSignatureBook book)
                 var repeat = heard is not null && at - heard.At < TimeSpan.FromSeconds(30)
                     && heard.Text.EndsWith(Spoken(name), StringComparison.Ordinal);
 
-                if (!l.SaidName && !repeat)
+                // Only a name that is a hull is said: two frames agreed on
+                // "KANOUUL" and on a Blade's name run into a party member's.
+                if (!l.SaidName && !repeat && Speakable(name))
                 {
                     l.SaidName = true;
                     now.Add(Say(at, "identified", $"Target identified: {Spoken(name)}"));
                 }
-                l.SaidName = true;
+                if (Speakable(name)) l.SaidName = true;
             }
         }
         else if (!l.SaidName && !l.SaidLikely && l.CrossSections.Count >= 2 && l.Cs is { } median)
@@ -206,14 +208,15 @@ public sealed class CombatWatch(ShipSignatureBook book)
                 l.SaidHostile = true;
                 // A printed name is said as a fact; a hull the signature fits is
                 // a guess, and is said as one - "likely", never bare.
-                var what = (l.Name ?? l.PendingName) is { } n ? Spoken(n)
+                var sayName = (l.Name ?? l.PendingName) is { } n && Speakable(n) ? n : null;
+                var what = sayName is not null ? Spoken(sayName)
                     : l.Cs is { } lockCs && Spoken(Odds(l, lockCs)) is { } guess ? $"contact, {guess}"
                     : "contact";
                 now.Add(Say(at, "hostile", $"Hostile {what}"));
 
                 // Said with its name, it has been identified too; said with a
                 // likely hull, the signature callout would only repeat it.
-                if (l.Name is not null || l.PendingName is not null) l.SaidName = true;
+                if (sayName is not null) l.SaidName = true;
                 else if (what != "contact") l.SaidLikely = true;
             }
         }
@@ -249,8 +252,24 @@ public sealed class CombatWatch(ShipSignatureBook book)
             }
         }
 
+        // The same sentence inside twenty seconds is not said again. In a
+        // swarm the pilot cycles between Blades a second apart, and the
+        // replay of 2026-11-05 said "Hostile Vanduul Blade" at 115 s and 116 s.
+        foreach (var callout in now.ToList())
+        {
+            if (_said.Any(c => !ReferenceEquals(c, callout) && c.Text == callout.Text
+                    && at - c.At < TimeSpan.FromSeconds(20) && c.At <= callout.At))
+            {
+                now.Remove(callout);
+                _said.Remove(callout);
+            }
+        }
+
         return now;
     }
+
+    /// <summary>A name the voice may say: a hull in the book, or anything when there is no book to check against.</summary>
+    private bool Speakable(string name) => Book.Count == 0 || Book.Hull(name) is not null;
 
     /// <summary>The ship classes the log saw lately; empty when nothing supplies them.</summary>
     public Func<IReadOnlySet<string>> Nearby { get; set; } = () => new HashSet<string>();
