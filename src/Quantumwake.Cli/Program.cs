@@ -22,6 +22,28 @@ using Quantumwake.Data;
 if (GetOption(args, "--garage-check") is { } dumpDir)
     return GarageCheck(dumpDir);
 
+// The combat reader run over frames in order - recorded video, extracted with
+// ffmpeg - the way the live loop would see them a few seconds apart: what the
+// target panel read, the lock label's colour, the hulls the cross-section
+// fits, and what would have been said. Needs the models and, for the hull
+// candidates, the community dataset.
+// --near <figure>: the hulls a cross-section fits, closest first.
+if (GetOption(args, "--near") is { } nearFigure && double.TryParse(nearFigure, out var nearCs))
+{
+    foreach (var hull in ShipSignatureBook.From(new CommunityData()).Near(nearCs, 12))
+        Console.WriteLine($"{hull.CrossSection,8:0}  {hull.Name}");
+    return 0;
+}
+
+if (GetOption(args, "--hull") is { } hullName)
+{
+    Console.WriteLine(ShipSignatureBook.From(new CommunityData()).Hull(hullName) ?? "(no hull)");
+    return 0;
+}
+
+if (GetOption(args, "--target") is { } targetFrames)
+    return await TargetCheck(targetFrames);
+
 // The screen reader run over a screenshot, or a folder of them, the way the
 // backups are run through the parser: what each frame read, how long it took,
 // and the lines written out so --screen and a diff can be asked about them.
@@ -1542,6 +1564,82 @@ static int Screen(string linesFile, string installRoot, string? catalogueQuery)
 }
 
 /// <summary>Aggregates parsed events into the figures worth eyeballing.</summary>
+
+static async Task<int> TargetCheck(string target)
+{
+    var files = Directory.Exists(target)
+        ? Directory.GetFiles(target, "*.png").Concat(Directory.GetFiles(target, "*.jpg")).OrderBy(f => f).ToArray()
+        : File.Exists(target) ? [target] : [];
+
+    if (files.Length == 0)
+    {
+        Console.Error.WriteLine($"No frames at {target}");
+        return 1;
+    }
+
+    using var reader = new Quantumwake.Ocr.Onnx.OnnxScreenReader();
+    var book = ShipSignatureBook.From(new CommunityData());
+    Console.WriteLine($"Hulls by cross-section: {book.Count}");
+
+    var watch = new CombatWatch(book);
+    ScreenPatch? known = null;
+    var at = DateTimeOffset.UnixEpoch;
+    int panels = 0, named = 0, withCs = 0, withSpeed = 0;
+
+    foreach (var file in files)
+    {
+        // Frames are taken a fixed step apart; the watch only needs them in order.
+        at = at.AddSeconds(2);
+        var (w, h) = ImageSize(file);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        var (panel, stance) = known is null
+            ? (null, TargetStance.Unread)
+            : await TargetLook.ReadAsync(reader, file, null, known, w, h);
+        var whole = false;
+
+        if (panel is null)
+        {
+            var lines = await reader.ReadAsync(file);
+            (panel, stance) = await TargetLook.ReadAsync(reader, file, lines, null, w, h);
+            whole = true;
+        }
+        clock.Stop();
+
+        known = panel?.Panel;
+        var said = watch.See(panel, stance, at);
+
+        if (panel is not null)
+        {
+            panels++;
+            if (panel.Name is not null) named++;
+            if (panel.CrossSection is not null) withCs++;
+            if (panel.SpeedMs is not null) withSpeed++;
+        }
+
+        var near = panel?.CrossSection is { } cs ? book.Near(cs, 3) : [];
+        Console.WriteLine($"{Path.GetFileName(file),-12} {clock.ElapsedMilliseconds,5} ms {(whole ? "whole" : "patch"),-5} " +
+            (panel is null ? "-" :
+                $"{panel.Name ?? (panel.Unknown ? "UNKNOWN" : "?"),-20} {panel.Faction ?? "",-14} " +
+                $"{panel.SpeedMs?.ToString("0") ?? "?",4} m/s {panel.RangeKm?.ToString("0.00") ?? "?",6} km  " +
+                $"EM {panel.Em?.ToString("0") ?? "?"} IR {panel.Ir?.ToString("0") ?? "?"} CS {panel.CrossSection?.ToString("0") ?? "?"}  " +
+                $"{stance,-8} {string.Join(" / ", near.Select(n => n.Name))}"));
+
+        foreach (var callout in said)
+            Console.WriteLine($"    >> {callout.Text}");
+    }
+
+    var picture = watch.Picture(at);
+    Console.WriteLine($"Frames {files.Length}, panel on {panels}, named on {named}, CS on {withCs}, speed on {withSpeed}; locks {picture.Locks}, hostile {picture.HostileLocks}");
+    return 0;
+}
+
+static (int Width, int Height) ImageSize(string file)
+{
+    using var codec = SkiaSharp.SKCodec.Create(file);
+    return (codec.Info.Width, codec.Info.Height);
+}
+
 internal sealed class Report
 {
     private readonly Dictionary<string, int> _locations = [];

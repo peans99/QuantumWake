@@ -175,6 +175,78 @@ mismatch says what it found instead), how long the engine takes over a live
 frame at full resolution, and whether a scan read live agrees with the same
 panel screenshotted.
 
+### The target panel (1.1.2)
+
+Measured on Nicolas's OBS recording of 2026-11-05 (`2026-11-05 20-55-25.mp4`,
+2 h 24 min at 1716x720, half his 3440x1440), a Tactical Strike Group run with
+two long fights. Frames were taken every 6 s over 00:29-00:36 and
+01:57-02:04, scaled back to 3440x1440 and read with
+`Quantumwake.Cli --target <folder>`. Nothing was measured on a live game yet:
+live reading was not switched on that night (no `live` folder), and the
+recording is blurrier than the screen, so these numbers are a floor.
+
+**`Game.log` says nothing about targets.** That session's log has no line for
+a lock, a target's name or a kill of an NPC fighter, so the screen is the
+only source.
+
+**What the panel carries.** Under the mission box, top right, four rows in
+the same order on both ship HUDs seen: three signature figures - EM, IR, CS,
+each with a smaller figure under it - then the name, `FACTION`, and
+`VELOCITY` with the range in brackets: `VELOCITY • 43M/S (2.55KM)`. One HUD
+writes the rows as loose text, the other in boxes with label and value
+apart, and the panel sits in a different place in each - so it is found by
+its words, never by position.
+
+**The name is often UNKNOWN.** Most fighters stayed `UNKNOWN / FACTION •
+UNKNOWN` for their whole fight; a name appears once the target is scanned,
+and the moment it does - 02:00:10, `UNKNOWN` turning into `VANDUUL BLADE` -
+is the "target identified" callout.
+
+**CS names the hull anyway.** The third figure is the hull's largest
+cross-section face times its armour, cut (not rounded) to a hundred:
+Idris-P 60,000 read `60.0K`, Perseus 35,430 read `35.4K`, Vanduul Blade 10,418
+read `10.4K`, Glaive 11,922 read `11.9K`, Gladius 9,779 read `9.7K`, Paladin
+28,580 read `28.5K` - the Paladin is the one that shows it is cut. It is
+steady through a fight (23.9K on every frame of one lock for 30 s), so an
+UNKNOWN can be narrowed to the hulls in that hundred; `ShipSignatureBook`
+does it from the Garage digests. The Blade's `10.4K` was on screen for 25 s
+before the game printed its name.
+
+**The hologram is damage, not hostility.** It turns red, but the Idris-P the
+party was defending (ship health 24%) was drawn red, and Vanduul fighters
+went from white to red over a fight. Hostility is the colour of the locked
+target's label in the world - the only label with a speed in brackets,
+`1.2km (26m/s)` - red for hostile, blue for party; and, when that label is not
+read, a faction that was only ever shooting: Vanduul, Outlaws, Shattered
+Blade.
+
+**0 m/s is not disabled.** The Idris-P and a turret both sat at 0 m/s for
+minutes. "Target disabled" is said only of a lock seen moving above 15 m/s
+that then reads zero twice.
+
+**The engines are not equal here.** Over the 137 frames:
+
+| | panel found | named | CS | speed | time a frame |
+|---|---|---|---|---|---|
+| ONNX, whole frame then panel | 109 | 56 | 68 | 71 | ~1 s whole, ~130 ms panel |
+| Windows OCR alone | 73 | 27 | 45 | 10 | ~120 ms whole, ~30 ms panel |
+| Windows whole frame, ONNX panel | 109 | 57 | 67 | 68 | ~175 ms whole + panel (~256 ms with the label search), ~126 ms panel |
+
+Windows' engine read the boxed HUD's `VELOCITY` and `FACTION` labels on no
+frame at all, and named a Vanduul fighter on two. So the panel is read with
+ONNX whenever its models are already on disk - never fetching them for this -
+and the panel's own range, upper-case `KM` in a bracket, finds the row when
+the label is missing.
+
+Misreadings folded, all seen: `VELOCTY`, `VELOCY`, `VELCCITY`, `l_VECCtry`;
+`FAETION`, `PACTION`, `FASTION`, `FACTON`, `AGTON`, `CTION`, `STION`; `UNKNOWH`,
+`UMKOWN`; `OM/S` for 0, `1B3M` for 183, `IO.4K` and `10.AK` for 10.4K;
+`Yanduul`, `Vandull`, `Vanduley`.
+
+Open: the same numbers on a live game at full resolution, how much the
+second-a-tick pace costs the game's frame rate, and whether a lock label read
+live is red as often as the panel says hostile.
+
 ---
 
 ## What other people already built

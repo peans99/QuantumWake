@@ -50,7 +50,22 @@ public sealed record GameCapture(bool Taken, string? Why = null, int Width = 0, 
 /// </param>
 /// <param name="Enabled">Whether live reading is on. Never on unless the pilot said yes.</param>
 /// <param name="AnsweredAt">When it was last answered or changed.</param>
-public sealed record LiveScreenSettings(bool Asked = false, bool Enabled = false, DateTimeOffset? AnsweredAt = null);
+/// <param name="Voice">
+/// Whether combat callouts are spoken. Its own switch, off until turned on:
+/// reading the screen is one agreement and a voice in the pilot's headset is
+/// another, and a yes to the first never turns on the second.
+/// </param>
+public sealed record LiveScreenSettings(bool Asked = false, bool Enabled = false, DateTimeOffset? AnsweredAt = null, bool Voice = false);
+
+/// <summary>
+/// Says a callout out loud. An interface for the same reason the capture is
+/// one: only a Windows desktop has a voice, and the server runs without one.
+/// </summary>
+public interface ICalloutVoice
+{
+    /// <summary>Speaks <paramref name="text"/>, or drops it when the voice is still busy with something newer.</summary>
+    void Say(string text);
+}
 
 /// <summary>
 /// Remembers whether the pilot wants the screen read live, and that they were asked.
@@ -83,20 +98,34 @@ public sealed class LiveScreenStore
     {
         lock (_gate)
         {
-            _current = new LiveScreenSettings(true, enabled, DateTimeOffset.UtcNow);
-
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-                File.WriteAllText(_path, JsonSerializer.Serialize(_current));
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // An answer that fails to save is asked again next start, which
-                // beats reading the screen on an answer nobody can find.
-            }
-
+            _current = _current with { Asked = true, Enabled = enabled, AnsweredAt = DateTimeOffset.UtcNow };
+            Save();
             return _current;
+        }
+    }
+
+    /// <summary>Turns the spoken callouts on or off; the reading answer is left as it was.</summary>
+    public LiveScreenSettings SetVoice(bool on)
+    {
+        lock (_gate)
+        {
+            _current = _current with { Voice = on };
+            Save();
+            return _current;
+        }
+    }
+
+    private void Save()
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+            File.WriteAllText(_path, JsonSerializer.Serialize(_current));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // An answer that fails to save is asked again next start, which
+            // beats reading the screen on an answer nobody can find.
         }
     }
 

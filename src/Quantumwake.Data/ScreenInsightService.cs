@@ -67,7 +67,8 @@ public sealed class ScreenInsightService(
     LogLibrary library,
     ScreenReadingStore readings,
     IScreenReader? reader = null,
-    IClipboardReader? clipboard = null)
+    IClipboardReader? clipboard = null,
+    Func<IScreenReader?>? panelReader = null)
 {
     public bool CanReadScreenshots => reader is not null;
 
@@ -278,7 +279,7 @@ public sealed class ScreenInsightService(
     public async Task<ScreenSighting> ReadShotAsync(string path, CancellationToken token = default)
     {
         var info = new FileInfo(path);
-        var (sighting, read) = await ReadFrameAsync(path, info.Name, new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero), token);
+        var (sighting, read, _) = await ReadFrameAsync(path, info.Name, new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero), token);
 
         // A frame the engine could not open is not kept: the watcher gives a
         // file the game is still writing another look before it settles that.
@@ -297,11 +298,51 @@ public sealed class ScreenInsightService(
     public async Task<ScreenSighting> ReadLiveAsync(string path, string shot, DateTimeOffset shotAt, CancellationToken token = default) =>
         (await ReadFrameAsync(path, shot, shotAt, token)).Sighting;
 
+    /// <summary>
+    /// <see cref="ReadLiveAsync"/> with the engine's lines kept, for the
+    /// readers that need to know where a thing sat rather than what it said -
+    /// the target panel is found by its words and then read again up close.
+    /// </summary>
+    public async Task<(ScreenSighting Sighting, IReadOnlyList<ScreenTextLine> Lines)> ReadLiveFrameAsync(
+        string path, string shot, DateTimeOffset shotAt, CancellationToken token = default)
+    {
+        var (sighting, _, lines) = await ReadFrameAsync(path, shot, shotAt, token);
+        return (sighting, lines);
+    }
+
+    /// <summary>The hulls by cross-section, rebuilt when the dataset under it changes.</summary>
+    public ShipSignatureBook SignatureBook()
+    {
+        var community = library.Community;
+        if (!ReferenceEquals(community, _bookFrom))
+        {
+            _book = ShipSignatureBook.From(community);
+            _bookFrom = community;
+        }
+
+        return _book;
+    }
+
+    private ShipSignatureBook _book = ShipSignatureBook.Empty;
+    private CommunityData? _bookFrom;
+
+    /// <summary>
+    /// The target panel, read up close; see <see cref="TargetLook"/>. With the
+    /// host's panel reader when it offers one - ONNX, when its models are on
+    /// disk - because the Windows engine read the boxed HUD worst of all.
+    /// </summary>
+    public Task<(TargetReading? Panel, TargetStance Stance)> ReadTargetAsync(
+        string path, IReadOnlyList<ScreenTextLine>? whole, ScreenPatch? known, int width, int height,
+        CancellationToken token = default) =>
+        reader is null
+            ? Task.FromResult<(TargetReading?, TargetStance)>((null, TargetStance.Unread))
+            : TargetLook.ReadAsync(panelReader?.Invoke() ?? reader, path, whole, known, width, height, token);
+
     /// <summary>A frame read through every second look; <c>Read</c> is false when the engine never got to it.</summary>
-    private async Task<(ScreenSighting Sighting, bool Read)> ReadFrameAsync(string path, string shot, DateTimeOffset shotAt, CancellationToken token)
+    private async Task<(ScreenSighting Sighting, bool Read, IReadOnlyList<ScreenTextLine> Lines)> ReadFrameAsync(string path, string shot, DateTimeOffset shotAt, CancellationToken token)
     {
         if (reader is null)
-            return (Nothing(shot, shotAt, "this copy cannot read screenshots - the overlay does that"), false);
+            return (Nothing(shot, shotAt, "this copy cannot read screenshots - the overlay does that"), false, []);
 
         var watch = System.Diagnostics.Stopwatch.StartNew();
         IReadOnlyList<ScreenTextLine> lines;
@@ -314,7 +355,7 @@ public sealed class ScreenInsightService(
         {
             // A half-written file is the likely one: the game is still saving
             // the shot the pilot took a moment ago.
-            return (Nothing(shot, shotAt, $"could not read that screenshot ({e.GetType().Name})"), false);
+            return (Nothing(shot, shotAt, $"could not read that screenshot ({e.GetType().Name})"), false, []);
         }
 
         // The balance is the one line the engine drops from a whole frame
@@ -335,7 +376,7 @@ public sealed class ScreenInsightService(
 
         watch.Stop();
 
-        return (Understand(shot, shotAt, lines, watch.ElapsedMilliseconds, scan, bars), true);
+        return (Understand(shot, shotAt, lines, watch.ElapsedMilliseconds, scan, bars), true, lines);
     }
 
     /// <summary>Everything after the engine, with nothing written: what a frame's lines mean.</summary>
@@ -555,4 +596,87 @@ public sealed class ScreenInsightService(
             candidate.Tier.ToString(),
             candidate.Agrees,
             candidate.Disagrees);
+}
+
+/// <summary>
+/// The target panel, read up close: the patch where it was last seen, or
+/// where the whole frame's lines put it.
+/// </summary>
+/// <remarks>
+/// Twice the size, no shear - the treatment the mining panel reads best at,
+/// and the panel is the same thin HUD face. Read alone, a patch a tenth of the
+/// frame costs a fraction of the whole read, which is what lets the live loop
+/// look at a fight every second. Static over the reader so the CLI's
+/// <c>--target</c> check runs exactly this against recorded frames.
+/// </remarks>
+public static class TargetLook
+{
+    /// <summary>Null panel when there is none to read; the caller looks at the whole frame again before it gives up.</summary>
+    public static async Task<(TargetReading? Panel, TargetStance Stance)> ReadAsync(
+        IScreenReader reader, string path, IReadOnlyList<ScreenTextLine>? whole, ScreenPatch? known,
+        int width, int height, CancellationToken token = default)
+    {
+        var stance = TargetStance.Unread;
+        if (whole is not null && TargetPanel.LockLabel(whole) is { } label)
+            stance = await StanceAsync(reader, path, label, token);
+
+        var patch = known ?? (whole is null ? null : TargetPanel.Locate(whole, width, height));
+        if (patch is null)
+            return (null, stance);
+
+        // The label is thin text over the world, and the whole read - Windows'
+        // engine above all - mostly misses it. With a lock held, the middle of
+        // the screen is read once more on whole-frame ticks, where a target
+        // being fought sits; a label off to the side stays unread.
+        if (whole is not null && stance == TargetStance.Unread)
+        {
+            var middle = new ScreenPatch(width * 0.25, height * 0.15, width * 0.5, height * 0.7);
+            try
+            {
+                var centre = await reader.ReadAsync(path, middle, new ScreenTreatment(Scale: 1, Shear: 0), token);
+                if (TargetPanel.LockLabel(centre) is { } found)
+                    stance = await StanceAsync(reader, path, found, token);
+            }
+            catch (Exception e) when (e is not ScreenEngineUnavailableException && !token.IsCancellationRequested)
+            {
+                // The stance stays unread; the panel is still worth reading.
+            }
+        }
+
+        IReadOnlyList<ScreenTextLine> close;
+        try
+        {
+            close = await reader.ReadAsync(path, patch, new ScreenTreatment(Scale: 2, Shear: 0), token);
+        }
+        catch (Exception e) when (e is not ScreenEngineUnavailableException && !token.IsCancellationRequested)
+        {
+            return (null, stance);
+        }
+
+        // Re-centred on what this read found, so a panel that drifts with the
+        // pilot's head is followed rather than lost off the patch's edge.
+        var panel = TargetPanel.Read(close, height);
+        if (panel is not null)
+        {
+            panel = panel with { Panel = TargetPanel.Locate(close, width, height) ?? patch };
+        }
+        else if (whole is not null)
+        {
+            panel = TargetPanel.Read(whole, height, patch);
+        }
+
+        // A faction that only ever shoots is hostile whatever colour the label
+        // was, or whether it was read at all.
+        if (stance == TargetStance.Unread && panel?.Faction is { } faction && TargetPanel.IsHostileFaction(faction))
+            stance = TargetStance.Hostile;
+
+        return (panel, stance);
+    }
+
+    private static async Task<TargetStance> StanceAsync(IScreenReader reader, string path, ScreenTextLine label, CancellationToken token)
+    {
+        var box = new ScreenPatch(label.Left, label.Top,
+            Math.Max(label.Height * 0.6 * label.Text.Length, label.Height), label.Height);
+        return TargetPanel.Stance(await reader.PixelsAsync(path, box, token), label);
+    }
 }

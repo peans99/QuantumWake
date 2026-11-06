@@ -42,12 +42,18 @@ send nothing about you.
 - **The game's screen, live**, only if you said yes when the app asked (it
   asks once, at start) or turned it on later on the Log page. While Star
   Citizen is the window in front, the app copies the pixels of the game's
-  window about every two seconds - the same pixels a screenshot would hold -
-  and reads them on your machine like a screenshot. Each frame is overwritten
-  by the next and deleted when reading stops; what is kept is the reading of
-  a mining scan panel, one per rock. A frame can show anything the game does,
-  other players' names included, and none of it leaves your computer. The
-  app never opens the game's process, reads its memory or sends it input.
+  window about every two seconds - every second while a ship is targeted -
+  the same pixels a screenshot would hold, and reads them on your machine
+  like a screenshot. Each frame is overwritten by the next and deleted when
+  reading stops; what is kept is the reading of a mining scan panel, one per
+  rock. The ship you have targeted - its name, signatures, speed and whether
+  it is marked hostile - is held in memory for the combat page and never
+  written down. A frame can show anything the game does, other players' names
+  included, and none of it leaves your computer. The app never opens the
+  game's process, reads its memory or sends it input.
+- **Spoken callouts**, only if you turn on the voice on the Log page: the
+  app says things like "Target identified" with the speech voice Windows
+  already has, on your PC. The sentence is not sent anywhere.
 - **Joysticks and the game's key bindings**, on the Controls page, to show and
   back up your bindings.
 

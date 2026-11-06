@@ -36,12 +36,14 @@ public static partial class ServerHost
     /// How to copy the game window for live reading. Supplied by the overlay on
     /// Windows; null otherwise, and the live switch then says it is unavailable.
     /// </param>
+    /// <param name="voice">Speaks combat callouts; supplied by the overlay on Windows, null otherwise.</param>
     public static WebApplication Build(
         string[] args,
         IScreenReader? screen = null,
         IClipboardReader? clipboard = null,
         IJoystickReader? joysticks = null,
-        IGameScreenCapture? capture = null)
+        IGameScreenCapture? capture = null,
+        ICalloutVoice? voice = null)
     {
 
         // Quantumwake server.
@@ -157,13 +159,22 @@ public static partial class ServerHost
         if (clipboard is null && LinuxClipboardReader.Available)
             clipboard = new LinuxClipboardReader();
 
+        // The target panel reads with ONNX when its models are already on
+        // disk, whichever engine reads everything else. On the 2026-11-05
+        // recording Windows' engine read the boxed HUD's labels on no frame
+        // and named a Vanduul fighter on two of sixty; ONNX found the panel
+        // on 109 of 137 frames. Only when present: this never starts the
+        // 14 MB download, which stays the screen settings' business.
+        var panelOnnx = screen as Quantumwake.Ocr.Onnx.OnnxScreenReader ?? new Quantumwake.Ocr.Onnx.OnnxScreenReader();
+
         // Built by hand rather than resolved, because the two readers come from
         // the host and may not exist at all.
         builder.Services.AddSingleton(sp =>
             new ScreenInsightService(
                 sp.GetRequiredService<LogLibrary>(),
                 sp.GetRequiredService<ScreenReadingStore>(),
-                screen, clipboard));
+                screen, clipboard,
+                () => panelOnnx.Ready ? panelOnnx : null));
 
         // Reads each screenshot as it lands, while the pilot has asked for that.
         // Idle otherwise: it checks the setting, not the folder.
@@ -173,6 +184,7 @@ public static partial class ServerHost
         // answer, so screenshot reading being on never turns this on.
         builder.Services.AddSingleton<LiveScreenStore>();
         if (capture is not null) builder.Services.AddSingleton(capture);
+        if (voice is not null) builder.Services.AddSingleton(voice);
         builder.Services.AddSingleton<LiveScreenService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<LiveScreenService>());
 
@@ -3812,6 +3824,18 @@ public static partial class ServerHost
             live.Answer(answer.Enabled && service.Available);
             return Results.Ok(service.Describe(live));
         });
+
+        // The voice is a switch of its own, under the reading one: on means
+        // callouts are spoken, and it is never turned on by anything else.
+        app.MapPost("/api/live/voice", (LiveVoice body, LiveScreenStore live, LiveScreenService service) =>
+        {
+            live.SetVoice(body.Enabled);
+            return Results.Ok(service.Describe(live));
+        });
+
+        // Says one sample callout, so the pilot hears the voice before a fight does.
+        app.MapPost("/api/live/voice/test", (LiveScreenService service) =>
+            service.TestVoice() ? Results.Ok() : Results.Problem("this copy has no voice - only the Windows app speaks", statusCode: 409));
 
         // The install comes from the closure and not the container: on a
         // machine with none it is not registered, and a GET cannot take it
