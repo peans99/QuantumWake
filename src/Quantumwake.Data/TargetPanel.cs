@@ -421,8 +421,9 @@ public static partial class TargetPanel
     public static bool IsUnknown(string text)
     {
         var flat = Letters(text);
-        if (flat.Length is < 5 or > 9) return false;
-        return Distance(flat, "UNKNOWN") <= 2;
+        // "LLUWKNOWN" had stray letters in front: anything ending KNOWN is it.
+        if (flat.Length is < 5 or > 10) return false;
+        return Distance(flat, "UNKNOWN") <= 2 || flat.EndsWith("KNOWN", StringComparison.Ordinal);
     }
 
     private static string Tidy(string text) =>

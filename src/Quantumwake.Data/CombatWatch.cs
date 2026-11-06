@@ -22,6 +22,12 @@ public sealed record CombatCallout(DateTimeOffset At, string Kind, string Text);
 /// <param name="Disabled">It was moving and has sat at 0 m/s since.</param>
 /// <param name="Since">When this lock was first seen.</param>
 /// <param name="SeenAt">When the panel was last read.</param>
+/// <param name="Class">
+/// The game's class for the hull the page may draw: the named hull, or the
+/// likeliest at 60% or better - the same bar the voice holds a guess to.
+/// Null when neither, and the page draws the game's own hologram instead.
+/// </param>
+/// <param name="Likely">The class is a guess from the odds rather than a printed name.</param>
 public sealed record CombatTarget(
     string? Name,
     IReadOnlyList<HullOdds> Candidates,
@@ -34,7 +40,9 @@ public sealed record CombatTarget(
     double? CrossSection,
     bool Disabled,
     DateTimeOffset Since,
-    DateTimeOffset SeenAt);
+    DateTimeOffset SeenAt,
+    string? Class = null,
+    bool Likely = false);
 
 /// <summary>What the combat page shows.</summary>
 /// <param name="Combat">A hostile lock has been seen in the last half minute.</param>
@@ -291,12 +299,19 @@ public sealed class CombatWatch(ShipSignatureBook book)
     {
         var l = _lock is not null && at - _lock.SeenAt <= Grace ? _lock : null;
 
-        var target = l is null ? null : new CombatTarget(
-            l.Name,
-            l.Name is null && l.Cs is { } cs ? Odds(l, cs) : [],
-            l.Faction,
-            l.Stance.ToString().ToLowerInvariant(),
-            l.Speed, l.Range, l.Em, l.Ir, l.Cs, l.Disabled, l.Since, l.SeenAt);
+        CombatTarget? target = null;
+        if (l is not null)
+        {
+            var odds = l.Name is null && l.Cs is { } cs ? Odds(l, cs) : [];
+            var named = l.Name is { } n ? Book.ClassOf(Book.Hull(n) ?? n) : null;
+            var likely = named is null && odds.Count > 0 && odds[0].Chance >= 0.6 ? odds[0].Class : null;
+
+            target = new CombatTarget(
+                l.Name, odds, l.Faction,
+                l.Stance.ToString().ToLowerInvariant(),
+                l.Speed, l.Range, l.Em, l.Ir, l.Cs, l.Disabled, l.Since, l.SeenAt,
+                named ?? likely, named is null && likely is not null);
+        }
 
         return new CombatPicture(
             _lastHostile is { } h && at - h <= CombatFor,

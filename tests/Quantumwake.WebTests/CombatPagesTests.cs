@@ -155,6 +155,27 @@ public class CombatPagesTests
     }
 
     [Fact]
+    public void The_target_page_draws_the_hull_or_the_games_hologram()
+    {
+        var e = Mfd();
+        // Unknown, and no hull ahead on the odds: the game's own hologram.
+        Assert.Equal("hologram", e.Evaluate("QwMfd.targetPicture(live).kind").AsString());
+        Assert.StartsWith("/api/live/hologram", e.Evaluate("QwMfd.targetPicture(live).src").AsString());
+
+        // A likely hull: its silhouette, marked as a guess, red while hostile, the hologram behind it.
+        e.Execute("var likely = {...live, status:{combat:{...live.status.combat, target:{...live.status.combat.target, class:'ANVL_Paladin', likely:true}}}};");
+        Assert.Equal("silhouette", e.Evaluate("QwMfd.targetPicture(likely).kind").AsString());
+        Assert.Equal("/api/fleet/icons/ANVL_Paladin", e.Evaluate("QwMfd.targetPicture(likely).src").AsString());
+        Assert.True(e.Evaluate("QwMfd.targetPicture(likely).likely").AsBoolean());
+        Assert.Equal("hostile", e.Evaluate("QwMfd.targetPicture(likely).tone").AsString());
+        Assert.StartsWith("/api/live/hologram", e.Evaluate("QwMfd.targetPicture(likely).fallback").AsString());
+
+        // Nothing to draw with reading off or nothing locked.
+        Assert.True(e.Evaluate("QwMfd.targetPicture({...live, enabled:false}) === null").AsBoolean());
+        Assert.True(e.Evaluate("QwMfd.targetPicture({...live, status:{combat:{target:null}}}) === null").AsBoolean());
+    }
+
+    [Fact]
     public void Combat_is_a_category_on_home_holding_both_pages()
     {
         var e = Mfd();

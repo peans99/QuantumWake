@@ -100,6 +100,7 @@ public sealed class LiveScreenService(
     private LiveScreenStatus _status = new("off");
     private CombatWatch? _combat;
     private ScreenPatch? _panel;
+    private int _frameHeight;
     private long _tick;
 
     /// <summary>Whether this copy can read the screen live at all.</summary>
@@ -218,6 +219,7 @@ public sealed class LiveScreenService(
         }
 
         var at = DateTimeOffset.UtcNow;
+        _frameHeight = taken.Height;
 
         lock (_gate)
         {
@@ -303,6 +305,58 @@ public sealed class LiveScreenService(
             LastReadMs = sighting.TookMs,
             LastPanelMs = panelMs,
         });
+    }
+
+    /// <summary>
+    /// The game's own hologram of the locked ship, cut from the frame just
+    /// read, as a PNG; null when reading is off or no panel is held.
+    /// </summary>
+    /// <remarks>
+    /// The hologram sits under the target panel - 40 to 230 below the
+    /// VELOCITY row and 80 left of it to 340 right, at 1440 high, which holds
+    /// it on both HUDs in the recording though they centre it differently -
+    /// and it is the one picture of the target that is always
+    /// there: a fifth of the hulls have no vehicle icon in the game files
+    /// (the Paladin, the Perseus and the Scythe among them). It also shows
+    /// the damage, which a silhouette cannot. Cut in memory from the frame on
+    /// request and never written anywhere.
+    /// </remarks>
+    public byte[]? Hologram()
+    {
+        if (!settings.Current.Enabled || _panel is not { } panel || _frameHeight <= 0)
+            return null;
+
+        var frame = Core.AppPaths.In("live", "frame.bmp");
+        try
+        {
+            byte[] bytes;
+            using (var stream = new FileStream(frame, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            using (var copy = new MemoryStream())
+            {
+                stream.CopyTo(copy);
+                bytes = copy.ToArray();
+            }
+
+            using var bitmap = SkiaSharp.SKBitmap.Decode(bytes);
+            if (bitmap is null) return null;
+
+            var u = _frameHeight / 1440.0;
+            var rect = SkiaSharp.SKRectI.Intersect(
+                new SkiaSharp.SKRectI(0, 0, bitmap.Width, bitmap.Height),
+                SkiaSharp.SKRectI.Create((int)(panel.Left + 120 * u), (int)(panel.Top + 230 * u), (int)(420 * u), (int)(190 * u)));
+            if (rect.Width <= 0 || rect.Height <= 0) return null;
+
+            using var cut = new SkiaSharp.SKBitmap(rect.Width, rect.Height);
+            if (!bitmap.ExtractSubset(cut, rect)) return null;
+            using var image = SkiaSharp.SKImage.FromBitmap(cut);
+            using var png = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 90);
+            return png.ToArray();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Mid-write, or gone because reading just stopped: the next ask gets the next frame.
+            return null;
+        }
     }
 
     /// <summary>Hands a frame's panel to the combat watch, and anything it says to the voice.</summary>

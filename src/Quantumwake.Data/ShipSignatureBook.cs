@@ -12,7 +12,8 @@ public sealed record SignatureMatch(string Name, double CrossSection, string? Cl
 /// <param name="Name">The hull as a pilot would say it.</param>
 /// <param name="Chance">Its share of the odds, 0 to 1, rounded to five percent.</param>
 /// <param name="Because">What put it there: signature, seen nearby, faction.</param>
-public sealed record HullOdds(string Name, double Chance, IReadOnlyList<string> Because);
+/// <param name="Class">The game's class name, for the hull's picture.</param>
+public sealed record HullOdds(string Name, double Chance, IReadOnlyList<string> Because, string? Class = null);
 
 /// <summary>
 /// Every hull's cross-section signature, so a target the panel calls UNKNOWN
@@ -185,7 +186,7 @@ public sealed class ShipSignatureBook
         var total = weighed.Sum(w => w.Weight);
         return [.. weighed
             .OrderByDescending(w => w.Weight)
-            .Select(w => new HullOdds(w.Hull.Name, Math.Round(w.Weight / total * 20) / 20, w.Because))
+            .Select(w => new HullOdds(w.Hull.Name, Math.Round(w.Weight / total * 20) / 20, w.Because, w.Hull.Class))
             .Where(o => o.Chance >= 0.05)
             .Take(take)];
     }
@@ -226,6 +227,10 @@ public sealed class ShipSignatureBook
 
         return bestDistance <= Math.Min(2, flat.Length / 5) ? best : null;
     }
+    /// <summary>The game's class name for a hull the book names, for its picture; null when it is not in the book.</summary>
+    public string? ClassOf(string? hull) =>
+        hull is null ? null : _hulls.FirstOrDefault(h => string.Equals(h.Name, hull, StringComparison.OrdinalIgnoreCase))?.Class;
+
 
     private static string Flat(string text) =>
         new([.. text.ToUpperInvariant().Where(char.IsLetterOrDigit)]);

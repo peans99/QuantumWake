@@ -1070,6 +1070,24 @@ window.QwMfd = (() => {
      is asking, or what it just did. Pinned rather than appended to the list,
      because the row that asked "confirm this?" used to scroll away behind the
      list it was asking about. Null anywhere it would say nothing. */
+  /* What the Target page draws for a lock: the game's silhouette of the hull
+     when it is named, or the likeliest at 60% (marked as a guess), and the
+     game's own hologram cut from the live frame otherwise - which is also the
+     fallback when a hull has no icon, as the Paladin and Perseus do not.
+     Null with nothing locked, or with live reading off. */
+  function targetPicture(live) {
+    const target = live?.enabled ? live?.status?.combat?.target : null;
+    if (!target) return null;
+    const tone = target.stance === 'hostile' ? 'hostile' : 'neutral';
+    const hologram = `/api/live/hologram?at=${encodeURIComponent(target.seenAt || '')}`;
+    if (target.class) {
+      return { kind: 'silhouette', src: `/api/fleet/icons/${encodeURIComponent(target.class)}`, fallback: hologram,
+        tone, likely: Boolean(target.likely),
+        note: target.likely ? say('Likely hull · not confirmed') : say('Hull as the panel names it') };
+    }
+    return { kind: 'hologram', src: hologram, tone, likely: false, note: say('The game’s hologram, as seen') };
+  }
+
   function actionLine(pageId, view) {
     if (pageId !== 'act') return null;
     if (view?.saved) return { state: 'saved', text: view.saved };
@@ -1124,7 +1142,7 @@ window.QwMfd = (() => {
         ? sayn(bed.times, 'A medical bed used {count} time · the game never states a regen point', 'A medical bed used {count} times · the game never states a regen point')
         : sayn(respawn.of, '{agreeing} of {count} death woke there · the game never states a regen point', '{agreeing} of {count} deaths woke there · the game never states a regen point', { agreeing: respawn.agreeing }) };
   }
-  return { say, sayn, fit, inset, defaultInset, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, radarFocus, radarHere, routeLine, panelRole, missionCard, makerOf, makers, dormant, actionLine, sameTask, taskId, rowIcon,
+  return { say, sayn, fit, inset, defaultInset, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, radarFocus, radarHere, routeLine, panelRole, missionCard, makerOf, makers, dormant, actionLine, targetPicture, sameTask, taskId, rowIcon,
     groups, menuNodes, menuNode, parent, title, validScreen, menuItems, previewPage, trail, resolveCommand, restoreScreen, readingView,
     pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, dozed, DOZE, prettyItem, pageOf, pageStep, pageLabel, LEDGER_PAGE, BRIGHTNESS, brightnessLevel, brightnessAt,
     cycleBrightness, stepBrightness, OSBS, BUTTONS };

@@ -272,6 +272,7 @@ function render() {
   radarPlan = plan;
   drawMenu(plan);
   drawMap(showing === 'map', plan, true);
+  drawTarget(showing === 'target');
   drawMaker();
   const view = QwMfd.readingView(screen, isMenu() ? [] : QwMfd.rows(page, state, briefing, briefingUnavailable,
     { selected, armed, map: plan, extra: { ...extra, nearestServices: nearestServices() }, offset, now: Date.now() }), details);
@@ -429,6 +430,37 @@ function drawSweep(group) {
   });
 }
 
+/* The Target page's picture; see QwMfd.targetPicture for which one. A mask
+   cannot say its image failed to load, so a silhouette is probed first, and
+   a hull without an icon falls back to the hologram for as long as it is
+   locked. The hologram's address carries the read's time, so it follows the
+   lock frame by frame without being cached. */
+let targetShape = '', targetFellBack = false;
+function drawTarget(visible) {
+  const figure = byId('target-view');
+  const picture = visible ? QwMfd.targetPicture(extra.live) : null;
+  figure.hidden = !picture;
+  if (!picture) { targetShape = ''; targetFellBack = false; return; }
+  figure.classList.toggle('hostile', picture.tone === 'hostile');
+  figure.classList.toggle('likely', picture.likely);
+  byId('target-note').textContent = picture.note;
+  const shape = byId('target-shape'), hologram = byId('target-hologram');
+  const showHologram = src => { shape.hidden = true; hologram.hidden = false; if (hologram.getAttribute('src') !== src) hologram.src = src; };
+  if (picture.kind !== 'silhouette') { targetShape = ''; targetFellBack = false; showHologram(picture.src); return; }
+  if (picture.src === targetShape) { if (targetFellBack) showHologram(picture.fallback); return; }
+  targetShape = picture.src; targetFellBack = false;
+  const probe = new Image();
+  probe.onload = () => {
+    if (targetShape !== picture.src) return;
+    shape.style.setProperty('--shape', `url("${picture.src}")`);
+    shape.hidden = false; hologram.hidden = true;
+  };
+  probe.onerror = () => {
+    if (targetShape !== picture.src) return;
+    targetFellBack = true; showHologram(picture.fallback);
+  };
+  probe.src = picture.src;
+}
 function drawMap(visible, view, big) {
   const figure = byId('map');
   figure.hidden = !visible;

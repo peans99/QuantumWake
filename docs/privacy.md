@@ -48,7 +48,9 @@ send nothing about you.
   reading stops; what is kept is the reading of a mining scan panel, one per
   rock. The ship you have targeted - its name, signatures, speed and whether
   it is marked hostile - is held in memory for the combat page and never
-  written down. A frame can show anything the game does, other players' names
+  written down. The MFD's Target page can show the game's hologram of that
+  ship, cut from the frame being read when the page asks and sent only to
+  the page on your own machine. A frame can show anything the game does, other players' names
   included, and none of it leaves your computer. The app never opens the
   game's process, reads its memory or sends it input.
 - **Spoken callouts**, only if you turn on the voice on the Log page: the

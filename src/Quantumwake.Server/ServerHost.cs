@@ -3844,6 +3844,14 @@ public static partial class ServerHost
             return Results.Ok(service.Describe(live));
         });
 
+        // The game's hologram of the locked ship, cut from the frame being read;
+        // see LiveScreenService.Hologram. Never cached: it is the frame of now.
+        app.MapGet("/api/live/hologram", (LiveScreenService service, HttpContext ctx) =>
+        {
+            ctx.Response.Headers.CacheControl = "no-store";
+            return service.Hologram() is { } png ? Results.File(png, "image/png") : Results.NotFound();
+        });
+
         // Says one sample callout, so the pilot hears the voice before a fight does.
         app.MapPost("/api/live/voice/test", (LiveScreenService service) =>
             service.TestVoice() ? Results.Ok() : Results.Problem("this copy has no voice - only the Windows app speaks", statusCode: 409));
