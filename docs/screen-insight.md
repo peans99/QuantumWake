@@ -185,9 +185,15 @@ two long fights. Frames were taken every 6 s over 00:29-00:36 and
 live reading was not switched on that night (no `live` folder), and the
 recording is blurrier than the screen, so these numbers are a floor.
 
-**`Game.log` says nothing about targets.** That session's log has no line for
-a lock, a target's name or a kill of an NPC fighter, so the screen is the
-only source.
+**`Game.log` names the hulls around, never the one locked.** That session's
+log has an `ATC_Reset_VehiclesBeingStoredCleared` line for each ship that
+streamed in - `ANVL_Paladin` 33, `VNCL_Blade` 21, `VNCL_Scythe` 18,
+`VNCL_Glaive` 17 - and `CEntity::OnOwnerRemoved` force-detaching a ship's
+parts when one went away (`VNCL_Glaive_Thruster_side_left`). No line says
+which ship was locked, whether it was hostile, or its name as the panel
+prints it; `SD-5313`, the callsign on a locked Outlaw, appears nowhere. So
+the screen is the only source for the lock. The log's list of hulls nearby
+is a cross-check the signature candidates could use - not used yet.
 
 **What the panel carries.** Under the mission box, top right, four rows in
 the same order on both ship HUDs seen: three signature figures - EM, IR, CS,

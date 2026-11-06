@@ -86,6 +86,16 @@ public class CombatPagesTests
         Assert.Contains("\"enabled\":true", page.BodyOf("/api/live/voice"));
     }
 
+    [Fact]
+    public void A_voice_that_could_not_speak_says_why()
+    {
+        var silent = Loaded(Hostile.Replace("\"voice\":false", "\"voice\":true,\"voiceTrouble\":\"the last callout could not be played (NoAudioDevice)\""));
+        Assert.False(silent.Truth("__dom.node('#live-voice-trouble').hidden"));
+        Assert.Contains("NoAudioDevice", silent.NodeText("#live-voice-trouble"));
+
+        Assert.True(Loaded(Hostile.Replace("\"voice\":false", "\"voice\":true")).Truth("__dom.node('#live-voice-trouble').hidden"));
+    }
+
     // ---- the MFD ----
 
     private static Engine Mfd()

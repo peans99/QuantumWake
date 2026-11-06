@@ -194,13 +194,17 @@ public sealed class CombatWatch(ShipSignatureBook book)
             if (!l.SaidHostile)
             {
                 l.SaidHostile = true;
+                // A printed name is said as a fact; a hull the signature fits is
+                // a guess, and is said as one - "likely", never bare.
                 var what = (l.Name ?? l.PendingName) is { } n ? Spoken(n)
-                    : Book.Near(l.Cs ?? -1, 3) is { Count: 1 } one ? one[0].Name
+                    : Book.Near(l.Cs ?? -1, 3) is { Count: 1 } one ? $"contact, likely {one[0].Name}"
                     : "contact";
                 now.Add(Say(at, "hostile", $"Hostile {what}"));
 
-                // Said with its name, it has been identified too.
+                // Said with its name, it has been identified too; said with a
+                // likely hull, the signature callout would only repeat it.
                 if (l.Name is not null || l.PendingName is not null) l.SaidName = true;
+                else if (what != "contact") l.SaidLikely = true;
             }
         }
 

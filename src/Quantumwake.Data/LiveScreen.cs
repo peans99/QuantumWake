@@ -65,6 +65,13 @@ public interface ICalloutVoice
 {
     /// <summary>Speaks <paramref name="text"/>, or drops it when the voice is still busy with something newer.</summary>
     void Say(string text);
+
+    /// <summary>
+    /// Why the last callout was not heard, or null when the last one played:
+    /// no voice installed, no audio device. Said on the Log page, because a
+    /// voice that fails in silence looks exactly like a fight with nothing to say.
+    /// </summary>
+    string? Trouble => null;
 }
 
 /// <summary>

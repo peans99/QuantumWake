@@ -40,6 +40,8 @@ public sealed class WindowsCalloutVoice : ICalloutVoice, IDisposable
 
     public void Say(string text) => _queue.Writer.TryWrite((text, DateTimeOffset.UtcNow));
 
+    public string? Trouble { get; private set; }
+
     private async Task SpeakAsync()
     {
         SpeechSynthesizer? synth = null;
@@ -58,8 +60,16 @@ public sealed class WindowsCalloutVoice : ICalloutVoice, IDisposable
 
                     using var stream = await synth.SynthesizeTextToStreamAsync(text);
                     var ended = new TaskCompletionSource();
-                    void Done(MediaPlayer p, object o) => ended.TrySetResult();
-                    void Failed(MediaPlayer p, MediaPlayerFailedEventArgs e) => ended.TrySetResult();
+                    void Done(MediaPlayer p, object o)
+                    {
+                        Trouble = null;
+                        ended.TrySetResult();
+                    }
+                    void Failed(MediaPlayer p, MediaPlayerFailedEventArgs e)
+                    {
+                        Trouble = $"the last callout could not be played ({e.Error}: {e.ErrorMessage})";
+                        ended.TrySetResult();
+                    }
 
                     player.MediaEnded += Done;
                     player.MediaFailed += Failed;
@@ -80,7 +90,7 @@ public sealed class WindowsCalloutVoice : ICalloutVoice, IDisposable
                 {
                     // A machine with no voice installed, or no audio device: the
                     // callout is still on the page, which is where it is kept.
-                    System.Diagnostics.Debug.WriteLine($"Callout not spoken: {e.Message}");
+                    Trouble = $"the last callout was not spoken ({e.GetType().Name}: {e.Message})";
                 }
             }
         }

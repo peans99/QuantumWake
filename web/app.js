@@ -36424,6 +36424,11 @@ function renderLiveScreen() {
   if (voiceRow) {
     voiceRow.hidden = !(state.enabled && state.canSpeak);
     $('#live-voice').checked = Boolean(state.voice);
+    const trouble = $('#live-voice-trouble');
+    if (trouble) {
+      trouble.hidden = !(state.enabled && state.voice && state.voiceTrouble);
+      trouble.textContent = state.voiceTrouble ? tx('Not heard: {why}.', { why: state.voiceTrouble }) : '';
+    }
   }
 
   const status = state.status || {};

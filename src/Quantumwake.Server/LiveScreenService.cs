@@ -29,6 +29,7 @@ public sealed record LiveScreenStatus(
 /// <summary>What <c>/api/live</c> says.</summary>
 /// <param name="Voice">Whether combat callouts are spoken.</param>
 /// <param name="CanSpeak">Whether this copy has a voice at all - the Windows app does, the server alone does not.</param>
+/// <param name="VoiceTrouble">Why the last callout was not heard, when it was not.</param>
 public sealed record LiveScreenState(
     bool Available,
     string? Unavailable,
@@ -38,7 +39,8 @@ public sealed record LiveScreenState(
     bool Ask,
     LiveScreenStatus Status,
     bool Voice = false,
-    bool CanSpeak = false);
+    bool CanSpeak = false,
+    string? VoiceTrouble = null);
 
 /// <summary>The pilot's answer, posted to <c>/api/live</c>.</summary>
 public sealed record LiveAnswer(bool Enabled);
@@ -127,7 +129,7 @@ public sealed class LiveScreenService(
         if (picture is not null) status = status with { Combat = picture };
 
         return new LiveScreenState(Available, Unavailable, answer.Asked, answer.Enabled, answer.AnsweredAt,
-            Available && !answer.Asked, status, answer.Voice, voice is not null);
+            Available && !answer.Asked, status, answer.Voice, voice is not null, voice?.Trouble);
     }
 
     /// <summary>Says a sentence through the voice now, so the pilot can hear what it sounds like before a fight.</summary>

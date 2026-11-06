@@ -348,6 +348,17 @@ public sealed class CombatTargetTests
         Assert.Null(watch.Picture(T0.AddSeconds(10)).Target);
     }
 
+    [Fact]
+    public void A_hostile_named_only_by_its_signature_is_said_as_likely()
+    {
+        var watch = new CombatWatch(Book);
+
+        var said = watch.See(Panel(cs: 28500, speed: 120), TargetStance.Hostile, T0);
+        said = [.. said, .. watch.See(Panel(cs: 28500, speed: 110), TargetStance.Hostile, T0.AddSeconds(1))];
+
+        Assert.Equal(["Hostile contact, likely Anvil Paladin"], said.Select(c => c.Text));
+    }
+
     // ---- the voice switch ----
 
     [Fact]
