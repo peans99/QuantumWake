@@ -271,9 +271,13 @@ public static partial class ScreenFrames
         }
 
         // The scan panel has no app bar and names no item the tooltip matcher
-        // would take; it is its own title and three labels.
+        // would take; it is its own title and three labels. A panel the second look settled counts
+        // as well: two looks agreed on it, which is more than the whole read had
+        // when it lost the labels to the glow.
         if (ReadMiningScan(all, commodityNames ?? []) is { } scan)
             return new ScreenFrame(ScreenKind.Mining, texts, null, null, null, wallet, Mining: settledScan ?? scan);
+        if (settledScan is not null)
+            return new ScreenFrame(ScreenKind.Mining, texts, null, null, null, wallet, Mining: settledScan);
 
         if (hasTooltip)
             return new ScreenFrame(ScreenKind.Tooltip, texts, tooltip, null, null, wallet);

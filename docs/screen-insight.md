@@ -285,6 +285,51 @@ Open: the same numbers on a live game at full resolution, how much the
 second-a-tick pace costs the game's frame rate, and whether a lock label read
 live is red as often as the panel says hostile.
 
+### The scan panel at 2560, from a MOLE (1.1.10)
+
+Measured on a public stream rather than this install: Elguapoe's "Star
+Citizen 4.10 | Solo Mole Mining High QUALITY MINERALS -- LIVE"
+(<https://www.youtube.com/watch?v=I_-XJnIwOy0>, 2026-08-31), 2560x1440, MOLE
+turret at Daymar's dust. Two stretches, 01:06:00-01:20:00 and
+01:31:30-01:34:00, one frame every 5 s: 200 frames, read through the whole
+screenshot path. The stream is someone else's and stays out of the repo.
+
+| | frames made a scan | time a frame |
+|---|---|---|
+| Windows' engine alone | 3 | ~106 ms |
+| ONNX alone | 135 | ~1.6 s |
+| Windows whole frame, ONNX second look (1.1.10) | 128 | ~0.7 s |
+
+Every rock in the stretch was read on at least one frame by the last; the
+one exception is a 121 kg rock ONNX also caught on one frame only.
+
+Three things stood in the way, each seen:
+
+- The rock's floating label runs into the title: "117RKICAN RESULTS",
+  "117kb6CAN RESULTS". Any line ending RESULTS is the title now; the three
+  labels under it are still what make it the panel.
+- Windows' engine often loses the title altogether. The second look then
+  starts from COMPOSITION with an SCU figure on its row (the 839 kg rock,
+  "COMPOSITION" / "3.39 SCU"), or, when COMPOSITION is lost too - read
+  "z:coMAOS1it0N" - from the difficulty word with an SCU figure 3.5 heights
+  under it (the 1,036 kg rock, "EASY" / "4.22 scu"). The words are the
+  game's: Easy, Medium, Hard, Challenging, Impossible
+  (`ui_Mining_MiningLaser_DifficultyForecast_*`).
+- The second look now reads with ONNX when its models are on disk, and a
+  scan two of its looks agree on makes the frame a scan even when the whole
+  read did not.
+
+During extraction the panel keeps its title and shows 0.00 for everything;
+those frames read as "0 kg, 0% resistance, 0 SCU", which is what is there.
+
+Single frames still misread a digit - 5,198 for 6,198 kg, 939 for 839 kg -
+which LiveRocks' 2% mass rule would take for a second rock.
+
+Seen on the same frames and not read yet: the fracture HUD's charge level
+against its OPTIMAL and OVERCHARGE marks and LASER INTENSITY; the laser and
+module stats; and the CARGO block - "CARGO 10.22 / 100.00 SCU" with each
+material's quality and SCU underneath.
+
 ---
 
 ## What other people already built

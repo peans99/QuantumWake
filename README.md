@@ -352,7 +352,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.1.9
+### 1.1.10
+
+**Rock scans read far more often.** The mining scan panel is now found even when the rock's own label runs into its title, or the title is lost in the glow, and is read with the sharper of the two text engines when it is on your PC. Measured on 200 frames of a 2560×1440 MOLE stream: scans read on 128 frames where 3 were before, with every rock read at least once - live, and from screenshots alike.
 
 **A real voice for the callouts.** The combat callouts are now spoken by Bella, a natural-sounding neural voice, instead of the robotic voices Windows comes with. Every phrase and the names of 226 ships were recorded once and travel inside the app (2.7 MB), so a callout plays the moment it is made, with nothing downloaded and nothing sent anywhere. A ship added to the game after this version is still named, in the Windows voice, until the next one records it.
 

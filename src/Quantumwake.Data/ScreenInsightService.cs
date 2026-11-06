@@ -366,9 +366,14 @@ public sealed class ScreenInsightService(
 
         // The scan panel loses most of its figures in the whole read; see
         // MiningSecondLook. Only runs when the whole read already made the
-        // frame a scan.
+        // frame a scan - or, with the host's panel reader at hand, when it
+        // found the title at all: on 200 frames of a 2560 MOLE stream Windows'
+        // engine made a scan of 3, and ONNX read the panel on 135.
+        var closer = panelReader?.Invoke();
+        var looks = closer ?? reader;
         var scan = await MiningSecondLook.SettleAsync(lines,
-            (patch, treatment, t) => reader.ReadAsync(path, patch, treatment, t), CommodityNames(), token);
+            (patch, treatment, t) => looks.ReadAsync(path, patch, treatment, t), CommodityNames(),
+            fromTitle: closer is not null, token: token);
 
         // The rank held is drawn, not written; see RepBars. Only decodes
         // pixels when the frame has rank cards on it.
