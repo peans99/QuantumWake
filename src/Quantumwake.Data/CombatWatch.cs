@@ -8,7 +8,10 @@ public sealed record CombatCallout(DateTimeOffset At, string Kind, string Text);
 
 /// <summary>The ship locked right now, as the watch has settled it.</summary>
 /// <param name="Name">The name the panel printed, once it printed one.</param>
-/// <param name="Candidates">Hulls the cross-section fits while the panel says UNKNOWN; empty once named.</param>
+/// <param name="Candidates">
+/// Rough odds for the hull while the panel says UNKNOWN - signature, ships
+/// seen nearby, faction; see <see cref="ShipSignatureBook.Weigh"/>. Empty once named.
+/// </param>
 /// <param name="Faction">The faction line's value, when it had one.</param>
 /// <param name="Stance">hostile, friendly, neutral or unread - the colour of its label in the world.</param>
 /// <param name="SpeedMs">Its last speed.</param>
@@ -21,7 +24,7 @@ public sealed record CombatCallout(DateTimeOffset At, string Kind, string Text);
 /// <param name="SeenAt">When the panel was last read.</param>
 public sealed record CombatTarget(
     string? Name,
-    IReadOnlyList<SignatureMatch> Candidates,
+    IReadOnlyList<HullOdds> Candidates,
     string? Faction,
     string Stance,
     double? SpeedMs,
@@ -94,7 +97,7 @@ public sealed class CombatWatch(ShipSignatureBook book)
         public readonly List<double> CrossSections = [];
         public double? Em, Ir, Speed, Range;
         public bool Moved, SaidName, SaidLikely, SaidHostile, SaidDisabled, Disabled, CountedHostile;
-        public int Zeroes, HostileReads, Off;
+        public int Zeroes, HostileReads, Off, Unnamed;
         public TargetStance Stance = TargetStance.Unread;
 
         public double? Cs => CrossSections.Count == 0 ? null
@@ -123,10 +126,18 @@ public sealed class CombatWatch(ShipSignatureBook book)
 
         // A cross-section far off the lock's is a new ship only when the next
         // read agrees: one misread digit - 48K for 4.8K - is not a new target.
+        // A frame whose figure went unread says nothing either way, and leaves
+        // the count where it was: the Perseus-to-Blade switch at 01:59:30 had
+        // an unread figure between its two Blade reads.
         var off = _lock is not null && OffSignature(_lock, panel);
-        if (_lock is not null) _lock.Off = off ? _lock.Off + 1 : 0;
+        if (_lock is not null && panel.CrossSection is not null) _lock.Off = off ? _lock.Off + 1 : 0;
 
-        if (_lock is null || NewName(_lock, panel) || _lock.Off >= 2)
+        // A named lock reading UNKNOWN is another ship: the game does not
+        // forget a name it has printed. Twice, so a misread name is not one.
+        if (_lock is not null)
+            _lock.Unnamed = _lock.Name is not null && panel.Unknown && panel.Name is null ? _lock.Unnamed + 1 : 0;
+
+        if (_lock is null || NewName(_lock, panel) || _lock.Off >= 2 || _lock.Unnamed >= 2)
         {
             _lock = new Lock { Since = at };
             _locks++;
@@ -167,15 +178,14 @@ public sealed class CombatWatch(ShipSignatureBook book)
         }
         else if (!l.SaidName && !l.SaidLikely && l.CrossSections.Count >= 2 && l.Cs is { } median)
         {
-            // Two reads of the same figure, and few enough hulls on it to be
-            // worth saying: past three it is a list, not an identification.
-            var near = Book.Near(median, 3);
-            if (near.Count is > 0 and <= 2 && panel.CrossSection is { } last && Math.Abs(last - median) < 120)
+            // Two reads of the same figure, and odds clear enough to be worth
+            // saying: one hull at 60% or better, or two that between them
+            // make 80%. Past that it is a list for the page, not a callout.
+            var odds = Odds(l, median);
+            if (panel.CrossSection is { } last && Math.Abs(last - median) < 120 && Spoken(odds) is { } guess)
             {
                 l.SaidLikely = true;
-                now.Add(Say(at, "likely", near.Count == 1
-                    ? $"Unknown contact, signature matches {near[0].Name}"
-                    : $"Unknown contact, signature matches {near[0].Name} or {near[1].Name}"));
+                now.Add(Say(at, "likely", $"Unknown contact, {guess}"));
             }
         }
 
@@ -197,7 +207,7 @@ public sealed class CombatWatch(ShipSignatureBook book)
                 // A printed name is said as a fact; a hull the signature fits is
                 // a guess, and is said as one - "likely", never bare.
                 var what = (l.Name ?? l.PendingName) is { } n ? Spoken(n)
-                    : Book.Near(l.Cs ?? -1, 3) is { Count: 1 } one ? $"contact, likely {one[0].Name}"
+                    : l.Cs is { } lockCs && Spoken(Odds(l, lockCs)) is { } guess ? $"contact, {guess}"
                     : "contact";
                 now.Add(Say(at, "hostile", $"Hostile {what}"));
 
@@ -242,6 +252,21 @@ public sealed class CombatWatch(ShipSignatureBook book)
         return now;
     }
 
+    /// <summary>The ship classes the log saw lately; empty when nothing supplies them.</summary>
+    public Func<IReadOnlySet<string>> Nearby { get; set; } = () => new HashSet<string>();
+
+    private IReadOnlyList<HullOdds> Odds(Lock l, double cs) => Book.Weigh(cs, l.Faction, Nearby());
+
+    /// <summary>
+    /// The guess as said: "likely X" at 60% or better, "X or Y" when the two
+    /// make 80%, null when the odds are too spread to say anything.
+    /// </summary>
+    private static string? Spoken(IReadOnlyList<HullOdds> odds) =>
+        odds.Count == 0 ? null
+        : odds[0].Chance >= 0.6 ? $"likely {odds[0].Name}"
+        : odds.Count >= 2 && odds[0].Chance + odds[1].Chance >= 0.8 ? $"{odds[0].Name} or {odds[1].Name}"
+        : null;
+
     /// <summary>What the page shows at <paramref name="at"/>.</summary>
     public CombatPicture Picture(DateTimeOffset at)
     {
@@ -249,7 +274,7 @@ public sealed class CombatWatch(ShipSignatureBook book)
 
         var target = l is null ? null : new CombatTarget(
             l.Name,
-            l.Name is null && l.Cs is { } cs ? Book.Near(cs) : [],
+            l.Name is null && l.Cs is { } cs ? Odds(l, cs) : [],
             l.Faction,
             l.Stance.ToString().ToLowerInvariant(),
             l.Speed, l.Range, l.Em, l.Ir, l.Cs, l.Disabled, l.Since, l.SeenAt);
@@ -273,7 +298,10 @@ public sealed class CombatWatch(ShipSignatureBook book)
     /// <summary>A cross-section further from the lock's than misreading explains.</summary>
     private static bool OffSignature(Lock l, TargetReading panel) =>
         l.Cs is { } cs && panel.CrossSection is { } read && l.CrossSections.Count >= 2
-        && Math.Abs(read - cs) > Math.Max(400, cs * 0.12);
+        // The figure is steady within a lock (23.9K on every frame of one, 30 s),
+        // and the Scythe and Glaive are 12% apart: 5% is room for a misread
+        // decimal without swallowing the next hull.
+        && Math.Abs(read - cs) > Math.Max(250, cs * 0.05);
 
     private CombatCallout Say(DateTimeOffset at, string kind, string text)
     {

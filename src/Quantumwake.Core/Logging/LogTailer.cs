@@ -41,6 +41,13 @@ public sealed class LogTailer : IAsyncDisposable
     /// <summary>Raised for each event parsed from newly appended lines.</summary>
     public event Action<GameEvent>? EventParsed;
 
+    /// <summary>
+    /// Raised for every line read, parsed or not - for the readers that keep
+    /// a clue in memory and nothing in the session, such as the ship classes
+    /// streamed in around the pilot (<c>NearbyHulls</c>).
+    /// </summary>
+    public event Action<LogLine>? LineRead;
+
     /// <summary>Raised when the log is replaced, i.e. the game restarted.</summary>
     public event Action? Rotated;
 
@@ -145,6 +152,8 @@ public sealed class LogTailer : IAsyncDisposable
         {
             if (!LogEnvelope.TryParse(entry, out var line))
                 continue;
+
+            LineRead?.Invoke(line);
 
             var ev = _parser.Parse(line);
             if (ev is not null)

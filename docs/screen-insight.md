@@ -249,6 +249,38 @@ Misreadings folded, all seen: `VELOCTY`, `VELOCY`, `VELCCITY`, `l_VECCtry`;
 `UMKOWN`; `OM/S` for 0, `1B3M` for 183, `IO.4K` and `10.AK` for 10.4K;
 `Yanduul`, `Vandull`, `Vanduley`.
 
+**Not ONNX for everything (1.1.5).** Asked whether to switch fully. On the
+recording, ONNX for the whole frame as well read the panel no better (found
+109, named 56 against the mixed 109 and 57) and the lock label somewhat more
+often (47 frames against 34; 13 hostile locks against 11), at about 1.0 s a
+whole frame against 0.26 s. On the 83 screenshots in this install, through
+the whole screenshot path, ONNX took 978 ms a shot against Windows' 105,
+read the Map footer on 2 where Windows read 5, lost a refinery quote's price
+and a scan's SCU, and gained one Mining and one Reputation frame. The
+screenshot readers were tuned on Windows' engine; it stays for whole frames,
+and ONNX for the target panel and the label search.
+
+**Odds for an UNKNOWN (1.1.5).** `ShipSignatureBook.Weigh` turns three clues
+into rough odds: the cross-section (a hull inside the panel's hundred counts
+in full, one just outside a third), the ship classes `Game.log` saw stream in
+over the last twenty minutes (`NearbyHulls`, x8), and the faction line
+(Vanduul x20 for a Vanduul hull, any other faction x1/20 for one). They are
+weights, not measured frequencies, and both pages say "rough odds". Replayed
+on the recording with the session's own log (`--target <frames> --log
+<Game.log> --start <UTC> --step 6`): an 11.9K fighter that stayed UNKNOWN
+from 02:00:54 to 02:01:18 into the recording showed Vanduul Glaive 80%,
+Mustang Gamma 10%, Mustang Omega 10% - the game printed VANDUUL GLAIVE on a
+lock of the same figure at 02:02:48, though whether it was the same ship
+the frames cannot say; the first fight's 13.5K fighter showed RSI Scorpius
+75%, Ares Ion 20%, Aurora Mk II 5%.
+
+The same replay found two lock-tracking faults, fixed with it: a 12% change
+of figure was taken for the same ship, which kept the Glaive (11.9K) on the
+Scythe's named lock (13.5K is 12.7% away); and an unread figure between two
+changed ones reset the count, so the switch from the Perseus to a Blade was
+missed. Now 5%, an unread figure counts for nothing either way, and a named
+lock that reads UNKNOWN twice is a new ship.
+
 Open: the same numbers on a live game at full resolution, how much the
 second-a-tick pace costs the game's frame rate, and whether a lock label read
 live is red as often as the panel says hostile.

@@ -212,11 +212,98 @@ public sealed class CombatTargetTests
 
     private static readonly ShipSignatureBook Book = ShipSignatureBook.Of(
     [
-        new("Aegis Gladius", 9779), new("Aegis Gladius Valiant", 9779), new("C.O. Nomad", 9712),
-        new("Drake Herald", 9648), new("Anvil Paladin", 28580), new("MISC Starfarer Gemini", 28193),
-        new("Vanduul Blade", 10418), new("Vanduul Glaive", 11922), new("RSI Perseus", 35430),
-        new("Aegis Idris-P", 60000), new("Origin M50 Interceptor", 5365),
+        new("Aegis Gladius", 9779, "AEGS_Gladius"), new("Aegis Gladius Valiant", 9779, "AEGS_Gladius_Valiant"),
+        new("C.O. Nomad", 9712, "CNOU_Nomad"), new("Drake Herald", 9648, "DRAK_Herald"),
+        new("Anvil Paladin", 28580, "ANVL_Paladin"), new("MISC Starfarer Gemini", 28193, "MISC_Starfarer_Gemini"),
+        new("Vanduul Blade", 10418, "VNCL_Blade"), new("Origin 85X Limited", 10444, "ORIG_85X_Limited"),
+        new("Vanduul Glaive", 11922, "VNCL_Glaive"), new("C.O. Mustang Gamma", 11984, "CNOU_Mustang_Gamma"),
+        new("RSI Scorpius", 13591, "RSI_Scorpius"), new("RSI Scorpius Antares", 13597, "RSI_Scorpius_Antares"),
+        new("RSI Perseus", 35430, "RSI_Perseus"), new("Aegis Idris-P", 60000, "AEGS_Idris_P"),
+        new("Origin M50 Interceptor", 5365, "ORIG_m50"),
     ]);
+
+    private static readonly IReadOnlySet<string> NoneSeen = new HashSet<string>();
+
+    [Fact]
+    public void Odds_from_the_signature_alone_split_evenly_between_its_hulls()
+    {
+        var odds = Book.Weigh(10400, null, NoneSeen);
+
+        Assert.Equal(["Origin 85X Limited", "Vanduul Blade"], odds.Select(o => o.Name).Order());
+        Assert.Equal(0.5, odds[0].Chance);
+        Assert.Equal(0.5, odds[1].Chance);
+    }
+
+    [Fact]
+    public void A_hull_the_log_saw_nearby_takes_most_of_the_odds()
+    {
+        // 2026-11-05: VNCL_Blade streamed in 21 times, the 85X never.
+        var odds = Book.Weigh(10400, null, new HashSet<string> { "VNCL_Blade" });
+
+        Assert.Equal("Vanduul Blade", odds[0].Name);
+        Assert.Equal(0.9, odds[0].Chance);
+        Assert.Contains("seen nearby", odds[0].Because);
+    }
+
+    [Fact]
+    public void A_vanduul_faction_all_but_settles_it_and_any_other_rules_vanduul_out()
+    {
+        Assert.Equal(1.0, Book.Weigh(11900, "Vanduul", NoneSeen)[0].Chance);
+        Assert.Equal("Vanduul Glaive", Book.Weigh(11900, "Vanduul", NoneSeen)[0].Name);
+
+        Assert.Equal("C.O. Mustang Gamma", Book.Weigh(11900, "Outlaws", NoneSeen)[0].Name);
+    }
+
+    [Fact]
+    public void A_variant_a_few_short_of_its_hull_is_the_hull()
+    {
+        // The Scorpius and the Antares are six apart; they split 45/45 before.
+        var odds = Book.Weigh(13500, null, NoneSeen);
+        Assert.Equal(["RSI Scorpius"], odds.Select(o => o.Name));
+    }
+
+    [Fact]
+    public void The_log_lists_the_ship_classes_it_streamed_in_lately()
+    {
+        var nearby = new NearbyHulls();
+        var at = new DateTimeOffset(2026, 11, 6, 3, 50, 0, TimeSpan.Zero);
+
+        nearby.Line("[Notice] <ATC_Reset_VehiclesBeingStoredCleared> ATC 'VNCL_Blade_ShipATCDataManager_917287752642' [917287752642] clearing 0 entries from vehicles-being-stored list on Reset", at);
+        nearby.Line("[Notice] <ATC_Reset_VehiclesBeingStoredCleared> ATC 'ANVL_Paladin_ShipATCDataManager_914901457784' [914901457784] clearing 0 entries", at.AddMinutes(-30));
+        nearby.Line("[Notice] <Query Inventory> nothing about ships", at);
+
+        Assert.Equal(["VNCL_Blade"], nearby.Classes(at.AddMinutes(5)));
+    }
+
+    [Fact]
+    public void A_named_lock_that_reads_unknown_twice_is_a_new_ship()
+    {
+        var watch = new CombatWatch(Book);
+        watch.See(Panel("VANDUUL SCYTHE", 200, 12500), TargetStance.Unread, T0);
+        watch.See(Panel("VANDUUL SCYTHE", 200, 12500), TargetStance.Unread, T0.AddSeconds(1));
+
+        watch.See(Panel(speed: 290), TargetStance.Unread, T0.AddSeconds(2));
+        Assert.Equal(1, watch.Picture(T0.AddSeconds(2)).Locks);
+        watch.See(Panel(speed: 290, cs: 11900), TargetStance.Unread, T0.AddSeconds(3));
+
+        var picture = watch.Picture(T0.AddSeconds(3));
+        Assert.Equal(2, picture.Locks);
+        Assert.Null(picture.Target!.Name);
+    }
+
+    [Fact]
+    public void An_unread_figure_between_two_off_ones_still_counts_as_a_switch()
+    {
+        var watch = new CombatWatch(Book);
+        watch.See(Panel("RSI PERSEUS", 0, 35400), TargetStance.Unread, T0);
+        watch.See(Panel("RSI PERSEUS", 0, 35400), TargetStance.Unread, T0.AddSeconds(1));
+
+        watch.See(Panel("RSI PERSEUS", 250, 10400), TargetStance.Unread, T0.AddSeconds(2));
+        watch.See(Panel("RSI PERSEUS", 250), TargetStance.Unread, T0.AddSeconds(3));
+        watch.See(Panel("RSI PERSEUS", 250, 10400), TargetStance.Unread, T0.AddSeconds(4));
+
+        Assert.Equal(2, watch.Picture(T0.AddSeconds(4)).Locks);
+    }
 
     [Fact]
     public void A_figure_is_cut_not_rounded_so_it_names_the_hulls_just_above_it()
@@ -226,8 +313,9 @@ public sealed class CombatTargetTests
         Assert.Equal("Anvil Paladin", near[0].Name);
         Assert.DoesNotContain(near, h => h.Name == "MISC Starfarer Gemini");
 
-        Assert.Equal(["Vanduul Blade"], Book.Near(10400).Select(h => h.Name));
-        Assert.Equal(["Vanduul Glaive"], Book.Near(11900).Select(h => h.Name));
+        // The 85X Limited is 26 from the Blade: one figure names both.
+        Assert.Equal(["Origin 85X Limited", "Vanduul Blade"], Book.Near(10400).Select(h => h.Name));
+        Assert.Equal(["Vanduul Glaive", "C.O. Mustang Gamma"], Book.Near(11900).Select(h => h.Name));
     }
 
     [Fact]
@@ -278,7 +366,7 @@ public sealed class CombatTargetTests
         Assert.Empty(watch.See(Panel(cs: 28500, speed: 120), TargetStance.Unread, T0));
         var said = watch.See(Panel(cs: 28500, speed: 110), TargetStance.Unread, T0.AddSeconds(1));
 
-        Assert.Equal(["Unknown contact, signature matches Anvil Paladin"], said.Select(c => c.Text));
+        Assert.Equal(["Unknown contact, likely Anvil Paladin"], said.Select(c => c.Text));
         Assert.Equal("Anvil Paladin", watch.Picture(T0.AddSeconds(1)).Target!.Candidates[0].Name);
     }
 

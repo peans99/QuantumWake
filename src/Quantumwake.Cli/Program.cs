@@ -42,7 +42,7 @@ if (GetOption(args, "--hull") is { } hullName)
 }
 
 if (GetOption(args, "--target") is { } targetFrames)
-    return await TargetCheck(targetFrames);
+    return await TargetCheck(targetFrames, GetOption(args, "--log"), GetOption(args, "--start"), GetOption(args, "--step"));
 
 // The screen reader run over a screenshot, or a folder of them, the way the
 // backups are run through the parser: what each frame read, how long it took,
@@ -1565,7 +1565,10 @@ static int Screen(string linesFile, string installRoot, string? catalogueQuery)
 
 /// <summary>Aggregates parsed events into the figures worth eyeballing.</summary>
 
-static async Task<int> TargetCheck(string target)
+// --log <Game.log> --start <UTC time of the first frame> [--step <seconds>]:
+// the frames are placed in that session, and the ships its log saw stream in
+// up to each frame weigh the odds for an UNKNOWN, as they would live.
+static async Task<int> TargetCheck(string target, string? logPath = null, string? start = null, string? step = null)
 {
     var files = Directory.Exists(target)
         ? Directory.GetFiles(target, "*.png").Concat(Directory.GetFiles(target, "*.jpg")).OrderBy(f => f).ToArray()
@@ -1582,6 +1585,16 @@ static async Task<int> TargetCheck(string target)
     Console.WriteLine($"Hulls by cross-section: {book.Count}");
 
     var watch = new CombatWatch(book);
+    var nearby = new Quantumwake.Data.NearbyHulls();
+    var logged = new List<(DateTimeOffset At, string Line)>();
+    if (logPath is not null)
+        foreach (var raw in File.ReadLines(logPath))
+            if (raw.Length > 26 && raw[0] == '<' && DateTimeOffset.TryParse(raw.AsSpan(1, 24), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var stamp))
+                logged.Add((stamp, raw));
+    var fedTo = 0;
+    var seconds = double.TryParse(step, out var s1) ? s1 : 2;
+    var clockAt = start is not null && DateTimeOffset.TryParse(start, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var s0) ? s0 : DateTimeOffset.UnixEpoch;
+    watch.Nearby = () => nearby.Classes(clockAt);
     ScreenPatch? known = null;
     var at = DateTimeOffset.UnixEpoch;
     int panels = 0, named = 0, withCs = 0, withSpeed = 0;
@@ -1590,6 +1603,8 @@ static async Task<int> TargetCheck(string target)
     {
         // Frames are taken a fixed step apart; the watch only needs them in order.
         at = at.AddSeconds(2);
+        clockAt = clockAt.AddSeconds(seconds);
+        while (fedTo < logged.Count && logged[fedTo].At <= clockAt) { nearby.Line(logged[fedTo].Line, logged[fedTo].At); fedTo++; }
         var (w, h) = ImageSize(file);
         var clock = System.Diagnostics.Stopwatch.StartNew();
 
@@ -1617,13 +1632,13 @@ static async Task<int> TargetCheck(string target)
             if (panel.SpeedMs is not null) withSpeed++;
         }
 
-        var near = panel?.CrossSection is { } cs ? book.Near(cs, 3) : [];
+        var near = panel?.CrossSection is { } cs && panel.Name is null ? watch.Picture(at).Target?.Candidates ?? [] : [];
         Console.WriteLine($"{Path.GetFileName(file),-12} {clock.ElapsedMilliseconds,5} ms {(whole ? "whole" : "patch"),-5} " +
             (panel is null ? "-" :
                 $"{panel.Name ?? (panel.Unknown ? "UNKNOWN" : "?"),-20} {panel.Faction ?? "",-14} " +
                 $"{panel.SpeedMs?.ToString("0") ?? "?",4} m/s {panel.RangeKm?.ToString("0.00") ?? "?",6} km  " +
                 $"EM {panel.Em?.ToString("0") ?? "?"} IR {panel.Ir?.ToString("0") ?? "?"} CS {panel.CrossSection?.ToString("0") ?? "?"}  " +
-                $"{stance,-8} {string.Join(" / ", near.Select(n => n.Name))}"));
+                $"{stance,-8} {string.Join(" / ", near.Select(n => $"{n.Name} {n.Chance:P0}"))}"));
 
         foreach (var callout in said)
             Console.WriteLine($"    >> {callout.Text}");

@@ -13,7 +13,7 @@ public class CombatPagesTests
          "voice":false,"canSpeak":true,
          "status":{"state":"reading","frames":40,"kept":0,"lastReadMs":120,
            "combat":{"combat":true,"locks":3,"hostileLocks":2,
-             "target":{"name":null,"candidates":[{"name":"Anvil Paladin","crossSection":28580}],"faction":"Outlaws",
+             "target":{"name":null,"candidates":[{"name":"Anvil Paladin","chance":0.85,"because":["signature","seen nearby"]},{"name":"MISC Starfarer Gemini","chance":0.15,"because":["signature, just outside"]}],"faction":"Outlaws",
                "stance":"hostile","speedMs":109,"rangeKm":2.43,"em":9100,"ir":39400,"crossSection":28500,
                "disabled":false,"since":"2026-11-05T21:30:00Z","seenAt":"2026-11-05T21:30:20Z"},
              "callouts":[{"at":"2026-11-05T21:30:05Z","kind":"hostile","text":"Hostile Anvil Paladin"},
@@ -36,13 +36,25 @@ public class CombatPagesTests
         var page = Loaded(Hostile);
 
         Assert.False(page.Truth("__dom.node('#now-target-card').hidden"));
-        Assert.Equal("Unknown · likely Anvil Paladin", page.NodeText("#now-target"));
+        Assert.Equal("Unknown · likely Anvil Paladin (85%)", page.NodeText("#now-target"));
+        Assert.Contains("Rough odds: Anvil Paladin 85% · MISC Starfarer Gemini 15%", page.NodeText("#now-target-odds"));
         Assert.Contains("Hostile", page.NodeText("#now-target-detail"));
         Assert.Contains("109 m/s", page.NodeText("#now-target-detail"));
         Assert.Contains("CS 28.5K", page.NodeText("#now-target-detail"));
         Assert.Contains("in combat", page.NodeText("#now-target-label"));
         Assert.True(page.Truth("__dom.node('#now-target-card').classList.contains('target-hostile')"));
         Assert.Contains("Hostile Anvil Paladin", page.NodeText("#now-target-calls"));
+    }
+
+    [Fact]
+    public void Spread_odds_leave_the_title_unknown_and_list_them()
+    {
+        var page = Loaded(Hostile
+            .Replace("\"chance\":0.85", "\"chance\":0.45")
+            .Replace("\"chance\":0.15", "\"chance\":0.55"));
+
+        Assert.Equal("Unknown", page.NodeText("#now-target"));
+        Assert.Contains("Anvil Paladin 45%", page.NodeText("#now-target-odds"));
     }
 
     [Fact]
@@ -113,7 +125,8 @@ public class CombatPagesTests
         var json = Mfd().Evaluate("JSON.stringify(QwMfd.rows(QwMfd.pageIds.indexOf('target'),{},null,false,{extra:{live}}))").AsString();
 
         Assert.Contains("TARGET · IN COMBAT", json);
-        Assert.Contains("Unknown · likely Anvil Paladin", json);
+        Assert.Contains("Unknown · likely Anvil Paladin (85%)", json);
+        Assert.Contains("ROUGH ODDS", json);
         Assert.Contains("HOSTILE · Outlaws", json);
         Assert.Contains("109 m/s · 2.43 km", json);
         Assert.Contains("CS 28.5K", json);

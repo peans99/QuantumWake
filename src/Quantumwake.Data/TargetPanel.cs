@@ -10,7 +10,7 @@ namespace Quantumwake.Data;
 /// scanned; most fighters were UNKNOWN for their whole fight in the 2026-11-05
 /// recording.
 /// </param>
-/// <param name="Unknown">The panel said UNKNOWN in the name's place.</param>
+/// <param name="Unknown">The panel printed UNKNOWN in the name's place - not merely that no name was read.</param>
 /// <param name="Faction">The faction line's value, or null when unread or blank.</param>
 /// <param name="SpeedMs">The target's speed in m/s.</param>
 /// <param name="RangeKm">How far away it is, in km.</param>
@@ -164,7 +164,7 @@ public static partial class TargetPanel
             Math.Max(0, velocity.Left - LeftOf * u), Math.Max(0, velocity.Top - Above * u),
             Width * u, (Above + Below) * u);
 
-        return new TargetReading(name, unknown || nameLine is null, faction, speed, range, em, ir, cs, at);
+        return new TargetReading(name, unknown, faction, speed, range, em, ir, cs, at);
     }
 
     /// <summary>

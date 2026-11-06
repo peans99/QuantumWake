@@ -1023,12 +1023,17 @@ window.QwMfd = (() => {
         if (!target) return [['NO TARGET', combat?.locks
           ? say('{locks} locks this session, {hostile} hostile', { locks: combat.locks, hostile: combat.hostileLocks || 0 })
           : say('Lock a ship and its panel is read every second.')]];
-        const hulls = (target.candidates || []).map(c => c.name);
+        /* Odds for an UNKNOWN are weights from the signature, the ships the
+           log saw nearby and the faction - a guess, labelled ROUGH ODDS. */
+        const odds = target.name ? [] : (target.candidates || []);
+        const pct = c => `${Math.round((c.chance || 0) * 100)}%`;
         const stance = { hostile: 'HOSTILE', friendly: 'FRIENDLY', neutral: 'NEUTRAL' }[target.stance];
         return [
           [combat.combat ? say('TARGET · IN COMBAT') : 'TARGET',
-            target.name || (hulls.length === 1 ? say('Unknown · likely {hull}', { hull: hulls[0] })
-              : hulls.length ? say('Unknown · fits {hulls}', { hulls: hulls.slice(0, 3).join(', ') }) : say('Unknown'))],
+            target.name || (odds.length && odds[0].chance >= 0.6
+              ? say('Unknown · likely {hull} ({chance})', { hull: odds[0].name, chance: pct(odds[0]) }) : say('Unknown'))],
+          ...(odds.length > 1 || (odds.length === 1 && odds[0].chance < 1)
+            ? [[say('ROUGH ODDS'), odds.slice(0, 3).map(c => `${c.name} ${pct(c)}`).join(' · ')]] : []),
           ['STANCE', [stance ? say(stance) : say('Not read'), target.faction].filter(Boolean).join(' · ')],
           ['MOTION', [target.disabled ? say('Stopped after moving') : target.speedMs != null ? `${Math.round(target.speedMs)} m/s` : null,
             target.rangeKm != null ? `${target.rangeKm.toFixed(2)} km` : null].filter(Boolean).join(' · ') || say('Not read')],

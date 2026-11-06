@@ -36461,19 +36461,33 @@ async function loadLiveScreen() {
 /** "Hostile", "Friendly"… for a stance the server sends lower-case. */
 const TARGET_STANCES = { hostile: 'Hostile', friendly: 'Friendly', neutral: 'Neutral' };
 
+const oddsPercent = (odds) => `${Math.round((odds.chance || 0) * 100)}%`;
+
 /**
  * What the Target card says the ship is: the panel's name when the game
- * printed one, otherwise the hulls its cross-section fits - named as a
- * guess, because a hundred on the panel can be several hulls.
+ * printed one; otherwise the likeliest hull when it is clearly ahead, or
+ * plain Unknown, with the odds on their own line below.
  */
 function targetTitle(target) {
   if (!target) return tx('No target');
   if (target.name) return target.name;
-  const hulls = (target.candidates || []).map((c) => c.name);
-  if (!hulls.length) return tx('Unknown');
-  if (hulls.length === 1) return tx('Unknown · likely {hull}', { hull: hulls[0] });
-  return tx('Unknown · signature fits {hulls}', {
-    hulls: hulls.slice(0, 3).join(', ') + (hulls.length > 3 ? ` +${hulls.length - 3}` : ''),
+  const odds = target.candidates || [];
+  if (odds.length && odds[0].chance >= 0.6) {
+    return tx('Unknown · likely {hull} ({chance})', { hull: odds[0].name, chance: oddsPercent(odds[0]) });
+  }
+  return tx('Unknown');
+}
+
+/**
+ * The odds for an UNKNOWN, said as what they are: weights from the
+ * signature, the ships the log saw nearby and the faction, not a measured
+ * frequency. Empty for a named target or a single certain hull.
+ */
+function targetOdds(target) {
+  const odds = target?.name ? [] : (target?.candidates || []);
+  if (!odds.length || (odds.length === 1 && odds[0].chance >= 1)) return '';
+  return tx('Rough odds: {odds} - from the signature, ships seen nearby and the faction', {
+    odds: odds.slice(0, 4).map((c) => `${c.name} ${oddsPercent(c)}`).join(' · '),
   });
 }
 
@@ -36511,6 +36525,11 @@ function renderNowTarget() {
   $('#now-target').textContent = targetTitle(target);
   $('#now-target-detail').textContent = target ? targetDetail(target)
     : tx('No target held · {locks} locks this session, {hostile} hostile', { locks: combat.locks || 0, hostile: combat.hostileLocks || 0 });
+  const odds = $('#now-target-odds');
+  if (odds) {
+    odds.textContent = targetOdds(target);
+    odds.hidden = !odds.textContent;
+  }
 
   const list = $('#now-target-calls');
   list.textContent = '';

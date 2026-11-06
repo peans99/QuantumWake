@@ -5,7 +5,14 @@ namespace Quantumwake.Data;
 /// <summary>A hull whose cross-section is near a figure the target panel showed.</summary>
 /// <param name="Name">The hull as a pilot would say it.</param>
 /// <param name="CrossSection">Its stock cross-section signature.</param>
-public sealed record SignatureMatch(string Name, double CrossSection);
+/// <param name="Class">The game's class name, as the log writes it - VNCL_Blade.</param>
+public sealed record SignatureMatch(string Name, double CrossSection, string? Class = null);
+
+/// <summary>One hull an UNKNOWN target could be, and how likely.</summary>
+/// <param name="Name">The hull as a pilot would say it.</param>
+/// <param name="Chance">Its share of the odds, 0 to 1, rounded to five percent.</param>
+/// <param name="Because">What put it there: signature, seen nearby, faction.</param>
+public sealed record HullOdds(string Name, double Chance, IReadOnlyList<string> Because);
 
 /// <summary>
 /// Every hull's cross-section signature, so a target the panel calls UNKNOWN
@@ -61,7 +68,7 @@ public sealed class ShipSignatureBook
             }
 
             if (cs > 0)
-                hulls.Add(new SignatureMatch(Spoken(className, ship.Name), cs));
+                hulls.Add(new SignatureMatch(Spoken(className, ship.Name), cs, className));
         }
 
         return new ShipSignatureBook([.. hulls
@@ -99,7 +106,8 @@ public sealed class ShipSignatureBook
         var kept = new List<SignatureMatch>();
         foreach (var hull in near.OrderBy(h => h.Name.Length))
         {
-            if (!kept.Any(k => Math.Abs(k.CrossSection - hull.CrossSection) < 1
+            // Within fifty, not equal: the Scorpius and its Antares differ by six.
+            if (!kept.Any(k => Math.Abs(k.CrossSection - hull.CrossSection) < 50
                     && hull.Name.StartsWith(k.Name, StringComparison.OrdinalIgnoreCase)))
                 kept.Add(hull);
         }
@@ -109,6 +117,81 @@ public sealed class ShipSignatureBook
             .ThenBy(h => h.Name.Length)
             .Take(take)];
     }
+
+    /// <summary>
+    /// Rough odds for which hull an UNKNOWN is, from three clues: the
+    /// cross-section, the ship classes the log saw stream in lately, and the
+    /// faction line.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// These are weights, not measured frequencies, and the page says so.
+    /// What they rest on, each from the 2026-11-05 session:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>A hull whose figure falls inside the panel's hundred counts in
+    /// full; one just outside it, which only armour modelled slightly wrong
+    /// would put there, a third.</item>
+    /// <item>A hull the log saw stream in counts eight times one it did not.
+    /// The 85X and the Mustangs share the Blade's and Glaive's figures and
+    /// were never in the log; the Vanduul were, dozens of times. Not seen is
+    /// not ruled out: a ship can be fought before its line is read.</item>
+    /// <item>A Vanduul faction makes a Vanduul hull twenty times likelier, and
+    /// any other faction read makes one twenty times less: the panel
+    /// printed VANDUUL only on Vanduul hulls, and OUTLAWS never on one.</item>
+    /// </list>
+    /// </remarks>
+    public IReadOnlyList<HullOdds> Weigh(
+        double crossSection, string? faction, IReadOnlySet<string> nearby, int take = 4)
+    {
+        var pool = Near(crossSection, take: 12);
+        if (pool.Count == 0)
+            return [];
+
+        var vanduulFaction = faction is not null && faction.Contains("Vanduul", StringComparison.OrdinalIgnoreCase);
+        var otherFaction = faction is not null && !vanduulFaction;
+
+        var weighed = new List<(SignatureMatch Hull, double Weight, List<string> Because)>();
+        foreach (var hull in pool)
+        {
+            var because = new List<string>();
+            var inside = hull.CrossSection >= crossSection && hull.CrossSection < crossSection + 100;
+            var weight = inside ? 1.0 : 0.3;
+            because.Add(inside ? "signature" : "signature, just outside");
+
+            if (hull.Class is { } cls && nearby.Any(seen => SameClass(seen, cls)))
+            {
+                weight *= 8;
+                because.Add("seen nearby");
+            }
+
+            var isVanduul = hull.Class?.StartsWith("VNCL_", StringComparison.OrdinalIgnoreCase) == true;
+            if (vanduulFaction)
+            {
+                weight *= isVanduul ? 20 : 0.05;
+                if (isVanduul) because.Add("Vanduul faction");
+            }
+            else if (otherFaction && isVanduul)
+            {
+                weight *= 0.05;
+            }
+
+            weighed.Add((hull, weight, because));
+        }
+
+        var total = weighed.Sum(w => w.Weight);
+        return [.. weighed
+            .OrderByDescending(w => w.Weight)
+            .Select(w => new HullOdds(w.Hull.Name, Math.Round(w.Weight / total * 20) / 20, w.Because))
+            .Where(o => o.Chance >= 0.05)
+            .Take(take)];
+    }
+
+    /// <summary>The log's class and the book's, allowing a variant either way: AEGS_Gladius and AEGS_Gladius_Pirate.</summary>
+    private static bool SameClass(string seen, string book) =>
+        string.Equals(seen, book, StringComparison.OrdinalIgnoreCase)
+        || seen.StartsWith(book + "_", StringComparison.OrdinalIgnoreCase)
+        || book.StartsWith(seen + "_", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The hull a printed name is, or null: the panel prints a shortened name

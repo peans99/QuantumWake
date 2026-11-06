@@ -286,6 +286,9 @@ public sealed partial class LiveSessionService : BackgroundService
     private readonly TripStore? _trips;
     private readonly Lock _gate = new();
 
+    /// <summary>Ship classes streamed in lately, for naming an UNKNOWN target; memory only.</summary>
+    private readonly NearbyHulls? _nearby;
+
     private SessionBuilder _builder;
     private LogTailer? _tailer;
     private string? _currentShip;
@@ -385,7 +388,8 @@ public sealed partial class LiveSessionService : BackgroundService
         TripStore? trips = null,
         ScreenReadingStore? screen = null,
         ScreenSettingsStore? screenSettings = null,
-        ShardNoteStore? shards = null)
+        ShardNoteStore? shards = null,
+        NearbyHulls? nearby = null)
     {
         _hub = hub;
         _library = library;
@@ -395,6 +399,7 @@ public sealed partial class LiveSessionService : BackgroundService
         _screen = screen;
         _screenSettings = screenSettings;
         _shards = shards;
+        _nearby = nearby;
         _builder = new SessionBuilder(install?.GameLogPath ?? "live");
 
         // Whatever was already read is not news. Seeding this here is what
@@ -435,6 +440,7 @@ public sealed partial class LiveSessionService : BackgroundService
 
         _tailer = new LogTailer(_install.GameLogPath);
         _tailer.EventParsed += OnEvent;
+        if (_nearby is { } nearby) _tailer.LineRead += line => nearby.Line(line.Raw, line.Timestamp);
         _tailer.Rotated += OnRotated;
         _tailer.Faulted += e => _logger.LogDebug(e, "Transient read failure while tailing.");
 

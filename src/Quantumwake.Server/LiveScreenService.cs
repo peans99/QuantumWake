@@ -83,7 +83,8 @@ public sealed class LiveScreenService(
     ILogger<LiveScreenService> logger,
     IGameScreenCapture? capture = null,
     LiveFrameLog? frames = null,
-    ICalloutVoice? voice = null) : BackgroundService
+    ICalloutVoice? voice = null,
+    NearbyHulls? nearby = null) : BackgroundService
 {
     /// <summary>The tick, at a fight's pace. Out of a fight every other tick is skipped.</summary>
     private static readonly TimeSpan Every = TimeSpan.FromSeconds(1);
@@ -222,6 +223,7 @@ public sealed class LiveScreenService(
         {
             _combat ??= new CombatWatch(insight.SignatureBook());
             _combat.Book = insight.SignatureBook();
+            if (nearby is not null) _combat.Nearby = () => nearby.Classes(DateTimeOffset.UtcNow);
         }
 
         // ---- the panel alone, while there is one to follow ----

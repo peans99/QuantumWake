@@ -114,6 +114,9 @@ public static partial class ServerHost
         builder.Services.AddSingleton(new ModelLibrary(install));
         builder.Services.AddSingleton<ScanStatus>();
         builder.Services.AddSingleton<ActivityBoard>();
+        // Ship classes the log says streamed in lately: a clue the combat
+        // watch weighs an UNKNOWN target with. Memory only.
+        builder.Services.AddSingleton<NearbyHulls>();
         builder.Services.AddSingleton<LiveSessionService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<LiveSessionService>());
 
