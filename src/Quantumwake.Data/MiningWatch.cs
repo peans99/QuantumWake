@@ -63,14 +63,49 @@ public sealed class MiningWatch
     private DateTimeOffset? _lastCrack;
     private bool _wasIn;
 
+    /// <summary>
+    /// Frames a bar has to hold still in before it is taken for the fracture
+    /// HUD (1.1.18; it was two, anywhere). A pilot heard mining callouts in
+    /// fights and at a Fleet terminal, with no rock in sight: a yellow or green
+    /// box of the bar's size turns up in combat markers and terminal screens,
+    /// but those move or come and go, and the real bar sits in one place for
+    /// as long as the laser is on it - every fracture on the 2026-08-31
+    /// stream held still for its first three frames.
+    /// </summary>
+    public const int StartFrames = 3;
+
+    /// <summary>
+    /// The fullest a bar may be when it is first seen. A fresh window starts
+    /// yellow and greens from the left: on that stream fractures were first
+    /// seen 0-37% green, and two single-frame sightings at 57%. A solid green
+    /// box at 100% is a marker or a gauge, not a window being filled.
+    /// </summary>
+    public const double StartFillAtMost = 0.6;
+
+    private ScreenPatch? _startBar;
+
+    /// <summary>Same place, give or take the bar growing taller as the charge climbs.</summary>
+    private static bool Still(ScreenPatch was, ScreenPatch now)
+    {
+        static double cx(ScreenPatch p) => p.Left + p.Width / 2;
+        static double cy(ScreenPatch p) => p.Top + p.Height / 2;
+        return Math.Abs(cx(was) - cx(now)) <= Math.Max(was.Width, now.Width) * 0.5
+            && Math.Abs(cy(was) - cy(now)) <= Math.Max(was.Height, now.Height) * 1.5;
+    }
+
     /// <summary>One frame's reading - null when no window bar was on it. Returns what is to be said now.</summary>
-    public IReadOnlyList<CombatCallout> See(ChargeReading? reading, DateTimeOffset at)
+    /// <param name="mayStart">
+    /// False in a fight: a bar not already followed is not taken up then. One
+    /// already followed carries on - a rock under fire is still a rock.
+    /// </param>
+    public IReadOnlyList<CombatCallout> See(ChargeReading? reading, DateTimeOffset at, bool mayStart = true)
     {
         var now = new List<CombatCallout>();
 
         if (reading is null)
         {
             _present = 0;
+            _startBar = null;
             if (!_active) return now;
             if (++_absent < 2) return now;
 
@@ -93,15 +128,37 @@ public sealed class MiningWatch
         _absent = 0;
         if (!_active)
         {
-            // The first frame of a bar counts towards agreeing on its state,
-            // so two frames in the window are enough to say so.
-            if (++_present < 2)
+            if (!mayStart)
             {
-                _pending = reading.State;
-                _agreed = 1;
+                _present = 0;
+                _startBar = null;
                 return now;
             }
+
+            // A run of sightings starts on a mostly yellow bar, and goes on
+            // only while the bar stays where it was.
+            if (_present == 0 || _startBar is not { } before || !Still(before, reading.Bar))
+            {
+                _present = 0;
+                if (reading.Fill > StartFillAtMost)
+                {
+                    _startBar = null;
+                    return now;
+                }
+            }
+            _startBar = reading.Bar;
+
+            // The run's frames count towards agreeing on its state, so the
+            // frame that starts following can already say it.
+            if (++_present == 1) { _pending = reading.State; _agreed = 1; }
+            else if (reading.State == _pending) _agreed++;
+            else { _pending = reading.State; _agreed = 1; }
+            if (_present < StartFrames) return now;
             _active = true;
+            _startBar = null;
+
+            // This frame's own vote is cast below, like every followed frame's.
+            _agreed--;
         }
 
         _fill = reading.Fill;

@@ -242,7 +242,9 @@ public sealed class CalloutSwitchTests : IDisposable
         Assert.Empty(hud.SeeWhole(false, none, T0.AddSeconds(2), flight: true));
         Assert.Empty(hud.SeeWhole(false, none, T0.AddSeconds(30), flight: false));   // looking round the cabin
         Assert.Empty(hud.SeeWhole(false, none, T0.AddSeconds(60), flight: true));
-        Assert.Single(hud.SeeWhole(false, none, T0.AddMinutes(10), flight: true));   // the next ship
+        // Ten minutes in mobiGlas without leaving the seat is the same flight (1.1.18).
+        Assert.Empty(hud.SeeWhole(false, none, T0.AddMinutes(11), flight: true));
+        Assert.Single(hud.SeeWhole(false, none, T0.AddMinutes(30), flight: true));   // the next ship
     }
 
     [Fact]

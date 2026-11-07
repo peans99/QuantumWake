@@ -181,9 +181,11 @@ public sealed class HudWatch
     /// Gone this long, the flight HUD coming back is a ship powering up. Long,
     /// because the engine misses it on one cockpit frame in eleven and a
     /// pilot looking round the cabin hides it too: "online" twice in a flight
-    /// is worse than not saying it after a two-minute walk.
+    /// is worse than not saying it after a short walk. Two minutes until
+    /// 1.1.18, when a pilot who never left the seat heard it again and again:
+    /// a spell in mobiGlas or a busy fight hides the HUD's words that long.
     /// </summary>
-    public static readonly TimeSpan FlightRearm = TimeSpan.FromMinutes(2);
+    public static readonly TimeSpan FlightRearm = TimeSpan.FromMinutes(15);
     private readonly Dictionary<string, Health> _health = [];
 
     private sealed class Health

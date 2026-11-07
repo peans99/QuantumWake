@@ -233,6 +233,16 @@ public sealed class LiveScreenService(
     }
 
     /// <summary>Whether a fight is on: the territory banner lately, or a hostile lock.</summary>
+    /// <summary>
+    /// A fight under way - a hostile locked in the last half minute - when a
+    /// new fracture bar is not taken up. Narrower than <see cref="InAFight"/>,
+    /// which also counts hostile territory: rocks are mined there.
+    /// </summary>
+    private bool Fighting(DateTimeOffset at)
+    {
+        lock (_gate) return _combat?.Picture(at).Combat == true;
+    }
+
     private bool InAFight(DateTimeOffset at)
     {
         if (_hud.Hostile(at)) return true;
@@ -403,7 +413,7 @@ public sealed class LiveScreenService(
         charge ??= await insight.ReadChargeAsync(frame, ChargeWindow.SearchArea(taken.Width, taken.Height), taken.Height, token);
         charging.Stop();
         _bar = charge?.Bar;
-        Fracture(charge, at);
+        Fracture(charge, at, mayStart: !Fighting(at));
 
         // ---- the missile band, on the ticks that do not read the whole frame ----
         // A whole-frame read sees the warning in its own lines; the ticks
@@ -460,6 +470,12 @@ public sealed class LiveScreenService(
         }
 
         Hud(lines, taken.Width, taken.Height, at);
+
+        // A mobiGlas app, a terminal, a kiosk or a tooltip is not the flight
+        // view, so no bar on it is the fracture HUD: the Fleet terminal's own
+        // bars were read as one (1.1.18).
+        if (sighting.Kind is not (ScreenKind.Unknown or ScreenKind.Mining))
+            Fracture(null, at);
 
         var kept = 0;
         string? keptAs = null;
@@ -568,10 +584,10 @@ public sealed class LiveScreenService(
     }
 
     /// <summary>Hands a frame's charge to the mining watch, and anything it says to the voice.</summary>
-    private void Fracture(ChargeReading? charge, DateTimeOffset at)
+    private void Fracture(ChargeReading? charge, DateTimeOffset at, bool mayStart = true)
     {
         IReadOnlyList<CombatCallout> said;
-        lock (_gate) said = _mining.See(charge, at);
+        lock (_gate) said = _mining.See(charge, at, mayStart);
         Speak(said, "Mining");
     }
 

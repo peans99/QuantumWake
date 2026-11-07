@@ -101,7 +101,7 @@ public sealed class FractureTests
 
     [Fact]
     public void A_bar_let_go_before_it_filled_is_no_crack() =>
-        Assert.Equal(["In the window"], Run(R("in", 0.1), R("in", 0.2), null, null));
+        Assert.Equal(["In the window"], Run(R("in", 0.1), R("in", 0.2), R("in", 0.3), null, null));
 
     [Fact]
     public void One_frame_of_a_window_is_not_a_fracture()
@@ -113,15 +113,15 @@ public sealed class FractureTests
     [Fact]
     public void Leaving_the_window_and_going_over_it_are_said()
     {
-        Assert.Equal(["In the window", "Out of the window"], Run(R("in"), R("in"), R("below", 0, 1), R("below", 0, 1.2)));
-        Assert.Equal(["Overcharge, back off"], Run(R("above"), R("above")));
+        Assert.Equal(["In the window", "Out of the window"], Run(R("in"), R("in"), R("in"), R("below", 0, 1), R("below", 0, 1.2)));
+        Assert.Equal(["Overcharge, back off"], Run(R("above"), R("above"), R("above")));
     }
 
     [Fact]
     public void The_picture_counts_cracks_and_shows_the_charge()
     {
         var watch = new MiningWatch();
-        foreach (var (f, i) in new ChargeReading?[] { R("in", 0.9), R("in", 0.95), null, null, R("below", 0, 3), R("below", 0, 3) }.Select((f, i) => (f, i)))
+        foreach (var (f, i) in new ChargeReading?[] { R("in", 0.5), R("in", 0.9), R("in", 0.95), null, null, R("below", 0, 3), R("below", 0, 3), R("below", 0, 3) }.Select((f, i) => (f, i)))
             watch.See(f, T0.AddSeconds(i));
 
         var picture = watch.Picture();
@@ -129,5 +129,52 @@ public sealed class FractureTests
         Assert.Equal("below", picture.State);
         Assert.Equal(3, picture.BelowBy);
         Assert.Equal(1, picture.Cracked);
+    }
+
+    // ---- 1.1.18: mining callouts heard in fights and at a Fleet terminal ----
+
+    private static ChargeReading At(double left, double top, double fill = 0.1) =>
+        new("in", fill, null, new ScreenPatch(left, top, 60, 24));
+
+    [Fact]
+    public void Two_frames_are_no_longer_enough()
+    {
+        Assert.Empty(Run(R("in"), R("in"), null, null));
+    }
+
+    [Fact]
+    public void A_box_that_moves_about_is_not_the_window()
+    {
+        // A combat marker of the bar's size, tracking a ship across the screen.
+        Assert.Empty(Run(At(1585, 692), At(1700, 640), At(1500, 760), At(1620, 600), null, null));
+    }
+
+    [Fact]
+    public void A_bar_growing_taller_in_place_is_still_the_window()
+    {
+        var growing = new ChargeReading("in", 0.1, null, new ScreenPatch(1584, 700, 60, 30));
+        Assert.Equal(["In the window"], Run(At(1585, 692), At(1585, 695), growing));
+    }
+
+    [Fact]
+    public void A_solid_green_box_first_seen_full_is_not_a_window_being_filled()
+    {
+        Assert.Empty(Run(R("in", 1), R("in", 1), R("in", 1), R("in", 1), null, null));
+    }
+
+    [Fact]
+    public void In_a_fight_a_new_bar_is_not_taken_up_but_a_followed_one_carries_on()
+    {
+        var watch = new MiningWatch();
+        Assert.Empty(new[] { R("in"), R("in"), R("in") }.SelectMany((f, i) => watch.See(f, T0.AddSeconds(i), mayStart: false)));
+        Assert.False(watch.Picture().Active);
+
+        var mining = new MiningWatch();
+        mining.See(R("in", 0.2), T0);
+        mining.See(R("in", 0.4), T0.AddSeconds(1));
+        mining.See(R("in", 0.6), T0.AddSeconds(2));
+        mining.See(R("in", 0.9), T0.AddSeconds(3), mayStart: false);
+        mining.See(null, T0.AddSeconds(4), mayStart: false);
+        Assert.Equal(["Rock cracked"], mining.See(null, T0.AddSeconds(5), mayStart: false).Select(c => c.Text));
     }
 }

@@ -352,7 +352,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.1.17
+### 1.1.18
+
+**Mining callouts only at a rock.** The fracture HUD's window bar is a short yellow bar, and a box of that size turns up elsewhere - combat markers, the Fleet terminal - so mining callouts were heard in fights and at a terminal with no rock in sight. A bar is now followed only once it has held still in one place for three frames and was first seen mostly yellow, as a fresh window is; never while a hostile has been locked in the last half minute (a rock already being cracked carries on); and never on a mobiGlas app, a terminal or a kiosk. On the 17-minute mining recording every callout is still made, a second or so later on four of them; on the combat recording there are none.
+
+**"System online" once a flight.** It was said again whenever the flight HUD had not been read for two minutes, which a spell in mobiGlas or a busy fight does without the pilot leaving the seat. It now waits for fifteen.
 
 **The MFD follows the action.** One frame now turns to the Target page when you lock a ship, a hostile is near or a missile is inbound, and to the fracture Charge page while the mining laser charges a rock - a fight at the rock goes to Target first, then back to Charge. It goes back to the page you were on 20 seconds after it ends, so a lock lost for a second in a turn does not flip the page. Press any button and the frame is yours again: it does not switch while you are pressing, and does not take you back from a page you chose. It is the right MFD unless you pick the left or Off under MFD setup → Screen → Follow the action, and it needs reading the game's screen on.
 
