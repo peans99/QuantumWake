@@ -64,6 +64,14 @@ public class MfdLayoutTests
         Assert.Equal(120, (MfdLayout.Default(Monitors) with { SleepAfterMinutes = 9999 }).Validate(Monitors).SleepAfterMinutes);
         Assert.Equal(20, (MfdLayout.Default(Monitors) with { SleepAfterMinutes = 20 }).Validate(Monitors).SleepAfterMinutes);
 
+        // Follow the action: the right frame unless set, and nothing a menu could not offer.
+        Assert.Equal("right", MfdLayout.Default(Monitors).Follow);
+        Assert.Equal("left", (MfdLayout.Default(Monitors) with { Follow = " LEFT " }).Validate(Monitors).Follow);
+        Assert.Equal("off", (MfdLayout.Default(Monitors) with { Follow = "off" }).Validate(Monitors).Follow);
+        Assert.Equal("right", (MfdLayout.Default(Monitors) with { Follow = "both" }).Validate(Monitors).Follow);
+        Assert.Equal("right", (MfdLayout.Default(Monitors) with { Follow = null! }).Validate(Monitors).Follow);
+        Assert.Equal("right", System.Text.Json.JsonSerializer.Deserialize<MfdLayout>("{\"panels\":[]}", MfdLayout.JsonOptions)!.Follow);
+
         // Four levels, and a value between two of them snaps rather than sitting
         // where no slider and no button on the frame can reach it again. A .7
         // from an older build is an exact tie, and goes to the brighter.

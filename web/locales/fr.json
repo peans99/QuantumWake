@@ -6327,5 +6327,10 @@
   "Turn on reading the screen first: with it off there is nothing to say.": "Activez d’abord la lecture de l’écran : sans elle, il n’y a rien à dire.",
   "Reading the game is off. Callouts are said once Read the game’s screen live and Speak callouts are on, above; these switches are kept until then.": "La lecture du jeu est désactivée. Les annonces sont dites une fois Lire l’écran du jeu en direct et Annoncer à voix haute activés, ci-dessus ; ces interrupteurs sont conservés d’ici là.",
   "Speak callouts is off, above. These switches are kept for when it is on.": "Annoncer à voix haute est désactivé, ci-dessus. Ces interrupteurs sont conservés pour quand il sera activé.",
-  "You can change this at any time in Settings → Voice & callouts, or on the Log page under Read from the game.": "Vous pouvez changer cela à tout moment dans Réglages → Voix et annonces, ou sur la page Journal sous Lire depuis le jeu."
+  "You can change this at any time in Settings → Voice & callouts, or on the Log page under Read from the game.": "Vous pouvez changer cela à tout moment dans Réglages → Voix et annonces, ou sur la page Journal sous Lire depuis le jeu.",
+  "Follow the action": "Suivre l’action",
+  "Follow the action turns one frame to Target when you lock a ship, a hostile is near or a missile is inbound, and to Charge while the mining laser charges a rock. It goes back to the page you were on 20 seconds after it ends. Press any button and the frame is yours again: it does not switch while you are pressing, and does not take you back from a page you chose. Needs reading the game's screen on.": "Suivre l’action fait passer un cadre sur Cible quand vous verrouillez un vaisseau, qu’un hostile est proche ou qu’un missile arrive, et sur Charge pendant que le laser de minage charge une roche. Il revient à la page où vous étiez 20 secondes après la fin. Appuyez sur n’importe quel bouton et le cadre est de nouveau à vous : il ne change pas de page pendant que vous appuyez, et ne vous ramène pas d’une page que vous avez choisie. Nécessite la lecture de l’écran du jeu.",
+  "Neither frame changes page on its own. Save to keep it.": "Aucun cadre ne change de page tout seul. Enregistrez pour le garder.",
+  "The {side} frame follows the action. Save to keep it.": "Le cadre {side} suit l’action. Enregistrez pour le garder.",
+  "right": "droit"
 }

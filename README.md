@@ -352,7 +352,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.1.16
+### 1.1.17
+
+**The MFD follows the action.** One frame now turns to the Target page when you lock a ship, a hostile is near or a missile is inbound, and to the fracture Charge page while the mining laser charges a rock - a fight at the rock goes to Target first, then back to Charge. It goes back to the page you were on 20 seconds after it ends, so a lock lost for a second in a turn does not flip the page. Press any button and the frame is yours again: it does not switch while you are pressing, and does not take you back from a page you chose. It is the right MFD unless you pick the left or Off under MFD setup → Screen → Follow the action, and it needs reading the game's screen on.
+
+**Reading the screen gives way to the game.** While the screen is being read, Quantum Wake now runs below normal priority, so the game is first to every core when both want one, and the text reader uses at most two threads instead of half the cores. A pilot felt the game lag with reading on. Reads take a little longer; the MFD frames, being part of the same app, give way too.
 
 **The voice is switched on in Settings.** Settings → Voice & callouts (it was Callouts) now starts with the two switches the voice needs - Read the game's screen live, and Speak callouts - with a button to hear it, above the list of every sound. They are the same switches as Log → Read from the game, whose card starts folded and was easy to miss. Speak callouts is shown greyed while reading is off rather than hidden, so it can be found before it can be used, and the MFD's combat and charge pages now point to Settings when reading is off.
 

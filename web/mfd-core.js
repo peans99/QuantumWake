@@ -589,6 +589,41 @@ window.QwMfd = (() => {
   /* The two frames have jobs before a pilot touches either one. They remain
      ordinary pages after that - saved screen choice always wins - but their
      identity should explain why one opened on a radar and the other on work. */
+  /* Follow the action (1.1.17): one frame turns to Target in a fight and to
+     Charge at a rock, then goes back. Pure, so the rules are tested rather than
+     flown: what the live reading wants on the glass, and one step of the
+     switch's memory - where it came from, when it went, when the reason left. */
+  const FOLLOW_HANDS_OFF = 5000, FOLLOW_RETURN = 20000, FOLLOW_MISSILE = 15000;
+  const followWant = (live, now) => {
+    if (!live?.available || !live.enabled) return null;
+    const combat = live.status?.combat;
+    // A missile can come from a ship nobody locked.
+    const missile = (combat?.callouts || []).some(c => c.kind === 'missile' && now - new Date(c.at).getTime() < FOLLOW_MISSILE);
+    if (combat?.target || combat?.combat || missile) return 'target';
+    if (live.status?.fracture?.active) return 'charge';
+    return null;
+  };
+  const followIdle = () => ({ auto: null, back: null, at: 0, lostAt: null });
+  const followStep = (memory, { want, screen, now, lastPress }) => {
+    const m = memory || followIdle();
+    // A press since the switch hands the frame back to the pilot: no return
+    // trip to a page they have since left on purpose.
+    if (m.auto && lastPress > m.at) return { memory: followIdle(), go: null };
+    if (want) {
+      // Callouts is a combat page too; a pilot reading it is not moved off it.
+      if (screen === want || (want === 'target' && screen === 'calls')) return { memory: { ...m, lostAt: null }, go: null };
+      // Mid-press is no time to move the page under the thumb.
+      if (now - lastPress < FOLLOW_HANDS_OFF) return { memory: { ...m, lostAt: null }, go: null };
+      return { memory: { auto: want, back: m.auto ? m.back : screen, at: now, lostAt: null }, go: want };
+    }
+    if (!m.auto) return { memory: m, go: null };
+    if (screen !== m.auto) return { memory: followIdle(), go: null };
+    // A lock dropped for a second in a turn is not the end of a fight.
+    const lostAt = m.lostAt ?? now;
+    if (now - lostAt < FOLLOW_RETURN) return { memory: { ...m, lostAt }, go: null };
+    return { memory: followIdle(), go: m.back };
+  };
+
   const panelRole = panel => panel === 'right'
     ? { label: 'MISSION', defaultScreen: 'task' }
     : { label: 'NAV', defaultScreen: 'nav' };
@@ -1181,7 +1216,7 @@ window.QwMfd = (() => {
         ? sayn(bed.times, 'A medical bed used {count} time · the game never states a regen point', 'A medical bed used {count} times · the game never states a regen point')
         : sayn(respawn.of, '{agreeing} of {count} death woke there · the game never states a regen point', '{agreeing} of {count} deaths woke there · the game never states a regen point', { agreeing: respawn.agreeing }) };
   }
-  return { say, sayn, fit, inset, defaultInset, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, radarFocus, radarHere, routeLine, panelRole, missionCard, makerOf, makers, dormant, actionLine, targetPicture, sameTask, taskId, rowIcon,
+  return { followWant, followStep, followIdle, FOLLOW_RETURN, FOLLOW_HANDS_OFF, say, sayn, fit, inset, defaultInset, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, radarFocus, radarHere, routeLine, panelRole, missionCard, makerOf, makers, dormant, actionLine, targetPicture, sameTask, taskId, rowIcon,
     groups, menuNodes, menuNode, parent, title, validScreen, menuItems, previewPage, trail, resolveCommand, restoreScreen, readingView,
     pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, dozed, DOZE, prettyItem, pageOf, pageStep, pageLabel, LEDGER_PAGE, BRIGHTNESS, brightnessLevel, brightnessAt,
     cycleBrightness, stepBrightness, OSBS, BUTTONS };

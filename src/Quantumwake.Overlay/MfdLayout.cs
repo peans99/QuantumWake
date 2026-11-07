@@ -132,6 +132,24 @@ internal sealed record MfdLayout
     /// </remarks>
     public int SleepAfterMinutes { get; init; }
 
+    /// <summary>
+    /// Which frame turns to Target in a fight and to Charge at a rock on its
+    /// own - "right", "left" or "off".
+    /// </summary>
+    /// <remarks>
+    /// One frame, not both: two panels jumping to the same page leave the
+    /// pilot nothing else to look at. The right one by default, because the
+    /// left is where you are and the right is the work in hand.
+    /// </remarks>
+    public string Follow { get; init; } = "right";
+
+    private static string CleanFollow(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        "left" => "left",
+        "off" => "off",
+        _ => "right",
+    };
+
     public MfdPanel[] Panels { get; init; } = [];
 
     /// <summary>
@@ -179,6 +197,7 @@ internal sealed record MfdLayout
             Brightness = NearestLevel(Brightness),
             TextScale = double.IsFinite(TextScale) ? Math.Clamp(TextScale, .8, 1.5) : 1,
             SleepAfterMinutes = Math.Clamp(SleepAfterMinutes, 0, 120),
+            Follow = CleanFollow(Follow),
             Panels = Panels.Select(p =>
         {
             if (p.Cougar is < 1 or > 8 || string.IsNullOrWhiteSpace(p.Monitor))

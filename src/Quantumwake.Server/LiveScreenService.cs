@@ -266,6 +266,31 @@ public sealed class LiveScreenService(
         lock (_gate) _status = change(_status);
     }
 
+    private bool? _standingBack;
+
+    /// <summary>
+    /// Below-normal priority for the whole app while the screen is being read
+    /// (1.1.17), so the game is first to every core when both want one - the
+    /// reads, the OCR engine's threads and the dashboard alike. Back to normal
+    /// when reading is off. A pilot felt the game lag with reading on.
+    /// </summary>
+    private void StandBack(bool reading)
+    {
+        if (_standingBack == reading || !OperatingSystem.IsWindows()) return;
+        _standingBack = reading;
+        try
+        {
+            using var self = System.Diagnostics.Process.GetCurrentProcess();
+            self.PriorityClass = reading
+                ? System.Diagnostics.ProcessPriorityClass.BelowNormal
+                : System.Diagnostics.ProcessPriorityClass.Normal;
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or PlatformNotSupportedException)
+        {
+            // Only a courtesy to the game; reading goes on at normal priority.
+        }
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var frame = Core.AppPaths.In("live", "frame.bmp");
@@ -276,6 +301,8 @@ public sealed class LiveScreenService(
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
                 _tick++;
+
+                StandBack(settings.Current.Enabled);
 
                 if (!settings.Current.Enabled)
                 {

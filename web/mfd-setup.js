@@ -5,7 +5,7 @@ const say = QwMfd.say;
 const setupElement = id => document.getElementById(id);
 const host = window.chrome?.webview;
 let monitors = [{ id: 'example', x: 0, y: 0, width: 1920, height: 1080, primary: true }];
-let layout = { enabled: false, blackout: true, brightness: 1, textScale: 1, sleepAfterMinutes: 0, buttons: null, panels: [
+let layout = { enabled: false, blackout: true, brightness: 1, textScale: 1, sleepAfterMinutes: 0, follow: 'right', buttons: null, panels: [
   { id: 'left', monitor: 'example', x: 360, y: 280, width: 480, height: 480, cougar: 1 },
   { id: 'right', monitor: 'example', x: 960, y: 280, width: 480, height: 480, cougar: 2 }
 ] };
@@ -162,6 +162,7 @@ function showScreen() {
     level + ' · ' + Math.round(QwMfd.brightnessAt(level) * 100) + '%';
   setupElement('text-scale').value = text;
   setupElement('sleep-after').value = String(layout.sleepAfterMinutes || 0);
+  setupElement('follow').value = ['left', 'off'].includes(layout.follow) ? layout.follow : 'right';
   setupElement('text-scale-value').textContent = text + '%';
 }
 setupElement('sleep-after').onchange = event => {
@@ -171,6 +172,14 @@ setupElement('sleep-after').onchange = event => {
   status(layout.sleepAfterMinutes
     ? say('Frames dim after {minutes} idle minutes. Save to keep it.', { minutes: layout.sleepAfterMinutes })
     : say('Frames stay at full brightness. Save to keep it.'));
+};
+setupElement('follow').onchange = event => {
+  layout.follow = event.target.value;
+  syncDirty();
+  if (previewing) send('preview');
+  status(layout.follow === 'off'
+    ? say('Neither frame changes page on its own. Save to keep it.')
+    : say('The {side} frame follows the action. Save to keep it.', { side: layout.follow === 'left' ? say('left') : say('right') }));
 };
 setupElement('text-scale').oninput = event => {
   layout.textScale = Number(event.target.value) / 100;

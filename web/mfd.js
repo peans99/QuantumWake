@@ -23,6 +23,11 @@ let brightness = 1, textScale = 1;
    than for protecting anything. It dims and never blanks - a frame you can
    still glance at beats one that has to be woken before it will answer. */
 let sleepAfterMinutes = 0, lastPress = Date.now(), dozing = false;
+/* Follow the action: which frame changes page on its own, from setup. Right
+   until the host says otherwise, which is also what a frame opened in a
+   browser does. */
+let follow = 'right', followMemory = QwMfd.followIdle();
+const followsHere = () => follow === panelId;
 let bindings = QwMfd.buttons(null);
 /* Body coordinates and the place gazetteer. Fetched once and kept: it is
    reference data that only changes when the game does, and re-pulling 294
@@ -189,12 +194,23 @@ function savePreferences() {
   try { localStorage.setItem(mfdKey, JSON.stringify({ screen })); } catch { }
 }
 const isMenu = () => !QwMfd.pageIds.includes(screen);
-function navigate(target) {
+function navigate(target, auto = false) {
   if (!QwMfd.validScreen(target)) return;
   standDown(); notice = ''; saved = ''; details = false; selected = 0; radarFocus = 0; offset = 0;
   screen = target; page = Math.max(0, QwMfd.pageIds.indexOf(screen));
   byId('content').scrollTop = 0;
-  savePreferences(); render();
+  // A page the fight chose is not the pilot's choice to come back to.
+  if (!auto) savePreferences();
+  render();
+}
+/* One step of Follow the action, after each live reading. */
+function followTheAction() {
+  if (!followsHere()) return;
+  const now = Date.now();
+  const { memory, go } = QwMfd.followStep(followMemory, {
+    want: QwMfd.followWant(extra.live, now), screen, now, lastPress });
+  followMemory = memory;
+  if (go && go !== screen) navigate(go, true);
 }
 function back() {
   if (details) { details = false; lastRows = ''; byId('content').scrollTop = 0; render(); }
@@ -661,6 +677,10 @@ function hostMessage(data) {
     bindings = QwMfd.buttons(data.buttons);
     if (Number.isFinite(data.brightness)) brightness = QwMfd.brightnessAt(QwMfd.brightnessLevel(data.brightness));
     if (Number.isFinite(data.textScale)) textScale = QwMfd.clamp(data.textScale, .8, 1.5);
+    if (typeof data.follow === 'string') {
+      follow = data.follow;
+      if (!followsHere()) followMemory = QwMfd.followIdle();
+    }
     if (Number.isFinite(data.sleepAfterMinutes)) {
       sleepAfterMinutes = QwMfd.clamp(data.sleepAfterMinutes, 0, 120);
       lastPress = Date.now(); dozing = false;
@@ -768,11 +788,17 @@ async function bootMfd() {
   /* A fight moves by the second, and the other extras by the half minute:
      the combat pages ask for the live reading on their own, and only while
      one of them is on the glass. */
+  /* The frame that follows the action asks too, wherever it is - slowly
+     while reading is off, since then there is nothing to follow. */
+  let liveTicks = 0;
   const liveTimer = setInterval(async () => {
-    if (!['target', 'calls', 'charge'].includes(screen)) return;
+    liveTicks++;
+    const onCombat = ['target', 'calls', 'charge'].includes(screen);
+    if (!onCombat && !followsHere()) return;
+    if (!onCombat && extra.live && !extra.live.enabled && liveTicks % 8) return;
     try {
       const response = await fetch('/api/live', { signal: AbortSignal.timeout(4000) });
-      if (response.ok) { extra = { ...extra, live: await response.json() }; lastRows = ''; render(); }
+      if (response.ok) { extra = { ...extra, live: await response.json() }; lastRows = ''; followTheAction(); render(); }
     } catch { /* the page says what it is missing */ }
   }, 1500);
   /* Its own timer rather than a check inside render: the panel re-renders
