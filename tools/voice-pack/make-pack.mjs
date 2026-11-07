@@ -41,6 +41,11 @@ const phrases = [
   'Ping', 'Scanning', 'Laser', 'Switching laser', 'Beam switched', 'Module one', 'Module two', 'Module three',
   'More power', 'Less power', 'Cargo jettisoned', 'Doors open', 'Doors closed', 'Shields to max',
   'Requesting clearance', 'Self destruct', 'Self destruct stopped', 'Confirm jettison?', 'Confirm self destruct?',
+  // 1.2.5: shields, power, landing gear, and the abort that asks first.
+  'Gear down', 'Gear up', 'Landing gear', 'Shields up', 'Shields down', 'Shields to minimum',
+  'Weapons to max', 'Weapons up', 'Weapons down', 'Engines to max', 'Engines up', 'Engines down', 'Power balanced',
+  'Front shields', 'Rear shields', 'Left shields', 'Right shields', 'Top shields', 'Bottom shields',
+  'Shields balanced', 'Shields on', 'Shields off', 'Shields toggled', 'Confirm shields off?', 'Confirm abort self destruct?',
 ];
 
 // Spelled for the ear, not the eye: Mk II is "Mark Two", the C.O. hulls are

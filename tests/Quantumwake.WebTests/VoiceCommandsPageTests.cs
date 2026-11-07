@@ -114,6 +114,31 @@ public class VoiceCommandsPageTests
     }
 
     [Fact]
+    public void Commands_with_no_key_are_offered_free_ones_written_like_any_binding()
+    {
+        var withSpare = Voice.Replace("\"heard\":[", "\"spare\":[{\"id\":\"guns\",\"phrase\":\"gun mode\",\"actionMap\":\"seat_general\",\"action\":\"v_toggle_guns_mode\",\"input\":\"kb1_rctrl+np_1\",\"shown\":\"RCtrl + Numpad 1\"}],\"gameRunning\":true,\"heard\":[");
+        var page = Loaded(withSpare);
+        Assert.Contains("1 command has no key voice can press", Text(page));
+        Assert.Contains("“gun mode” → RCtrl + Numpad 1", Text(page));
+        Assert.Contains("Give them keys as an import file", Text(page));
+
+        page.Serve("/api/controls/bindings", """{"how":"export","name":"quantumwake-voice","mappings":"C:/sc/mappings/quantumwake-voice.xml","command":"pp_rebindkeys quantumwake-voice.xml"}""");
+        page.Do($$"""
+            const button = {{Root}}.descendants().find(n => n.dataset && n.dataset.voiceAct === 'spare');
+            {{Root}}.fire('click', { target: button });
+            await new Promise(r => setTimeout(r, 0));
+            await new Promise(r => setTimeout(r, 0));
+            """);
+        var body = page.BodyOf("/api/controls/bindings");
+        Assert.Contains("\"input\":\"kb1_rctrl+np_1\"", body);
+        Assert.Contains("\"action\":\"v_toggle_guns_mode\"", body);
+        Assert.Contains("pp_rebindkeys quantumwake-voice.xml", Text(page));
+
+        // Nothing to give, nothing shown.
+        Assert.Equal(0, Loaded(Voice).Number($"{Root}.byClass('voice-spare').length"));
+    }
+
+    [Fact]
     public void Hear_it_asks_for_that_commands_answer()
     {
         var page = Loaded(Voice);

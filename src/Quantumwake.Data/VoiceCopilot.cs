@@ -19,7 +19,7 @@ public interface ISpeechListener
     /// <summary>Why it is not listening when asked to, or null when it is: no microphone, microphone access off.</summary>
     string? Trouble { get; }
 
-    /// <summary>Starts listening for these phrases, or changes them; each match is handed to <paramref name="heard"/>.</summary>
+    /// <summary>Starts listening for these phrases - each a <see cref="PhrasePattern"/> - or changes them; each match is handed to <paramref name="heard"/>.</summary>
     void Listen(IReadOnlyList<string> phrases, Action<HeardPhrase> heard);
 
     /// <summary>Stops listening and lets go of the microphone.</summary>
@@ -193,6 +193,16 @@ public sealed class VoiceCopilot
 
     private DateTimeOffset? _buttonUpAt;
 
+    /// <summary>
+    /// How long after a self destruct this copilot confirmed an abort presses
+    /// at once. The key is a toggle: pressed with no countdown running it
+    /// starts one. Five minutes is a generous guess at the countdown, not a
+    /// measured figure; past it, an abort asks for "confirm" first.
+    /// </summary>
+    public static readonly TimeSpan DestructWindow = TimeSpan.FromMinutes(5);
+
+    private DateTimeOffset? _destructAt;
+
     /// <summary>Awake by the wake phrase.</summary>
     public bool Awake { get; private set; }
 
@@ -226,6 +236,7 @@ public sealed class VoiceCopilot
         Pending = null;
         ButtonDown = false;
         _buttonUpAt = null;
+        _destructAt = null;
     }
 
     public VoiceDecision Hear(HeardPhrase heard, VoiceCommandSettings settings)
@@ -275,13 +286,14 @@ public sealed class VoiceCopilot
                 // one word that must never fire a self destruct by accident.
                 if (!listening)
                     return new(VoiceCommands.SayCancelled, null, $"{pending.Command.Phrase} cancelled: confirm was said without push-to-talk.");
-                return new(null, pending.Command, $"Confirmed {pending.Command.Phrase}.");
+                return new(null, Pressed(pending.Command, now), $"Confirmed {pending.Command.Phrase}.");
             }
             else
             {
                 // Anything else, cancel included, stands the command down: the
                 // safe reading of a pilot who said something other than yes.
-                if (text == VoiceCommands.CancelPhrase || !listening)
+                // "Abort self destruct" while one waits on confirm is a no as well.
+                if (text == VoiceCommands.CancelPhrase || !listening || VoiceCommands.ForPhrase(text)?.Id == "abortdestruct")
                     return new(VoiceCommands.SayCancelled, null, $"{pending.Command.Phrase} cancelled.");
             }
         }
@@ -298,13 +310,24 @@ public sealed class VoiceCopilot
 
         if (settings.IsOff(command.Id)) return new(null, null, $"{command.Phrase} is switched off.");
 
-        if (command.Confirm)
+        var unsure = command.Id == "abortdestruct" && !(_destructAt is { } started && now - started <= DestructWindow);
+        if (command.Confirm || unsure)
         {
             Pending = (command, now + VoiceCommands.ConfirmWindow);
-            return new(command.Prompt ?? $"Confirm {command.Phrase}?", null, $"Waiting for confirm on {command.Phrase}.");
+            return new(command.Prompt ?? $"Confirm {command.Phrase}?", null, unsure
+                ? $"Waiting for confirm on {command.Phrase}: no self destruct confirmed here in the last {DestructWindow.TotalMinutes:0} minutes, and the key starts one when none is running."
+                : $"Waiting for confirm on {command.Phrase}.");
         }
 
-        return new(null, command, $"Heard {command.Phrase}.");
+        return new(null, Pressed(command, now), $"Heard {command.Phrase}.");
+    }
+
+    /// <summary>Notes a self destruct started or stopped, so a later abort knows whether one is running.</summary>
+    private VoiceCommand Pressed(VoiceCommand command, DateTimeOffset now)
+    {
+        if (command.Id == "selfdestruct") _destructAt = now;
+        else if (command.Id == "abortdestruct") _destructAt = null;
+        return command;
     }
 
     private static string Unsure(HeardPhrase heard) =>

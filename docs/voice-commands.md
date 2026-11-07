@@ -16,12 +16,35 @@ block says so.
   `MS-1033-80-DESK`, en-US, found 2026-11-07. It runs on the machine with no
   network and needs no "online speech recognition" switch. It is also what
   VoiceAttack listens with.
-- **A fixed grammar, not dictation.** The recogniser is told the exact phrases
-  (`VoiceCommands.Grammar()`, 50 of them) and nothing else. Measured with the
-  Windows voice speaking into a WAV file and the file recognised against the
-  grammar: the ten commands tried came back at 0.91–0.99 confidence. "What a
-  lovely day" and "pass me the salt" matched nothing. A real voice over game
-  noise will score lower, so the confidence bar exists.
+- **A closed grammar, not dictation.** The recogniser is told what may be
+  said (`VoiceCommands.Grammar()`) and nothing else. Until 1.2.4 that was 50
+  fixed sentences, so "power to shields" worked and "full power to the
+  shields" did not. Since 1.2.5 each command is a few patterns
+  (`PhrasePattern`), `(full|max) power to [the] (shield|shields)`, handed
+  to the recogniser as structure, so it costs no more than one sentence.
+  Any command may open with "copilot" and end with "please". See the
+  vocabulary below.
+- **Measured** with the Windows voice speaking into a WAV file, recognised
+  against the 1.2.5 grammar (2026-11-07):
+  - Long wordings came back at 0.99: "full power to the front shields",
+    "divert shields to the rear please", "shields to the right", "full shield
+    back", "copilot gear down".
+  - Short commands came back at 0.92–0.99, except "mining mode" at 0.75
+    (0.93 with the old list). It is still over the bar, but it is the one to
+    watch.
+  - "What a lovely day" matched nothing.
+  - The old list was worse at the long wordings, not just deaf to them. It
+    heard "full power to the front shields" as "full power to shields" (0.86),
+    which is the wrong action.
+  - **"Nav" is not recognised at all**, with the old list or the new one: the
+    recogniser has no pronunciation for the word. "Navigation mode" comes back
+    at 0.98, so say that.
+  - **The cost of a closed grammar:** speech close to a command is pulled
+    onto it. "Shields to the side" came back as "shields to the starboard"
+    (0.86). A wording that is no command at all ("what a lovely day") is
+    dropped; one that is nearly a command may not be.
+  - A real voice over game noise will score lower, so the confidence bar
+    exists.
 - **The bar** is 0.7 for a command (`VoiceCommandSettings.MinConfidence`).
   The wake and sleep phrases need 0.1 more: a wrongly heard command does one
   thing, but a wrongly heard wake leaves every command live.
@@ -38,8 +61,43 @@ block says so.
   "confirm" within 6 s. "Cancel", silence, or anything said while it is not
   listening stands the command down. With push-to-talk, "confirm" itself has
   to be said with the button held (1.2.1): one said with it up, to a wingman,
-  cancels rather than fires. "Abort self destruct" presses the same key
-  again with no confirm, since that is how the game stops the countdown.
+  cancels rather than fires. Shields off waits on "confirm" too (1.2.5):
+  "on" and "off" are a sound apart, and a misheard "on" must not drop the
+  shields in a fight.
+- **Abort self destruct** presses the same key again, which is how the game
+  stops the countdown. With no countdown running, that key *starts* one. So
+  abort presses at once only within five minutes of a self destruct this
+  copilot confirmed (1.2.5); otherwise it asks "Confirm abort self
+  destruct?" first. Five minutes is a generous guess at the countdown, not a
+  measured figure. Saying "abort self destruct" while a self destruct waits
+  on confirm is a no, not a second question.
+
+## What it understands (1.2.5)
+
+Each line is the main phrase, then the kinds of wording that also work. The
+test `Every_wording_belongs_to_one_command_only` spells every pattern out,
+more than 5,000 wordings, and fails if any belongs to two commands or is
+"confirm" or "cancel".
+
+| Command | Also heard as |
+|---|---|
+| power to shields | full / max / maximum / all power to (the) shield(s); shields to max; max shields |
+| increase shields | increase / raise / boost (the) shields (power); more power to (the) shields; more shields; shields up |
+| decrease shields | decrease / lower / reduce (the) shields (power); less power to (the) shields; shields down |
+| minimum shields | min / minimum / minimize (the) shields; shields to minimum |
+| front, rear, left, right, top, bottom shields | (raise / boost / full / max / more / divert / angle / shift / focus …) (power to) (the) front shields; shields (power) (to) (the) front. Front is also forward / fore / nose; rear is back / aft / stern; left is port; right is starboard; top is dorsal / upper; bottom is belly / ventral / underside |
+| balance shields | reset / balance / equalize / center / level (the) shields (faces); even out the shields; shields reset |
+| shields on, shields off, toggle shields | shields on / online; turn (the) shields on; enable / activate shields; and the same with off / disable / kill / drop |
+| power to weapons, power to engines | the same shapes as shields, with weapons / guns and engines / thrusters; more / less power to …; balance power, reset power |
+| gear down, gear up, toggle landing gear | (landing) gear down; deploy / lower / drop (the) (landing) gear; and up / retract / raise |
+| gun, mining, salvage, scan, quantum, combat, navigation mode | (switch to / go to / enter / set / engage) … mode; switch to mining; S C M; weapons hot |
+| ping, scan target | (radar) ping; send a ping; scan; scan the area · scan (the) target / object / contact / ship |
+| mining: laser, switch laser, beam, modules, more / less power | fire / stop / start / toggle (the) (mining) laser; laser on; fracture / extraction mode; beam high; (activate / use) module one; first module; mining power up |
+| doors, request landing, jettison, self destruct | open / close / shut (all) (the) doors · request landing / departure / takeoff / clearance, call the tower · jettison / dump / eject (the) cargo · (initiate / start …) self destruct (sequence), abort / stop / cancel self destruct |
+
+"Up" and "down" are deliberately not shield-face words: "shields up" and
+"lower shields" are power. "Lower" in "lower the gear" is landing gear,
+because there is no "shields" in it.
 
 Audio never reaches the app. It sees only the phrase matched and its score,
 keeps the last 40 in memory for the page, and writes none of them to disk.
@@ -102,8 +160,8 @@ known bad, and each command's Hear it button is how to listen.
 
 ## What it can press on this install
 
-Planned against this install's catalogue and Nicolas's `actionmaps.xml` on
-2026-11-07, 13 of the 24 commands press a key as things stand:
+As it was in 1.2.0, against this install's catalogue and Nicolas's
+`actionmaps.xml` on 2026-11-07, 13 of the 24 commands pressed a key:
 
 - **Can press:**
   - The mining set: mining and salvage mode, both on M; laser, switch laser,
@@ -115,8 +173,44 @@ Planned against this install's catalogue and Nicolas's `actionmaps.xml` on
 - **No key at all:** quantum mode.
 - **On the mouse wheel:** more power.
 
-Giving these spare keys, written as a profile the pilot imports once, is the
-next step (1.2.1).
+With the 1.2.5 commands, against the same files, 27 of 47 press a key.
+The power set (shields, weapons and engines on F5–F8) and toggle shields (O)
+are all bound by default. More power is still on the mouse wheel. The other
+19 have no keyboard key:
+
+- The eight from 1.2.0: guns, quantum, combat and nav mode, scan target,
+  less power, and both door commands.
+- The six shield faces, shield reset, and shields on and off. They are on
+  his sticks: js4's hat and buttons 11–13, and js6 buttons 16 and 18.
+- Gear down and gear up, which are on nothing.
+
+### Spare keys (1.2.5)
+
+Settings → Voice commands lists the commands with no keyboard key and offers
+a free key for each (`VoiceBinding.SpareKeys`):
+
+- **Which keys:** right Ctrl, then right Alt, with numpad 1–0 then F1–F12.
+  The game leaves these chords free by default.
+- **What is skipped:** any chord already used, by any of the game's 1,103
+  default actions or by the pilot's profile. A key given to a voice command
+  would be taken off that action, because a binding moves an exact input. A
+  modifier bound on its own anywhere is not used at all, since holding it
+  would fire that action as well.
+- **What gets a key:** only a command with no keyboard key, whether it was
+  never bound, is on a stick only, or was cleared. A key the app cannot press
+  (the mouse wheel) is left as the pilot set it, and so is a stick binding: a
+  keyboard key is added beside it.
+- **How it is written:** through `/api/controls/bindings`, the same path as
+  the Controls page. With the game closed, the profile is backed up and then
+  rewritten. With it running, an import file `quantumwake-voice` is written
+  for the keybinding screen or `pp_rebindkeys`.
+- **On his files** it proposes 19 keys: RCtrl + Numpad 1–0 and RCtrl +
+  F1–F9. Guns, quantum, combat and nav mode, scan target, less power, the
+  doors, gear, the faces, shield reset and shields on/off.
+
+**Chords written modifier-last** are pressed modifier first since 1.2.5.
+The game writes Shields Decrease as `f7+lalt`, and pressing in written
+order put F7 down alone first, which is Shields Increase.
 
 ## The licence
 
@@ -147,3 +241,8 @@ open, and the switch's own text says what it does.
   Windows drops the keys without saying so (UIPI), and nothing in the app can
   see that.
 - **Recognition with a real voice** through a headset, with the game running.
+- **Shield faces on a given ship.** The actions are in the 4.10 controls
+  file and Nicolas has them on a stick, but whether a ship has faces to raise
+  is the game's to say.
+- **Chords on RCtrl** pressed by SendInput: the game tells LAlt+F7 from F7,
+  so RCtrl + F1 should not open the mobiGlas, but this has not been tried.

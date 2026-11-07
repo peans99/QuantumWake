@@ -352,7 +352,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.2.4
+### 1.2.5
 
 **Voice commands: say it instead of finding the key.** For the things you do once a session and would rather not give a button to. Settings → Voice & callouts has a new Voice commands switch, off until you turn it on. Say "Quantum Wake copilot on", or hold a push-to-talk button or key you pick, and the app listens for a short list of commands:
 
@@ -378,6 +378,21 @@ Each command presses the key the game has for that action, either yours from you
 - The feed shows the last five events instead of twelve.
 
 Fullscreen (Ctrl+Alt+F) and the dashboard still show everything.
+
+**Voice commands understand the way you actually say things.** Each command used to listen for one or two exact sentences, so "power to shields" worked and "full power to the shields" did not. It now listens for patterns, so all of these work: "full power to shields", "max shields", "shields to the right", "full shield back", "boost the rear shields", "gear down", "switch to mining", "request takeoff". Any command can start with "copilot" and end with "please". There are new commands too:
+- The six shield faces: front, rear, left, right, top and bottom. Left also answers to port and right to starboard.
+- Balance shields, more and less shields, minimum shields, and shields on, off and toggle.
+- Weapons and engines power, and balance power.
+- Gear up, gear down and toggle landing gear.
+
+Settings → Voice commands shows a few example wordings for each command, and every new reply is in the same recorded voice. Recognition was checked with the Windows voice speaking into a file: the long wordings come back at 99% confidence. "Nav" is a word the Windows recogniser cannot hear at all, so say "navigation mode".
+
+**Free keys for commands that have none.** Voice can only press keyboard keys, and on many installs several of these actions are on a stick or on nothing. Settings → Voice commands now lists them and offers a free key for each, such as Right Ctrl + Numpad 1 or Right Ctrl + F1. These are chords the game leaves unused, and the app skips any key already used by your profile or by any of the game's defaults. One click writes them the same way the Controls page writes bindings: into your profile, after a backup, when the game is closed, or as an import file while it runs. Your stick bindings stay as they are.
+
+**Safer around self destruct and shields.**
+- "Abort self destruct" presses the self destruct key again, which starts a countdown when none is running. It now presses at once only within five minutes of a self destruct the copilot itself confirmed. Otherwise it asks "Confirm abort self destruct?" first.
+- "Shields off" waits for "confirm", because "on" and "off" sound alike.
+- A fix: commands the game binds as "F7 + LAlt", such as less power to shields, pressed F7 before LAlt. That could raise the shields instead of lowering them. The modifier now goes down first.
 
 ### 1.1.25
 

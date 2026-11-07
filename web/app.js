@@ -37189,6 +37189,41 @@ let voiceDrawn = '';
 let voicePollTimer = null;
 let voiceKeyWaiting = false;
 let voiceParts = null;
+/** What the last "give them keys" did, shown under the list until the page is left. */
+let voiceSpareNote = '';
+
+/**
+ * Sends the proposed keys to the same endpoint the Controls page applies
+ * bindings through, so the profile is backed up first and a running game
+ * gets an import file instead of a rewritten profile under it.
+ */
+async function giveVoiceSpareKeys(button) {
+  const spare = voiceState?.spare || [];
+  if (!spare.length) return;
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/controls/bindings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'quantumwake-voice',
+        changes: spare.map((k) => ({ actionMap: k.actionMap, action: k.action, input: k.input })),
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    voiceSpareNote = !response.ok
+      ? (serverText(result.message) || result.title || tx('Could not apply ({status}).', { status: response.status }))
+      : result.how === 'live'
+        ? tx('Keys written; the profile as it was is kept under Controls → Backups. Star Citizen reads them at its next start.')
+        : tx('Written as {file}. In the game: Options → Keybindings → import "{name}", or at the console: {command}.', { file: result.mappings, name: result.name, command: result.command });
+  } catch (err) {
+    voiceSpareNote = tx('Could not apply: {problem}', { problem: err.message });
+  } finally {
+    button.disabled = false;
+    voiceDrawn = '';
+    await loadVoice().catch(() => {});
+  }
+}
 
 /** Puts a sentence on the state line until the next answer from the app replaces it. */
 function voiceSay(text) {
@@ -37314,7 +37349,7 @@ function renderVoiceCommands() {
   }));
 
   const drawn = JSON.stringify([s.enabled, s.trigger, s.key, s.button, s.buttonDevicePresent, s.learning, voiceKeyWaiting,
-    s.replies, (s.commands || []).map((c) => [c.id, c.on, c.key, c.canPress, c.why])]);
+    s.replies, (s.commands || []).map((c) => [c.id, c.on, c.key, c.canPress, c.why]), s.spare, s.gameRunning, voiceSpareNote]);
   if (drawn === voiceDrawn) return;
   voiceDrawn = drawn;
 
@@ -37371,6 +37406,29 @@ function renderVoiceCommands() {
   parts.push(toggle('replies', s.replies, tx('Answer out loud'), tx('“Mining mode”, “Confirm self destruct?”, said by the callout voice.')));
 
   parts.push(el('p', 'muted', tx('Each command presses the key the game has for it: yours from your keybindings, or the game’s default. One with no keyboard key says so, because voice cannot press a stick button.')));
+  const spare = s.spare || [];
+  if (spare.length || voiceSpareNote) {
+    // Commands with no keyboard key can be given one the game leaves free,
+    // written the way the Controls page writes bindings (1.2.5).
+    const box = el('div', 'voice-spare');
+    if (spare.length) {
+      box.append(el('p', '', txn(spare.length,
+        '{count} command has no key voice can press. It can be given a free one:',
+        '{count} commands have no key voice can press. They can be given free ones:')));
+      const keys = el('ul', 'voice-spare-list');
+      for (const k of spare) keys.append(el('li', '', `“${k.phrase}” → ${k.shown}`));
+      box.append(keys);
+      const give = el('button', 'ghost small', s.gameRunning ? tx('Give them keys as an import file') : tx('Give them keys in your profile'));
+      give.type = 'button';
+      give.dataset.voiceAct = 'spare';
+      box.append(give, ' ', el('span', 'muted', s.gameRunning
+        ? tx('Star Citizen is running, so they are written as a file its keybinding screen imports.')
+        : tx('Written into the game\'s profile, after keeping it as it is; the game reads it at its next start.')));
+    }
+    if (voiceSpareNote) box.append(el('p', 'muted', voiceSpareNote));
+    parts.push(box);
+  }
+
   const list = el('div', 'voice-command-list');
   for (const c of s.commands || []) {
     const row = el('div', `voice-command${c.canPress ? '' : ' voice-command-unbound'}`);
@@ -37428,6 +37486,10 @@ $('#voice-commands')?.addEventListener('click', (event) => {
   }
   const act = event.target?.dataset?.voiceAct;
   if (!act) return;
+  if (act === 'spare') {
+    giveVoiceSpareKeys(event.target).catch(() => {});
+    return;
+  }
   if (act === 'key') {
     voiceKeyWaiting = true;
     renderVoiceCommands();

@@ -36,6 +36,14 @@ public class VoiceCommandTests
          </actionmap>
          <actionmap name="spaceship_power">
           <action name="v_engineering_assignment_shields_max" onHold="1" holdTriggerDelay="0.25" keyboard="f7"/>
+          <action name="v_engineering_assignment_shields_decrease" activationMode="tap" keyboard="f7+lalt"/>
+         </actionmap>
+         <actionmap name="spaceship_defensive">
+          <action name="v_shield_raise_level_forward" activationMode="press" keyboard=" "/>
+          <action name="v_shield_raise_level_back" activationMode="press" keyboard=" "/>
+         </actionmap>
+         <actionmap name="lights_controller">
+          <action name="v_lights_stand_in" activationMode="press" keyboard="rctrl+np_1"/>
          </actionmap>
          <actionmap name="spaceship_mining">
           <action name="v_increase_mining_throttle" activationMode="press" keyboard="maxis_z"/>
@@ -108,6 +116,46 @@ public class VoiceCommandTests
         Assert.Equal(["lalt", "n"], plan.Keys);
         Assert.Equal("LAlt + N", plan.Shown);
         Assert.False(plan.FromProfile);
+    }
+
+    [Fact]
+    public void A_chord_the_game_writes_modifier_last_is_pressed_modifier_first()
+    {
+        // Shields Decrease is f7+lalt in the file. F7 down alone first is
+        // Shields Increase - the opposite of what was asked for.
+        var plan = VoiceBinding.Plan(Command("shieldsdown"), Game, null);
+        Assert.Equal(["lalt", "f7"], plan.Keys);
+        Assert.Equal("LAlt + F7", plan.Shown);
+    }
+
+    [Fact]
+    public void Spare_keys_go_only_to_commands_with_no_key_and_skip_every_key_in_use()
+    {
+        // rctrl+np_1 is a game default (the stand-in light) and the pilot has
+        // rctrl+np_2 on something: the first free key is rctrl+np_3.
+        var profile = Profile("""
+            <actionmap name="spaceship_movement"><action name="v_atc_request"><rebind input="kb1_rctrl+np_2"/></action></actionmap>
+            """);
+        var spare = VoiceBinding.SpareKeys(VoiceCommands.All, Game, profile);
+        Assert.Equal(["guns", "opendoors", "shieldfront", "shieldback"], spare.Select(k => k.Command.Id));
+        Assert.Equal("kb1_rctrl+np_3", spare[0].Input);
+        Assert.Equal("RCtrl + Numpad 3", spare[0].Shown);
+        Assert.Equal(spare.Count, spare.Select(k => k.Input).Distinct().Count());
+        // A key the app cannot press (the mouse wheel) is not "no key": it is left alone.
+        Assert.DoesNotContain(spare, k => k.Command.Id == "powerup");
+
+        // With RCtrl bound on its own, holding it would fire that too: only RAlt is used.
+        var lone = Profile("""
+            <actionmap name="spaceship_movement"><action name="v_atc_request"><rebind input="kb1_rctrl"/></action></actionmap>
+            """);
+        Assert.All(VoiceBinding.SpareKeys(VoiceCommands.All, Game, lone), k => Assert.StartsWith("kb1_ralt+", k.Input));
+
+        // And a key it gave is then the command's own.
+        var given = Profile("""
+            <actionmap name="seat_general"><action name="v_toggle_guns_mode"><rebind input="kb1_rctrl+np_3"/></action></actionmap>
+            """);
+        Assert.True(VoiceBinding.Plan(Command("guns"), Game, given).CanPress);
+        Assert.DoesNotContain(VoiceBinding.SpareKeys(VoiceCommands.All, Game, given), k => k.Command.Id == "guns");
     }
 
     [Fact]
@@ -279,12 +327,133 @@ public class VoiceCommandTests
     }
 
     [Fact]
-    public void Every_phrase_belongs_to_one_command_only()
+    public void Every_wording_belongs_to_one_command_only()
     {
-        var phrases = VoiceCommands.All.SelectMany(c => c.Phrases).ToList();
-        Assert.Equal(phrases.Count, phrases.Distinct(StringComparer.OrdinalIgnoreCase).Count());
-        Assert.DoesNotContain(VoiceCommands.ConfirmPhrase, phrases);
+        // Each pattern spelled out in full and matched against every command:
+        // a wording two commands both claim would press whichever came first.
         Assert.Equal(VoiceCommands.All.Count, VoiceCommands.All.Select(c => c.Id).Distinct().Count());
+        var control = new[] { VoiceCommands.WakePhrase, VoiceCommands.SleepPhrase, VoiceCommands.SleepShort, VoiceCommands.ConfirmPhrase, VoiceCommands.CancelPhrase };
+        var patterns = VoiceCommands.All.SelectMany(c => c.Phrases.Select(p => (c.Id, Pattern: PhrasePattern.Parse(p)))).ToList();
+        var clashes = new List<string>();
+        var wordings = 0;
+        foreach (var (id, pattern) in patterns)
+        {
+            foreach (var wording in pattern.Expand())
+            {
+                wordings++;
+                var claimed = patterns.Where(x => x.Id != id && x.Pattern.Matches(wording)).Select(x => x.Id).Distinct().ToList();
+                if (claimed.Count > 0) clashes.Add($"'{wording}' ({id}) is also {string.Join(", ", claimed)}");
+                if (control.Contains(wording)) clashes.Add($"'{wording}' ({id}) is a control word");
+                if (clashes.Count > 20) break;
+            }
+        }
+        Assert.True(clashes.Count == 0, string.Join(Environment.NewLine, clashes));
+        Assert.True(wordings > 5_000, $"only {wordings} wordings");
+    }
+
+    [Theory]
+    [InlineData("power to shields", "shields")]
+    [InlineData("full power to shield", "shields")]
+    [InlineData("full power to the shields", "shields")]
+    [InlineData("max shields", "shields")]
+    [InlineData("shields up", "shieldsup")]
+    [InlineData("increase shields", "shieldsup")]
+    [InlineData("lower shields", "shieldsdown")]
+    [InlineData("full shield back", "shieldback")]
+    [InlineData("increase shield back", "shieldback")]
+    [InlineData("boost the rear shields", "shieldback")]
+    [InlineData("shields to the right", "shieldright")]
+    [InlineData("shield starboard", "shieldright")]
+    [InlineData("divert shields to port", "shieldleft")]
+    [InlineData("full power to the front shields", "shieldfront")]
+    [InlineData("Copilot, full power to the front shields, please.", "shieldfront")]
+    [InlineData("balance shields", "shieldreset")]
+    [InlineData("shields off", "shieldsoff")]
+    [InlineData("turn on the shields", "shieldson")]
+    [InlineData("gear down", "geardown")]
+    [InlineData("lower the landing gear", "geardown")]
+    [InlineData("switch to mining", "mining")]
+    [InlineData("go to S C M mode", "combat")]
+    [InlineData("request takeoff", "atc")]
+    [InlineData("open the doors please", "opendoors")]
+    [InlineData("dump the cargo", "jettison")]
+    [InlineData("cancel self destruct", "abortdestruct")]
+    public void The_ways_a_pilot_says_it_are_heard(string said, string id) =>
+        Assert.Equal(id, VoiceCommands.ForPhrase(said)?.Id);
+
+    [Theory]
+    [InlineData("shields")]
+    [InlineData("power")]
+    [InlineData("copilot")]
+    [InlineData("please")]
+    [InlineData("shields to the side")]
+    [InlineData("confirm please")]
+    public void Words_that_are_no_command_are_not_one(string said) =>
+        Assert.Null(VoiceCommands.ForPhrase(said));
+
+    [Fact]
+    public void The_recogniser_gets_manners_on_commands_but_never_on_confirm()
+    {
+        var grammar = VoiceCommands.Grammar();
+        Assert.Contains(VoiceCommands.ConfirmPhrase, grammar);
+        Assert.DoesNotContain(grammar, g => g.Contains("confirm") && g.Contains('['));
+        Assert.Contains("[copilot] power to shields [please]", grammar);
+        Assert.All(grammar, g => PhrasePattern.Parse(g));
+    }
+
+    [Fact]
+    public void A_pattern_reads_its_brackets_and_refuses_empty_choices()
+    {
+        var p = PhrasePattern.Parse("(full|max) power to [the] (shield|shields)");
+        Assert.Equal(8, p.Expand().Count);
+        Assert.True(p.Matches("Max power to shield"));
+        Assert.False(p.Matches("power to shield"));
+        Assert.Equal(["max power to shield", "full power to the shields"], p.Examples(2));
+        Assert.Throws<FormatException>(() => PhrasePattern.Parse("(full|) power"));
+        Assert.Throws<FormatException>(() => PhrasePattern.Parse("[the shields"));
+        Assert.Throws<FormatException>(() => PhrasePattern.Parse("(a]"));
+    }
+
+    [Fact]
+    public void Abort_presses_at_once_only_after_a_self_destruct_confirmed_here()
+    {
+        var copilot = new VoiceCopilot();
+        copilot.Hear(Said(VoiceCommands.WakePhrase), On);
+
+        // No countdown this copilot knows of: the key would start one, so it asks.
+        var cold = copilot.Hear(Said("abort self destruct", 1), On);
+        Assert.Null(cold.Press);
+        Assert.Equal("Confirm abort self destruct?", cold.Say);
+        Assert.Equal("abortdestruct", copilot.Hear(Said("confirm", 2), On).Press?.Id);
+
+        // After a confirmed self destruct, abort is immediate.
+        copilot.Hear(Said("self destruct", 10), On);
+        Assert.Equal("selfdestruct", copilot.Hear(Said("confirm", 11), On).Press?.Id);
+        Assert.Equal("abortdestruct", copilot.Hear(Said("stop self destruct", 20), On).Press?.Id);
+
+        // And once stopped, a second abort asks again.
+        Assert.Null(copilot.Hear(Said("abort self destruct", 30), On).Press);
+    }
+
+    [Fact]
+    public void Abort_while_self_destruct_waits_on_confirm_is_a_no()
+    {
+        var copilot = new VoiceCopilot();
+        copilot.Hear(Said(VoiceCommands.WakePhrase), On);
+        copilot.Hear(Said("self destruct", 1), On);
+        var no = copilot.Hear(Said("cancel self destruct", 2), On);
+        Assert.Null(no.Press);
+        Assert.Equal(VoiceCommands.SayCancelled, no.Say);
+        Assert.Null(copilot.Pending);
+    }
+
+    [Fact]
+    public void Shields_off_waits_on_confirm()
+    {
+        var copilot = new VoiceCopilot();
+        copilot.Hear(Said(VoiceCommands.WakePhrase), On);
+        Assert.Equal("Confirm shields off?", copilot.Hear(Said("shields off", 1), On).Say);
+        Assert.Equal("shieldson", copilot.Hear(Said("shields on", 10), On).Press?.Id);
     }
 
     [Fact]

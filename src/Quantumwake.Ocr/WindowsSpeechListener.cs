@@ -52,7 +52,10 @@ public sealed class WindowsSpeechListener : ISpeechListener, IDisposable
             try
             {
                 var engine = new SpeechRecognitionEngine(info);
-                var choices = new Choices([.. phrases]);
+                // Each phrase is a pattern, handed over as its structure rather
+                // than every sentence it allows (1.2.5): the shields alone run to
+                // thousands of wordings.
+                var choices = new Choices([.. phrases.Select(p => Build(PhrasePattern.Parse(p).Parts, info.Culture))]);
                 engine.LoadGrammar(new Grammar(new GrammarBuilder(choices) { Culture = info.Culture }) { Name = "copilot" });
                 engine.SpeechRecognized += OnRecognized;
                 engine.SetInputToDefaultAudioDevice();
@@ -98,6 +101,30 @@ public sealed class WindowsSpeechListener : ISpeechListener, IDisposable
     }
 
     /// <summary>The English recogniser, US first, or null when the machine has none.</summary>
+    /// <summary>
+    /// A pattern as the engine's own grammar. Every builder carries the
+    /// recogniser's culture: one left on the default fails at load, not here.
+    /// </summary>
+    private static GrammarBuilder Build(IReadOnlyList<PhrasePattern.Part> run, CultureInfo culture)
+    {
+        var builder = new GrammarBuilder { Culture = culture };
+        foreach (var part in run)
+        {
+            switch (part)
+            {
+                case PhrasePattern.Word word:
+                    builder.Append(word.Text);
+                    break;
+                case PhrasePattern.Group group:
+                    var options = new GrammarBuilder(new Choices([.. group.Choices.Select(c => Build(c, culture))])) { Culture = culture };
+                    if (group.Optional) builder.Append(options, 0, 1);
+                    else builder.Append(options);
+                    break;
+            }
+        }
+        return builder;
+    }
+
     private static RecognizerInfo? Recognizer()
     {
         try

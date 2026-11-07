@@ -218,6 +218,10 @@ public sealed class VoiceCommandService(
     public KeyPlan PlanFor(VoiceCommand command) =>
         VoiceBinding.Plan(command, library.GameCommodities.Controls.Catalogue, Profile());
 
+    /// <summary>Keys proposed for the commands that have none; nothing is written until the page sends them to /api/controls/bindings.</summary>
+    public IReadOnlyList<SpareKey> SpareKeys() =>
+        VoiceBinding.SpareKeys(VoiceCommands.All, library.GameCommodities.Controls.Catalogue, Profile());
+
     /// <summary>The live keybinding profile, read again only when the game has rewritten it.</summary>
     private ControlProfile? Profile()
     {
@@ -273,6 +277,7 @@ public sealed class VoiceCommandService(
             learning = _learnUntil is { } until && until > now;
             heard = [.. _log];
         }
+        var spare = SpareKeys();
         var stick = settings.ButtonDevice is { } guid && joysticks.Available
             ? joysticks.Devices().FirstOrDefault(d => string.Equals(d.Guid, guid, StringComparison.OrdinalIgnoreCase))
             : null;
@@ -305,7 +310,7 @@ public sealed class VoiceCommandService(
                 {
                     c.Id,
                     c.Phrase,
-                    c.Also,
+                    also = c.Examples(),
                     c.Confirm,
                     on = !settings.IsOff(c.Id),
                     action = action?.Label ?? c.Action,
@@ -318,6 +323,8 @@ public sealed class VoiceCommandService(
                 };
             }),
             heard = heard.Select(h => new { at = h.At, h.Text, confidence = Math.Round(h.Confidence, 2), h.Outcome, h.Command }),
+            spare = spare.Select(k => new { k.Command.Id, k.Command.Phrase, k.Command.ActionMap, k.Command.Action, k.Input, k.Shown }),
+            gameRunning = spare.Count > 0 && GameProcess.IsRunning(),
         };
     }
 }
