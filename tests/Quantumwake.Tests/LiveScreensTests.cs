@@ -24,6 +24,32 @@ public sealed class LiveScreensTests
     private static ScreenSighting Map(DateTimeOffset at, string place) =>
         Frame(ScreenKind.Map, at) with { Map = new MapReading("STANTON", place, null, null, null, null) };
 
+    private static ScreenSighting Freight(DateTimeOffset at, ScreenTextLine[] lines)
+    {
+        var frame = ScreenFrames.Read(lines, [], [], ["Stims", "Silicon"]);
+        return Frame(ScreenKind.Freight, at) with { Freight = frame.Freight };
+    }
+
+    /// <summary>
+    /// At the hangar: the list while cargo moves, then a hand-over's
+    /// confirmation - two readings, the confirmation's under its contracts.
+    /// </summary>
+    [Fact]
+    public void The_freight_terminals_list_and_its_confirmation_are_two_readings()
+    {
+        var screens = new LiveScreens();
+        Assert.Null(screens.Keep(Freight(At, FreightFrameFixtures.ListOneContract), At));
+        var list = screens.Keep(Freight(At.AddSeconds(2), FreightFrameFixtures.ListOneContract), At.AddSeconds(2));
+
+        Assert.Null(screens.Keep(Freight(At.AddSeconds(4), FreightFrameFixtures.ConfirmOneContract), At.AddSeconds(4)));
+        var confirm = screens.Keep(Freight(At.AddSeconds(6), FreightFrameFixtures.ConfirmOneContract), At.AddSeconds(6));
+
+        Assert.NotNull(list);
+        Assert.NotNull(confirm);
+        Assert.NotEqual(list, confirm);
+        Assert.StartsWith("freight:confirm:ROOKIE RANK", LiveScreens.Screen(Freight(At, FreightFrameFixtures.ConfirmOneContract)));
+    }
+
     [Fact]
     public void A_screen_seen_once_is_not_kept()
     {

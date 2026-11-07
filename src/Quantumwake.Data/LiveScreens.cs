@@ -145,6 +145,17 @@ public sealed class LiveScreens
                 : null,
             ScreenKind.Refinery => s.Refinery is { } f ? $"refinery:{f.Stage}:{f.Station?.ToUpperInvariant()}" : null,
 
+            // The confirmation by the contracts on it, so two hand-overs are
+            // two readings; the list as one screen, renewed as cargo moves.
+            // The confirmation was up five or six seconds each time on the
+            // video, enough for the two running frames a keep needs - a pilot
+            // who clicks CONFIRM at once leaves nothing behind.
+            ScreenKind.Freight => s.Freight is { } fr
+                ? fr.Stage == "confirm"
+                    ? fr.Orders.Count > 0 ? "freight:confirm:" + string.Join("+", fr.Orders.Select(o => o.Title.ToUpperInvariant())) : null
+                    : "freight:list"
+                : null,
+
             // A mobiGlas app with no reader still carries the balance in its
             // bar - the home screen is where a pilot glances at their cash -
             // and a screenshot of it kept that. Kept live as one reading,
@@ -157,7 +168,7 @@ public sealed class LiveScreens
     /// <summary>Everything the frame's readers made of it, as one string to compare frames by.</summary>
     private static string Says(ScreenSighting s) => JsonSerializer.Serialize(new object?[]
     {
-        s.Loadout, s.Map, s.Wallet?.Balance, s.Contracts, s.Fleet, s.Reputation, s.Kiosk, s.Refinery,
+        s.Loadout, s.Map, s.Wallet?.Balance, s.Contracts, s.Fleet, s.Reputation, s.Kiosk, s.Refinery, s.Freight,
     });
 
     /// <summary>

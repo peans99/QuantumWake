@@ -49,7 +49,8 @@ public sealed record ScreenSighting(
     bool Dismissed = false,
     MiningScanReading? Mining = null,
     RefineryReading? Refinery = null,
-    DateTimeOffset? FirstAt = null)
+    DateTimeOffset? FirstAt = null,
+    FreightReading? Freight = null)
 {
     /// <summary>When the screen was first seen: the first kept frame for a live reading, the file's moment for a screenshot.</summary>
     public DateTimeOffset SeenAt => FirstAt ?? ShotAt;

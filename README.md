@@ -352,11 +352,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.1.23
+### 1.1.24
 
 **No more Print Screen with live reading on.** With "Read the game's screen live" switched on, the screens you used to screenshot for the app are now picked up as you look at them: the Fleet Manager, the map, a ship's loadout, a commodity kiosk, a refinery, and the Contracts and Rep apps. Each screen becomes one reading in the Log while it stays up, updated when a later look reads more of it or the screen really changes, such as a kiosk after you buy. A screen has to be up for a couple of seconds before it counts, so a tab flicked past is not kept. Item tooltips are not kept this way, so browsing an inventory does not fill the Log. Contracts cards read this way feed the hauling plan just as screenshots of them did, each tied to the haul it was opened for. Screenshots you take are still read as before. Readings taken live are marked "read live from the screen" in the Log, with no "Read again" button, because there is no file to read again.
 
 **Your balance, live, from any mobiGlas screen.** With live reading on, the cash shown in the mobiGlas bar is now kept even on a screen the app has no reader for, such as the home screen, where most pilots glance at their balance. Before, it was kept only on the screens listed above. The figure has to read the same on two looks in a row before the Ledger uses it, so a digit misread once is not taken as your cash.
+
+**The hangar's freight terminal is read.** The Freight Manager, where contract cargo moves between the warehouse and the freight elevator, is now one of the screens the app understands, from a screenshot or live. On its main screen it reads the elevator's and warehouse's capacity and which contracts the cargo there belongs to. On the confirmation when you hand cargo over, it reads each contract with its time remaining, every crate size, and what is in them. It does not read how many crates of each size: that figure is printed too small to read reliably, and a wrong count would look right, so it is left out and the Log says so. Screenshots of the terminal you already took are read too. Pickups have not been seen yet, so a screenshot of the terminal while loading would help.
 
 **The Golem's mining head can be swapped.** The Pitman was treated as bespoke to the Golem, so Garage and Mining offered no other laser for it. It is not: a pilot fitted a Helix I in game, and the game's own data marks the port as taking any size 1 head. Garage now offers every size 1 mining laser on the Golem, and Mining's fit calculator lets you pick one and compares it with the Pitman. The Pitman itself is still offered only on the Golem, because nobody has yet been seen fitting it to another ship.
 

@@ -46,6 +46,9 @@ public enum ScreenKind
 
     /// <summary>A station's refinery terminal: its load, and a work order being priced or run.</summary>
     Refinery,
+
+    /// <summary>A hangar's Freight Manager terminal: the elevator and the warehouse, and contract cargo between them.</summary>
+    Freight,
 }
 
 /// <summary>One port on the loadout screen and what the frame says is in it.</summary>
@@ -140,7 +143,8 @@ public sealed record ScreenFrame(
     ReputationReading? Reputation = null,
     KioskReading? Kiosk = null,
     MiningScanReading? Mining = null,
-    RefineryReading? Refinery = null);
+    RefineryReading? Refinery = null,
+    FreightReading? Freight = null);
 
 /// <summary>
 /// Sorts a frame into the screen it is and reads what that screen carries.
@@ -252,6 +256,11 @@ public static partial class ScreenFrames
 
         if (ReadReputation(all) is { } reputation)
             return new ScreenFrame(ScreenKind.Reputation, texts, null, null, null, wallet, Reputation: reputation);
+
+        // Before the commodity kiosk: a confirmation's tiles are a commodity
+        // and an SCU figure, the shape that reader takes rows from.
+        if (ReadFreight(all, commodityNames ?? []) is { } freight)
+            return new ScreenFrame(ScreenKind.Freight, texts, null, null, null, wallet, Freight: freight);
 
         // The kiosk has no mobiGlas bar, and is the one screen where the
         // balance has ever read - so when it printed every digit, that is

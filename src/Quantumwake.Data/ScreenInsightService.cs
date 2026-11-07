@@ -459,6 +459,11 @@ public sealed class ScreenInsightService(
             (patch, treatment, t) => looks.ReadAsync(path, patch, treatment, t), CommodityNames(),
             fromTitle: closer is not null, token: token);
 
+        // The Freight Manager's crate counts are small green type the whole
+        // read does not get; see FreightSecondLook. Only on its confirmation.
+        lines = await FreightSecondLook.TakeAsync(lines,
+            (patch, treatment, t) => looks.ReadAsync(path, patch, treatment, t), token);
+
         // The rank held is drawn, not written; see RepBars. Only decodes
         // pixels when the frame has rank cards on it.
         var bars = await RepBars.MeasureAsync(lines, (patch, t) => reader.PixelsAsync(path, patch, t), token);
@@ -509,7 +514,7 @@ public sealed class ScreenInsightService(
             Summarise(frame, loadout, item),
             checks, item, loadout, frame.Map, frame.Wallet, frame.Lines, tookMs,
             frame.Contracts, frame.Fleet, frame.Reputation, frame.Kiosk, Mining: frame.Mining,
-            Refinery: frame.Refinery);
+            Refinery: frame.Refinery, Freight: frame.Freight);
     }
 
     /// <summary>Reads the clipboard for a <c>/showlocation</c> reading.</summary>
@@ -613,9 +618,39 @@ public sealed class ScreenInsightService(
             + (frame.Mining.Scu is { } scu ? scu is > 0 and < 1 ? $", {scu * 1000:0.##}m SCU" : $", {scu:0.##} SCU" : ""),
         ScreenKind.Refinery when frame.Refinery is { } refinery =>
             RefinerySummary(refinery),
+        ScreenKind.Freight when frame.Freight is { } freight =>
+            FreightSummary(freight),
         ScreenKind.MobiGlas => "a mobiGlas screen this app cannot read yet",
         _ => "nothing this app knows how to read",
     };
+
+    /// <summary>
+    /// "the freight elevator: 2 contracts to hand over, crates of 8, 2 and 1
+    /// SCU" or "the freight elevator, 94/1120 SCU on the elevator, cargo for
+    /// 1 contract". Sizes, never a number of crates: the count does not read
+    /// (see FreightCrates).
+    /// </summary>
+    private static string FreightSummary(FreightReading freight)
+    {
+        var contracts = freight.Orders.Count == 1 ? "1 contract" : $"{freight.Orders.Count} contracts";
+
+        if (freight.Stage == "confirm")
+        {
+            var sizes = freight.Orders.SelectMany(o => o.Crates).Select(c => c.SizeScu)
+                .Distinct().OrderDescending().Select(n => n.ToString()).ToList();
+            return $"the freight elevator: {contracts} to hand over"
+                + (sizes.Count switch
+                {
+                    0 => "",
+                    1 => $", crates of {sizes[0]} SCU",
+                    _ => $", crates of {string.Join(", ", sizes[..^1])} and {sizes[^1]} SCU",
+                });
+        }
+
+        return "the freight elevator"
+            + (freight.Elevator is { } e ? $", {e.Used}/{e.Total} SCU on the elevator" : "")
+            + (freight.Orders.Count > 0 ? $", cargo for {contracts}" : "");
+    }
 
     private static string RefinerySummary(RefineryReading refinery)
     {

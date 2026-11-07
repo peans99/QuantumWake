@@ -12201,7 +12201,7 @@ function renderScreenLiveNote() {
   const live = Boolean(liveState?.available && liveState?.enabled);
   note.hidden = !live;
   note.textContent = live
-    ? tx('Reading the game’s screen live is on, so the Fleet Manager, the map, loadouts, kiosks, refineries and the Contracts and Rep apps and your balance are kept as you look at them - no screenshot needed. Screenshots you take are still read.')
+    ? tx('Reading the game’s screen live is on, so the Fleet Manager, the map, loadouts, kiosks, refineries, freight terminals and the Contracts and Rep apps and your balance are kept as you look at them - no screenshot needed. Screenshots you take are still read.')
     : '';
 }
 
@@ -12325,6 +12325,7 @@ const SCREEN_KINDS = {
   Kiosk: tx('kiosk'),
   Mining: tx('rock scan'),
   Refinery: tx('refinery'),
+  Freight: tx('freight terminal'),
   MobiGlas: 'mobiGlas',
   Unknown: tx('unread'),
 };
@@ -12456,6 +12457,10 @@ const SCREEN_SENTENCES = [
   [/^a refinery order running at (.+?)((?:, .+)?)$/, (m) => `${tx('a refinery order running at {place}', { place: tx(m[1]) })}${screenPieces(m[2])}`],
   [/^a refinery quote at (.+?)((?:[:,] .+)?)$/, (m) => `${tx('a refinery quote at {place}', { place: tx(m[1]) })}${screenPieces(m[2])}`],
   [/^the refinery at (.+?)((?:, .+)?)$/, (m) => `${tx('the refinery at {place}', { place: tx(m[1]) })}${screenPieces(m[2])}`],
+  [/^the freight elevator: (\d+) contracts? to hand over(?:, crates of (.+) SCU)?$/, (m) =>
+    `${txn(Number(m[1]), 'the freight elevator: {count} contract to hand over', 'the freight elevator: {count} contracts to hand over')}`
+    + (m[2] ? tx(', crates of {sizes} SCU', { sizes: m[2].replace(' and ', ` ${tx('and')} `) }) : '')],
+  [/^the freight elevator((?:, .+)?)$/, (m) => `${tx('the freight elevator')}${screenPieces(m[1])}`],
 ];
 
 /* A head and the list after it, joined by the page language's colon. */
@@ -12467,6 +12472,8 @@ function screenListed(head, list) {
 /* The clauses a summary strings together after its head, each on its own. */
 const SCREEN_PIECES = [
   [/^mass unread$/, () => tx('mass unread')],
+  [/^(\d+)\/(\d+) SCU on the elevator$/, (m) => tx('{used}/{total} SCU on the elevator', { used: m[1], total: m[2] })],
+  [/^cargo for (\d+) contracts?$/, (m) => txn(Number(m[1]), 'cargo for {count} contract', 'cargo for {count} contracts')],
   [/^(\d+) parts? named$/, (m) => txn(Number(m[1]), '{count} part named', '{count} parts named')],
   [/^(\d+) ports? empty$/, (m) => txn(Number(m[1]), '{count} port empty', '{count} ports empty')],
   [/^(\d+) ports? with nothing read under (?:it|them)$/, (m) => txn(Number(m[1]), '{count} port with nothing read under it', '{count} ports with nothing read under them')],
@@ -12747,6 +12754,44 @@ function renderSighting(box, s, { full = true } = {}) {
     go.title = tx('Open the Mining page on the orders read off the terminal');
     go.addEventListener('click', () => { miningPane = 'runs'; showView('mining'); });
     box.append(go);
+  }
+
+  // The hangar's freight terminal: each contract's cargo, and on the
+  // confirmation the crate sizes and what is in them. Never a number of
+  // crates - the count under each tile does not read, and is said not to.
+  if (s.freight) {
+    const f = s.freight;
+    const orders = f.orders || [];
+    box.append(el('div', 'strong', f.stage === 'confirm'
+      ? txn(orders.length, 'cargo to hand over for {count} contract', 'cargo to hand over for {count} contracts')
+      : tx('the freight elevator')));
+
+    const facts = [
+      f.elevator ? tx('{used}/{total} SCU on the elevator', { used: fmtInt(f.elevator.used), total: fmtInt(f.elevator.total) }) : null,
+      f.warehouse ? tx('{used}/{total} SCU in the warehouse', { used: fmtInt(f.warehouse.used), total: fmtInt(f.warehouse.total) }) : null,
+    ].filter(Boolean);
+    if (facts.length) box.append(el('div', 'muted', facts.join(' · ')));
+
+    if (full && orders.length) {
+      const list = el('ul', 'feed screen-fittings');
+      for (const order of orders) {
+        const li = el('li');
+        li.append(el('span', 'what', order.title));
+        const bits = [
+          order.secondsLeft != null ? tx('{time} left', { time: refineryClock(order.secondsLeft) }) : null,
+          ...(order.crates || []).map((c) => tx('{size} SCU of {commodity}', {
+            size: c.sizeScu,
+            commodity: c.commodity || (c.commodityRead ? `“${c.commodityRead}”` : tx('a commodity that did not read')),
+          })),
+        ].filter(Boolean);
+        li.append(el('span', 'd', bits.length ? ` · ${bits.join(' · ')}` : ''));
+        list.append(li);
+      }
+      box.append(list);
+    }
+
+    if (f.stage === 'confirm')
+      box.append(el('div', 'muted', tx('How many crates of each size is printed in small green type that does not read reliably, so it is not taken.')));
   }
 
   if (s.contracts) {

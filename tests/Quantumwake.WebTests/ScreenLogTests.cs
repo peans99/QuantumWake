@@ -199,6 +199,39 @@ public class ScreenLogTests
         Assert.Contains("read live from the screen", page.NodeText("#screen-readings"));
     }
 
+    /// <summary>
+    /// The freight terminal's hand-over: each contract with its clock and its
+    /// crate sizes, a commodity that did not read said as read, and the count
+    /// it does not take said not to be taken rather than shown as nothing.
+    /// </summary>
+    [Fact]
+    public void A_freight_confirmation_lists_each_contracts_crates_and_says_the_count_is_not_read()
+    {
+        const string freight = """
+            {"shot":"live-20261107-200006","shotAt":"2026-11-07T20:00:06Z","kind":"Freight",
+             "summary":"the freight elevator: 2 contracts to hand over, crates of 8, 2 and 1 SCU","tookMs":290,"checks":[],
+             "freight":{"stage":"confirm","elevator":null,"warehouse":null,"orders":[
+               {"contractor":null,"title":"ROOKIE RANK - DIRECT EXTRA SMALL CARGO HAUL","secondsLeft":437,
+                "crates":[{"sizeScu":1,"commodityRead":"TUNGSTEN","commodity":"Tungsten"}]},
+               {"contractor":null,"title":"JUNIOR RANK - DIRECT MEDIUM CARGO HAUL","secondsLeft":737,
+                "crates":[{"sizeScu":8,"commodityRead":"SILICON","commodity":"Silicon"},{"sizeScu":2,"commodityRead":"SILICO","commodity":null}]}]},
+             "lines":[]}
+            """;
+
+        var page = Panel(readings: freight);
+        var log = page.NodeText("#screen-readings");
+
+        Assert.Contains("freight terminal", log);
+        Assert.Contains("cargo to hand over for 2 contracts", log);
+        Assert.Contains("JUNIOR RANK - DIRECT MEDIUM CARGO HAUL", log);
+        Assert.Contains("1 SCU of Tungsten", log);
+        Assert.Contains("8 SCU of Silicon", log);
+        Assert.Contains("2 SCU of “SILICO”", log);
+        Assert.Contains("does not read reliably", log);
+        // A freight reading is a screen the app reads, not one queued for a reader.
+        Assert.True(page.Truth("__dom.node('#screen-review').hidden"));
+    }
+
     // ---- the stream, and the toast ----
 
     private static void Frame(Page page, string events, string screen = "null") =>

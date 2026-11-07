@@ -119,6 +119,64 @@ leaving them open.
   reward from a screenshot, or nothing, and labelled as such.
 - **Distances.** Still none; stop order stays a suggestion.
 
+## What the Freight Manager shows (1.1.24)
+
+Measured 2026-11-07 on somebody else's game, not this install: zirHaze Gaming,
+*Hauling in Star Citizen 4.10 - What Has Changed?* (YouTube `2VUGRubmnP0`,
+27 Aug 2026, 2560x1440). 35 frames of the hangar terminal, one a second, read
+by the same engines the app uses; the frames are kept locally in
+`D:\videorecording\freight`, not in the repo. It answers most of screenshots 2-4
+below without a field session.
+
+**The list.** Two panes, `[ELEVATOR]` and `[WAREHOUSE]`, each with
+`CAPACITY: used/total SCU` (the elevator 1120 at the first hangar, 896 at the
+second; the warehouse 5000). The warehouse groups cargo under the contractor
+and **the contract's own title** - `COVALEX INDEPENDENT CONTRACTORS` /
+`ROOKIE RANK - DIRECT MEDIUM CARGO HAUL` - so the kiosk does say which contract
+a crate is for. Each crate is a picture with a count (`X1`, `X11`) and no
+written size; the pilot's own belongings sit under `PERSONAL INVENTORY` the
+same way. The elevator read 0/1120 SCU, then 94/1120 once the contract's
+cargo was moved onto it, then 98 three seconds later - what the extra 4 SCU
+was, the frames do not say.
+
+**The confirmation.** At the drop, moving cargo into the warehouse brings up
+`TRANSACTION CONFIRMATION` on its `CONTRACT ORDERS` tab: per contract the title,
+`Time Remaining: 07:17`, "This contract will be completed after you deliver the
+goods to the warehouse", and a tile per crate size with **size, count and
+commodity written out** - `8 SCU`, `11/11`, `STIMS`. Two contracts on one
+confirmation each keep their own block. Both confirmations seen were drops;
+whether the pickup shows one is **unmeasured**.
+
+**What reads.** Windows' engine read `FREIGHT MANAGER` on all 35 frames, every
+contract title, the capacities (the warehouse's "0/5000" as `O/SOOO`, folded
+back) and the sizes - every 8 as `B`, and once the 1 SCU tile as a bare `scu`,
+which a close read with ONNX gives back. Commodities mostly read; `TLJNGSTEN`
+for TUNGSTEN, which the close read spells right. **The counts do not read.**
+Windows read none of 15. ONNX, at every patch and scale tried (×2 to ×4, the
+whole tile and the count line alone), read the 8 SCU tile's `11/11` as `1/1`
+on about half its reads - two reads agreeing on the wrong answer - and the
+`1/1` tiles as `M`. A count of 1 that is 11 is 80 SCU missing from a manifest
+and looks plausible, so the reader takes no count at all. The elevator's load
+is a check for later: 11 × 8 + 4 + 2 = 94, what the list said after loading.
+
+**This install's own frames.** Four screenshots of the terminal were already in
+the reading log, filed as unreadable: 12 Sep and three on 24 Oct at Ruin
+Station (two Red Wind Carbon hauls, two Waste hauls). The terminal is seen at an
+angle - Windows reports the text at 7.4°, 10.5°, 10.3° and -5.3° - and
+the confirmation is the same screen as the video's, counts in grey rather than
+green. Both Red Wind clocks read `00:00`: no timer, taken as none. Titles,
+sizes and capacities read. Commodities mostly did not, and the reason is not
+the type: Windows reports its positions in its own straightened copy of the
+frame, so on a 10° frame a line it reads sits 50 px from where it is, and the
+close read that would have found CARBON under a tile was looking at the next
+contract's title instead. That is fixed in 1.1.25 for every reader, not just
+this one.
+
+**What it means for the build order.** Step 4 is half possible: which
+contract, which sizes and which commodity come off at a drop, but not how
+many of each. Totals per contract still come from the Contracts card and the
+delivery toast.
+
 ## Field session
 
 What to bring back from one hauling session, in this order. Leave screenshots
@@ -185,7 +243,10 @@ Each step stands on its own if the next never happens.
 ## Open questions
 
 - Why half the hauls get no delivery toast (field check 1).
-- Whether the kiosk names crates, sizes and contracts (screenshots 2–4).
+- ~~Whether the kiosk names crates, sizes and contracts (screenshots 2–4).~~
+  It names the contract on the list and, at the drop, sizes and commodity per
+  contract; crate counts are printed but do not read. See *What the Freight
+  Manager shows*. Still open: the pickup's side, and a partial unload.
 - Whether a drop's objective index follows the card's order — still unchecked
   since [hauling.md](hauling.md) raised it.
 - Whether courier contracts join a run alongside hauls, or get a run of their

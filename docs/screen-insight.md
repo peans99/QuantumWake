@@ -227,6 +227,41 @@ terminal or a mobiGlas app for long (the 2026-11-05 OBS recording is combat,
 the Elguapoe and Risbo streams are mining), so how often a live kiosk or Fleet
 frame reads as fully as a screenshot of it is still unmeasured.
 
+### The Freight Manager (1.1.24)
+
+`ScreenKind.Freight`, the hangar's freight terminal, written from frames of a
+4.10 video rather than this install - the evidence is in
+[delivery-run.md](delivery-run.md#what-the-freight-manager-shows-1124). Read
+whole by Windows and anchored on `FREIGHT MANAGER`, which it read on all 35
+frames; checked before the commodity kiosk, whose rows a confirmation's tiles
+resemble. Two stages: `list` (the elevator's and warehouse's capacity, each
+contract's issuer and title) and `confirm` (per contract its title, time
+remaining, and each crate size with its commodity). `FreightSecondLook` reads
+each tile again at ×2 with the panel reader, for the commodity's spelling and a
+size whose digit the whole read lost. On the four fixture frames, through the
+same path the live loop takes: every title, three of four capacities (the
+fourth read `n Isooo`, past folding back), all six tiles' sizes, five of six
+commodities - the sixth is under the pilot's cursor.
+
+**Crate counts are not taken**, and the negative result is the point of
+writing it down: the `11/11` under a tile read as `1/1` on about half the ONNX
+reads at every scale and patch tried, which is a manifest 80 SCU short that
+looks right. Kept live like the other screens: the list as one reading, a
+confirmation as one per set of contracts on it. It was up five or six seconds
+each time on the video; a pilot who clicks CONFIRM straight away leaves
+nothing behind.
+
+This install has four frames of the same terminal (12 Sep, 24 Oct), seen at an
+angle: Windows' `TextAngle` was 7.4, 10.5, 10.3 and -5.3 degrees on them, and
+-3.6 to 2.1 on the video's. Its word boxes are positions in a copy of the frame
+it has turned straight, not in the frame - rotating them back by `+TextAngle`
+about the frame's centre lands within a few pixels of ONNX's own boxes (24 Oct
+21:58: `B SCu` at 1409,612 → 1433,558 against ONNX's 1431,559; the video's
+3:42: 892,607 → 886,632 against 887,628). Uncorrected, a close read sized off a
+Windows line looks 50 px from the tile on a 10° frame, which is how the next
+contract's title was taken for a tile's commodity. 1.1.24 reads these frames
+without the correction; the correction is 1.1.25.
+
 Not yet seen on a running game: the window class (`CryENGINE` is assumed, and a
 mismatch says what it found instead), how long the engine takes over a live
 frame at full resolution, and whether a scan read live agrees with the same
