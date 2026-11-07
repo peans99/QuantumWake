@@ -583,6 +583,38 @@ public class HaulPlannerTests
         Assert.Equal(["Gaslight", "Checkmate"], planned.Legs.Select(l => l.Pickup));
     }
 
+    /// <summary>
+    /// The same two hauls with the cards read live: each card is kept a few
+    /// seconds after its acceptance and renewed while it stays open, so its
+    /// newest frame is well past the window. It is still tied to the haul it
+    /// was opened by, through when it was first kept - otherwise both go
+    /// unbound and the first haul takes the newer card again.
+    /// </summary>
+    [Fact]
+    public void A_card_kept_live_and_renewed_stays_with_the_contract_it_opened_with()
+    {
+        const string title = "Member | Stellar Medium Haul | to Ruin Station";
+        ContractRecord[] contracts =
+        [
+            Contract("first", Multi2Carbon, title),
+            Contract("second", Multi2Carbon, title, 1, ContractOutcome.Completed),
+        ];
+        ScreenSighting[] frames =
+        [
+            CardAt("live-a", TimeSpan.FromSeconds(30), "Member I Stellar Medium Haul I to Ruin Station",
+                "Deliver 0/158 SCU of Carbon to Ruin Station.", "Collect Carbon from Gaslight.", "Collect Carbon from Checkmate.")
+                with { FirstAt = T0 + TimeSpan.FromSeconds(9) },
+            CardAt("live-b", TimeSpan.FromSeconds(100), "Member I Stellar Medium Haul I to Ruin Station",
+                "Deliver 0/173 SCU of Carbon to Ruin Station.", "Collect Carbon from Starlight Service Station.", "Collect Carbon from Dudley & Daughters.")
+                with { FirstAt = T0 + TimeSpan.FromSeconds(61) },
+        ];
+
+        var planned = Assert.Single(HaulPlanner.Plan(contracts, frames, Atlas).Contracts);
+
+        Assert.Equal("live-a", planned.Shot);
+        Assert.Equal(["Gaslight", "Checkmate"], planned.Legs.Select(l => l.Pickup));
+    }
+
     /// <summary>The rep bracket the headline swallowed is not part of the title.</summary>
     [Fact]
     public void A_title_read_with_its_rep_bracket_is_still_the_same_contract() =>

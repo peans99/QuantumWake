@@ -22,6 +22,14 @@ namespace Quantumwake.Data;
 /// seen, but nothing believes it any more: not the wallet, not the fleet,
 /// not the fittings, not the Now card.
 /// </param>
+/// <param name="FirstAt">
+/// For a reading kept live and renewed by later frames: when it was first
+/// kept. <c>ShotAt</c> moves to the newest frame, which is right for what the
+/// screen says now - a balance, a kiosk's stock - and wrong for when the
+/// screen came up: a Contracts card opened on accepting a haul is tied to that
+/// haul by being seen within seconds of it. Null for a screenshot, whose
+/// moment never moves.
+/// </param>
 public sealed record ScreenSighting(
     string Shot,
     DateTimeOffset ShotAt,
@@ -40,7 +48,12 @@ public sealed record ScreenSighting(
     KioskReading? Kiosk = null,
     bool Dismissed = false,
     MiningScanReading? Mining = null,
-    RefineryReading? Refinery = null);
+    RefineryReading? Refinery = null,
+    DateTimeOffset? FirstAt = null)
+{
+    /// <summary>When the screen was first seen: the first kept frame for a live reading, the file's moment for a screenshot.</summary>
+    public DateTimeOffset SeenAt => FirstAt ?? ShotAt;
+}
 
 /// <summary>One Rep app reading, kept for the reputation history.</summary>
 public sealed record RepSighting(string Shot, DateTimeOffset ShotAt, ReputationReading Reading, bool Dismissed = false);
@@ -444,14 +457,16 @@ public sealed class ScreenReadingStore
     /// press of "Read again" and starts afresh, dismissal included; a live
     /// reading is renewed every few seconds with nobody pressing anything, and
     /// one the pilot invalidated must not be believed again two seconds later.
+    /// When it was first kept carries over too, as <see cref="ScreenSighting.FirstAt"/>.
     /// </summary>
     public void Renew(ScreenSighting sighting)
     {
         lock (_gate)
         {
-            var dismissed = _sightings.Any(s => s.Dismissed
-                && string.Equals(s.Shot, sighting.Shot, StringComparison.OrdinalIgnoreCase));
-            Add(dismissed ? sighting with { Dismissed = true } : sighting);
+            var kept = _sightings.FirstOrDefault(s => string.Equals(s.Shot, sighting.Shot, StringComparison.OrdinalIgnoreCase));
+            Add(kept is null
+                ? sighting
+                : sighting with { Dismissed = kept.Dismissed || sighting.Dismissed, FirstAt = kept.FirstAt ?? kept.ShotAt });
         }
     }
 

@@ -208,7 +208,11 @@ depends on the live switch. Screenshots the pilot takes are still read while it
 is on, too, so a screen photographed then is in the log twice: once by its
 file, once live. A live reading the pilot invalidates stays invalidated as
 later frames renew it (`ScreenReadingStore.Renew`); a file read again on a
-press starts afresh, as it always did.
+press starts afresh, as it always did. A renewal moves `ShotAt` to the newest
+frame and keeps the first in `FirstAt` (1.1.23): the haul planner ties a
+Contracts card to the haul it was opened by when it is seen within 15 s of the
+acceptance, and a live card renewed for a minute had moved out of that window,
+which brought back the 25 Oct mix-up where one Carbon haul took the other's card.
 
 One check says less live than it does from a file: a renewed live kiosk's
 wallet is checked against the newest balance *before* it, which is the same

@@ -208,11 +208,14 @@ public sealed class LiveScreensTests
             {
                 var frame = Kiosk(At.AddSeconds(s), ("Gold", s < 30 ? 6000 : 6100));
                 if (screens.Keep(frame, At.AddSeconds(s)) is { } shot)
-                    readings.Add(frame with { Shot = shot });
+                    readings.Renew(frame with { Shot = shot });
             }
 
             var kept = Assert.Single(readings.All());
             Assert.Equal(6100, kept.Kiosk!.Rows[0].Price);
+            // What it says is the newest frame's; when it came up is the first kept one's.
+            Assert.Equal(At.AddSeconds(32), kept.ShotAt);
+            Assert.Equal(At.AddSeconds(2), kept.SeenAt);
         }
         finally
         {
