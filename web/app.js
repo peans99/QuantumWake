@@ -37283,8 +37283,16 @@ function renderVoiceCommands() {
     const key = c.canPress
       ? el('span', 'voice-command-key', c.fromProfile ? tx('{key} (your binding)', { key: c.key }) : c.key)
       : el('span', 'voice-command-why muted', c.why);
-    row.append(label, el('span', 'muted voice-command-action', c.action), key);
-    if (c.confirm) row.append(el('span', 'voice-command-confirm', tx('asks to confirm')));
+    const extra = el('span', 'voice-command-extra');
+    if (c.confirm) extra.append(el('span', 'voice-command-confirm', tx('asks to confirm')));
+    if (s.canSpeak) {
+      const hear = el('button', 'ghost tiny', tx('Hear it'));
+      hear.type = 'button';
+      hear.dataset.voiceHear = c.id;
+      hear.title = c.voice === 'windows' ? `“${c.says}” · ${tx('Windows voice')}` : `“${c.says}”`;
+      extra.append(hear);
+    }
+    row.append(label, el('span', 'muted voice-command-action', c.action), key, extra);
     list.append(row);
   }
   parts.push(list);
@@ -37307,6 +37315,11 @@ $('#voice-commands')?.addEventListener('change', (event) => {
 });
 
 $('#voice-commands')?.addEventListener('click', (event) => {
+  const hear = event.target?.dataset?.voiceHear;
+  if (hear) {
+    fetch(`/api/voice/hear?id=${encodeURIComponent(hear)}`, { method: 'POST' }).catch(() => { /* only a sample */ });
+    return;
+  }
   const act = event.target?.dataset?.voiceAct;
   if (!act) return;
   if (act === 'key') {

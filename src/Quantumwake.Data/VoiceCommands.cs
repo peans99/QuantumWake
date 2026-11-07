@@ -13,6 +13,7 @@ namespace Quantumwake.Data;
 /// <param name="Action">The game's action id - <c>v_toggle_mining_mode</c>.</param>
 /// <param name="Reply">What the copilot says once the key is pressed.</param>
 /// <param name="Confirm">True when a spoken "confirm" has to follow before the key is pressed.</param>
+/// <param name="Prompt">What the copilot asks when the command waits on "confirm" - "Confirm self destruct?" - or null for none.</param>
 /// <param name="HoldSeconds">
 /// How long to hold the key when the action keeps working for as long as it is
 /// held - a scan runs while its key is down - rather than firing once. Null for
@@ -26,7 +27,8 @@ public sealed record VoiceCommand(
     string Action,
     string Reply,
     bool Confirm = false,
-    double? HoldSeconds = null)
+    double? HoldSeconds = null,
+    string? Prompt = null)
 {
     /// <summary>Every way of saying it, the main phrase first.</summary>
     public IEnumerable<string> Phrases => Also.Prepend(Phrase);
@@ -77,21 +79,39 @@ public static class VoiceCommands
         // it: the phrases say what they usually mean, the key only flips.
         new("laser", "toggle laser", ["fire laser", "stop laser"], "spaceship_mining", "v_toggle_mining_laser_fire", "Laser"),
         new("lasertype", "switch laser", ["fracture mode", "extraction mode"], "spaceship_mining", "v_toggle_mining_laser_type", "Switching laser"),
-        new("beam", "toggle beam", ["beam high", "beam low"], "spaceship_mining", "v_mining_use_permanent_modifier", "Beam"),
+        new("beam", "toggle beam", ["beam high", "beam low"], "spaceship_mining", "v_mining_use_permanent_modifier", "Beam switched"),
         new("module1", "module one", ["activate module one"], "spaceship_mining", "v_mining_use_consumable1", "Module one"),
         new("module2", "module two", ["activate module two"], "spaceship_mining", "v_mining_use_consumable2", "Module two"),
         new("module3", "module three", ["activate module three"], "spaceship_mining", "v_mining_use_consumable3", "Module three"),
         new("powerup", "more power", ["laser power up"], "spaceship_mining", "v_increase_mining_throttle", "More power"),
         new("powerdown", "less power", ["laser power down"], "spaceship_mining", "v_decrease_mining_throttle", "Less power"),
         // Throws the hold's ore away, so it waits for "confirm" like self destruct.
-        new("jettison", "jettison cargo", ["dump cargo"], "spaceship_mining", "v_jettison_volatile_cargo", "Cargo jettisoned", Confirm: true),
+        new("jettison", "jettison cargo", ["dump cargo"], "spaceship_mining", "v_jettison_volatile_cargo", "Cargo jettisoned", Confirm: true, Prompt: "Confirm jettison?"),
         new("opendoors", "open all doors", ["open the doors", "open doors"], "spaceship_general", "v_open_all_doors", "Doors open"),
         new("closedoors", "close all doors", ["close the doors", "close doors"], "spaceship_general", "v_close_all_doors", "Doors closed"),
         new("shields", "power to shields", ["shields to max", "full power to shields"], "spaceship_power", "v_engineering_assignment_shields_max", "Shields to max"),
-        new("atc", "request landing", ["request departure", "request takeoff"], "spaceship_movement", "v_atc_request", "Requesting"),
-        new("selfdestruct", "self destruct", ["initiate self destruct"], "spaceship_general", "v_self_destruct", "Self destruct", Confirm: true),
+        new("atc", "request landing", ["request departure", "request takeoff"], "spaceship_movement", "v_atc_request", "Requesting clearance"),
+        new("selfdestruct", "self destruct", ["initiate self destruct"], "spaceship_general", "v_self_destruct", "Self destruct", Confirm: true, Prompt: "Confirm self destruct?"),
         // The same key again stops the countdown, so stopping needs no confirm.
         new("abortdestruct", "abort self destruct", ["stop self destruct"], "spaceship_general", "v_self_destruct", "Self destruct stopped"),
+    ];
+
+    public const string SayAwake = "Copilot on";
+    public const string SayAsleep = "Copilot off";
+    public const string SayCancelled = "Cancelled";
+    public const string SayCannotPress = "Can't press that";
+    public const string SayNotInFront = "Game not in front";
+
+    /// <summary>
+    /// Every sentence the copilot can say. The recorded voice pack has to
+    /// cover each one - a test holds it to that - or the reply falls back to
+    /// the Windows voice mid-session and sounds like a different copilot.
+    /// </summary>
+    public static IReadOnlyList<string> Spoken() =>
+    [
+        SayAwake, SayAsleep, SayCancelled, SayCannotPress, SayNotInFront,
+        .. All.Select(c => c.Reply),
+        .. All.Where(c => c.Confirm).Select(c => c.Prompt ?? $"Confirm {c.Phrase}?"),
     ];
 
     public static VoiceCommand? Find(string id) => All.FirstOrDefault(c => c.Id == id);

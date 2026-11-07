@@ -33,6 +33,14 @@ const phrases = [
   // How many rocks a ping is: PingReadout.Sentence, up to its twenty.
   'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
   'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen', 'Twenty',
+  // The voice-command copilot's replies (1.2.2): VoiceCommands.Spoken(), which
+  // VoicePackTests holds the embedded pack to, so a reply added there and
+  // not here fails the build rather than falling back to the Windows voice.
+  'Copilot on', 'Copilot off', 'Cancelled', "Can't press that", 'Game not in front',
+  'Guns', 'Mining mode', 'Salvage mode', 'Scan mode', 'Quantum mode', 'Combat mode', 'Nav mode',
+  'Ping', 'Scanning', 'Laser', 'Switching laser', 'Beam switched', 'Module one', 'Module two', 'Module three',
+  'More power', 'Less power', 'Cargo jettisoned', 'Doors open', 'Doors closed', 'Shields to max',
+  'Requesting clearance', 'Self destruct', 'Self destruct stopped', 'Confirm jettison?', 'Confirm self destruct?',
 ];
 
 // Spelled for the ear, not the eye: Mk II is "Mark Two", the C.O. hulls are

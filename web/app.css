@@ -8822,7 +8822,8 @@ tr.landed { outline-offset: -2px; }
    sentences, and unwrapped they pushed every row past the 880 px block. */
 .voice-commands .toggle { white-space: normal; align-items: flex-start; line-height: 1.5; }
 .voice-commands .toggle input { margin-top: 3px; }
-.voice-command { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.7fr) 7.5rem; align-items: center; gap: 10px; }
+.voice-command { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.7fr) 10rem; align-items: center; gap: 10px; }
+.voice-command-extra { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .voice-command > * { min-width: 0; }
 .voice-command-key { font-family: var(--mono); font-size: 12px; }
 .voice-command-action { font-size: 12.5px; }

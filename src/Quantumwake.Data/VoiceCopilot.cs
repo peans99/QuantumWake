@@ -246,11 +246,11 @@ public sealed class VoiceCopilot
             {
                 if (!settings.UsesPhrase) return new(null, null, "Push-to-talk only: the wake phrase is switched off.");
                 Awake = true;
-                return new("Copilot on", null, "Awake: listening for commands.");
+                return new(VoiceCommands.SayAwake, null, "Awake: listening for commands.");
             }
             Awake = false;
             Pending = null;
-            return new("Copilot off", null, "Asleep: only the wake phrase is listened for.");
+            return new(VoiceCommands.SayAsleep, null, "Asleep: only the wake phrase is listened for.");
         }
 
         if (heard.Confidence < bar) return new(null, null, Unsure(heard));
@@ -274,7 +274,7 @@ public sealed class VoiceCopilot
                 // wingman, on comms - is not the pilot answering, and is the
                 // one word that must never fire a self destruct by accident.
                 if (!listening)
-                    return new("Cancelled", null, $"{pending.Command.Phrase} cancelled: confirm was said without push-to-talk.");
+                    return new(VoiceCommands.SayCancelled, null, $"{pending.Command.Phrase} cancelled: confirm was said without push-to-talk.");
                 return new(null, pending.Command, $"Confirmed {pending.Command.Phrase}.");
             }
             else
@@ -282,7 +282,7 @@ public sealed class VoiceCopilot
                 // Anything else, cancel included, stands the command down: the
                 // safe reading of a pilot who said something other than yes.
                 if (text == VoiceCommands.CancelPhrase || !listening)
-                    return new("Cancelled", null, $"{pending.Command.Phrase} cancelled.");
+                    return new(VoiceCommands.SayCancelled, null, $"{pending.Command.Phrase} cancelled.");
             }
         }
 
@@ -301,7 +301,7 @@ public sealed class VoiceCopilot
         if (command.Confirm)
         {
             Pending = (command, now + VoiceCommands.ConfirmWindow);
-            return new($"Confirm {command.Reply.ToLowerInvariant()}?", null, $"Waiting for confirm on {command.Phrase}.");
+            return new(command.Prompt ?? $"Confirm {command.Phrase}?", null, $"Waiting for confirm on {command.Phrase}.");
         }
 
         return new(null, command, $"Heard {command.Phrase}.");

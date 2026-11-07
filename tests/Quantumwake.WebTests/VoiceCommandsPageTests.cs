@@ -7,7 +7,7 @@ namespace Quantumwake.WebTests;
 public class VoiceCommandsPageTests
 {
     private const string Voice = """
-        {"available":true,"recogniser":true,"canPress":true,"trouble":null,"state":"asleep","learning":false,
+        {"available":true,"recogniser":true,"canPress":true,"canSpeak":true,"trouble":null,"state":"asleep","learning":false,
          "enabled":true,"trigger":"phrase","button":null,"key":null,"keyShown":null,"buttonDevice":null,
          "buttonDeviceName":null,"buttonDevicePresent":false,"minConfidence":0.7,"replies":true,
          "wake":"quantum wake copilot on","sleep":"quantum wake copilot off",
@@ -66,7 +66,7 @@ public class VoiceCommandsPageTests
     [Fact]
     public void A_copy_that_cannot_listen_says_why_and_shows_no_switches()
     {
-        var bare = Loaded(Voice.Replace("\"canPress\":true,\"trouble\"", "\"canPress\":false,\"trouble\""));
+        var bare = Loaded(Voice.Replace("\"canPress\":true,\"canSpeak\"", "\"canPress\":false,\"canSpeak\""));
         Assert.Contains("Only the Windows app listens", Text(bare));
         Assert.True(bare.Truth($"{Root}.byClass('voice-commands-controls')[0].hidden"));
 
@@ -111,6 +111,23 @@ public class VoiceCommandsPageTests
             """);
         Assert.Contains("POST /api/voice/learn", page.Fetched());
         Assert.Contains("Press the stick button now", Text(page));
+    }
+
+    [Fact]
+    public void Hear_it_asks_for_that_commands_answer()
+    {
+        var page = Loaded(Voice);
+        page.Serve("/api/voice/hear?id=selfdestruct", "{}");
+        page.Do($$"""
+            const button = {{Root}}.descendants().find(n => n.dataset && n.dataset.voiceHear === 'selfdestruct');
+            {{Root}}.fire('click', { target: button });
+            await new Promise(r => setTimeout(r, 0));
+            """);
+        Assert.Contains("POST /api/voice/hear?id=selfdestruct", page.Fetched());
+
+        // A copy with no voice offers nothing to hear.
+        var mute = Loaded(Voice.Replace("\"canSpeak\":true", "\"canSpeak\":false"));
+        Assert.Equal(0, mute.Number($"{Root}.descendants().filter(n => n.dataset && n.dataset.voiceHear).length"));
     }
 
     [Fact]

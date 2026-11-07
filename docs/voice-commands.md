@@ -44,6 +44,27 @@ block says so.
 Audio never reaches the app. It sees only the phrase matched and its score,
 keeps the last 40 in memory for the page, and writes none of them to disk.
 
+## What it says
+
+Every answer is in the recorded callout voice, Bella (Kokoro `af_bella`), as
+one clip a sentence (1.2.2):
+
+- The wake and sleep replies.
+- Each command's reply, and the two confirm prompts.
+- "Cancelled", "Can't press that" and "Game not in front".
+
+That is 31 clips, about 0.2 MB, recorded by `tools/voice-pack/make-pack.mjs`
+from the list in `VoiceCommands.Spoken()`. A test fails if a sentence there
+has no clip, so no reply drops to the Windows voice mid-session.
+
+The recordings were checked by recognising each one back against the list of
+replies. 25 of the 31 came back as written. The other six came back empty
+rather than as another reply: "Copilot on", "Combat mode", "Nav mode",
+"Ping", "Module one" and "More power". They are as long and as loud as the
+rest. Dictation is no oracle either, since it heard "Module two", which
+passed at 0.95, as "Don Schultz you". So the six are unconfirmed rather than
+known bad, and each command's Hear it button is how to listen.
+
 ## How it presses
 
 - **Which key.** `VoiceBinding.Plan` takes, in order:

@@ -172,7 +172,7 @@ public sealed class VoiceCommandService(
         var plan = PlanFor(command);
         if (!plan.CanPress)
         {
-            Say(settings, "Can't press that");
+            Say(settings, VoiceCommands.SayCannotPress);
             Record(heard, $"{command.Phrase}: {plan.Why}", command.Id);
             return;
         }
@@ -194,7 +194,7 @@ public sealed class VoiceCommandService(
             }
             else
             {
-                Say(settings, "Game not in front");
+                Say(settings, VoiceCommands.SayNotInFront);
                 Record(heard, $"Not pressed: {pressed.Why}.", command.Id);
             }
         });
@@ -242,6 +242,23 @@ public sealed class VoiceCommandService(
         }
     }
 
+    /// <summary>
+    /// What a command answers out loud - its prompt when it waits on
+    /// "confirm", else its reply - said now, for the page's "Hear it".
+    /// False when there is no such command or no voice.
+    /// </summary>
+    public bool Sample(string id)
+    {
+        if (voice is null) return false;
+        var text = id == "wake" ? VoiceCommands.SayAwake
+            : VoiceCommands.Find(id) is { } c ? SpokenFor(c) : null;
+        if (text is null) return false;
+        voice.Say(text);
+        return true;
+    }
+
+    private static string SpokenFor(VoiceCommand c) => c.Confirm ? c.Prompt ?? $"Confirm {c.Phrase}?" : c.Reply;
+
     /// <summary>Everything the page shows.</summary>
     public object Describe()
     {
@@ -264,6 +281,7 @@ public sealed class VoiceCommandService(
             available = Available,
             recogniser = listener?.Available == true,
             canPress = keyboard is not null,
+            canSpeak = voice is not null,
             trouble = settings.Enabled ? listener?.Trouble : null,
             state,
             learning,
@@ -295,6 +313,8 @@ public sealed class VoiceCommandService(
                     canPress = plan.CanPress,
                     why = plan.Why,
                     fromProfile = plan.FromProfile,
+                    says = SpokenFor(c),
+                    voice = voice?.VoiceFor(SpokenFor(c)),
                 };
             }),
             heard = heard.Select(h => new { at = h.At, h.Text, confidence = Math.Round(h.Confidence, 2), h.Outcome, h.Command }),
@@ -354,6 +374,10 @@ public static class VoiceCommandEndpoints
 
         // "Press the button now": the next stick button pressed in the next
         // few seconds becomes push-to-talk.
+        // "Hear it": the command's answer, in the voice the pilot will hear.
+        app.MapPost("/api/voice/hear", (string id, VoiceCommandService service) =>
+            service.Sample(id) ? Results.Ok() : Results.Problem($"nothing to say for '{id}'", statusCode: 400));
+
         app.MapPost("/api/voice/learn", (VoiceCommandService service) =>
         {
             service.StartLearning();

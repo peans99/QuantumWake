@@ -288,6 +288,23 @@ public class VoiceCommandTests
     }
 
     [Fact]
+    public void Every_sentence_the_copilot_says_is_in_bellas_recorded_pack()
+    {
+        // The pack the app embeds, read from the repository: a reply added to
+        // VoiceCommands without its clip would be said in the Windows voice,
+        // a different copilot halfway through a session.
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Directory.Build.props"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        using var manifest = File.OpenRead(Path.Combine(dir!.FullName, "src", "Quantumwake.Ocr", "Voices", "af_bella", "manifest.json"));
+        var pack = VoicePack.Load(manifest)!;
+
+        var missing = VoiceCommands.Spoken().Where(s => pack.Clips(s) is not { Count: 1 }).ToList();
+        Assert.True(missing.Count == 0, "Not recorded as one clip: " + string.Join(", ", missing));
+        Assert.Equal("Confirm self destruct?", VoiceCommands.Find("selfdestruct")!.Prompt);
+    }
+
+    [Fact]
     public void The_store_keeps_its_answer_and_drops_what_this_build_does_not_know()
     {
         var folder = Directory.CreateTempSubdirectory("qw-voice-").FullName;
