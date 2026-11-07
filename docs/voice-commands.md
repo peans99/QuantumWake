@@ -36,7 +36,9 @@ block says so.
 - **Confirm**: self destruct and jettison cargo are not pressed on their own
   phrase. The copilot asks "Confirm self destruct?" and presses only on
   "confirm" within 6 s. "Cancel", silence, or anything said while it is not
-  listening stands the command down. "Abort self destruct" presses the same key
+  listening stands the command down. With push-to-talk, "confirm" itself has
+  to be said with the button held (1.2.1): one said with it up, to a wingman,
+  cancels rather than fires. "Abort self destruct" presses the same key
   again with no confirm, since that is how the game stops the countdown.
 
 Audio never reaches the app. It sees only the phrase matched and its score,

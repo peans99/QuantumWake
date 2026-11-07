@@ -247,6 +247,27 @@ public class VoiceCommandTests
     }
 
     [Fact]
+    public void With_push_to_talk_a_confirm_said_with_the_button_up_cancels_instead_of_firing()
+    {
+        var settings = On with { Trigger = VoiceTrigger.Button };
+        var copilot = new VoiceCopilot();
+        copilot.Button(true, T0);
+        Assert.Equal("Confirm self destruct?", copilot.Hear(Said("self destruct", 0.5), settings).Say);
+        copilot.Button(false, T0.AddSeconds(1));
+
+        // Four seconds later, inside the confirm window but well past the
+        // button's grace: someone on comms says it.
+        var stray = copilot.Hear(Said("confirm", 5), settings);
+        Assert.Null(stray.Press);
+        Assert.Equal("Cancelled", stray.Say);
+
+        // Held, it confirms.
+        copilot.Button(true, T0.AddSeconds(10));
+        copilot.Hear(Said("self destruct", 10.5), settings);
+        Assert.Equal("selfdestruct", copilot.Hear(Said("confirm", 11), settings).Press?.Id);
+    }
+
+    [Fact]
     public void A_command_switched_off_is_heard_but_not_pressed()
     {
         var settings = On with { Off = ["jettison"] };

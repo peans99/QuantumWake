@@ -352,7 +352,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.2.0
+### 1.2.1
 
 **Voice commands: say it instead of finding the key.** For the things you do once a session and would rather not give a button to. Settings → Voice & callouts has a new Voice commands switch, off until you turn it on. Say "Quantum Wake copilot on", or hold a push-to-talk button or key you pick, and the app listens for a short list of commands:
 
@@ -362,11 +362,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 - Power to shields.
 - Request landing or departure.
 - The three mining modules, switch laser, toggle beam, and laser power.
-- Self destruct and jettison cargo, which both wait for you to say "confirm".
+- Self destruct and jettison cargo, which both wait for you to say "confirm". With push-to-talk, "confirm" has to be said with the button held too, so a "confirm" from someone else on comms cancels instead.
 
 Each command presses the key the game has for that action, either yours from your keybindings or the game's default, held for as long as the game's own rules ask, and only while Star Citizen is the window in front. The list shows which key each command will press. It says plainly when an action is only on your stick or has no key, because voice can press keyboard keys and mouse buttons but not stick buttons. Listening is done on your PC by the speech recogniser Windows already carries, told only these phrases. Nothing is recorded or sent. Windows only. It has not been tried in the game itself yet, so try one command first to check the game takes the key.
 
-**More actions show how they fire.** The Controls page and the keybindings list now read every way the game spells an action's activation mode, and the keyboard defaults some actions keep in a separate entry. 22 actions that showed no mode now show one, and five that looked unbound now show their key.
+**More actions show how they fire.** The Controls page now reads every way the game spells an action's activation mode, and the keyboard defaults some actions keep in a separate entry. 22 actions that showed no mode now show one, and five that looked unbound now show their key.
 
 ### 1.1.25
 

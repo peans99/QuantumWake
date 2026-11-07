@@ -269,6 +269,12 @@ public sealed class VoiceCopilot
             }
             else if (text == VoiceCommands.ConfirmPhrase)
             {
+                // Held to the same rule as the command it confirms. With
+                // push-to-talk, a "confirm" said with the button up - to a
+                // wingman, on comms - is not the pilot answering, and is the
+                // one word that must never fire a self destruct by accident.
+                if (!listening)
+                    return new("Cancelled", null, $"{pending.Command.Phrase} cancelled: confirm was said without push-to-talk.");
                 return new(null, pending.Command, $"Confirmed {pending.Command.Phrase}.");
             }
             else

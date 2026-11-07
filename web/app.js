@@ -37245,7 +37245,9 @@ function renderVoiceCommands() {
   parts.push(trigger);
   parts.push(el('p', 'muted', s.trigger === 'button'
     ? tx('Commands count only while the button or key is held, and a moment after letting go.')
-    : tx('Say “Quantum Wake copilot on” and it acts on commands until “copilot off”.')));
+    : s.trigger === 'both'
+      ? tx('Say “Quantum Wake copilot on” and it acts on commands until “copilot off”, or hold push-to-talk for one command while it is asleep.')
+      : tx('Say “Quantum Wake copilot on” and it acts on commands until “copilot off”.')));
 
   if (s.trigger !== 'phrase') {
     const ptt = el('div', 'voice-ptt');
