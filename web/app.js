@@ -18208,6 +18208,12 @@ async function renderOverlayLayout() {
     contrast.onchange = saveOverlayLayout;
   }
 
+  const pop = $('#overlay-pop-target');
+  if (pop) {
+    pop.checked = data.current.popTarget !== false;
+    pop.onchange = saveOverlayLayout;
+  }
+
   $('#overlay-layout-status').textContent = '';
 }
 
@@ -18547,6 +18553,7 @@ async function saveOverlayLayout(savedMessage = tx('saved'), chosen = null) {
     cards: pick('#overlay-cards'),
     density: $$('#overlay-density input').find((r) => r.checked)?.value || 'normal',
     highContrast: Boolean($('#overlay-high-contrast')?.checked),
+    popTarget: $('#overlay-pop-target') ? Boolean($('#overlay-pop-target').checked) : true,
   };
 
   const status = $('#overlay-layout-status');
@@ -18629,8 +18636,8 @@ async function applyOverlayPreset(name) {
   // offered lists when this browser has no cached copy yet.
   const available = overlayLayoutData || await getJson('/api/overlay/layout');
   const next = preset
-    ? { ...preset, highContrast: Boolean(available?.current?.highContrast) }
-    : { tabs: available?.tabs || [], cards: available?.cards || [], density: 'normal', highContrast: Boolean(available?.current?.highContrast) };
+    ? { ...preset, highContrast: Boolean(available?.current?.highContrast), popTarget: available?.current?.popTarget !== false }
+    : { tabs: available?.tabs || [], cards: available?.cards || [], density: 'normal', highContrast: Boolean(available?.current?.highContrast), popTarget: available?.current?.popTarget !== false };
   all('#overlay-tabs', next.tabs); all('#overlay-cards', next.cards);
   $$('#overlay-density input').forEach(box => { box.checked = box.value === next.density; });
   const contrast = $('#overlay-high-contrast');
@@ -18653,6 +18660,8 @@ window.scOverlayPreset = name => applyOverlayPreset(String(name));
  * is a separate browser and a few seconds of lag costs nothing.
  */
 let lastReloadToken = null;
+/** The layout the widget last applied: what the Target pop asks before it moves anything. */
+let overlayApplied = null;
 
 async function applyOverlayLayout() {
   let data;
@@ -18671,6 +18680,7 @@ async function applyOverlayLayout() {
   lastReloadToken = data.reloadToken;
 
   const layout = data.current;
+  overlayApplied = layout;
 
   const expanded = document.body.classList.contains('expanded');
 
@@ -36522,6 +36532,7 @@ function renderLiveScreen() {
   // The card is on Now, not the Log page, and the overlay shows it without
   // the Log page ever being opened.
   renderNowTarget();
+  if (isOverlay) popTargetCard();
   renderNowFracture();
   renderCalloutSettings();
   renderSettingsVoice();
@@ -36670,6 +36681,44 @@ function renderNowTarget() {
     li.append(el('span', 'd', ' · ' + new Date(call.at).toLocaleTimeString(QW_DATE_LOCALES)));
     list.append(li);
   }
+}
+
+/**
+ * Pop the Target card (1.1.19), for pilots without the MFD frames: in the
+ * widget, a lock turns the page to Now with the Target card first, and 20 s
+ * after the lock is gone the page goes back to where it was. A pilot who
+ * left Now meanwhile chose somewhere else, and is not taken anywhere. Pure,
+ * so the rules are tested rather than flown.
+ */
+const TARGET_POP_RETURN = 20000;
+const targetPopIdle = () => ({ popped: false, back: null, lostAt: null });
+function targetPopStep(memory, { want, view, now }) {
+  const m = memory || targetPopIdle();
+  if (want) {
+    if (m.popped) return { memory: { ...m, lostAt: null }, go: null, first: false };
+    return { memory: { popped: true, back: view, lostAt: null }, go: view === 'now' ? null : 'now', first: true };
+  }
+  if (!m.popped) return { memory: m, go: null, first: false };
+  // A lock dropped for a second in a turn is not the end of a fight.
+  const lostAt = m.lostAt ?? now;
+  if (now - lostAt < TARGET_POP_RETURN) return { memory: { ...m, lostAt }, go: null, first: false };
+  return { memory: targetPopIdle(), go: view === 'now' && m.back && m.back !== 'now' ? m.back : null, first: false };
+}
+
+let targetPop = targetPopIdle();
+
+function popTargetCard() {
+  const card = $('#now-target-card');
+  if (!card) return;
+  const layout = overlayApplied;
+  const wanted = Boolean(layout && layout.popTarget !== false && (layout.cards || []).includes('target')
+    && liveState?.enabled && liveState?.status?.combat?.target);
+  const view = $('#tabs button.active[data-view]')?.dataset.view || 'now';
+  const { memory, go, first } = targetPopStep(targetPop, { want: wanted, view, now: Date.now() });
+  targetPop = memory;
+  card.classList.toggle('card-popped', targetPop.popped);
+  if (go) showView(go);
+  if (first) card.scrollIntoView?.({ block: 'nearest' });
 }
 
 /**
@@ -37060,6 +37109,13 @@ async function boot() {
   setInterval(() => {
     if (liveState?.enabled && document.visibilityState === 'visible') loadLiveScreen().catch(() => {});
   }, 5000);
+
+  // The widget pops the Target card on a lock, so it asks sooner than the
+  // dashboard does: within two seconds rather than five.
+  if (isOverlay) setInterval(() => {
+    if (liveState?.enabled && overlayApplied?.popTarget !== false && !liveState?.status?.combat?.target)
+      loadLiveScreen().catch(() => {});
+  }, 2000);
 
   // A fight moves faster than that: while a lock is held the Target card is
   // asked again every second and a half, and not at all otherwise.

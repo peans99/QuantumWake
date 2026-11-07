@@ -22,7 +22,8 @@ public sealed record OverlayLayout(
     IReadOnlyList<string> Cards,
     string Density,
     IReadOnlyList<string>? Known = null,
-    bool HighContrast = false)
+    bool HighContrast = false,
+    bool PopTarget = true)
 {
     /// <summary>The views worth having over a game, and the order they sit in.</summary>
     public static readonly IReadOnlyList<string> SelectableTabs =
@@ -37,7 +38,8 @@ public sealed record OverlayLayout(
         [.. SelectableCards],
         "normal",
         [.. SelectableCards],
-        false);
+        false,
+        true);
 }
 
 /// <summary>
@@ -152,7 +154,7 @@ public sealed class OverlayLayoutStore
 
         var density = layout.Density is "compact" or "tiny" ? layout.Density : "normal";
         var cleaned = new OverlayLayout(
-            tabs, cards, density, [.. OverlayLayout.SelectableCards], layout.HighContrast);
+            tabs, cards, density, [.. OverlayLayout.SelectableCards], layout.HighContrast, layout.PopTarget);
 
         lock (_gate)
         {

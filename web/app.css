@@ -615,6 +615,9 @@ h2.spaced { margin-top: 32px; }
 
 /* ---------- panels ---------- */
 
+/* Pop the Target card (1.1.19): first in the widget while a lock is held. */
+.now-grid > .card-popped { order: -1; }
+
 .now-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));

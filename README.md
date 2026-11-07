@@ -352,7 +352,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.1.18
+### 1.1.19
+
+**The Target card comes forward in the overlay.** For pilots without the MFD frames: when you lock a ship, the overlay turns to Now with the Target card first - the ship or its likely hull, its odds, and the callouts - and goes back to where you were 20 seconds after the lock is gone, so a lock lost for a second in a turn does not bounce it. If you moved to another page yourself in the meantime, it stays where you put it. On unless switched off under Settings → Overlay → In a fight; it needs reading the game's screen on and the Target card ticked.
 
 **Mining callouts only at a rock.** The fracture HUD's window bar is a short yellow bar, and a box of that size turns up elsewhere - combat markers, the Fleet terminal - so mining callouts were heard in fights and at a terminal with no rock in sight. A bar is now followed only once it has held still in one place for three frames and was first seen mostly yellow, as a fresh window is; never while a hostile has been locked in the last half minute (a rock already being cracked carries on); and never on a mobiGlas app, a terminal or a kiosk. On the 17-minute mining recording every callout is still made, a second or so later on four of them; on the combat recording there are none.
 
