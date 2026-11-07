@@ -10,7 +10,7 @@ namespace Quantumwake.Server;
 /// <param name="LastKind">What that frame was - Mining, Unknown, and so on.</param>
 /// <param name="LastSummary">What it said.</param>
 /// <param name="Frames">Frames read since the app started.</param>
-/// <param name="Kept">Rock scans kept in the reading log since the app started.</param>
+/// <param name="Kept">Readings kept in the reading log since the app started - rock scans and screens, each renewal counted.</param>
 /// <param name="LastReadMs">How long the engine took over the last frame.</param>
 /// <param name="Combat">The target panel as the combat watch has it: the lock, whether it is a fight, what was said.</param>
 /// <param name="LastPanelMs">How long the last close read of the target panel took.</param>
@@ -97,10 +97,13 @@ public sealed record LiveCallout(string Kind, bool On);
 /// overwritten by the next, so nothing of the screen is kept on disk.
 /// </para>
 /// <para>
-/// What is kept is the prototype's one screen, the mining scan panel, one
-/// reading a rock (see <see cref="LiveRocks"/>). Every other kind is read and
-/// shown as the last thing seen, and not stored: that is the next decision,
-/// screen by screen, rather than a flood into the reading log by default.
+/// What is kept is what a screenshot would have been taken of: the mining
+/// scan panel, one reading a rock (see <see cref="LiveRocks"/>), and since
+/// 1.1.21 every other screen the screenshot reader knows, one reading a
+/// screen (see <see cref="LiveScreens"/>) - so with reading on, Print Screen
+/// is no longer needed for the fleet, the map, a kiosk or the apps. A frame of
+/// nothing this app reads, or of a mobiGlas app it has no reader for, is shown
+/// as the last thing seen and not stored.
 /// </para>
 /// <para>
 /// The cockpit's target panel sets a faster pace. A fight changes by the
@@ -134,6 +137,7 @@ public sealed class LiveScreenService(
     private readonly LiveFrameLog _log = frames ?? new LiveFrameLog(Core.AppPaths.In("live"));
 
     private readonly LiveRocks _rocks = new();
+    private readonly LiveScreens _screens = new();
     private readonly Lock _gate = new();
     private LiveScreenStatus _status = new("off");
     private CombatWatch? _combat;
@@ -477,14 +481,17 @@ public sealed class LiveScreenService(
         if (sighting.Kind is not (ScreenKind.Unknown or ScreenKind.Mining))
             Fracture(null, at);
 
+        // Asked of every frame, a rock's included, so a screen interrupted by
+        // something else has to be seen twice again before it is kept.
+        var screenShot = _screens.Keep(sighting, at);
         var kept = 0;
         string? keptAs = null;
-        if (sighting.Mining is { } scan && _rocks.Keep(scan, at) is { } shot)
+        if ((sighting.Mining is { } scan ? _rocks.Keep(scan, at) : screenShot) is { } shot)
         {
-            readings.Add(sighting with { Shot = shot });
+            readings.Renew(sighting with { Shot = shot });
             kept = 1;
             keptAs = shot;
-            logger.LogInformation("Live scan kept as {Shot}: {Summary}", shot, sighting.Summary);
+            logger.LogInformation("Live {Kind} kept as {Shot}: {Summary}", sighting.Kind, shot, sighting.Summary);
         }
 
         var panelMs = 0L;

@@ -81,7 +81,7 @@ public class GaragePageTests
         var page = Opened();
         page.Do("""
             garageStock.ports = [{portId:'fixed',hardpoint:'head',group:'WeaponMining',name:'Pitman',class:'pitman',stockClass:'pitman',minSize:1,maxSize:1,
-                fixedReason:'Fixed Pitman head — bespoke to the Golem.'}];
+                fixedReason:'Fixed head — the reference loadout does not allow replacements.'}];
             renderGarage(garageStock);
             """);
         Assert.Contains("Pitman", page.NodeText("#garage-rig-right"));

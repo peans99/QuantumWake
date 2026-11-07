@@ -337,16 +337,19 @@ public static class HaulPlanner
             .Where(c => c.MissionId is { Length: > 0 } && HaulingContract.IsHauling(c.Raw))
             .OrderBy(c => c.FirstSeen)
             .ToList();
-        var shots = frames.Where(f => !f.Dismissed).OrderBy(f => f.ShotAt).ToList();
+        // By when each card first came up, not when it was last read: a card
+        // kept live is renewed while it stays open, and its newest frame can
+        // be a minute after the acceptance it was opened by (1.1.23).
+        var shots = frames.Where(f => !f.Dismissed).OrderBy(f => f.SeenAt).ToList();
         var bound = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var contract in accepted)
         {
-            var first = shots.FirstOrDefault(f => f.ShotAt >= contract.FirstSeen);
-            if (first is null || first.ShotAt - contract.FirstSeen > JustAccepted) continue;
+            var first = shots.FirstOrDefault(f => f.SeenAt >= contract.FirstSeen);
+            if (first is null || first.SeenAt - contract.FirstSeen > JustAccepted) continue;
 
             // Another acceptance in between: the card is that one's, if anyone's.
-            if (accepted.Any(other => other.FirstSeen > contract.FirstSeen && other.FirstSeen <= first.ShotAt)) continue;
+            if (accepted.Any(other => other.FirstSeen > contract.FirstSeen && other.FirstSeen <= first.SeenAt)) continue;
 
             if (first.Contracts?.SelectedTitle is { } shown
                 && ScreenFrames.SameContract(shown, ContractTags.Clean(contract.Name)))

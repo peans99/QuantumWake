@@ -9399,7 +9399,7 @@ function renderCrackHeads() {
     laser.className = 'select crack-laser';
     const locked = head.editable === false || head.editable === null;
     for (const l of crackModel.lasers.filter((l) => locked ? l.class === head.stock
-      : l.size === head.size && !l.bespoke)) {
+      : (l.size === head.size && !l.golemOnly) || l.class === head.stock)) {
       laser.append(new Option(`${l.name} · ${fmtInt(l.power)} · ${describeModifiers(l.modifiers) || tx('no modifiers')}`, l.class));
     }
     if (head.stock && [...laser.options].some((o) => o.value === head.stock)) laser.value = head.stock;
@@ -12185,7 +12185,24 @@ function applyScreenMode() {
       : tx('off');
   }
 
+  renderScreenLiveNote();
   startScreenWatch();
+}
+
+/**
+ * With the screen read live, the screens a pilot used to press Print Screen
+ * for are kept as they are looked at, and the screenshot controls are the
+ * second way in rather than the only one. Said beside them, because a pilot
+ * who sees "Read last screenshot" will otherwise go on pressing the key.
+ */
+function renderScreenLiveNote() {
+  const note = $('#screen-live-note');
+  if (!note) return;
+  const live = Boolean(liveState?.available && liveState?.enabled);
+  note.hidden = !live;
+  note.textContent = live
+    ? tx('Reading the game’s screen live is on, so the Fleet Manager, the map, loadouts, kiosks, refineries, freight terminals and the Contracts and Rep apps and your balance are kept as you look at them - no screenshot needed. Screenshots you take are still read.')
+    : '';
 }
 
 async function saveScreenSettings(mode, watch, watchScreenshots) {
@@ -12308,6 +12325,7 @@ const SCREEN_KINDS = {
   Kiosk: tx('kiosk'),
   Mining: tx('rock scan'),
   Refinery: tx('refinery'),
+  Freight: tx('freight terminal'),
   MobiGlas: 'mobiGlas',
   Unknown: tx('unread'),
 };
@@ -12439,6 +12457,10 @@ const SCREEN_SENTENCES = [
   [/^a refinery order running at (.+?)((?:, .+)?)$/, (m) => `${tx('a refinery order running at {place}', { place: tx(m[1]) })}${screenPieces(m[2])}`],
   [/^a refinery quote at (.+?)((?:[:,] .+)?)$/, (m) => `${tx('a refinery quote at {place}', { place: tx(m[1]) })}${screenPieces(m[2])}`],
   [/^the refinery at (.+?)((?:, .+)?)$/, (m) => `${tx('the refinery at {place}', { place: tx(m[1]) })}${screenPieces(m[2])}`],
+  [/^the freight elevator: (\d+) contracts? to hand over(?:, crates of (.+) SCU)?$/, (m) =>
+    `${txn(Number(m[1]), 'the freight elevator: {count} contract to hand over', 'the freight elevator: {count} contracts to hand over')}`
+    + (m[2] ? tx(', crates of {sizes} SCU', { sizes: m[2].replace(' and ', ` ${tx('and')} `) }) : '')],
+  [/^the freight elevator((?:, .+)?)$/, (m) => `${tx('the freight elevator')}${screenPieces(m[1])}`],
 ];
 
 /* A head and the list after it, joined by the page language's colon. */
@@ -12450,6 +12472,8 @@ function screenListed(head, list) {
 /* The clauses a summary strings together after its head, each on its own. */
 const SCREEN_PIECES = [
   [/^mass unread$/, () => tx('mass unread')],
+  [/^(\d+)\/(\d+) SCU on the elevator$/, (m) => tx('{used}/{total} SCU on the elevator', { used: m[1], total: m[2] })],
+  [/^cargo for (\d+) contracts?$/, (m) => txn(Number(m[1]), 'cargo for {count} contract', 'cargo for {count} contracts')],
   [/^(\d+) parts? named$/, (m) => txn(Number(m[1]), '{count} part named', '{count} parts named')],
   [/^(\d+) ports? empty$/, (m) => txn(Number(m[1]), '{count} port empty', '{count} ports empty')],
   [/^(\d+) ports? with nothing read under (?:it|them)$/, (m) => txn(Number(m[1]), '{count} port with nothing read under it', '{count} ports with nothing read under them')],
@@ -12732,6 +12756,44 @@ function renderSighting(box, s, { full = true } = {}) {
     box.append(go);
   }
 
+  // The hangar's freight terminal: each contract's cargo, and on the
+  // confirmation the crate sizes and what is in them. Never a number of
+  // crates - the count under each tile does not read, and is said not to.
+  if (s.freight) {
+    const f = s.freight;
+    const orders = f.orders || [];
+    box.append(el('div', 'strong', f.stage === 'confirm'
+      ? txn(orders.length, 'cargo to hand over for {count} contract', 'cargo to hand over for {count} contracts')
+      : tx('the freight elevator')));
+
+    const facts = [
+      f.elevator ? tx('{used}/{total} SCU on the elevator', { used: fmtInt(f.elevator.used), total: fmtInt(f.elevator.total) }) : null,
+      f.warehouse ? tx('{used}/{total} SCU in the warehouse', { used: fmtInt(f.warehouse.used), total: fmtInt(f.warehouse.total) }) : null,
+    ].filter(Boolean);
+    if (facts.length) box.append(el('div', 'muted', facts.join(' · ')));
+
+    if (full && orders.length) {
+      const list = el('ul', 'feed screen-fittings');
+      for (const order of orders) {
+        const li = el('li');
+        li.append(el('span', 'what', order.title));
+        const bits = [
+          order.secondsLeft != null ? tx('{time} left', { time: refineryClock(order.secondsLeft) }) : null,
+          ...(order.crates || []).map((c) => tx('{size} SCU of {commodity}', {
+            size: c.sizeScu,
+            commodity: c.commodity || (c.commodityRead ? `“${c.commodityRead}”` : tx('a commodity that did not read')),
+          })),
+        ].filter(Boolean);
+        li.append(el('span', 'd', bits.length ? ` · ${bits.join(' · ')}` : ''));
+        list.append(li);
+      }
+      box.append(list);
+    }
+
+    if (f.stage === 'confirm')
+      box.append(el('div', 'muted', tx('How many crates of each size is printed in small green type that does not read reliably, so it is not taken.')));
+  }
+
   if (s.contracts) {
     const c = s.contracts;
     box.append(el('div', 'strong', screenContractsLine(c)));
@@ -12985,7 +13047,7 @@ async function renderScreenLog() {
       const s = entry.shot;
       if (s.dismissed) row.classList.add('dismissed');
       body.append(el('div', 'muted',
-        `${stamp(s.shotAt)} · ${SCREEN_KINDS[s.kind] || s.kind} · ${s.shot}${s.dismissed ? ` · ${tx('invalidated')}` : ''}`));
+        `${stamp(s.shotAt)} · ${SCREEN_KINDS[s.kind] || s.kind} · ${screenIsLive(s) ? tx('read live from the screen') : s.shot}${s.dismissed ? ` · ${tx('invalidated')}` : ''}`));
       renderSighting(body, s, { full: latest });
 
       // Kept in the log either way: the misreading is worth seeing, and the
@@ -13003,18 +13065,23 @@ async function renderScreenLog() {
         : tx('Keep this reading in the log, but stop the wallet, fleet and fittings using it');
       action.addEventListener('click', () => dismissReading(s, !s.dismissed, action));
 
+      const actions = el('div', 'screen-actions');
+      actions.append(action);
+
       // Through the reader as it is now. The frame that taught a reader is
       // the first one worth reading again, and the log otherwise keeps the
-      // old reading of it for good.
-      const again = document.createElement('button');
-      again.type = 'button';
-      again.className = 'ghost screen-reread';
-      again.textContent = tx('Read again');
-      again.title = tx('Put this screenshot through the reader again and replace this reading');
-      again.addEventListener('click', () => rereadReading(s, again));
-
-      const actions = el('div', 'screen-actions');
-      actions.append(action, again);
+      // old reading of it for good. A reading taken live has no file - the
+      // frame was overwritten two seconds later - so there is nothing to
+      // read again, and a button that could only fail is not offered.
+      if (!screenIsLive(s)) {
+        const again = document.createElement('button');
+        again.type = 'button';
+        again.className = 'ghost screen-reread';
+        again.textContent = tx('Read again');
+        again.title = tx('Put this screenshot through the reader again and replace this reading');
+        again.addEventListener('click', () => rereadReading(s, again));
+        actions.append(again);
+      }
       body.append(actions);
     }
 
@@ -13094,7 +13161,9 @@ function renderScreenReviewInbox(readings) {
   const count = $('#screen-review-count');
   if (!box || !list) return;
 
-  const unknown = readings.filter(reading => ['MobiGlas', 'Unknown'].includes(reading.kind));
+  // Not a live reading: the only mobiGlas screens kept live are kept for the
+  // balance in their bar, and there is no capture to put beside the text.
+  const unknown = readings.filter(reading => ['MobiGlas', 'Unknown'].includes(reading.kind) && !screenIsLive(reading));
   box.hidden = unknown.length === 0;
   list.textContent = '';
   if (count) count.textContent = unknown.length ? tx('{count} queued', { count: unknown.length }) : '';
@@ -13132,6 +13201,11 @@ async function pinClipboardLocation(paste, button) {
     button.disabled = false;
     button.textContent = tx('Pin as POI');
   }
+}
+
+/** Whether a reading was kept by the live screen reader rather than read from a screenshot file. */
+function screenIsLive(reading) {
+  return typeof reading?.shot === 'string' && reading.shot.startsWith('live-');
 }
 
 /** The same file through the reader it has now; the fresh reading replaces the old one. */
@@ -36537,6 +36611,7 @@ function renderLiveScreen() {
   renderCalloutSettings();
   renderSettingsVoice();
   renderRadarLive();
+  renderScreenLiveNote();
 
   const block = $('#live-block');
   if (!block) return;
@@ -36575,7 +36650,7 @@ function renderLiveScreen() {
     line.textContent = tx('Off.');
   } else if (status.state === 'reading') {
     const when = status.lastFrameAt ? new Date(status.lastFrameAt).toLocaleTimeString(QW_DATE_LOCALES) : '';
-    line.textContent = tx('Reading: {frames} frames, {kept} rock scans kept. Last at {when}: {summary}', {
+    line.textContent = tx('Reading: {frames} frames, {kept} screens kept. Last at {when}: {summary}', {
       frames: (status.frames || 0).toLocaleString(),
       kept: (status.kept || 0).toLocaleString(),
       when,

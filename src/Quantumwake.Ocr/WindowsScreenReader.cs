@@ -29,11 +29,24 @@ namespace Quantumwake.Ocr;
 /// write this and costs more than the recognition does.
 /// </para>
 /// </remarks>
-public sealed class WindowsScreenReader : IScreenReader
+public sealed class WindowsScreenReader : IScreenReader, ITiltedReader
 {
     private readonly OcrEngine? _engine =
         OcrEngine.TryCreateFromLanguage(new Language("en-US"))
         ?? OcrEngine.TryCreateFromUserProfileLanguages();
+
+    /// <summary>
+    /// The tilt of each frame's last whole read, by path - a handful at most:
+    /// the live frame is one path read over and over, and screenshots are read
+    /// one after another, each tilt asked for straight after its read.
+    /// </summary>
+    private readonly Dictionary<string, ScreenTilt?> _tilts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Lock _gate = new();
+
+    public ScreenTilt? TiltOf(string imagePath)
+    {
+        lock (_gate) return _tilts.GetValueOrDefault(imagePath);
+    }
 
     /// <summary>Whether this machine has an engine at all.</summary>
     /// <remarks>
@@ -55,7 +68,17 @@ public sealed class WindowsScreenReader : IScreenReader
 
         var result = await _engine.RecognizeAsync(bitmap).AsTask(token);
 
-        return Lines(result);
+        // Left in the straightened copy, where the readers' rows are level;
+        // the tilt is kept so a close read can be cut where the text is.
+        lock (_gate)
+        {
+            if (_tilts.Count > 32) _tilts.Clear();
+            _tilts[imagePath] = result.TextAngle is { } angle and not 0
+                ? new ScreenTilt(angle, bitmap.PixelWidth, bitmap.PixelHeight)
+                : null;
+        }
+
+        return Lines(result, 0, 0, onPicture: false);
     }
 
     /// <remarks>
@@ -133,7 +156,9 @@ public sealed class WindowsScreenReader : IScreenReader
 
         var result = await _engine.RecognizeAsync(bitmap).AsTask(token);
 
-        return [.. Lines(result).Select(line => line with
+        // A close read's lines go back onto the patch's own pixels before they
+        // are mapped into the frame: the patch is a cut of the real frame.
+        return [.. Lines(result, w, h, onPicture: true).Select(line => line with
         {
             Left = left + (line.Left + treatment.Shear * (h - line.Top)) / scale,
             Top = top + line.Top / scale,
@@ -213,16 +238,32 @@ public sealed class WindowsScreenReader : IScreenReader
         return output;
     }
 
-    private static List<ScreenTextLine> Lines(OcrResult result) =>
-        [.. result.Lines
-            .Where(line => line.Words.Count > 0)
-            .Select(line => new ScreenTextLine(
-                line.Text,
-                line.Words.Min(w => w.BoundingRect.Left),
-                line.Words.Min(w => w.BoundingRect.Top),
+    /// <remarks>
+    /// The engine reports its boxes in a copy of the picture it turned
+    /// straight when the text was at an angle (<c>TextAngle</c>), not in the
+    /// picture - see <see cref="ScreenGeometry"/>. A whole read leaves them
+    /// there, where rows are level. A close read (<paramref name="onPicture"/>)
+    /// turns each line's top-left corner back onto the patch it was cut from,
+    /// since its caller maps it into the frame by the patch's own position.
+    /// </remarks>
+    private static List<ScreenTextLine> Lines(OcrResult result, double width, double height, bool onPicture)
+    {
+        var tilt = onPicture && result.TextAngle is { } angle and not 0 ? new ScreenTilt(angle, width, height) : null;
 
-                // The tallest word, because a line of mixed case is as tall as
-                // its capitals and the distances measured against this are all
-                // in line heights.
-                line.Words.Max(w => w.BoundingRect.Height)))];
+        return [.. result.Lines
+            .Where(line => line.Words.Count > 0)
+            .Select(line =>
+            {
+                var (left, top) = (line.Words.Min(w => w.BoundingRect.Left), line.Words.Min(w => w.BoundingRect.Top));
+                if (tilt is not null) (left, top) = ScreenGeometry.OnFrame(left, top, tilt);
+
+                return new ScreenTextLine(
+                    line.Text, left, top,
+
+                    // The tallest word, because a line of mixed case is as tall as
+                    // its capitals and the distances measured against this are all
+                    // in line heights.
+                    line.Words.Max(w => w.BoundingRect.Height));
+            })];
+    }
 }

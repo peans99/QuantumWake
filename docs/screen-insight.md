@@ -166,9 +166,128 @@ as pure black - detected, and said on the page.
 One screen: the mining scan panel, which the screenshot reader already reads.
 A frame every two seconds goes through exactly the screenshot path - same
 engine, same second looks - and a scan is kept as one reading a rock, updated
-while the rock stays selected (`LiveRocks`). Every other kind of frame is read
-and shown as "last seen" on the Log page, and not stored: which screens are
-worth keeping live is the next decision, one screen at a time.
+while the rock stays selected (`LiveRocks`). Every other kind of frame was
+read and shown as "last seen" on the Log page, and not stored.
+
+**1.1.21: live replaces the screenshot.** Every screen the screenshot reader
+has a reader for is now kept from live frames too - Loadout, Map, Contracts,
+Fleet, Reputation, Kiosk, Refinery - so with reading on, Print Screen is not
+needed for any of them. `LiveScreens` keeps one reading a screen, under the
+`live-<time>` name it was first kept as:
+
+- *Which screen* is what the screen names: the ship in the loadout, system and
+  place on the map, the selected contract (or the list), the organisation and
+  tab in Rep, the kiosk's side and ship, the refinery's station and stage. The
+  Fleet Manager is one screen. A frame that names nothing is not kept.
+- *Never from one frame.* The next whole-frame read, two seconds on, has to
+  name the same screen. A tab flicked past or a frame mistaken for a terminal
+  is not what a screenshot would have been taken of.
+- *Replaced, not added to.* A later frame replaces the reading when it filled
+  in more values (every value the readers filled, counted alike), or when it
+  reads as much but says something different on two frames running - a kiosk
+  after a purchase, not a digit the engine read differently once.
+- *Two minutes away* and the next look is a new reading.
+- *Not kept live:* tooltips, because hovering down an inventory would keep one
+  an item and push the one loadout reading of a ship out of a 300-entry log;
+  frames of nothing, and mobiGlas apps with no reader whose balance did not
+  read, which would be the same unreadable line every two seconds.
+- *The balance alone (1.1.22).* A mobiGlas app with no reader is kept when the
+  balance in its bar read, as one wallet reading whichever app it was on - the
+  home screen is where a pilot looks at their cash. In Nicolas's log 72 of 155
+  readings carry a balance, and 9 of those are such screens, which 1.1.21 left
+  behind. Because the Ledger counts the cash on from it, a wallet reading needs
+  the same figure on two frames running before it is kept at all, not just the
+  same screen; a new figure renews it the same way. These readings stay out of
+  the Log's review queue, which is for screenshots a reader could be written
+  from and has no capture to show for a live one.
+
+Screenshots stay the way in wherever live reading is not used: on Linux, which
+has no capture and so never offers the switch, and for any pilot who leaves it
+off - the screenshot watch and its buttons are unchanged, and nothing about them
+depends on the live switch. Screenshots the pilot takes are still read while it
+is on, too, so a screen photographed then is in the log twice: once by its
+file, once live. A live reading the pilot invalidates stays invalidated as
+later frames renew it (`ScreenReadingStore.Renew`); a file read again on a
+press starts afresh, as it always did. A renewal moves `ShotAt` to the newest
+frame and keeps the first in `FirstAt` (1.1.23): the haul planner ties a
+Contracts card to the haul it was opened by when it is seen within 15 s of the
+acceptance, and a live card renewed for a minute had moved out of that window,
+which brought back the 25 Oct mix-up where one Carbon haul took the other's card.
+
+One check says less live than it does from a file: a renewed live kiosk's
+wallet is checked against the newest balance *before* it, which is the same
+reading's previous version a few seconds older, so it reads as matching. The
+ledger's baseline is still right; only that verdict in the Log carries no news. A live reading
+has no file, so the Log page offers no "Read again" for one, and the queues that
+re-read old screenshots (`Unmeasured`, `Misfiled`, `Doubtful`, `Unjoined`) skip
+it because they ask for the file first.
+
+Not yet checked on real footage: none of the recordings on this machine shows a
+terminal or a mobiGlas app for long (the 2026-11-05 OBS recording is combat,
+the Elguapoe and Risbo streams are mining), so how often a live kiosk or Fleet
+frame reads as fully as a screenshot of it is still unmeasured.
+
+### The Freight Manager (1.1.24)
+
+`ScreenKind.Freight`, the hangar's freight terminal, written from frames of a
+4.10 video rather than this install - the evidence is in
+[delivery-run.md](delivery-run.md#what-the-freight-manager-shows-1124). Read
+whole by Windows and anchored on `FREIGHT MANAGER`, which it read on all 35
+frames; checked before the commodity kiosk, whose rows a confirmation's tiles
+resemble. Two stages: `list` (the elevator's and warehouse's capacity, each
+contract's issuer and title) and `confirm` (per contract its title, time
+remaining, and each crate size with its commodity). `FreightSecondLook` reads
+each tile again at ×2 with the panel reader, for the commodity's spelling and a
+size whose digit the whole read lost. On the four fixture frames, through the
+same path the live loop takes: every title, three of four capacities (the
+fourth read `n Isooo`, past folding back), all six tiles' sizes, five of six
+commodities - the sixth is under the pilot's cursor.
+
+**Crate counts are not taken**, and the negative result is the point of
+writing it down: the `11/11` under a tile read as `1/1` on about half the ONNX
+reads at every scale and patch tried, which is a manifest 80 SCU short that
+looks right. Kept live like the other screens: the list as one reading, a
+confirmation as one per set of contracts on it. It was up five or six seconds
+each time on the video; a pilot who clicks CONFIRM straight away leaves
+nothing behind.
+
+This install has four frames of the same terminal (12 Sep, 24 Oct), seen at an
+angle: Windows' `TextAngle` was 7.4, 10.5, 10.3 and -5.3 degrees on them, and
+-3.6 to 2.1 on the video's. Its word boxes are positions in a copy of the frame
+it has turned straight, not in the frame - rotating them back by `+TextAngle`
+about the frame's centre lands within a few pixels of ONNX's own boxes (24 Oct
+21:58: `B SCu` at 1409,612 → 1433,558 against ONNX's 1431,559; the video's
+3:42: 892,607 → 886,632 against 887,628). Uncorrected, a close read sized off a
+Windows line looks 50 px from the tile on a 10° frame, which is how the next
+contract's title was taken for a tile's commodity. 1.1.24 reads these frames
+without the correction.
+
+**1.1.25: close reads are cut where the text is.** `WindowsScreenReader`
+keeps the angle of each whole read (`ITiltedReader`), and every second look in
+`ScreenInsightService` goes through `ScreenGeometry.Straight`: the patch, worked
+out from the whole read's lines, is turned onto the frame (the box around its
+four turned corners) and read there. The whole read's lines are **left in the
+engine's straightened copy**. Turning them all onto the frame was tried first,
+and it slanted the Fleet Manager's rows on a frame at -8.1 degrees and lost a
+ship from it. What a second look reads comes back into that copy when it is
+added to the whole read's lines (the wallet, the Freight Manager), and stays on
+the frame when the look parses its patch alone (the mining scan panel, which is
+HUD type drawn level even when the engine's angle for the frame is not).
+
+Measured over all 155 screenshots in this install's folder, before and after,
+reader by reader (the run before was repeated and matched itself exactly): 3
+changed, none for the worse. The Freight Manager's four frames went from 6 of
+13 crate tiles with a commodity named to 11 (CARBON and POTASSIUM on 24 Oct),
+and a 19 Sep loadout frame now reads its
+balance, 2,316,338 aUEC - the figure three screenshots seconds earlier had read,
+which this one did not use. No kind changed; the 25 Rep readings, 38 Contracts
+and 5 Fleet frames are identical.
+
+A negative result from the same run: the first attempt also turned a 3 Oct
+mining scan from unreadable into Raw Silicon, 4,294 kg, and that was luck. The
+panel's close read flips between all and nothing when its patch moves by a
+pixel - 2615.8,522.5 read the panel, 2616.3,521.5 read nothing - because it needs
+two of four sizes to agree. It is not claimed as a fix.
 
 Not yet seen on a running game: the window class (`CryENGINE` is assumed, and a
 mismatch says what it found instead), how long the engine takes over a live

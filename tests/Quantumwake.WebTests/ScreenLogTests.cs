@@ -180,6 +180,58 @@ public class ScreenLogTests
         Assert.Contains("Open screenshot", page.NodeText("#screen-review-list"));
     }
 
+    /// <summary>
+    /// A mobiGlas screen kept live is kept for the balance in its bar, and has
+    /// no capture to open: it is in the log, not in the queue for a reader.
+    /// </summary>
+    [Fact]
+    public void A_mobiglas_screen_kept_live_for_its_balance_is_not_queued_for_review()
+    {
+        const string live = """
+            {"shot":"live-20261107-200006","shotAt":"2026-11-07T20:00:06Z","kind":"MobiGlas",
+             "summary":"a mobiGlas screen this app cannot read yet","tookMs":150,"checks":[],
+             "wallet":{"balance":2092773,"trouble":null},"lines":["Unmapped app"]}
+            """;
+
+        var page = Panel(readings: live);
+
+        Assert.True(page.Truth("__dom.node('#screen-review').hidden"));
+        Assert.Contains("read live from the screen", page.NodeText("#screen-readings"));
+    }
+
+    /// <summary>
+    /// The freight terminal's hand-over: each contract with its clock and its
+    /// crate sizes, a commodity that did not read said as read, and the count
+    /// it does not take said not to be taken rather than shown as nothing.
+    /// </summary>
+    [Fact]
+    public void A_freight_confirmation_lists_each_contracts_crates_and_says_the_count_is_not_read()
+    {
+        const string freight = """
+            {"shot":"live-20261107-200006","shotAt":"2026-11-07T20:00:06Z","kind":"Freight",
+             "summary":"the freight elevator: 2 contracts to hand over, crates of 8, 2 and 1 SCU","tookMs":290,"checks":[],
+             "freight":{"stage":"confirm","elevator":null,"warehouse":null,"orders":[
+               {"contractor":null,"title":"ROOKIE RANK - DIRECT EXTRA SMALL CARGO HAUL","secondsLeft":437,
+                "crates":[{"sizeScu":1,"commodityRead":"TUNGSTEN","commodity":"Tungsten"}]},
+               {"contractor":null,"title":"JUNIOR RANK - DIRECT MEDIUM CARGO HAUL","secondsLeft":737,
+                "crates":[{"sizeScu":8,"commodityRead":"SILICON","commodity":"Silicon"},{"sizeScu":2,"commodityRead":"SILICO","commodity":null}]}]},
+             "lines":[]}
+            """;
+
+        var page = Panel(readings: freight);
+        var log = page.NodeText("#screen-readings");
+
+        Assert.Contains("freight terminal", log);
+        Assert.Contains("cargo to hand over for 2 contracts", log);
+        Assert.Contains("JUNIOR RANK - DIRECT MEDIUM CARGO HAUL", log);
+        Assert.Contains("1 SCU of Tungsten", log);
+        Assert.Contains("8 SCU of Silicon", log);
+        Assert.Contains("2 SCU of “SILICO”", log);
+        Assert.Contains("does not read reliably", log);
+        // A freight reading is a screen the app reads, not one queued for a reader.
+        Assert.True(page.Truth("__dom.node('#screen-review').hidden"));
+    }
+
     // ---- the stream, and the toast ----
 
     private static void Frame(Page page, string events, string screen = "null") =>
@@ -382,6 +434,41 @@ public class ScreenLogTests
 
         // The cash card may have been drawn from the very reading set aside.
         Assert.Contains("GET /api/ledger/wallet", page.Fetched());
+    }
+
+    /// <summary>
+    /// A reading the live screen reader kept has no file behind it - the frame
+    /// was overwritten a moment later - so the log says where it came from and
+    /// offers no "Read again" that could only fail.
+    /// </summary>
+    [Fact]
+    public void A_reading_kept_live_says_so_and_is_not_offered_again()
+    {
+        var page = Panel(Kiosk.Replace("ScreenShot-K.jpg", "live-20261107-200002"));
+
+        var log = page.NodeText("#screen-readings");
+        Assert.Contains("read live from the screen", log);
+        Assert.DoesNotContain("live-20261107-200002", log);
+        Assert.Equal(0, page.Count("__dom.node('#screen-readings').byClass('screen-reread').length"));
+        Assert.Equal(1, page.Count("__dom.node('#screen-readings').byClass('screen-dismiss').length"));
+    }
+
+    /// <summary>
+    /// With the screen read live, the screenshot controls are the second way
+    /// in, and the panel says so beside them.
+    /// </summary>
+    [Fact]
+    public void The_screenshot_panel_says_when_live_reading_keeps_the_screens()
+    {
+        var page = Panel(Kiosk);
+        Assert.True(page.Truth("__dom.node('#screen-live-note').hidden"));
+
+        page.Do("liveState = {available:true, enabled:true, status:{state:'reading'}}; applyScreenMode();");
+        Assert.False(page.Truth("__dom.node('#screen-live-note').hidden"));
+        Assert.Contains("no screenshot needed", page.NodeText("#screen-live-note"));
+
+        page.Do("liveState = {available:true, enabled:false, status:{state:'off'}}; applyScreenMode();");
+        Assert.True(page.Truth("__dom.node('#screen-live-note').hidden"));
     }
 
     /// <summary>

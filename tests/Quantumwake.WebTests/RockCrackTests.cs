@@ -54,22 +54,22 @@ public class RockCrackTests
     }
 
     [Fact]
-    public void A_fixed_golem_head_keeps_its_modules_and_does_not_offer_other_lasers()
+    public void The_golem_offers_its_pitman_and_every_other_size_one_head()
     {
         var page = Opened();
         page.Do("""
-            crackModel.lasers.push({class:'Mining_Laser_DRAK_Golem_S1',name:'Pitman',size:1,power:3900,slots:2,bespoke:true});
-            crackModel.ships.push({class:'DRAK_Golem',name:'Drake Golem',heads:[{portId:'g',size:1,stock:'Mining_Laser_DRAK_Golem_S1',editable:false,note:'Fixed Pitman head — bespoke to the Golem. Mining modules remain configurable.'}]});
+            crackModel.lasers.push({class:'Mining_Laser_DRAK_Golem_S1',name:'Pitman',size:1,power:3900,slots:2,golemOnly:true});
+            crackModel.ships.push({class:'DRAK_Golem',name:'Drake Golem',heads:[{portId:'g',size:1,stock:'Mining_Laser_DRAK_Golem_S1',editable:true}]});
             renderCrackHeads();
             """);
+        // The Prospector is the flown ship: the Pitman is not one of its choices.
         Assert.DoesNotContain("Pitman", page.NodeText("#crack-heads"));
         page.Do("__dom.node('#crack-ship').value = 'DRAK_Golem'; renderCrackHeads(); await assessCrack();");
         var laser = "__dom.node('#crack-heads').querySelector('.crack-laser')";
-        Assert.True(page.Truth($"{laser}.disabled"));
-        Assert.Equal(1, page.Count($"{laser}.options.length"));
-        Assert.Equal(2, page.Count("__dom.node('#crack-heads').querySelectorAll('.crack-module').length"));
-        Assert.Contains("Fixed Pitman head", page.NodeText("#crack-heads"));
-        Assert.Contains("Stock head only", page.NodeText("#crack-matrix-note"));
+        Assert.False(page.Truth($"{laser}.disabled"));
+        Assert.Equal("Mining_Laser_DRAK_Golem_S1", page.Text($"{laser}.value"));
+        Assert.Equal(4, page.Count($"{laser}.options.length"));
+        Assert.Contains("Helix I", page.NodeText("#crack-heads"));
         Assert.Contains("\"ship\":\"DRAK_Golem\"", page.BodyOf("/api/mining/crack"));
     }
 

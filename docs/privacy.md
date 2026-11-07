@@ -45,8 +45,13 @@ send nothing about you.
   window about every two seconds - every second while a ship is targeted -
   the same pixels a screenshot would hold, and reads them on your machine
   like a screenshot. Each frame is overwritten by the next and deleted when
-  reading stops; what is kept is the reading of a mining scan panel, one per
-  rock. The ship you have targeted - its name, signatures, speed and whether
+  reading stops. What is kept is the reading - never the picture - of the
+  screens a screenshot would have been taken of: a mining scan panel, one
+  per rock, and since 1.1.21 the Fleet Manager, the map, a loadout, a
+  commodity kiosk, a refinery and the Contracts and Rep apps, one reading per
+  screen while it stays up, in the same reading log screenshots go to, and
+  since 1.1.22 your balance from the bar of any other mobiGlas screen. Item
+  tooltips and screens the app cannot read are not kept. The ship you have targeted - its name, signatures, speed and whether
   it is marked hostile - is held in memory for the combat page and never
   written down. The MFD's Target page can show the game's hologram of that
   ship, cut from the frame being read when the page asks and sent only to
