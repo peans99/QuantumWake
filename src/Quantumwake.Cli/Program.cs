@@ -70,6 +70,42 @@ if (GetOption(args, "--charge") is { } chargeFrames)
     return 0;
 }
 
+// --ping-places <game cache json>: the places with mineables, what spawns at
+// each, every table ore with no radar row (a spelling the two disagree on),
+// and how often a ping has more than one reading with and without the place.
+if (GetOption(args, "--ping-places") is { } pingCache)
+{
+    var pingInstall = GameInstallLocator.Preferred();
+    var game = Quantumwake.Core.GameData.GameCommodities.Load(pingInstall?.RootPath, pingCache);
+    var rows = Quantumwake.Core.GameData.GameRockSignatures.Radar(game.Mining.Signatures ?? []);
+    var places = PingPlaces.From(game.Spawns);
+    var shipOres = rows.Where(r => r.Kind == "ship").Select(r => PingPlaces.Ore(r.Name)).ToHashSet();
+    Console.WriteLine($"{rows.Count} radar rows, {places.Count} places");
+    foreach (var orphan in places.SelectMany(p => p.Ores).Distinct().Where(o => !shipOres.Contains(o)).Order())
+        Console.WriteLine($"  table ore with no radar row: {orphan}");
+
+    int pings = 0, manyAnywhere = 0, manyHere = 0, wrongHere = 0;
+    foreach (var place in places)
+    {
+        var here = PingPlaces.Rows(rows, place);
+        int placePings = 0, placeMany = 0, placeManyAnywhere = 0;
+        foreach (var row in here)
+        for (var n = 1; n <= 8; n++)
+        {
+            var ping = n * row.Signature;
+            var anywhere = PingReadout.Decode(ping, rows);
+            var narrowed = PingReadout.Decode(ping, here);
+            pings++; placePings++;
+            if (anywhere.Count > 1) { manyAnywhere++; placeManyAnywhere++; }
+            if (narrowed.Count > 1) { manyHere++; placeMany++; }
+            if (!narrowed.Any(m => m.Count == n && m.Signature == row.Signature)) wrongHere++;
+        }
+        Console.WriteLine($"{place.Name,-28} {place.System ?? "-",-8} {(place.Asteroids ? "field  " : "surface")} {here.Count,3} rows  ambiguous {placeManyAnywhere,3} -> {placeMany,3} of {placePings,3}  ores {string.Join(",", place.Ores.Order())}{(place.Hand ? " +hand" : "")}{(place.Ground ? " +ground" : "")}");
+    }
+    Console.WriteLine($"Pings {pings}: more than one reading anywhere {manyAnywhere} ({manyAnywhere * 100.0 / pings:0}%), at the place {manyHere} ({manyHere * 100.0 / pings:0}%); true reading lost {wrongHere}");
+    return 0;
+}
+
 // --hud <frames> [--lines <dumps>]: the missile band read up close on every
 // frame, and - from the whole-frame dumps the Windows engine wrote, one .txt
 // a frame as "[ left top hN]  text" - the territory banner and the mission's

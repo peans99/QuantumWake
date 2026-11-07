@@ -1058,10 +1058,16 @@ window.QwMfd = (() => {
         const fracture = live.status?.fracture;
         // A ping read in the last two minutes leads while no rock is being cracked.
         const ping = fracture?.ping && fracture.pingAt && (view.now ?? Date.now()) - new Date(fracture.pingAt).getTime() < 120000 ? fracture.ping : null;
-        const pingRows = ping ? [[say('PING · {value}', { value: Math.round(ping.value).toLocaleString('en-US') }),
-          (ping.matches || []).length
-            ? ping.matches.slice(0, 3).map(m => `${m.count} × ${m.name}`).join(' · ')
-            : say('No whole number of one rock')]] : [];
+        // A wanted rock is starred, and the place a ping was read against is
+        // given: a reading against every rock is a wider guess than one
+        // against Daymar.
+        const pingText = (p) => (p.matches || []).length
+          ? p.matches.slice(0, 3).map(m => `${m.wanted ? '★ ' : ''}${m.count} × ${m.name}`).join(' · ')
+          : say('No whole number of one rock');
+        const pingRows = ping ? [[say('PING · {value}', { value: Math.round(ping.value).toLocaleString('en-US') }), pingText(ping)],
+          ...(ping.place ? [[say('READ AGAINST'), ping.place.toUpperCase()]] : []),
+          // The sweep so far, after the one leading: a field to come back to.
+          ...(fracture.pings || []).slice(1, 4).map(p => [say('EARLIER · {value}', { value: Math.round(p.value).toLocaleString('en-US') }), pingText(p)])] : [];
         if (!fracture?.active) return [...pingRows, ['NOT FRACTURING', fracture?.cracked
           ? sayn(fracture.cracked, '{count} rock cracked this session', '{count} rocks cracked this session')
           : say('Fire the mining laser at a rock and its charge is read every second.')]];

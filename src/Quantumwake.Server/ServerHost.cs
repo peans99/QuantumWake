@@ -3852,6 +3852,14 @@ public static partial class ServerHost
                 ? Results.Problem($"no callout called '{body.Kind}'", statusCode: 400)
                 : Results.Ok(service.Describe(live)));
 
+        // How pings are read, from Mining → Radar: the place, the wanted
+        // rocks, and whether only those are said.
+        app.MapPost("/api/live/ping", (LivePing body, LiveScreenStore live, LiveScreenService service) =>
+        {
+            live.SetPing(body.Place, body.Wanted, body.WantedOnly);
+            return Results.Ok(service.Describe(live));
+        });
+
         // The game's hologram of the locked ship, cut from the frame being read;
         // see LiveScreenService.Hologram. Never cached: it is the frame of now.
         app.MapGet("/api/live/hologram", (LiveScreenService service, HttpContext ctx) =>

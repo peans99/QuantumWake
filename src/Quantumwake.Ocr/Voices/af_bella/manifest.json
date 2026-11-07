@@ -48,7 +48,8 @@
     "Objective failed": "p_objective_failed.m4a",
     "Contract complete": "p_contract_complete.m4a",
     "Contract failed": "p_contract_failed.m4a",
-    "Quantum Wake system online": "p_quantum_wake_system_online.m4a"
+    "Quantum Wake system online": "p_quantum_wake_system_online.m4a",
+    "wanted": "p_wanted.m4a"
   },
   "names": {
     "Aegis Avenger Stalker": "n_aegis_avenger_stalker.m4a",

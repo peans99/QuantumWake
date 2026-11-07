@@ -329,6 +329,7 @@
         <div class="value" id="now-fracture">&mdash;</div>
         <div class="fracture-meter" id="now-fracture-meter" hidden><span id="now-fracture-fill"></span></div>
         <div class="muted now-target-detail" id="now-fracture-detail"></div>
+        <ol class="fracture-pings" id="now-fracture-pings" hidden></ol>
       </article>
 
       <article class="card span2" id="now-target-card" data-card="target" hidden>
@@ -2767,6 +2768,19 @@
         <div id="radar-matches" aria-live="polite"></div>
       </div>
 
+      <!-- 1.1.15: how the live reader reads a ping - against the place the log
+           puts the pilot, or one picked here - and which rocks are worth a call. -->
+      <div class="radar-live" id="radar-live" hidden>
+        <h4 class="spaced">Pings read live</h4>
+        <div class="radar-live-row">
+          <label><span>Read pings against</span>
+            <select id="radar-place"></select>
+          </label>
+          <label class="toggle"><input type="checkbox" id="radar-wanted-only"><span>Only say wanted rocks <em class="muted">The rest are still listed on the Fracture card.</em></span></label>
+        </div>
+        <p class="muted small" id="radar-place-note"></p>
+      </div>
+
       <h4 class="spaced">Every rock's signature</h4>
       <div class="table-wrap">
         <table id="radar-table">
@@ -2778,6 +2792,7 @@
             <th>Found</th>
             <th class="num">×2</th><th class="num">×3</th><th class="num">×4</th>
             <th class="num">×5</th><th class="num">×6</th>
+            <th title="Said with &ldquo;wanted&rdquo; after it, and the only rocks said when Only say wanted rocks is on">Wanted</th>
           </tr></thead>
           <tbody></tbody>
         </table>

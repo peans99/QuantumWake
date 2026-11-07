@@ -504,6 +504,37 @@ Complete and 40 Contract Failed. Each is logged several times under one
 notification number; a number and text seen in the last minute is the same
 toast, and one more than 30 s old is the start-up read of the log.
 
+### A ping read against the place (1.1.15)
+
+Two community tools do what the ping readout does, and were looked at for
+what they add: Miner Scanner Tool (miner-scanner.com, Python, a hand-filled
+table, an ore colour each and a filter by system) and SC_Signature_Scanner
+(github.com/Diftic, Python/EasyOCR on screenshots, a detection log, tier
+colours, salvage panels at 2,000 each). Both need a capture box drawn by hand;
+the readout here finds its box. What was taken: the place, wanted rocks, and
+the log of pings.
+
+The install's `HarvestableProviderPreset`s give 45 places with mineables
+(`--ping-places` in the CLI prints them), each with a SpaceShip group naming
+the ship rocks by deposit ("Riccite Ore", "Aluminium Ore", "Sileron Ore") and
+FPS and GroundVehicle groups. Spelt alike with the radar rows' ores (Aluminium
+→ aluminum, Sileron → stileron), every table ore has a radar row. Asteroid
+fields are the places named for a belt, ring, halo, cluster, Lagrange point or
+Pyro's Cool/Warm/DeepSpace fields; the rest are bodies.
+
+Over every ping a place's own rocks can make (1 to 8 of each, 4,864 pings),
+more than one reading fits 16% against every rock and 10% against the place,
+and the true reading is never dropped. Fields fall to 0-4 of 104-160; bodies
+barely move (22 → 18-20 of 64-128), because hand (3,000) and ground (4,000)
+deposits are on every surface and their multiples meet.
+
+The place is the log's body, then its place, then the quantum target, matched
+by name exactly; nothing maps the log's Lagrange stations to the tables'
+Lagrange A-G, so those are picked by hand. A ping the place cannot read is
+read against every rock and shown with no place - with RisboTheBlade's Riccite
+video's frames replayed and Lagrange A picked (no Riccite there), 10,155 still came
+out three Riccite.
+
 ---
 
 ## What other people already built

@@ -6305,5 +6305,21 @@
   "Overcharge": "Surcharge",
   "Rock cracked": "Roche fracturée",
   "Radar ping": "Ping radar",
-  "Ship HUD online": "HUD du vaisseau en ligne"
+  "Ship HUD online": "HUD du vaisseau en ligne",
+  "Pings read live": "Signaux lus en direct",
+  "Read pings against": "Lire les signaux par rapport à",
+  "Only say wanted rocks <em class=\"muted\">The rest are still listed on the Fracture card.</em>": "Ne dire que les roches voulues <em class=\"muted\">Les autres restent listées sur la carte Fracture.</em>",
+  "Wanted: said with “wanted” after it": "Voulue : dite suivie de « wanted »",
+  "Where the log puts you ({place})": "Là où le journal vous place ({place})",
+  "Where the log puts you": "Là où le journal vous place",
+  "Every rock, anywhere": "Toutes les roches, partout",
+  "{place} · asteroid field": "{place} · champ d’astéroïdes",
+  "Pings are read against every rock.": "Les signaux sont lus par rapport à toutes les roches.",
+  "Pings are read against the rocks that spawn at {place}, as picked here.": "Les signaux sont lus par rapport aux roches qui apparaissent à {place}, choisi ici.",
+  "Pings are read against the rocks that spawn at {place}, where the log puts you. A field with no ground deposits drops them, and a moon drops the asteroid classes.": "Les signaux sont lus par rapport aux roches qui apparaissent à {place}, là où le journal vous place. Un champ sans gisements au sol les écarte, et une lune écarte les classes d’astéroïdes.",
+  "The log does not put you anywhere with a deposit table yet, so pings are read against every rock. Pick the place if you know it.": "Le journal ne vous place encore nulle part qui ait une table de gisements, donc les signaux sont lus par rapport à toutes les roches. Choisissez le lieu si vous le connaissez.",
+  "Read against the rocks at {place}": "Lu par rapport aux roches de {place}",
+  "Read against every rock": "Lu par rapport à toutes les roches",
+  "READ AGAINST": "LU POUR",
+  "EARLIER · {value}": "AVANT · {value}"
 }

@@ -8804,6 +8804,7 @@ function renderRadar() {
 
   const body = $('#radar-table tbody');
   body.textContent = '';
+  radarWantedBoxes = [];
   for (const row of radarModel.rows) {
     const tr = el('tr');
     tr.dataset.kind = row.kind;
@@ -8820,8 +8821,17 @@ function renderRadar() {
     tr.append(el('td', null, radarTier(row.tier)));
     tr.append(el('td', null, radarFound(row)));
     for (let n = 2; n <= 6; n++) tr.append(el('td', 'num', fmtInt(row.signature * n)));
+    const want = el('input');
+    want.type = 'checkbox';
+    want.dataset.wanted = radarSpokenName(row);
+    want.title = tx('Wanted: said with “wanted” after it');
+    radarWantedBoxes.push(want);
+    const wantCell = el('td', 'radar-wanted');
+    wantCell.append(want);
+    tr.append(wantCell);
     body.append(tr);
   }
+  syncRadarWanted();
 
   $('#radar-note').textContent = tx('{rows} rows from {read} rocks in the install. {unplaced} more are templates, test rocks or rocks no deposit places, and are left out.',
     { rows: radarModel.rows.length, read: radarModel.read, unplaced: radarModel.unplaced });
@@ -8864,6 +8874,108 @@ function renderRadarMatches() {
 }
 
 $('#radar-ping')?.addEventListener('input', renderRadarMatches);
+
+/* ---------- Mining → Radar: how pings are read live (1.1.15) ---------- */
+
+/** The Wanted boxes the table drew, to tick from what the server says without redrawing the table. */
+let radarWantedBoxes = [];
+let radarPlacesDrawn = '';
+
+/**
+ * A rock as the voice says it, in English whatever the page's language:
+ * the name the server marks wanted, so it has to be spelt its way.
+ */
+function radarSpokenName(row) {
+  if (row.kind === 'ship') return row.name;
+  if (row.kind === 'asteroid') return `${row.name.charAt(0)}-type asteroid`;
+  if (row.kind === 'hand') return 'Hand-mining deposit';
+  if (row.kind === 'ground') return 'Ground-vehicle deposit';
+  return 'Older deposit rock';
+}
+
+/** Ticks the Wanted boxes from /api/live; greys them where nothing reads pings. */
+function syncRadarWanted() {
+  const pings = liveState?.available ? liveState.pings : null;
+  const wanted = new Set(pings?.wanted || []);
+  for (const box of radarWantedBoxes) {
+    box.checked = wanted.has(box.dataset.wanted);
+    box.disabled = !pings;
+  }
+}
+
+/**
+ * The Radar page's live block: which place pings are read against - where
+ * the log puts the pilot, every rock, or a place picked here - and whether
+ * only wanted rocks are said. Only where the screen can be read live.
+ */
+function renderRadarLive() {
+  const block = $('#radar-live');
+  if (!block) return;
+  const pings = liveState?.available ? liveState.pings : null;
+  block.hidden = !pings;
+  syncRadarWanted();
+  if (!pings) return;
+
+  const select = $('#radar-place');
+  const value = pings.place == null ? 'auto' : pings.place;
+  const drawn = JSON.stringify([pings.here, (pings.places || []).map((p) => p.name)]);
+  if (select && drawn !== radarPlacesDrawn) {
+    radarPlacesDrawn = drawn;
+    select.replaceChildren();
+    const option = (val, text) => {
+      const o = el('option', null, text);
+      o.value = val;
+      return o;
+    };
+    select.append(option('auto', pings.here
+      ? tx('Where the log puts you ({place})', { place: pings.here })
+      : tx('Where the log puts you')));
+    select.append(option('*', tx('Every rock, anywhere')));
+    for (const p of pings.places || [])
+      select.append(option(p.name, p.asteroids ? tx('{place} · asteroid field', { place: p.name }) : p.system ? `${p.name} · ${p.system}` : p.name));
+  }
+  if (select) select.value = value;
+
+  const only = $('#radar-wanted-only');
+  if (only) only.checked = Boolean(pings.wantedOnly);
+
+  const note = $('#radar-place-note');
+  if (note) {
+    note.textContent = pings.place === '*' ? tx('Pings are read against every rock.')
+      : pings.place ? tx('Pings are read against the rocks that spawn at {place}, as picked here.', { place: pings.place })
+        : pings.here ? tx('Pings are read against the rocks that spawn at {place}, where the log puts you. A field with no ground deposits drops them, and a moon drops the asteroid classes.', { place: pings.here })
+          : tx('The log does not put you anywhere with a deposit table yet, so pings are read against every rock. Pick the place if you know it.');
+  }
+}
+
+/** Posts how pings are read; whatever is left out stays as the server has it. */
+async function postPing(event, body) {
+  try {
+    const response = await fetch('/api/live/ping', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(`ping ${response.status}`);
+    liveState = await response.json();
+    renderLiveScreen();
+  } catch {
+    if (event.target.type === 'checkbox') event.target.checked = !event.target.checked;
+    const note = $('#radar-place-note');
+    if (note) note.textContent = tx('The change did not save.');
+  }
+}
+
+$('#radar-place')?.addEventListener('change', (event) => postPing(event, { place: event.target.value }));
+$('#radar-wanted-only')?.addEventListener('change', (event) => postPing(event, { wantedOnly: event.target.checked }));
+$('#radar-table')?.addEventListener('change', (event) => {
+  const name = event.target?.dataset?.wanted;
+  if (!name) return;
+  const wanted = new Set(liveState?.pings?.wanted || []);
+  if (event.target.checked) wanted.add(name);
+  else wanted.delete(name);
+  postPing(event, { wanted: [...wanted] });
+});
 
 /* ---------- the Mining page's five panes ---------- */
 
@@ -36412,6 +36524,7 @@ function renderLiveScreen() {
   renderNowTarget();
   renderNowFracture();
   renderCalloutSettings();
+  renderRadarLive();
 
   const block = $('#live-block');
   if (!block) return;
@@ -36571,8 +36684,27 @@ function renderNowFracture() {
   const calls = fracture?.callouts || [];
   // A ping read in the last two minutes is still the rock being flown to.
   const ping = fracture?.ping && fracture.pingAt && Date.now() - new Date(fracture.pingAt).getTime() < 120000 ? fracture.ping : null;
-  card.hidden = !fracture || !(fracture.active || fracture.cracked || calls.length || ping);
+  // The sweep: every ping this session, newest first, while the newest is
+  // under ten minutes old - long enough to fly the field and come back.
+  const pings = (fracture?.pings || []).filter((p) => p.at);
+  const sweep = pings.length && Date.now() - new Date(pings[0].at).getTime() < 600000 ? pings : [];
+  card.hidden = !fracture || !(fracture.active || fracture.cracked || calls.length || ping || sweep.length);
   if (card.hidden) return;
+
+  const list = $('#now-fracture-pings');
+  if (list) {
+    list.hidden = fracture.active || sweep.length < 2;
+    list.replaceChildren();
+    if (!list.hidden) {
+      for (const p of sweep.slice(0, 8)) {
+        const li = el('li', p.wanted ? 'fracture-ping fracture-ping-wanted' : 'fracture-ping');
+        li.append(el('span', 'muted', new Date(p.at).toLocaleTimeString(QW_DATE_LOCALES, { hour: '2-digit', minute: '2-digit' })));
+        li.append(el('b', null, ` ${Math.round(p.value).toLocaleString()} `));
+        li.append(el('span', null, pingSaid(p)));
+        list.append(li);
+      }
+    }
+  }
 
   const state = fracture.active ? fracture.state : null;
   card.classList.toggle('fracture-in', state === 'in');
@@ -36593,7 +36725,8 @@ function renderNowFracture() {
   $('#now-fracture-fill').style.width = fill + '%';
   $('#now-fracture-detail').textContent = fracture.active
     ? tx('Crack {fill}% · {count} cracked so far', { fill, count: fracture.cracked || 0 })
-    : fracture.lastCrackAt ? tx('Last at {when}', { when: new Date(fracture.lastCrackAt).toLocaleTimeString(QW_DATE_LOCALES) }) : '';
+    : ping ? (ping.place ? tx('Read against the rocks at {place}', { place: ping.place }) : tx('Read against every rock'))
+      : fracture.lastCrackAt ? tx('Last at {when}', { when: new Date(fracture.lastCrackAt).toLocaleTimeString(QW_DATE_LOCALES) }) : '';
 }
 
 /**
@@ -36604,7 +36737,7 @@ function renderNowFracture() {
 function pingSaid(ping) {
   const matches = ping.matches || [];
   if (!matches.length) return tx('No whole number of one rock');
-  return matches.slice(0, 3).map((m) => `${m.count} × ${m.name}${m.tier ? ` (${radarTier(m.tier)})` : ''}`).join(tx(' or '));
+  return matches.slice(0, 3).map((m) => `${m.wanted ? '★ ' : ''}${m.count} × ${m.name}${m.tier ? ` (${radarTier(m.tier)})` : ''}`).join(tx(' or '));
 }
 
 /** Posts the voice switches; a kind left out stays as the server has it. */

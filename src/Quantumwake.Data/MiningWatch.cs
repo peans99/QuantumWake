@@ -10,6 +10,7 @@ namespace Quantumwake.Data;
 /// <param name="Callouts">The last few things said, newest first.</param>
 /// <param name="Ping">The last radar signature read and what it decodes to, while it is recent.</param>
 /// <param name="PingAt">When it was read.</param>
+/// <param name="Pings">The pings read this session, newest first - a sweep across a field to come back to.</param>
 public sealed record MiningPicture(
     bool Active,
     string? State,
@@ -19,7 +20,15 @@ public sealed record MiningPicture(
     DateTimeOffset? LastCrackAt,
     IReadOnlyList<CombatCallout> Callouts,
     PingReading? Ping = null,
-    DateTimeOffset? PingAt = null);
+    DateTimeOffset? PingAt = null,
+    IReadOnlyList<PingReading>? Pings = null);
+
+/// <summary>How a ping is to be read: against which place, and which rocks the pilot is after.</summary>
+/// <param name="Place">The place to read against, or null for every rock.</param>
+/// <param name="Chosen">The pilot picked it, rather than the log's location.</param>
+/// <param name="Wanted">Rocks marked wanted on Mining → Radar, by the name the voice says.</param>
+/// <param name="WantedOnly">Say only pings that could be a wanted rock; the rest are still listed.</param>
+public sealed record PingOptions(PingPlace? Place = null, bool Chosen = false, IReadOnlySet<string>? Wanted = null, bool WantedOnly = false);
 
 /// <summary>
 /// Turns the charge read each second into the moments worth saying while a
@@ -124,7 +133,12 @@ public sealed class MiningWatch
 
     public MiningPicture Picture() => new(
         _active, _active ? _state : null, _active ? _fill : 0, _active ? _belowBy : null,
-        _cracked, _lastCrack, [.. Enumerable.Reverse(_said).Take(8)], _ping, _pingAt);
+        _cracked, _lastCrack, [.. Enumerable.Reverse(_said).Take(8)], _ping, _pingAt, [.. Enumerable.Reverse(_pings)]);
+
+    /// <summary>The most pings kept: a sweep of one field, not the evening.</summary>
+    public const int PingsKept = 12;
+
+    private readonly List<PingReading> _pings = [];
 
     private PingReading? _ping;
     private DateTimeOffset? _pingAt;
@@ -138,16 +152,51 @@ public sealed class MiningWatch
     /// agree on it, and not again for half a minute: the pilot sweeping across
     /// the same cluster is not news, a different figure is.
     /// </summary>
-    public IReadOnlyList<CombatCallout> SeePing(double? value, IReadOnlyList<Quantumwake.Core.GameData.RadarRow> rows, DateTimeOffset at)
+    /// <remarks>
+    /// The ping is read against the rocks that spawn at the place in
+    /// <paramref name="options"/>, and against every rock when none of those
+    /// reads it: a figure that is a whole number of a rock the table says is
+    /// not here says more about the place being wrong - the log's guess, or a
+    /// pick left over from the last session - than about the radar. Every agreed ping
+    /// goes into the history - a different figure, or the same one after half
+    /// a minute - and with <see cref="PingOptions.WantedOnly"/> only the ones
+    /// that could be a wanted rock are said.
+    /// </remarks>
+    public IReadOnlyList<CombatCallout> SeePing(double? value, IReadOnlyList<Quantumwake.Core.GameData.RadarRow> rows, DateTimeOffset at,
+        PingOptions? options = null)
     {
         var now = new List<CombatCallout>();
         if (value is not { } v) { _pingPending = null; return now; }
 
         if (_pingPending != v) { _pingPending = v; return now; }
 
-        _ping = new PingReading(v, PingReadout.Decode(v, rows));
+        var place = options?.Place;
+        var here = PingPlaces.Rows(rows, place);
+        var decoded = PingReadout.Decode(v, here);
+        if (ReferenceEquals(here, rows)) place = null;          // nothing at the place to read against
+        else if (decoded.Count == 0)
+        {
+            decoded = PingReadout.Decode(v, rows);
+            if (decoded.Count > 0) place = null;
+        }
+
+        var (matches, wanted) = PingReadout.Wanted(decoded, options?.Wanted);
+        _ping = new PingReading(v, matches, place?.Name, options?.Chosen ?? false, wanted, at);
         _pingAt = at;
+
+        // Held on one contact, the same figure every few seconds is one entry
+        // brought up to date; the same figure after half a minute away is
+        // another rock of the same size.
+        if (_pings.Count > 0 && _pings[^1].Value == v && at - (_pings[^1].At ?? at) <= TimeSpan.FromSeconds(30))
+            _pings[^1] = _ping;
+        else
+        {
+            _pings.Add(_ping);
+            if (_pings.Count > PingsKept) _pings.RemoveAt(0);
+        }
+
         if (_pingSaid == v && at - _pingSaidAt < TimeSpan.FromSeconds(30)) return now;
+        if (options?.WantedOnly == true && !wanted) return now;
         if (PingReadout.Sentence(_ping) is not { } sentence) return now;
 
         _pingSaid = v;

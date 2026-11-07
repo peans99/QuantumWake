@@ -69,10 +69,21 @@ public sealed record GameCapture(bool Taken, string? Why = null, int Width = 0, 
 /// a callout added in a later version is heard rather than silently missing
 /// from an answer saved before it existed.
 /// </param>
+/// <param name="PingPlace">
+/// The place pings are read against: null to take it from where the log puts
+/// the pilot, <see cref="Anywhere"/> for every rock, or a place's name from
+/// <see cref="PingPlaces"/>.
+/// </param>
+/// <param name="Wanted">The rocks the pilot is after, by the name the voice says - "Quantainium", "Hand-mining deposit".</param>
+/// <param name="WantedOnly">Say only pings that could be a wanted rock.</param>
 public sealed record LiveScreenSettings(
     bool Asked = false, bool Enabled = false, DateTimeOffset? AnsweredAt = null, bool Voice = false,
-    bool VoiceCombat = true, bool VoiceMining = true, bool VoiceMissions = true, IReadOnlyList<string>? Muted = null)
+    bool VoiceCombat = true, bool VoiceMining = true, bool VoiceMissions = true, IReadOnlyList<string>? Muted = null,
+    string? PingPlace = null, IReadOnlyList<string>? Wanted = null, bool WantedOnly = false)
 {
+    /// <summary>The <see cref="PingPlace"/> that reads a ping against every rock.</summary>
+    public const string Anywhere = "*";
+
     /// <summary>Whether a combat callout is said now.</summary>
     public bool SpeaksCombat => Voice && VoiceCombat;
 
@@ -166,6 +177,28 @@ public sealed class LiveScreenStore
                 VoiceCombat = combat ?? _current.VoiceCombat,
                 VoiceMining = mining ?? _current.VoiceMining,
                 VoiceMissions = missions ?? _current.VoiceMissions,
+            };
+            Save();
+            return _current;
+        }
+    }
+
+    /// <summary>
+    /// How pings are read: the place ("auto" for the log's, <see cref="LiveScreenSettings.Anywhere"/>
+    /// for none, or a name), the wanted rocks, and whether only those are said.
+    /// Anything not sent stays as it was.
+    /// </summary>
+    public LiveScreenSettings SetPing(string? place = null, IReadOnlyList<string>? wanted = null, bool? wantedOnly = null)
+    {
+        lock (_gate)
+        {
+            _current = _current with
+            {
+                PingPlace = place is null ? _current.PingPlace
+                    : place.Equals("auto", StringComparison.OrdinalIgnoreCase) || place.Length == 0 ? null : place,
+                Wanted = wanted is null ? _current.Wanted
+                    : wanted.Count == 0 ? null : [.. wanted.Where(w => !string.IsNullOrWhiteSpace(w)).Distinct(StringComparer.Ordinal)],
+                WantedOnly = wantedOnly ?? _current.WantedOnly,
             };
             Save();
             return _current;

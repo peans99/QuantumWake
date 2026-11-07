@@ -352,7 +352,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.1.14
+### 1.1.15
+
+**Pings read against where you are.** A radar ping is a count times one rock's signature, and some rocks share a signature: I-type asteroids, ground-vehicle deposits and older deposit rocks all read 4,000, so 12,000 alone could be three of any of them. Your install's own deposit tables say which rocks spawn at each of 45 places, so a ping is now read against the rocks of the place you are at: an asteroid field drops ground deposits, a moon drops the asteroid classes, and a ship rock that does not spawn there is left out. The place comes from the game log - the moon or planet you are at, or where you are jumping to - or you can pick it yourself under Mining → Radar, including "Every rock, anywhere". In the tables, a ping has more than one possible reading 16% of the time against every rock and 10% against the place; in asteroid fields it falls to 0-3%, and on moons it barely moves, because hand-mining and ground-vehicle deposits are both on every surface. A ping that none of the place's rocks can explain is read against every rock instead, and says so, since the more likely mistake is the place. The log does not name Lagrange points or belts in a way that matches the tables, so for those, pick the place yourself. This has been checked against recorded frames, not yet in a game where the log has a location to give.
+
+**Wanted rocks.** Tick the rocks you are after in the new Wanted column on Mining → Radar and Bella says "wanted" after them - "Three Riccite, wanted" - with a wanted reading put first when a figure has two. "Only say wanted rocks" keeps her quiet about everything else while you sweep a field; the rest are still listed.
+
+**The sweep, kept.** Every ping you hold a contact on is now kept for the session, so you can sweep a field and then go back to the best rock: the Fracture card on the Now page lists them with the time, the figure, what it reads as (wanted rocks starred) and the place it was read against, and the MFD's Charge page shows the last three below the newest. Holding the same contact is one entry, not one a second.
 
 **Every sound has its own switch.** A new Callouts group in Settings lists every sentence the voice can say - eighteen of them, under Ship, Combat, Missions and Mining - each with its own switch and a Hear it button. Switching one off only stops it being said; it is still listed on the page. The Log page's Combat and Mining switches still quiet a whole activity at once, and gain a third, Missions. Everything is on unless you turn it off, and an answer saved by an older version keeps every sound on.
 

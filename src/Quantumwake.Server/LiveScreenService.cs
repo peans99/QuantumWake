@@ -50,7 +50,23 @@ public sealed record LiveScreenState(
     bool VoiceCombat = true,
     bool VoiceMining = true,
     bool VoiceMissions = true,
-    IReadOnlyList<CalloutSwitch>? Callouts = null);
+    IReadOnlyList<CalloutSwitch>? Callouts = null,
+    PingSettings? Pings = null);
+
+/// <summary>How pings are read, for Mining → Radar.</summary>
+/// <param name="Place">The pilot's choice: null for where the log puts them, "*" for every rock, or a place.</param>
+/// <param name="Here">The place the log puts them at now, when it is one with a deposit table.</param>
+/// <param name="Places">Every place with mineables, to pick from.</param>
+/// <param name="Wanted">The rocks marked wanted, by the name the voice says.</param>
+/// <param name="WantedOnly">Whether only those are said.</param>
+public sealed record PingSettings(string? Place, string? Here, IReadOnlyList<PingPlaceName> Places, IReadOnlyList<string> Wanted, bool WantedOnly);
+
+/// <summary>A place to pick, with its system and whether it is an asteroid field.</summary>
+public sealed record PingPlaceName(string Name, string? System, bool Asteroids);
+
+/// <summary>How pings are read, posted to <c>/api/live/ping</c>; anything left out stays as it was.</summary>
+/// <param name="Place">"auto", "*" or a place's name.</param>
+public sealed record LivePing(string? Place = null, IReadOnlyList<string>? Wanted = null, bool? WantedOnly = null);
 
 /// <summary>One row of Settings → Callouts.</summary>
 /// <param name="On">Its own switch; the voice and the group's switch still have to be on too.</param>
@@ -105,7 +121,8 @@ public sealed class LiveScreenService(
     IGameScreenCapture? capture = null,
     LiveFrameLog? frames = null,
     ICalloutVoice? voice = null,
-    NearbyHulls? nearby = null) : BackgroundService
+    NearbyHulls? nearby = null,
+    LiveSessionService? session = null) : BackgroundService
 {
     /// <summary>The tick, at a fight's pace. Out of a fight every other tick is skipped.</summary>
     private static readonly TimeSpan Every = TimeSpan.FromSeconds(1);
@@ -158,7 +175,34 @@ public sealed class LiveScreenService(
         return new LiveScreenState(Available, Unavailable, answer.Asked, answer.Enabled, answer.AnsweredAt,
             Available && !answer.Asked, status, answer.Voice, voice is not null, voice?.Trouble,
             answer.VoiceCombat, answer.VoiceMining, answer.VoiceMissions,
-            [.. Callouts.All.Select(k => new CalloutSwitch(k.Kind, k.Group, k.Name, k.Sample, !answer.IsMuted(k.Kind), voice?.VoiceFor(k.Sample)))]);
+            [.. Callouts.All.Select(k => new CalloutSwitch(k.Kind, k.Group, k.Name, k.Sample, !answer.IsMuted(k.Kind), voice?.VoiceFor(k.Sample)))],
+            new PingSettings(answer.PingPlace, Here()?.Name,
+                [.. insight.PingPlaces().Select(p => new PingPlaceName(p.Name, p.System, p.Asteroids))],
+                answer.Wanted ?? [], answer.WantedOnly));
+    }
+
+    /// <summary>The place with a deposit table the log puts the pilot at: the body, the place, then where a jump is headed.</summary>
+    private PingPlace? Here()
+    {
+        if (session?.Current is not { } now) return null;
+        return PingPlaces.Find(insight.PingPlaces(), now.LocationBody, now.Location, now.TravellingTo);
+    }
+
+    /// <summary>The rows a ping is read against now, and how: the pilot's place, the log's, or every rock.</summary>
+    private (IReadOnlyList<Quantumwake.Core.GameData.RadarRow> Rows, PingOptions Options) PingRows()
+    {
+        var answer = settings.Current;
+        var rows = insight.RadarRows();
+        var wanted = answer.Wanted is { Count: > 0 } w ? new HashSet<string>(w, StringComparer.Ordinal) : null;
+
+        PingPlace? place;
+        var chosen = answer.PingPlace is not null;
+        if (answer.PingPlace == LiveScreenSettings.Anywhere) place = null;
+        else if (chosen) place = PingPlaces.Find(insight.PingPlaces(), answer.PingPlace);
+        else place = Here();
+
+        // Narrowed in the mining watch, which falls back to every rock when the place reads nothing.
+        return (rows, new PingOptions(place, chosen, wanted, answer.WantedOnly));
     }
 
     /// <summary>
@@ -422,7 +466,8 @@ public sealed class LiveScreenService(
         {
             var ping = await insight.ReadPingAsync(frame, taken.Width, taken.Height, token);
             IReadOnlyList<CombatCallout> pinged;
-            lock (_gate) pinged = _mining.SeePing(ping, insight.RadarRows(), at);
+            var (rows, options) = PingRows();
+            lock (_gate) pinged = _mining.SeePing(ping, rows, at, options);
             Speak(pinged, "Ping");
         }
 

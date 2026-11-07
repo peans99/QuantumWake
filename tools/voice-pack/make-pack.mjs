@@ -26,7 +26,7 @@ if (!namesFile || !outRoot) {
 const phrases = [
   'Hostile target identified', 'Target identified', 'Target disabled', 'Target critical',
   'Hostile contact, likely', 'Unknown contact, likely', 'Hostile contact', 'Unknown contact',
-  'Hostile', 'likely', 'or',
+  'Hostile', 'likely', 'or', 'wanted',
   'In the window', 'Out of the window', 'Overcharge, back off', 'Rock cracked',
   'Missile inbound', 'Entering hostile territory', 'Escort hull', 'Objective health', 'below 50 percent', 'below 25 percent',
   'Quantum Wake system online', 'New objective', 'Objective complete', 'Objective failed', 'Contract complete', 'Contract failed',

@@ -9,12 +9,19 @@ namespace Quantumwake.Data;
 /// <param name="Name">The rock as a pilot says it - "Riccite", "Hand-mining deposit".</param>
 /// <param name="Tier">Its rarity, for ship rocks.</param>
 /// <param name="Signature">One rock's figure.</param>
-public sealed record PingMatch(int Count, string Name, string? Tier, double Signature);
+/// <param name="Wanted">A rock the pilot marked as wanted on Mining → Radar.</param>
+public sealed record PingMatch(int Count, string Name, string? Tier, double Signature, bool Wanted = false);
 
 /// <summary>A ping read off the HUD and what it is.</summary>
 /// <param name="Value">The figure as read.</param>
-/// <param name="Matches">Every exact reading, fewest rocks first; empty when it is no whole number of any one rock.</param>
-public sealed record PingReading(double Value, IReadOnlyList<PingMatch> Matches);
+/// <param name="Matches">Every exact reading, fewest rocks first, the pilot's wanted rocks ahead of the rest; empty when it is no whole number of any one rock.</param>
+/// <param name="Place">The place it was read against, when one was; see <see cref="PingPlaces"/>.</param>
+/// <param name="Chosen">That place was picked by the pilot rather than taken from where the log puts them.</param>
+/// <param name="Wanted">One of its readings is a rock the pilot marked as wanted.</param>
+/// <param name="At">When it was read.</param>
+public sealed record PingReading(
+    double Value, IReadOnlyList<PingMatch> Matches,
+    string? Place = null, bool Chosen = false, bool Wanted = false, DateTimeOffset? At = null);
 
 /// <summary>
 /// The mining radar's signature readout - the boxed figure with a pin icon
@@ -99,8 +106,21 @@ public static partial class PingReadout
     public static string? Sentence(PingReading reading)
     {
         if (reading.Matches.Count == 0) return null;
-        string Say(PingMatch m) => $"{Numbers[m.Count]} {m.Name}";
+        // "wanted" straight after the rock it is about - "Two Quantainium,
+        // wanted, or Three Iron" - and Wanted() below has put that one first.
+        string Say(PingMatch m) => $"{Numbers[m.Count]} {m.Name}{(m.Wanted ? ", wanted" : "")}";
         return reading.Matches.Count == 1 ? Say(reading.Matches[0]) : $"{Say(reading.Matches[0])} or {Say(reading.Matches[1])}";
+    }
+
+    /// <summary>
+    /// The readings with the pilot's wanted rocks first, and whether there are
+    /// any; matches keep their fewest-first order within each half.
+    /// </summary>
+    public static (IReadOnlyList<PingMatch> Matches, bool Wanted) Wanted(IReadOnlyList<PingMatch> matches, IReadOnlySet<string>? wanted)
+    {
+        if (wanted is null || wanted.Count == 0) return (matches, false);
+        var hits = matches.Where(m => wanted.Contains(m.Name)).Select(m => m with { Wanted = true }).ToList();
+        return hits.Count == 0 ? (matches, false) : ([.. hits, .. matches.Where(m => !wanted.Contains(m.Name))], true);
     }
 
     /// <summary>The number words the voice pack records; see tools/voice-pack.</summary>

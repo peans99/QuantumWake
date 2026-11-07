@@ -381,6 +381,21 @@ public sealed class ScreenInsightService(
     private IReadOnlyList<Quantumwake.Core.GameData.RadarRow> _radar = [];
     private object? _radarFrom;
 
+    /// <summary>The places with mineables and what spawns at each, from the install's deposit tables; empty until read.</summary>
+    public IReadOnlyList<PingPlace> PingPlaces()
+    {
+        var spawns = library.GameCommodities.Spawns;
+        if (!ReferenceEquals(spawns, _placesFrom))
+        {
+            _places = Quantumwake.Data.PingPlaces.From(spawns);
+            _placesFrom = spawns;
+        }
+        return _places;
+    }
+
+    private IReadOnlyList<PingPlace> _places = [];
+    private object? _placesFrom;
+
     /// <summary>
     /// The fracture HUD's charge against its window, from pixels in
     /// <paramref name="area"/> - the search area on a first look, the bar's
