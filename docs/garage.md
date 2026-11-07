@@ -7,13 +7,14 @@ each on the Vulture and Reclaimer. The salvage modules remain non-editable
 as marked in that dataset. Existing caches discarded compatibility, so their
 heads are shown with a refresh explanation until Settings rebuilds the data.
 
-The Golem is an explicit exception: the inspected dump marks the Pitman port
-editable, indistinguishable from a generic S1 port. Neither that flag nor its
-ancestor flags detect the bespoke restriction. `IndustrialFit` enforces
-the restriction documented in [RSI's Golem Q&A](https://robertsspaceindustries.com/en/comm-link/engineering/20509-Q-A-Drake-Golem)
-by the stock Pitman class, including hull variants, while leaving modules
-available. This is a documented exception, not automatic detection from
-the dump's editability flag.
+The Golem used to be an exception and no longer is. Until 1.1.20 the Pitman
+was treated as bespoke, as [RSI's Golem Q&A](https://robertsspaceindustries.com/en/comm-link/engineering/20509-Q-A-Drake-Golem)
+described it, overriding the dump, which marks the port editable like any
+generic S1 port. On 2026-11-07 a pilot reported fitting a Helix I to a Golem
+in game, so the dump's flag was right and the override was wrong; the port
+now follows the flag. One part of the old rule stays: `IndustrialFit.IsGolemOnly`
+keeps the Pitman off other hulls' lists, because nobody has reported fitting
+it anywhere but a Golem. That is a gap in the evidence, not a known restriction.
 
 Plan for 0.13.0, written 2026-09-14 before any code. The question was whether
 the app can show every stat for one of your ships, let you try a different

@@ -18,7 +18,7 @@ public class GarageIndustrialTests
         var raw = Fixture("garage-industrial-ships.json");
         var ships = CommunityData.DigestShipStats(raw, parts);
         var slots = CommunityData.DigestShipSlots(raw);
-        Assert.False(slots.ContainsKey("DRAK_Golem"));
+        Assert.Contains(slots["DRAK_Golem"], s => s.Kind == "WeaponMining");
         var server = new ServerUnderTest();
         var directory = Path.Combine(server.DataDirectory, "community");
         Directory.CreateDirectory(directory);
@@ -58,26 +58,38 @@ public class GarageIndustrialTests
                 var fitted = await server.Posted($"/api/garage/{cls}/sheet", new { swaps = new Dictionary<string, string> { [id] = replacement } });
                 Assert.Contains(fitted.GetProperty("ports").EnumerateArray(), p => p.GetProperty("class").GetString() == replacement && p.GetProperty("changed").GetBoolean());
             }
+            // The Golem's head swaps like any S1 head: a pilot fitted a Helix I
+            // in game (2026-11-07), and the dump marks the port editable.
             var golem = await server.Get("/api/garage/DRAK_Golem");
-            var fixedHead = Assert.Single(golem.GetProperty("ports").EnumerateArray());
-            Assert.Contains("Fixed Pitman", fixedHead.GetProperty("fixedReason").GetString());
-            var golemPort = fixedHead.GetProperty("portId").GetString()!;
-            var forbidden = new { swaps = new Dictionary<string, string> { [golemPort] = "Mining_Laser_THCN_Helix_S1" } };
-            Assert.Equal(System.Net.HttpStatusCode.BadRequest, (await server.Post("/api/garage/DRAK_Golem/sheet", forbidden)).StatusCode);
-            Assert.Equal(System.Net.HttpStatusCode.BadRequest, (await server.Post("/api/garage/DRAK_Golem/shop", forbidden)).StatusCode);
-            Assert.Empty((await server.Get($"/api/garage/DRAK_Golem/options?port={golemPort}")).GetProperty("options").EnumerateArray());
+            var golemHead = Assert.Single(golem.GetProperty("ports").EnumerateArray());
+            Assert.True(!golemHead.TryGetProperty("fixedReason", out var reason) || reason.ValueKind == JsonValueKind.Null);
+            var golemPort = golemHead.GetProperty("portId").GetString()!;
+            var golemOptions = (await server.Get($"/api/garage/DRAK_Golem/options?port={golemPort}"))
+                .GetProperty("options").EnumerateArray().Select(o => o.GetProperty("part").GetProperty("class").GetString()).ToArray();
+            Assert.Contains("Mining_Laser_THCN_Helix_S1", golemOptions);
+            Assert.Contains("Mining_Laser_DRAK_Golem_S1", golemOptions);
+            var helix = new { swaps = new Dictionary<string, string> { [golemPort] = "Mining_Laser_THCN_Helix_S1" } };
+            var golemFitted = await server.Posted("/api/garage/DRAK_Golem/sheet", helix);
+            Assert.Contains(golemFitted.GetProperty("ports").EnumerateArray(), p => p.GetProperty("class").GetString() == "Mining_Laser_THCN_Helix_S1" && p.GetProperty("changed").GetBoolean());
             var miningGolem = Quantumwake.Server.ServerHost.MiningShips(new CommunityData(directory)).Single(s => s.Class == "DRAK_Golem");
-            Assert.False(Assert.Single(miningGolem.Heads).Editable);
+            Assert.True(Assert.Single(miningGolem.Heads).Editable);
+
+            // The Pitman has been seen only on the Golem, so no other hull is offered it.
+            var prospectorPort = (await server.Get("/api/garage/MISC_Prospector")).GetProperty("ports")[0].GetProperty("portId").GetString()!;
+            var pitman = new { swaps = new Dictionary<string, string> { [prospectorPort] = "Mining_Laser_DRAK_Golem_S1" } };
+            Assert.Equal(System.Net.HttpStatusCode.BadRequest, (await server.Post("/api/garage/MISC_Prospector/sheet", pitman)).StatusCode);
+            Assert.DoesNotContain((await server.Get($"/api/garage/MISC_Prospector/options?port={prospectorPort}")).GetProperty("options").EnumerateArray(),
+                o => o.GetProperty("part").GetProperty("class").GetString() == "Mining_Laser_DRAK_Golem_S1");
         }
         finally { await server.DisposeAsync(); }
     }
 
     [Fact]
-    public void The_bespoke_head_is_not_a_generic_size_one_upgrade_in_either_direction()
+    public void The_golem_takes_any_size_one_head_but_the_pitman_goes_nowhere_else()
     {
         const string pitman = "Mining_Laser_DRAK_Golem_S1";
         const string helix = "Mining_Laser_THCN_Helix_S1";
-        Assert.False(IndustrialFit.Allows(pitman, true, 1, helix, 1));
+        Assert.True(IndustrialFit.Allows(pitman, true, 1, helix, 1));
         Assert.False(IndustrialFit.Allows(helix, true, 1, pitman, 1));
         Assert.True(IndustrialFit.Allows(pitman, false, 1, pitman, 1));
         Assert.False(IndustrialFit.Allows("stock", null, 1, helix, 1));

@@ -352,6 +352,10 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 1.1.20
+
+**The Golem's mining head can be swapped.** The Pitman was treated as bespoke to the Golem, so Garage and Mining offered no other laser for it. It is not: a pilot fitted a Helix I in game, and the game's own data marks the port as taking any size 1 head. Garage now offers every size 1 mining laser on the Golem, and Mining's fit calculator lets you pick one and compares it with the Pitman. The Pitman itself is still offered only on the Golem, because nobody has yet been seen fitting it to another ship.
+
 ### 1.1.19
 
 **The Target card comes forward in the overlay.** For pilots without the MFD frames: when you lock a ship, the overlay turns to Now with the Target card first - the ship or its likely hull, its odds, and the callouts - and goes back to where you were 20 seconds after the lock is gone, so a lock lost for a second in a turn does not bounce it. If you moved to another page yourself in the meantime, it stays where you put it. On unless switched off under Settings → Overlay → In a fight; it needs reading the game's screen on and the Target card ticked.

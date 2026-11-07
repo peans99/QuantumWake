@@ -9399,7 +9399,7 @@ function renderCrackHeads() {
     laser.className = 'select crack-laser';
     const locked = head.editable === false || head.editable === null;
     for (const l of crackModel.lasers.filter((l) => locked ? l.class === head.stock
-      : l.size === head.size && !l.bespoke)) {
+      : (l.size === head.size && !l.golemOnly) || l.class === head.stock)) {
       laser.append(new Option(`${l.name} · ${fmtInt(l.power)} · ${describeModifiers(l.modifiers) || tx('no modifiers')}`, l.class));
     }
     if (head.stock && [...laser.options].some((o) => o.value === head.stock)) laser.value = head.stock;

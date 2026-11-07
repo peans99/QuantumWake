@@ -765,7 +765,6 @@ public sealed partial class CommunityData
 
         static void Keep(JsonElement port, List<ShipSlot> into)
         {
-            if (IndustrialFit.IsBespoke(Str(port, "ClassName"))) return;
             if (!port.TryGetProperty("Editable", out var editable) || editable.ValueKind != JsonValueKind.True)
                 return;
 

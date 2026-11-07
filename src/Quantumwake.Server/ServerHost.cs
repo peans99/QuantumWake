@@ -1300,7 +1300,7 @@ public static partial class ServerHost
                 // Ship heads only: the S0 heads are the ROC's and the hand tool's,
                 // and the MPUV arm reuses the Arbor's name for a weaker beam.
                 lasers = mining.Lasers.Where(l => l.Size >= 1 && !l.Class.Contains("MPUV", StringComparison.OrdinalIgnoreCase))
-                    .Select(l => new { l.Class, l.Name, l.Size, l.Power, l.ExtractionPower, l.FilterModifier, l.ThrottleMinimum, l.Modifiers, l.Manufacturer, l.Slots, bespoke = IndustrialFit.IsBespoke(l.Class), market = Priced(l.Class) }),
+                    .Select(l => new { l.Class, l.Name, l.Size, l.Power, l.ExtractionPower, l.FilterModifier, l.ThrottleMinimum, l.Modifiers, l.Manufacturer, l.Slots, golemOnly = IndustrialFit.IsGolemOnly(l.Class), market = Priced(l.Class) }),
                 modules = mining.Modules.Select(m => new { m.Class, m.Name, m.Active, m.Lifetime, m.Charges, m.PowerMultiplier, m.ExtractionMultiplier, m.FilterModifier, m.Modifiers, m.Manufacturer, market = Priced(m.Class) }),
                 gadgets = mining.Gadgets.Select(g => new { g.Class, g.Name, g.Modifiers, g.Manufacturer, market = Priced(g.Class) }),
                 minerals = mining.Minerals.Where(m => m.Method == "Ship"),
@@ -1451,9 +1451,7 @@ public static partial class ServerHost
                 .Where(l => l.Size == size && !l.Class.Contains("MPUV", StringComparison.OrdinalIgnoreCase))
                 .Where(l => hull is not null
                     ? hull.Heads.All(h => IndustrialFit.Allows(h.Stock, h.Editable, h.Size, l.Class, l.Size))
-                    : heads.Any(h => IndustrialFit.IsBespoke(h.Laser.Class))
-                        ? heads.All(h => h.Laser.Class.Equals(l.Class, StringComparison.OrdinalIgnoreCase))
-                        : !IndustrialFit.IsBespoke(l.Class))
+                    : !IndustrialFit.IsGolemOnly(l.Class) || heads.Any(h => h.Laser.Class.Equals(l.Class, StringComparison.OrdinalIgnoreCase)))
                 .Select(l =>
                 {
                     var swapped = heads.Count == 0
@@ -4865,7 +4863,7 @@ public static partial class ServerHost
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var options = community.Parts.Values
                 .Where(p => kinds.Contains(p.Type) && p.Size >= target.MinSize && p.Size <= target.MaxSize)
-                .Where(p => !IndustrialFit.IsBespoke(p.Class) || p.Class.Equals(target.Class, StringComparison.OrdinalIgnoreCase))
+                .Where(p => !IndustrialFit.IsGolemOnly(p.Class) || p.Class.Equals(target.Class, StringComparison.OrdinalIgnoreCase))
                 .Where(p => p.Type != "WeaponMining" || IndustrialFit.IsMiningCandidate(p.Class))
                 .Where(p => !p.Name.Equals(p.Class, StringComparison.Ordinal) && !p.Name.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase))
                 .Select(p =>
@@ -5809,7 +5807,7 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
                     if (string.Equals(port.Type, "WeaponMining", StringComparison.Ordinal)
                         || (port.Class?.StartsWith("Mining_Laser_", StringComparison.OrdinalIgnoreCase) ?? false))
                         heads.Add(new MiningHead(port.PortId, port.MaxSize, port.Class,
-                            IndustrialFit.IsBespoke(port.Class) ? false : community.HasIndustrialPorts ? port.Editable : null,
+                            community.HasIndustrialPorts ? port.Editable : null,
                             IndustrialPortNote(community, port)));
                     Walk(port.Children);
                 }
@@ -5980,8 +5978,7 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
     static string? IndustrialPortNote(CommunityData community, FitPort port)
     {
         if (port.Type is not ("WeaponMining" or "SalvageHead")) return null;
-        return IndustrialFit.FixedReason(port.Class)
-            ?? (!community.HasIndustrialPorts ? "Refresh the community dataset in Settings to check this head's compatibility."
+        return (!community.HasIndustrialPorts ? "Refresh the community dataset in Settings to check this head's compatibility."
                 : !port.Editable ? "Fixed head — the reference loadout does not allow replacements." : null);
     }
 
@@ -5992,7 +5989,7 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
             var port = FindPort(ship.Loadout, id);
             if (port is null || string.Equals(candidate, port.Class, StringComparison.OrdinalIgnoreCase)) continue;
             if (IndustrialPortNote(community, port) is { } reason) return reason;
-            if (IndustrialFit.IsBespoke(candidate)) return "The Pitman head is bespoke to the Golem.";
+            if (IndustrialFit.IsGolemOnly(candidate)) return "The Pitman head has only been seen fitted to the Golem.";
         }
         return null;
     }
