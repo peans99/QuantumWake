@@ -82,7 +82,10 @@ public sealed class LiveFrameLogTests : IDisposable
         var log = Log();
         log.Read("Unknown", 5, 500, 1920, 1080, null);
 
-        Assert.EndsWith("frames-2026-11-05.csv", log.PathFor(_now));
+        // The machine's own date for that moment: 21:00 at UTC-5 is the 5th
+        // here and already the 6th on a runner kept in UTC, and both are right.
+        Assert.EndsWith($"frames-{_now.ToLocalTime():yyyy-MM-dd}.csv", log.PathFor(_now));
+        Assert.Contains(_now.ToLocalTime().Day, new[] { 5, 6 });
         Assert.True(File.Exists(log.PathFor(_now)));
         Assert.False(File.Exists(old));
         Assert.True(File.Exists(recent));
