@@ -463,6 +463,7 @@ function showView(name) {
   if (name === 'settings') {
     renderSettings().catch(() => {});
     loadGameData().catch(() => {});
+    loadVoice().catch(() => {});
   }
 
   // A log is a live reference, not an Overlay setting. Read it when the pilot
@@ -37068,6 +37069,278 @@ $('#live-enabled')?.addEventListener('change', (event) => {
     if (line) line.textContent = tx('The change did not save.');
   });
 });
+
+/* ---------- Voice commands (1.2.0) ---------- */
+
+/**
+ * Settings → Voice & callouts → Voice commands: the copilot's switch, how it
+ * is woken, and every command with the key it would press on this install.
+ * Built here rather than in the markup so each sentence goes through tx() and
+ * the WebTests can drive it.
+ */
+let voiceState = null;
+let voiceDrawn = '';
+let voicePollTimer = null;
+let voiceKeyWaiting = false;
+let voiceParts = null;
+
+/** Puts a sentence on the state line until the next answer from the app replaces it. */
+function voiceSay(text) {
+  if (voiceParts?.line) voiceParts.line.textContent = text;
+}
+
+/**
+ * The game's name for a key the browser saw. event.code is the key's place
+ * on the board, not the letter printed on it, which is what the game binds
+ * and what the app presses - so on an AZERTY board the key printed A comes
+ * back as q, the game's name for that place.
+ */
+function voiceGameKey(code) {
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3).toLowerCase();
+  if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+  if (/^F([1-9]|1[0-2])$/.test(code)) return code.toLowerCase();
+  if (/^Numpad[0-9]$/.test(code)) return `np_${code.slice(6)}`;
+  return ({
+    NumpadAdd: 'np_add', NumpadSubtract: 'np_subtract', NumpadMultiply: 'np_multiply', NumpadDivide: 'np_divide',
+    NumpadDecimal: 'np_period', NumpadEnter: 'np_enter', AltLeft: 'lalt', AltRight: 'ralt', ControlLeft: 'lctrl',
+    ControlRight: 'rctrl', ShiftLeft: 'lshift', ShiftRight: 'rshift', Space: 'space', Tab: 'tab', Enter: 'enter',
+    Backspace: 'backspace', Insert: 'insert', Delete: 'delete', Home: 'home', End: 'end', PageUp: 'pgup', PageDown: 'pgdn',
+    ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', BracketLeft: 'lbracket',
+    BracketRight: 'rbracket', Minus: 'minus', Equal: 'equals', Comma: 'comma', Period: 'period', Slash: 'slash',
+    Semicolon: 'semicolon', Quote: 'apostrophe', Backquote: 'grave', Backslash: 'backslash', CapsLock: 'capslock',
+    ScrollLock: 'scrolllock',
+  })[code] ?? null;
+}
+
+async function loadVoice() {
+  try {
+    const response = await fetch('/api/voice');
+    if (!response.ok) throw new Error(`voice ${response.status}`);
+    voiceState = await response.json();
+  } catch {
+    voiceState = { failed: true };
+  }
+  renderVoiceCommands();
+  scheduleVoicePoll();
+}
+
+/** Asked again every two seconds while the page is open and the copilot on, so its state and what it heard keep up. */
+function scheduleVoicePoll() {
+  clearTimeout(voicePollTimer);
+  if (!voiceState?.enabled && !voiceState?.learning) return;
+  if (!$('#view-settings')?.classList?.contains('active')) return;
+  voicePollTimer = setTimeout(() => loadVoice().catch(() => {}), 2000);
+}
+
+async function postVoice(change) {
+  const response = await fetch('/api/voice', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(change),
+  });
+  if (!response.ok) throw new Error(`voice ${response.status}`);
+  voiceState = await response.json();
+  renderVoiceCommands();
+  scheduleVoicePoll();
+}
+
+/** The copilot's state in a sentence. */
+function voiceStateLine(s) {
+  if (!s) return tx('Asking the app whether it can listen…');
+  if (s.failed) return tx('The app did not answer about voice commands.');
+  if (!s.canPress) return tx('Only the Windows app listens for voice commands; this copy cannot press keys.');
+  if (!s.recogniser) return tx('Windows has no English speech recogniser on this PC, so nothing can listen. Adding English speech in Windows Settings → Time & language → Speech puts one there.');
+  if (!s.enabled) return tx('Off. Turn it on to say a command instead of finding its key.');
+  if (s.trouble) return tx('Not listening: {why}.', { why: s.trouble });
+  if (s.state === 'confirming') return tx('Waiting for “confirm”.');
+  if (s.state === 'listening') return tx('Listening while push-to-talk is held.');
+  if (s.state === 'awake') return tx('Awake: listening for commands until “copilot off”.');
+  if (s.trigger === 'button') return tx('Ready: hold push-to-talk and say a command.');
+  if (s.trigger === 'both') return tx('Asleep: say “Quantum Wake copilot on”, or hold push-to-talk.');
+  return tx('Asleep: say “Quantum Wake copilot on” to wake it.');
+}
+
+function voicePushToTalkLine(s) {
+  if (voiceKeyWaiting) return tx('Press the key now…');
+  if (s.learning) return tx('Press the stick button now…');
+  if (s.key) return tx('Push-to-talk: {key} on the keyboard.', { key: s.keyShown || s.key });
+  if (s.button) {
+    return s.buttonDevicePresent
+      ? tx('Push-to-talk: button {button} on {stick}.', { button: s.button, stick: s.buttonDeviceName })
+      : tx('Push-to-talk: button {button} on a stick that is not plugged in.', { button: s.button });
+  }
+  return tx('No push-to-talk chosen yet.');
+}
+
+function renderVoiceCommands() {
+  const root = $('#voice-commands');
+  if (!root) return;
+  const s = voiceState;
+
+  // Kept rather than looked up again: the three parts are made once, and the
+  // controls are rebuilt inside them only when what they show changed.
+  if (voiceParts?.root !== root) {
+    voiceParts = { root, line: el('p', 'muted voice-commands-state'), controls: el('div', 'voice-commands-controls'), heard: el('ol', 'voice-heard') };
+    root.replaceChildren(voiceParts.line, voiceParts.controls, voiceParts.heard);
+    voiceDrawn = '';
+  }
+  const { line, controls, heard } = voiceParts;
+  line.textContent = voiceStateLine(s);
+
+  const usable = Boolean(s && !s.failed && s.canPress && s.recogniser);
+  controls.hidden = !usable;
+  heard.hidden = !usable || !s.enabled || !(s.heard || []).length;
+  if (!usable) return;
+
+  heard.replaceChildren(...(s.heard || []).slice(0, 10).map((h) => {
+    const item = el('li', h.command ? 'voice-heard-command' : '');
+    const time = new Date(h.at);
+    item.append(
+      el('span', 'muted', Number.isNaN(time.getTime()) ? '' : time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })),
+      ' ',
+      el('strong', '', `“${h.text}”`),
+      ' ',
+      el('span', 'muted', `${Math.round((h.confidence || 0) * 100)}%`),
+      ' ',
+      el('span', '', h.outcome),
+    );
+    return item;
+  }));
+
+  const drawn = JSON.stringify([s.enabled, s.trigger, s.key, s.button, s.buttonDevicePresent, s.learning, voiceKeyWaiting,
+    s.replies, (s.commands || []).map((c) => [c.id, c.on, c.key, c.canPress, c.why])]);
+  if (drawn === voiceDrawn) return;
+  voiceDrawn = drawn;
+
+  const toggle = (data, checked, text, note) => {
+    const label = el('label', 'toggle');
+    const input = el('input');
+    input.type = 'checkbox';
+    input.dataset.voice = data;
+    input.checked = Boolean(checked);
+    const span = el('span', '', text);
+    if (note) {
+      span.append(' ');
+      span.append(el('em', 'muted', note));
+    }
+    label.append(input, span);
+    return label;
+  };
+
+  const parts = [toggle('enabled', s.enabled, tx('Listen for voice commands'),
+    tx('The microphone is heard by the speech recogniser Windows carries, on this PC: nothing is recorded or sent. A command presses the game’s own key for it, only while Star Citizen is the window in front.'))];
+
+  const trigger = el('div', 'voice-trigger');
+  for (const [value, text] of [['phrase', tx('Wake phrase')], ['button', tx('Push-to-talk')], ['both', tx('Either')]]) {
+    const label = el('label', 'voice-trigger-option');
+    const input = el('input');
+    input.type = 'radio';
+    input.name = 'voice-trigger';
+    input.value = value;
+    input.dataset.voiceTrigger = value;
+    input.checked = s.trigger === value;
+    label.append(input, ' ', text);
+    trigger.append(label);
+  }
+  parts.push(trigger);
+  parts.push(el('p', 'muted', s.trigger === 'button'
+    ? tx('Commands count only while the button or key is held, and a moment after letting go.')
+    : tx('Say “Quantum Wake copilot on” and it acts on commands until “copilot off”.')));
+
+  if (s.trigger !== 'phrase') {
+    const ptt = el('div', 'voice-ptt');
+    const act = (name, text) => {
+      const button = el('button', 'ghost tiny', text);
+      button.type = 'button';
+      button.dataset.voiceAct = name;
+      return button;
+    };
+    ptt.append(el('span', '', voicePushToTalkLine(s)), ' ', act('learn', tx('Use a stick button')), ' ', act('key', tx('Use a key')));
+    if (s.key || s.button) ptt.append(' ', act('clear', tx('Clear')));
+    parts.push(ptt);
+  }
+
+  parts.push(toggle('replies', s.replies, tx('Answer out loud'), tx('“Mining mode”, “Confirm self destruct?”, said by the callout voice.')));
+
+  parts.push(el('p', 'muted', tx('Each command presses the key the game has for it: yours from your keybindings, or the game’s default. One with no keyboard key says so, because voice cannot press a stick button.')));
+  const list = el('div', 'voice-command-list');
+  for (const c of s.commands || []) {
+    const row = el('div', `voice-command${c.canPress ? '' : ' voice-command-unbound'}`);
+    row.dataset.voiceRow = c.id;
+    const input = el('input');
+    input.type = 'checkbox';
+    input.dataset.voiceCommand = c.id;
+    input.checked = Boolean(c.on);
+    const label = el('label', 'toggle');
+    const words = el('span', '', `“${c.phrase}”`);
+    if ((c.also || []).length) {
+      words.append(' ');
+      words.append(el('em', 'muted', tx('or {phrases}', { phrases: c.also.map((p) => `“${p}”`).join(', ') })));
+    }
+    label.append(input, words);
+    const key = c.canPress
+      ? el('span', 'voice-command-key', c.fromProfile ? tx('{key} (your binding)', { key: c.key }) : c.key)
+      : el('span', 'voice-command-why muted', c.why);
+    row.append(label, el('span', 'muted voice-command-action', c.action), key);
+    if (c.confirm) row.append(el('span', 'voice-command-confirm', tx('asks to confirm')));
+    list.append(row);
+  }
+  parts.push(list);
+  parts.push(el('h4', '', tx('Heard')));
+
+  controls.replaceChildren(...parts);
+}
+
+$('#voice-commands')?.addEventListener('change', (event) => {
+  const target = event.target;
+  const failed = () => {
+    voiceDrawn = '';
+    renderVoiceCommands();
+    voiceSay(tx('The change did not save.'));
+  };
+  if (target?.dataset?.voice === 'enabled') postVoice({ enabled: target.checked }).catch(failed);
+  else if (target?.dataset?.voice === 'replies') postVoice({ replies: target.checked }).catch(failed);
+  else if (target?.dataset?.voiceTrigger) postVoice({ trigger: target.dataset.voiceTrigger }).catch(failed);
+  else if (target?.dataset?.voiceCommand) postVoice({ command: target.dataset.voiceCommand, on: target.checked }).catch(failed);
+});
+
+$('#voice-commands')?.addEventListener('click', (event) => {
+  const act = event.target?.dataset?.voiceAct;
+  if (!act) return;
+  if (act === 'key') {
+    voiceKeyWaiting = true;
+    renderVoiceCommands();
+    return;
+  }
+  voiceKeyWaiting = false;
+  const call = act === 'learn'
+    ? fetch('/api/voice/learn', { method: 'POST' }).then((r) => r.json()).then((state) => {
+      voiceState = state;
+      renderVoiceCommands();
+      scheduleVoicePoll();
+    })
+    : postVoice({ clearButton: true, key: '' });
+  call.catch(() => { /* the line keeps saying what was last known */ });
+});
+
+// "Use a key": the next key pressed on this page is push-to-talk. Taken
+// before anything else sees it, so pressing Tab does not also move focus.
+document.addEventListener('keydown', (event) => {
+  if (!voiceKeyWaiting) return;
+  event.preventDefault();
+  voiceKeyWaiting = false;
+  const key = voiceGameKey(event.code);
+  if (!key) {
+    voiceDrawn = '';
+    renderVoiceCommands();
+    voiceSay(tx('That key cannot be used for push-to-talk.'));
+    return;
+  }
+  postVoice({ key }).catch(() => {
+    voiceDrawn = '';
+    renderVoiceCommands();
+  });
+}, true);
 
 async function boot() {
   decorateNavigationGlyphs();

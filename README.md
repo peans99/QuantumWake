@@ -352,6 +352,22 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 1.2.0
+
+**Voice commands: say it instead of finding the key.** For the things you do once a session and would rather not give a button to. Settings → Voice & callouts has a new Voice commands switch, off until you turn it on. Say "Quantum Wake copilot on", or hold a push-to-talk button or key you pick, and the app listens for a short list of commands:
+
+- Gun, mining, salvage, scan, quantum, combat and nav mode.
+- Ping and scan target.
+- Open and close all doors.
+- Power to shields.
+- Request landing or departure.
+- The three mining modules, switch laser, toggle beam, and laser power.
+- Self destruct and jettison cargo, which both wait for you to say "confirm".
+
+Each command presses the key the game has for that action, either yours from your keybindings or the game's default, held for as long as the game's own rules ask, and only while Star Citizen is the window in front. The list shows which key each command will press. It says plainly when an action is only on your stick or has no key, because voice can press keyboard keys and mouse buttons but not stick buttons. Listening is done on your PC by the speech recogniser Windows already carries, told only these phrases. Nothing is recorded or sent. Windows only. It has not been tried in the game itself yet, so try one command first to check the game takes the key.
+
+**More actions show how they fire.** The Controls page and the keybindings list now read every way the game spells an action's activation mode, and the keyboard defaults some actions keep in a separate entry. 22 actions that showed no mode now show one, and five that looked unbound now show their key.
+
 ### 1.1.25
 
 **No more Print Screen with live reading on.** With "Read the game's screen live" switched on, the screens you used to screenshot for the app are now picked up as you look at them: the Fleet Manager, the map, a ship's loadout, a commodity kiosk, a refinery, and the Contracts and Rep apps. Each screen becomes one reading in the Log while it stays up, updated when a later look reads more of it or the screen really changes, such as a kiosk after you buy. A screen has to be up for a couple of seconds before it counts, so a tab flicked past is not kept. Item tooltips are not kept this way, so browsing an inventory does not fill the Log. Contracts cards read this way feed the hauling plan just as screenshots of them did, each tied to the haul it was opened for. Screenshots you take are still read as before. Readings taken live are marked "read live from the screen" in the Log, with no "Read again" button, because there is no file to read again.

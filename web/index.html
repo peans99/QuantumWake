@@ -4639,7 +4639,7 @@
     <details class="settings-group" id="settings-callouts-group">
       <summary>
         <span class="settings-group-index">03</span>
-        <span class="settings-group-copy"><strong>Voice &amp; callouts</strong><span>Switch the voice on, then each sound it can make on its own.</span></span>
+        <span class="settings-group-copy"><strong>Voice &amp; callouts</strong><span>Switch the voice on, each sound it can make, and the commands it listens for.</span></span>
       </summary>
       <div class="settings-group-content">
     <div class="option-block" id="settings-voice-block" hidden>
@@ -4671,6 +4671,14 @@
       </div>
       <p class="muted" id="settings-callouts-state">Asking the app what it can say…</p>
       <div class="callout-list" id="settings-callouts"></div>
+    </div>
+    <!-- Voice commands (1.2.0): drawn by renderVoiceCommands, so every
+         sentence in it goes through tx() and the WebTests. -->
+    <div class="option-block" id="settings-voice-commands">
+      <div class="option-head">
+        <h3>Voice commands</h3>
+      </div>
+      <div class="voice-commands" id="voice-commands"></div>
     </div>
       </div>
     </details>

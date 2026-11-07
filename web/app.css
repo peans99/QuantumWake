@@ -8811,6 +8811,29 @@ tr.landed { outline-offset: -2px; }
 .callout-row .toggle { flex: 1 1 auto; min-width: 0; }
 .callout-group-off .callout-row { opacity: .55; }
 
+/* Settings → Voice commands (1.2.0): each command with the key it presses,
+   or the reason it cannot; on a phone the three parts stack. */
+.voice-commands-controls { display: grid; gap: 10px; margin-top: 8px; }
+.voice-trigger { display: flex; flex-wrap: wrap; gap: 16px; }
+.voice-trigger-option { display: inline-flex; align-items: center; gap: 6px; }
+.voice-ptt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.voice-command-list { display: grid; gap: 6px; }
+/* .toggle does not wrap anywhere else; here its notes and phrases are
+   sentences, and unwrapped they pushed every row past the 880 px block. */
+.voice-commands .toggle { white-space: normal; align-items: flex-start; line-height: 1.5; }
+.voice-commands .toggle input { margin-top: 3px; }
+.voice-command { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.7fr) 7.5rem; align-items: center; gap: 10px; }
+.voice-command > * { min-width: 0; }
+.voice-command-key { font-family: var(--mono); font-size: 12px; }
+.voice-command-action { font-size: 12.5px; }
+.voice-command-confirm { font: 10.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--amber); }
+.voice-command-unbound .toggle { opacity: .7; }
+.voice-command-why { font-size: 12px; }
+.voice-heard { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
+@media (max-width: 720px) {
+  .voice-command { grid-template-columns: minmax(0, 1fr); gap: 2px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+}
+
 /* Mining → Radar's live block and the Fracture card's sweep (1.1.15). */
 .radar-live-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 18px; }
 .radar-live-row select { min-width: 240px; }

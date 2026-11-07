@@ -57,10 +57,18 @@ send nothing about you.
   ship, cut from the frame being read when the page asks and sent only to
   the page on your own machine. A frame can show anything the game does, other players' names
   included, and none of it leaves your computer. The app never opens the
-  game's process, reads its memory or sends it input.
+  game's process, reads its memory or sends it input; voice commands, below, are
+  a switch of their own and the one part of the app that presses keys.
 - **Spoken callouts**, only if you turn on the voice on the Log page: the
   app says things like "Target identified" with the speech voice Windows
   already has, on your PC. The sentence is not sent anywhere.
+- **Your microphone**, only if you turn on Voice commands in Settings →
+  Voice & callouts. It is heard by the speech recogniser Windows carries, on
+  your PC, told only the copilot's few dozen phrases. The app never gets the
+  audio: it sees the phrase matched and how sure the recogniser was, keeps the
+  last 40 in memory for the page, and writes none of them down. A command
+  presses the game's key for it, and only while Star Citizen is the window in
+  front. See [voice-commands.md](voice-commands.md).
 - **Joysticks and the game's key bindings**, on the Controls page, to show and
   back up your bindings.
 
