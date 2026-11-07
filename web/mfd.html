@@ -26,9 +26,10 @@
 <div id="readings"></div>
     <figure id="map" hidden><svg id="map-plot" viewBox="-1.18 -1.18 2.36 2.36" aria-hidden="true"></svg>
       <figcaption id="map-note"></figcaption></figure>
-    <!-- The locked ship: the game's silhouette of the hull, tinted by stance,
-         or the game's own target hologram cut from the frame being read. -->
-    <figure id="target-view" hidden><div id="target-shape"></div><img id="target-hologram" alt="" hidden>
+    <!-- The locked ship as the Garage pictures it: the game's silhouette of
+         the hull tinted by stance, its render when it has no silhouette, or
+         a plain ship mark while nothing names it. -->
+    <figure id="target-view" hidden><div id="target-shape"></div><img id="target-render" alt="" hidden>
       <figcaption id="target-note"></figcaption></figure>
 </div>
 <button id="more" type="button" hidden>More details</button>

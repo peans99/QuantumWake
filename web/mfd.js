@@ -447,34 +447,47 @@ function drawSweep(group) {
 }
 
 /* The Target page's picture; see QwMfd.targetPicture for which one. A mask
-   cannot say its image failed to load, so a silhouette is probed first, and
-   a hull without an icon falls back to the hologram for as long as it is
-   locked. The hologram's address carries the read's time, so it follows the
-   lock frame by frame without being cached. */
-let targetShape = '', targetFellBack = false;
+   cannot say its image failed to load, so a silhouette is probed first; a
+   hull without an icon takes its first Garage render, and one without that
+   either takes the plain mark. Worked out once per hull: the page redraws on
+   every live read, and a picture that reloaded with it is what this replaced.
+   The mark is a drawing rather than a file, so it can never fail to load. */
+const TARGET_MARK = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100"><path d="M80 6 90 38 150 64v10l-58-8-4 20 16 8H56l16-8-4-20-58 8V64l60-26z"/></svg>')}")`;
+let targetShape = null, targetDrawn = null;
 function drawTarget(visible) {
   const figure = byId('target-view');
   const picture = visible ? QwMfd.targetPicture(extra.live) : null;
   figure.hidden = !picture;
-  if (!picture) { targetShape = ''; targetFellBack = false; return; }
+  if (!picture) { targetShape = null; return; }
   figure.classList.toggle('hostile', picture.tone === 'hostile');
   figure.classList.toggle('likely', picture.likely);
   byId('target-note').textContent = picture.note;
-  const shape = byId('target-shape'), hologram = byId('target-hologram');
-  const showHologram = src => { shape.hidden = true; hologram.hidden = false; if (hologram.getAttribute('src') !== src) hologram.src = src; };
-  if (picture.kind !== 'silhouette') { targetShape = ''; targetFellBack = false; showHologram(picture.src); return; }
-  if (picture.src === targetShape) { if (targetFellBack) showHologram(picture.fallback); return; }
-  targetShape = picture.src; targetFellBack = false;
+  if (picture.src === targetShape) return;
+  targetShape = picture.src;
+  const shape = byId('target-shape'), render = byId('target-render');
+  const still = () => targetShape === picture.src;
+  const mask = url => {
+    if (!still() || targetDrawn === url) return;
+    targetDrawn = url;
+    shape.style.setProperty('--shape', url);
+    shape.hidden = false; render.hidden = true;
+  };
+  const photo = src => {
+    if (!still()) return;
+    targetDrawn = src;
+    if (render.getAttribute('src') !== src) render.src = src;
+    shape.hidden = true; render.hidden = false;
+  };
+  if (picture.kind !== 'silhouette') { mask(TARGET_MARK); return; }
   const probe = new Image();
-  probe.onload = () => {
-    if (targetShape !== picture.src) return;
-    shape.style.setProperty('--shape', `url("${picture.src}")`);
-    shape.hidden = false; hologram.hidden = true;
-  };
-  probe.onerror = () => {
-    if (targetShape !== picture.src) return;
-    targetFellBack = true; showHologram(picture.fallback);
-  };
+  probe.onload = () => mask(`url("${picture.src}")`);
+  probe.onerror = () => fetch(picture.paints)
+    .then(r => r.ok ? r.json() : [])
+    .then(paints => paints?.[0]?.item
+      ? photo(`/api/fleet/paints/${encodeURIComponent(paints[0].item)}/render`)
+      : mask(TARGET_MARK))
+    .catch(() => mask(TARGET_MARK));
   probe.src = picture.src;
 }
 function drawMap(visible, view, big) {

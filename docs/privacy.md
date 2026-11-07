@@ -53,9 +53,8 @@ send nothing about you.
   since 1.1.22 your balance from the bar of any other mobiGlas screen. Item
   tooltips and screens the app cannot read are not kept. The ship you have targeted - its name, signatures, speed and whether
   it is marked hostile - is held in memory for the combat page and never
-  written down. The MFD's Target page can show the game's hologram of that
-  ship, cut from the frame being read when the page asks and sent only to
-  the page on your own machine. A frame can show anything the game does, other players' names
+  written down. The MFD's Target page draws that ship from the game files, the
+  same pictures as the Garage, not from your screen. A frame can show anything the game does, other players' names
   included, and none of it leaves your computer. The app never opens the
   game's process, reads its memory or sends it input; voice commands, below, are
   a switch of their own and the one part of the app that presses keys.

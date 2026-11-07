@@ -206,20 +206,28 @@ public class CombatPagesTests
     }
 
     [Fact]
-    public void The_target_page_draws_the_hull_or_the_games_hologram()
+    public void The_target_page_draws_the_hull_as_the_garage_does()
     {
         var e = Mfd();
-        // Unknown, and no hull ahead on the odds: the game's own hologram.
-        Assert.Equal("hologram", e.Evaluate("QwMfd.targetPicture(live).kind").AsString());
-        Assert.StartsWith("/api/live/hologram", e.Evaluate("QwMfd.targetPicture(live).src").AsString());
+        // Unknown, and no hull ahead on the odds: the plain mark, never a
+        // picture of the screen, which reloaded on every read.
+        Assert.Equal("mark", e.Evaluate("QwMfd.targetPicture(live).kind").AsString());
+        Assert.Equal("Hull not identified yet", e.Evaluate("QwMfd.targetPicture(live).note").AsString());
+        Assert.DoesNotContain("hologram", e.Evaluate("JSON.stringify(QwMfd.targetPicture(live))").AsString());
 
-        // A likely hull: its silhouette, marked as a guess, red while hostile, the hologram behind it.
+        // The picture is the same object on the next read of the same lock -
+        // nothing in it carries the read's time.
+        e.Execute("var later = {...live, status:{combat:{...live.status.combat, target:{...live.status.combat.target, seenAt:'2099-01-01T00:00:00Z'}}}};");
+        Assert.True(e.Evaluate("JSON.stringify(QwMfd.targetPicture(live)) === JSON.stringify(QwMfd.targetPicture(later))").AsBoolean());
+
+        // A likely hull: its silhouette, marked as a guess, red while hostile.
         e.Execute("var likely = {...live, status:{combat:{...live.status.combat, target:{...live.status.combat.target, class:'ANVL_Paladin', likely:true}}}};");
         Assert.Equal("silhouette", e.Evaluate("QwMfd.targetPicture(likely).kind").AsString());
         Assert.Equal("/api/fleet/icons/ANVL_Paladin", e.Evaluate("QwMfd.targetPicture(likely).src").AsString());
         Assert.True(e.Evaluate("QwMfd.targetPicture(likely).likely").AsBoolean());
         Assert.Equal("hostile", e.Evaluate("QwMfd.targetPicture(likely).tone").AsString());
-        Assert.StartsWith("/api/live/hologram", e.Evaluate("QwMfd.targetPicture(likely).fallback").AsString());
+        // A hull with no icon falls back to its Garage render, looked up here.
+        Assert.Equal("/api/fleet/paints/ANVL_Paladin", e.Evaluate("QwMfd.targetPicture(likely).paints").AsString());
 
         // Nothing to draw with reading off or nothing locked.
         Assert.True(e.Evaluate("QwMfd.targetPicture({...live, enabled:false}) === null").AsBoolean());

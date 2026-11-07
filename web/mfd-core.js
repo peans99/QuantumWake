@@ -1144,22 +1144,26 @@ window.QwMfd = (() => {
      is asking, or what it just did. Pinned rather than appended to the list,
      because the row that asked "confirm this?" used to scroll away behind the
      list it was asking about. Null anywhere it would say nothing. */
-  /* What the Target page draws for a lock: the game's silhouette of the hull
-     when it is named, or the likeliest at 60% (marked as a guess), and the
-     game's own hologram cut from the live frame otherwise - which is also the
-     fallback when a hull has no icon, as the Paladin and Perseus do not.
+  /* What the Target page draws for a lock: the Garage's picture of the hull
+     when it is named, or the likeliest at 60% (marked as a guess) - its
+     silhouette, or for a hull with no icon (the Paladin, the Perseus) the
+     render the Garage falls back to, looked up from `paints`. A target
+     nothing can name gets a plain ship mark. Every one of those is fixed for
+     the hull, so the picture changes when the lock does and not otherwise:
+     the live hologram it used to show was re-cut from every read and
+     flickered on a lock that had not changed (1.2.3).
      Null with nothing locked, or with live reading off. */
   function targetPicture(live) {
     const target = live?.enabled ? live?.status?.combat?.target : null;
     if (!target) return null;
     const tone = target.stance === 'hostile' ? 'hostile' : 'neutral';
-    const hologram = `/api/live/hologram?at=${encodeURIComponent(target.seenAt || '')}`;
     if (target.class) {
-      return { kind: 'silhouette', src: `/api/fleet/icons/${encodeURIComponent(target.class)}`, fallback: hologram,
+      const cls = encodeURIComponent(target.class);
+      return { kind: 'silhouette', src: `/api/fleet/icons/${cls}`, paints: `/api/fleet/paints/${cls}`,
         tone, likely: Boolean(target.likely),
         note: target.likely ? say('Likely hull · not confirmed') : say('Hull as the panel names it') };
     }
-    return { kind: 'hologram', src: hologram, tone, likely: false, note: say('The game’s hologram, as seen') };
+    return { kind: 'mark', src: '', tone, likely: false, note: say('Hull not identified yet') };
   }
 
   function actionLine(pageId, view) {

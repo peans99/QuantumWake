@@ -352,7 +352,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.2.2
+### 1.2.3
 
 **Voice commands: say it instead of finding the key.** For the things you do once a session and would rather not give a button to. Settings → Voice & callouts has a new Voice commands switch, off until you turn it on. Say "Quantum Wake copilot on", or hold a push-to-talk button or key you pick, and the app listens for a short list of commands:
 
@@ -367,6 +367,8 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 Each command presses the key the game has for that action, either yours from your keybindings or the game's default, held for as long as the game's own rules ask, and only while Star Citizen is the window in front. The list shows which key each command will press. It says plainly when an action is only on your stick or has no key, because voice can press keyboard keys and mouse buttons but not stick buttons. Every answer the copilot gives, such as "Copilot on", "Mining mode", "Confirm self destruct?" or "Game not in front", is said in the same recorded voice as the callouts, and each command has a Hear it button. Listening is done on your PC by the speech recogniser Windows already carries, told only these phrases. Nothing is recorded or sent. Windows only. It has not been tried in the game itself yet, so try one command first to check the game takes the key.
 
 **More actions show how they fire.** The Controls page now reads every way the game spells an action's activation mode, and the keyboard defaults some actions keep in a separate entry. 22 actions that showed no mode now show one, and five that looked unbound now show their key.
+
+**The MFD's Target page shows the ship as the Garage pictures it.** For a target the app could not name, and for hulls the game has no silhouette for (the Paladin and the Perseus among them), the page showed a picture cut from your screen that reloaded every second, even when nothing had changed. It now shows the same pictures as the Garage. A named hull, or the likeliest one, gets its silhouette, red while hostile. A hull with no silhouette gets its Garage render. A target nothing can name yet gets a plain ship mark. The picture changes only when the lock does. The hull's damage is still read from the screen, and still shown as sound, damaged or critical under the picture.
 
 ### 1.1.25
 
