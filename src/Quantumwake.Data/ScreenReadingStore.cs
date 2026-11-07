@@ -438,6 +438,23 @@ public sealed class ScreenReadingStore
         }
     }
 
+    /// <summary>
+    /// <see cref="Add"/> for a reading kept live and read again by a later
+    /// frame, keeping the pilot's verdict on it. Reading a file again is a
+    /// press of "Read again" and starts afresh, dismissal included; a live
+    /// reading is renewed every few seconds with nobody pressing anything, and
+    /// one the pilot invalidated must not be believed again two seconds later.
+    /// </summary>
+    public void Renew(ScreenSighting sighting)
+    {
+        lock (_gate)
+        {
+            var dismissed = _sightings.Any(s => s.Dismissed
+                && string.Equals(s.Shot, sighting.Shot, StringComparison.OrdinalIgnoreCase));
+            Add(dismissed ? sighting with { Dismissed = true } : sighting);
+        }
+    }
+
     public void Add(ScreenSighting sighting)
     {
         lock (_gate)

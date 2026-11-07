@@ -385,6 +385,41 @@ public class ScreenLogTests
     }
 
     /// <summary>
+    /// A reading the live screen reader kept has no file behind it - the frame
+    /// was overwritten a moment later - so the log says where it came from and
+    /// offers no "Read again" that could only fail.
+    /// </summary>
+    [Fact]
+    public void A_reading_kept_live_says_so_and_is_not_offered_again()
+    {
+        var page = Panel(Kiosk.Replace("ScreenShot-K.jpg", "live-20261107-200002"));
+
+        var log = page.NodeText("#screen-readings");
+        Assert.Contains("read live from the screen", log);
+        Assert.DoesNotContain("live-20261107-200002", log);
+        Assert.Equal(0, page.Count("__dom.node('#screen-readings').byClass('screen-reread').length"));
+        Assert.Equal(1, page.Count("__dom.node('#screen-readings').byClass('screen-dismiss').length"));
+    }
+
+    /// <summary>
+    /// With the screen read live, the screenshot controls are the second way
+    /// in, and the panel says so beside them.
+    /// </summary>
+    [Fact]
+    public void The_screenshot_panel_says_when_live_reading_keeps_the_screens()
+    {
+        var page = Panel(Kiosk);
+        Assert.True(page.Truth("__dom.node('#screen-live-note').hidden"));
+
+        page.Do("liveState = {available:true, enabled:true, status:{state:'reading'}}; applyScreenMode();");
+        Assert.False(page.Truth("__dom.node('#screen-live-note').hidden"));
+        Assert.Contains("no screenshot needed", page.NodeText("#screen-live-note"));
+
+        page.Do("liveState = {available:true, enabled:false, status:{state:'off'}}; applyScreenMode();");
+        Assert.True(page.Truth("__dom.node('#screen-live-note').hidden"));
+    }
+
+    /// <summary>
     /// The frame that taught a reader is the first one worth reading again,
     /// and the log otherwise keeps the old reading of it for good.
     /// </summary>

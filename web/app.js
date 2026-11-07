@@ -12185,7 +12185,24 @@ function applyScreenMode() {
       : tx('off');
   }
 
+  renderScreenLiveNote();
   startScreenWatch();
+}
+
+/**
+ * With the screen read live, the screens a pilot used to press Print Screen
+ * for are kept as they are looked at, and the screenshot controls are the
+ * second way in rather than the only one. Said beside them, because a pilot
+ * who sees "Read last screenshot" will otherwise go on pressing the key.
+ */
+function renderScreenLiveNote() {
+  const note = $('#screen-live-note');
+  if (!note) return;
+  const live = Boolean(liveState?.available && liveState?.enabled);
+  note.hidden = !live;
+  note.textContent = live
+    ? tx('Reading the game’s screen live is on, so the Fleet Manager, the map, loadouts, kiosks, refineries and the Contracts and Rep apps are kept as you look at them - no screenshot needed. Screenshots you take are still read.')
+    : '';
 }
 
 async function saveScreenSettings(mode, watch, watchScreenshots) {
@@ -12985,7 +13002,7 @@ async function renderScreenLog() {
       const s = entry.shot;
       if (s.dismissed) row.classList.add('dismissed');
       body.append(el('div', 'muted',
-        `${stamp(s.shotAt)} · ${SCREEN_KINDS[s.kind] || s.kind} · ${s.shot}${s.dismissed ? ` · ${tx('invalidated')}` : ''}`));
+        `${stamp(s.shotAt)} · ${SCREEN_KINDS[s.kind] || s.kind} · ${screenIsLive(s) ? tx('read live from the screen') : s.shot}${s.dismissed ? ` · ${tx('invalidated')}` : ''}`));
       renderSighting(body, s, { full: latest });
 
       // Kept in the log either way: the misreading is worth seeing, and the
@@ -13003,18 +13020,23 @@ async function renderScreenLog() {
         : tx('Keep this reading in the log, but stop the wallet, fleet and fittings using it');
       action.addEventListener('click', () => dismissReading(s, !s.dismissed, action));
 
+      const actions = el('div', 'screen-actions');
+      actions.append(action);
+
       // Through the reader as it is now. The frame that taught a reader is
       // the first one worth reading again, and the log otherwise keeps the
-      // old reading of it for good.
-      const again = document.createElement('button');
-      again.type = 'button';
-      again.className = 'ghost screen-reread';
-      again.textContent = tx('Read again');
-      again.title = tx('Put this screenshot through the reader again and replace this reading');
-      again.addEventListener('click', () => rereadReading(s, again));
-
-      const actions = el('div', 'screen-actions');
-      actions.append(action, again);
+      // old reading of it for good. A reading taken live has no file - the
+      // frame was overwritten two seconds later - so there is nothing to
+      // read again, and a button that could only fail is not offered.
+      if (!screenIsLive(s)) {
+        const again = document.createElement('button');
+        again.type = 'button';
+        again.className = 'ghost screen-reread';
+        again.textContent = tx('Read again');
+        again.title = tx('Put this screenshot through the reader again and replace this reading');
+        again.addEventListener('click', () => rereadReading(s, again));
+        actions.append(again);
+      }
       body.append(actions);
     }
 
@@ -13132,6 +13154,11 @@ async function pinClipboardLocation(paste, button) {
     button.disabled = false;
     button.textContent = tx('Pin as POI');
   }
+}
+
+/** Whether a reading was kept by the live screen reader rather than read from a screenshot file. */
+function screenIsLive(reading) {
+  return typeof reading?.shot === 'string' && reading.shot.startsWith('live-');
 }
 
 /** The same file through the reader it has now; the fresh reading replaces the old one. */
@@ -36537,6 +36564,7 @@ function renderLiveScreen() {
   renderCalloutSettings();
   renderSettingsVoice();
   renderRadarLive();
+  renderScreenLiveNote();
 
   const block = $('#live-block');
   if (!block) return;
@@ -36575,7 +36603,7 @@ function renderLiveScreen() {
     line.textContent = tx('Off.');
   } else if (status.state === 'reading') {
     const when = status.lastFrameAt ? new Date(status.lastFrameAt).toLocaleTimeString(QW_DATE_LOCALES) : '';
-    line.textContent = tx('Reading: {frames} frames, {kept} rock scans kept. Last at {when}: {summary}', {
+    line.textContent = tx('Reading: {frames} frames, {kept} screens kept. Last at {when}: {summary}', {
       frames: (status.frames || 0).toLocaleString(),
       kept: (status.kept || 0).toLocaleString(),
       when,

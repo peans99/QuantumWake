@@ -166,9 +166,53 @@ as pure black - detected, and said on the page.
 One screen: the mining scan panel, which the screenshot reader already reads.
 A frame every two seconds goes through exactly the screenshot path - same
 engine, same second looks - and a scan is kept as one reading a rock, updated
-while the rock stays selected (`LiveRocks`). Every other kind of frame is read
-and shown as "last seen" on the Log page, and not stored: which screens are
-worth keeping live is the next decision, one screen at a time.
+while the rock stays selected (`LiveRocks`). Every other kind of frame was
+read and shown as "last seen" on the Log page, and not stored.
+
+**1.1.21: live replaces the screenshot.** Every screen the screenshot reader
+has a reader for is now kept from live frames too - Loadout, Map, Contracts,
+Fleet, Reputation, Kiosk, Refinery - so with reading on, Print Screen is not
+needed for any of them. `LiveScreens` keeps one reading a screen, under the
+`live-<time>` name it was first kept as:
+
+- *Which screen* is what the screen names: the ship in the loadout, system and
+  place on the map, the selected contract (or the list), the organisation and
+  tab in Rep, the kiosk's side and ship, the refinery's station and stage. The
+  Fleet Manager is one screen. A frame that names nothing is not kept.
+- *Never from one frame.* The next whole-frame read, two seconds on, has to
+  name the same screen. A tab flicked past or a frame mistaken for a terminal
+  is not what a screenshot would have been taken of.
+- *Replaced, not added to.* A later frame replaces the reading when it filled
+  in more values (every value the readers filled, counted alike), or when it
+  reads as much but says something different on two frames running - a kiosk
+  after a purchase, not a digit the engine read differently once.
+- *Two minutes away* and the next look is a new reading.
+- *Not kept live:* tooltips, because hovering down an inventory would keep one
+  an item and push the one loadout reading of a ship out of a 300-entry log;
+  mobiGlas apps with no reader and frames of nothing, which would be the same
+  unreadable line every two seconds.
+
+Screenshots stay the way in wherever live reading is not used: on Linux, which
+has no capture and so never offers the switch, and for any pilot who leaves it
+off - the screenshot watch and its buttons are unchanged, and nothing about them
+depends on the live switch. Screenshots the pilot takes are still read while it
+is on, too, so a screen photographed then is in the log twice: once by its
+file, once live. A live reading the pilot invalidates stays invalidated as
+later frames renew it (`ScreenReadingStore.Renew`); a file read again on a
+press starts afresh, as it always did.
+
+One check says less live than it does from a file: a renewed live kiosk's
+wallet is checked against the newest balance *before* it, which is the same
+reading's previous version a few seconds older, so it reads as matching. The
+ledger's baseline is still right; only that verdict in the Log carries no news. A live reading
+has no file, so the Log page offers no "Read again" for one, and the queues that
+re-read old screenshots (`Unmeasured`, `Misfiled`, `Doubtful`, `Unjoined`) skip
+it because they ask for the file first.
+
+Not yet checked on real footage: none of the recordings on this machine shows a
+terminal or a mobiGlas app for long (the 2026-11-05 OBS recording is combat,
+the Elguapoe and Risbo streams are mining), so how often a live kiosk or Fleet
+frame reads as fully as a screenshot of it is still unmeasured.
 
 Not yet seen on a running game: the window class (`CryENGINE` is assumed, and a
 mismatch says what it found instead), how long the engine takes over a live
