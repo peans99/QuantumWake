@@ -12201,7 +12201,7 @@ function renderScreenLiveNote() {
   const live = Boolean(liveState?.available && liveState?.enabled);
   note.hidden = !live;
   note.textContent = live
-    ? tx('Reading the game’s screen live is on, so the Fleet Manager, the map, loadouts, kiosks, refineries and the Contracts and Rep apps are kept as you look at them - no screenshot needed. Screenshots you take are still read.')
+    ? tx('Reading the game’s screen live is on, so the Fleet Manager, the map, loadouts, kiosks, refineries and the Contracts and Rep apps and your balance are kept as you look at them - no screenshot needed. Screenshots you take are still read.')
     : '';
 }
 
@@ -13116,7 +13116,9 @@ function renderScreenReviewInbox(readings) {
   const count = $('#screen-review-count');
   if (!box || !list) return;
 
-  const unknown = readings.filter(reading => ['MobiGlas', 'Unknown'].includes(reading.kind));
+  // Not a live reading: the only mobiGlas screens kept live are kept for the
+  // balance in their bar, and there is no capture to put beside the text.
+  const unknown = readings.filter(reading => ['MobiGlas', 'Unknown'].includes(reading.kind) && !screenIsLive(reading));
   box.hidden = unknown.length === 0;
   list.textContent = '';
   if (count) count.textContent = unknown.length ? tx('{count} queued', { count: unknown.length }) : '';

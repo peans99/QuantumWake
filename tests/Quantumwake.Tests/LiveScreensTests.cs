@@ -120,6 +120,68 @@ public sealed class LiveScreensTests
             Assert.Null(screens.Keep(Frame(kind, At.AddSeconds(s), "the same frame"), At.AddSeconds(s)));
     }
 
+    private static ScreenSighting Home(DateTimeOffset at, long? balance) =>
+        Frame(ScreenKind.MobiGlas, at, "a mobiGlas screen this app cannot read yet") with
+        {
+            Wallet = new WalletReading(balance, balance is null ? ScreenFrames.WalletTrouble : null),
+        };
+
+    /// <summary>
+    /// The home screen is where a pilot glances at their cash, and a
+    /// screenshot of it kept the balance: so does a live look, once the same
+    /// figure has read twice.
+    /// </summary>
+    [Fact]
+    public void A_balance_on_a_mobiglas_screen_is_kept_once_it_reads_the_same_twice()
+    {
+        var screens = new LiveScreens();
+        Assert.Null(screens.Keep(Home(At, 2_092_773), At));
+        // The same screen, a digit misread: not yet a figure to believe.
+        Assert.Null(screens.Keep(Home(At.AddSeconds(2), 2_092_778), At.AddSeconds(2)));
+        Assert.Null(screens.Keep(Home(At.AddSeconds(4), 2_092_773), At.AddSeconds(4)));
+        var kept = screens.Keep(Home(At.AddSeconds(6), 2_092_773), At.AddSeconds(6));
+        Assert.Equal("live-20261107-200006", kept);
+
+        // Spent, and seen twice: the same reading, renewed with the new figure.
+        Assert.Null(screens.Keep(Home(At.AddSeconds(8), 1_992_773), At.AddSeconds(8)));
+        Assert.Equal(kept, screens.Keep(Home(At.AddSeconds(10), 1_992_773), At.AddSeconds(10)));
+    }
+
+    [Fact]
+    public void A_mobiglas_screen_whose_balance_did_not_read_is_not_kept()
+    {
+        var screens = new LiveScreens();
+        for (var s = 0; s < 10; s += 2)
+            Assert.Null(screens.Keep(Home(At.AddSeconds(s), null), At.AddSeconds(s)));
+    }
+
+    /// <summary>What the Ledger carries the cash forward from.</summary>
+    [Fact]
+    public void A_live_balance_is_the_wallet_the_ledger_counts_from()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "qw-live-screens-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var readings = new ScreenReadingStore(directory);
+            var screens = new LiveScreens();
+            for (var s = 0; s < 6; s += 2)
+            {
+                var frame = Home(At.AddSeconds(s), 2_092_773);
+                if (screens.Keep(frame, At.AddSeconds(s)) is { } shot)
+                    readings.Renew(frame with { Shot = shot });
+            }
+
+            var wallet = readings.LastWallet();
+            Assert.NotNull(wallet);
+            Assert.Equal(2_092_773, wallet.Balance);
+            Assert.StartsWith("live-", wallet.Shot);
+        }
+        finally
+        {
+            try { Directory.Delete(directory, recursive: true); } catch (IOException) { }
+        }
+    }
+
     [Fact]
     public void A_screen_that_named_nothing_is_not_kept()
     {

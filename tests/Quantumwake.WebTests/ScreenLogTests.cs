@@ -180,6 +180,25 @@ public class ScreenLogTests
         Assert.Contains("Open screenshot", page.NodeText("#screen-review-list"));
     }
 
+    /// <summary>
+    /// A mobiGlas screen kept live is kept for the balance in its bar, and has
+    /// no capture to open: it is in the log, not in the queue for a reader.
+    /// </summary>
+    [Fact]
+    public void A_mobiglas_screen_kept_live_for_its_balance_is_not_queued_for_review()
+    {
+        const string live = """
+            {"shot":"live-20261107-200006","shotAt":"2026-11-07T20:00:06Z","kind":"MobiGlas",
+             "summary":"a mobiGlas screen this app cannot read yet","tookMs":150,"checks":[],
+             "wallet":{"balance":2092773,"trouble":null},"lines":["Unmapped app"]}
+            """;
+
+        var page = Panel(readings: live);
+
+        Assert.True(page.Truth("__dom.node('#screen-review').hidden"));
+        Assert.Contains("read live from the screen", page.NodeText("#screen-readings"));
+    }
+
     // ---- the stream, and the toast ----
 
     private static void Frame(Page page, string events, string screen = "null") =>

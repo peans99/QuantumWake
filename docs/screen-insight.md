@@ -189,8 +189,17 @@ needed for any of them. `LiveScreens` keeps one reading a screen, under the
 - *Two minutes away* and the next look is a new reading.
 - *Not kept live:* tooltips, because hovering down an inventory would keep one
   an item and push the one loadout reading of a ship out of a 300-entry log;
-  mobiGlas apps with no reader and frames of nothing, which would be the same
-  unreadable line every two seconds.
+  frames of nothing, and mobiGlas apps with no reader whose balance did not
+  read, which would be the same unreadable line every two seconds.
+- *The balance alone (1.1.22).* A mobiGlas app with no reader is kept when the
+  balance in its bar read, as one wallet reading whichever app it was on - the
+  home screen is where a pilot looks at their cash. In Nicolas's log 72 of 155
+  readings carry a balance, and 9 of those are such screens, which 1.1.21 left
+  behind. Because the Ledger counts the cash on from it, a wallet reading needs
+  the same figure on two frames running before it is kept at all, not just the
+  same screen; a new figure renews it the same way. These readings stay out of
+  the Log's review queue, which is for screenshots a reader could be written
+  from and has no capture to show for a live one.
 
 Screenshots stay the way in wherever live reading is not used: on Linux, which
 has no capture and so never offers the switch, and for any pilot who leaves it

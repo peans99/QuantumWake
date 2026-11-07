@@ -34,9 +34,10 @@ namespace Quantumwake.Data;
 /// seconds later, to say the same screen again.
 /// </para>
 /// <para>
-/// The rock scan stays with <see cref="LiveRocks"/>, and a mobiGlas app this
-/// app has no reader for is never kept: read live it would be the same
-/// unreadable line every two seconds.
+/// The rock scan stays with <see cref="LiveRocks"/>. A mobiGlas app this app
+/// has no reader for is kept only for the balance in its bar, as one wallet
+/// reading (1.1.22); without a balance it would be the same unreadable line
+/// every two seconds, and is not kept.
 /// </para>
 /// </remarks>
 public sealed class LiveScreens
@@ -62,6 +63,9 @@ public sealed class LiveScreens
     /// an ultrawide has taken most of a second on its own.
     /// </summary>
     private static readonly TimeSpan Running = TimeSpan.FromSeconds(8);
+
+    /// <summary>A mobiGlas app this app has no reader for, kept for the balance in its bar alone.</summary>
+    private const string WalletScreen = "wallet";
 
     /// <summary>
     /// The name to keep this frame's reading under, or null when it is not
@@ -101,7 +105,11 @@ public sealed class LiveScreens
             return held.Shot;
         }
 
-        if (!seenBefore) return null;
+        // A balance is the whole of a wallet reading, and the Ledger believes
+        // it, so it has to read the same figure twice before it is kept at
+        // all: a digit misread on one frame must not become the cash baseline
+        // for the seconds until the next frame corrects it.
+        if (!seenBefore || (screen == WalletScreen && !saidBefore)) return null;
 
         var shot = $"live-{at.ToUniversalTime():yyyyMMdd-HHmmss}";
         _held[screen] = new Held { Shot = shot, Score = score, Says = says, LastSeen = at };
@@ -136,6 +144,12 @@ public sealed class LiveScreens
                 ? (k.Buying == false ? "kiosk:sell:" : "kiosk:buy:") + (k.Ship ?? k.ShipRead ?? "").ToUpperInvariant()
                 : null,
             ScreenKind.Refinery => s.Refinery is { } f ? $"refinery:{f.Stage}:{f.Station?.ToUpperInvariant()}" : null,
+
+            // A mobiGlas app with no reader still carries the balance in its
+            // bar - the home screen is where a pilot glances at their cash -
+            // and a screenshot of it kept that. Kept live as one reading,
+            // whichever app it was on, renewed when the figure changes.
+            ScreenKind.MobiGlas => s.Wallet?.Balance is not null ? WalletScreen : null,
             _ => null,
         };
     }
