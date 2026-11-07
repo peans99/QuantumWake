@@ -62,8 +62,22 @@ public partial class MainWindow : Window
     private Rect _glanceRestoreBounds;
     private bool _isGlance;
 
-    /// <summary>Height that holds the focus strip, campaign rail and live status without scrolling.</summary>
-    private const double GlanceHeight = 304;
+    /// <summary>
+    /// The strip view's height until the page says how tall its lines are -
+    /// two lines and the frame. The page then sizes it exactly, and again
+    /// whenever a line comes or goes (1.2.4).
+    /// </summary>
+    private const double GlanceHeight = 72;
+
+    /// <summary>
+    /// The strip is a band, not a panel: a wider window only stretches lines
+    /// that already end in an ellipsis. The full widget's width comes back.
+    /// </summary>
+    private const double GlanceMaxWidth = 380;
+
+    /// <summary>The full widget's floor; the strip goes well under it.</summary>
+    private const double WidgetMinHeight = 150;
+    private const double GlanceMinHeight = 36;
 
     /// <summary>
     /// Width of the transparent gutter around the WebView2 that acts as the
@@ -134,11 +148,12 @@ public partial class MainWindow : Window
             Width = saved.Width;
             Height = saved.Height;
             _isGlance = saved.Glance;
+            if (_isGlance) MinHeight = GlanceMinHeight;
             _glanceRestoreBounds = new Rect(
                 Left,
                 Top,
                 Math.Max(MinWidth, saved.ExpandedWidth ?? Width),
-                Math.Max(MinHeight, saved.ExpandedHeight ?? 460));
+                Math.Max(WidgetMinHeight, saved.ExpandedHeight ?? 460));
         }
         else
         {
@@ -221,6 +236,25 @@ public partial class MainWindow : Window
         settings.AreDefaultContextMenusEnabled = false;
         settings.IsStatusBarEnabled = false;
         settings.AreBrowserAcceleratorKeysEnabled = false;
+
+        // The strip says how tall it is, and asks for the full widget when
+        // clicked. Only this server's page is listened to.
+        Browser.CoreWebView2.WebMessageReceived += (_, message) =>
+        {
+            if (!message.Source.StartsWith(ServerRoot.ToString(), StringComparison.OrdinalIgnoreCase)) return;
+            try
+            {
+                using var json = System.Text.Json.JsonDocument.Parse(message.WebMessageAsJson);
+                var root = json.RootElement;
+                var kind = root.TryGetProperty("kind", out var k) ? k.GetString() : null;
+                if (kind == "strip" && root.TryGetProperty("height", out var h) && h.TryGetDouble(out var height))
+                    FitStrip(height);
+                else if (kind == "expand" && _isGlance && !_isFullscreen)
+                    ToggleGlance();
+            }
+            catch (System.Text.Json.JsonException) { }
+            catch (InvalidOperationException) { }
+        };
 
         Browser.Source = new Uri(ServerRoot, _isGlance ? "?overlay=1&glance=1" : "?overlay=1");
         Browser.NavigationCompleted += (_, _) => Splash.Visibility = Visibility.Collapsed;
@@ -448,22 +482,25 @@ public partial class MainWindow : Window
         if (_isGlance)
         {
             _glanceRestoreBounds = new Rect(Left, Top, Width, Height);
+            MinHeight = GlanceMinHeight;
+            Width = Math.Min(Width, GlanceMaxWidth);
             Height = GlanceHeight;
         }
         else
         {
             var left = Left;
             var top = Top;
+            MinHeight = WidgetMinHeight;
             Width = _glanceRestoreBounds.Width;
-            Height = _glanceRestoreBounds.Height;
+            Height = Math.Max(WidgetMinHeight, _glanceRestoreBounds.Height);
             Left = left;
             Top = top;
         }
 
         UpdateGlanceControl();
         ShowOverlayFeedback(
-            _isGlance ? DesktopText.T("Glance mode") : DesktopText.T("Full widget"),
-            _isGlance ? DesktopText.T("Focus, campaign and current status stay visible") : DesktopText.T("All chosen cards are back"));
+            _isGlance ? DesktopText.T("Strip view") : DesktopText.T("Full widget"),
+            _isGlance ? DesktopText.T("Where you are, what is next, and any lock or fracture") : DesktopText.T("All chosen cards are back"));
 
         if (Browser.CoreWebView2 is null) return;
 
@@ -478,12 +515,25 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Sizes the window to the strip the page drew. WebView2 lays out in the
+    /// same device-independent units as WPF, so the page's CSS height plus
+    /// whatever surrounds the browser - the gutter, and the header while the
+    /// widget is unpinned - is the window's height.
+    /// </summary>
+    private void FitStrip(double pageHeight)
+    {
+        if (!_isGlance || _isFullscreen || pageHeight <= 0) return;
+        var chrome = Math.Max(0, ActualHeight - Browser.ActualHeight);
+        Height = Math.Max(GlanceMinHeight, Math.Ceiling(pageHeight + chrome));
+    }
+
     private void UpdateGlanceControl()
     {
         CompactButton.Content = _isGlance ? "▴" : "▾";
         CompactButton.ToolTip = _isGlance
             ? DesktopText.T("Expand widget (Ctrl+Alt+C)")
-            : DesktopText.T("Glance view — focus, campaign and current status (Ctrl+Alt+C)");
+            : DesktopText.T("Strip view — where you are and what is next (Ctrl+Alt+C)");
         CompactButton.IsEnabled = !_isFullscreen;
     }
 

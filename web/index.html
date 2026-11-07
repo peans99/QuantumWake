@@ -191,6 +191,14 @@
 
 <main>
 
+  <!-- The overlay's compact view (Ctrl+Alt+C): two or three lines, sized to
+       fit by the shell. Hidden everywhere else. A click opens the full widget. -->
+  <div class="overlay-strip" id="overlay-strip" title="Open the full widget">
+    <div class="strip-line strip-where"><span class="strip-mark" aria-hidden="true">◆</span><b id="strip-where">—</b><span class="strip-ship" id="strip-ship"></span></div>
+    <div class="strip-line strip-next" id="strip-next-line" hidden><span class="strip-mark" aria-hidden="true">▸</span><span id="strip-next"></span></div>
+    <div class="strip-line strip-alert" id="strip-alert-line" hidden><span class="strip-mark" aria-hidden="true">●</span><span id="strip-alert"></span></div>
+  </div>
+
   <!-- Shown only when no Star Citizen install could be found: without one
        there is nothing to read, so this asks rather than sitting empty. -->
   <div class="no-install" id="no-install" hidden>

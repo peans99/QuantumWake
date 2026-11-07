@@ -691,6 +691,8 @@ window.scOverlayGlance = (on) => {
   else url.searchParams.delete('glance');
   window.history.replaceState(null, '', url);
   if (glance) showView('now');
+  overlayStripHeight = 0;
+  renderOverlayStrip();
 };
 
 /* The native shell has no room for a permanent status line. Its commands still
@@ -1211,13 +1213,7 @@ function contractFocus(contracts) {
 }
 
 /** The one decision worth leading the hub with, before the configurable cards. */
-function renderNowFocus(state, briefing = pilotBriefing) {
-  const strip = $('#now-focus');
-  const title = $('#now-focus-title');
-  const detail = $('#now-focus-detail');
-  const open = $('#now-focus-open');
-  if (!strip || !title || !detail || !open) return;
-
+function nowFocus(state, briefing = pilotBriefing) {
   const differing = recentScreenDisagreement(state);
   const nextStop = (briefing?.stops || []).find(stop => !stop.done);
   let focus = null;
@@ -1229,7 +1225,18 @@ function renderNowFocus(state, briefing = pilotBriefing) {
   else if (nextStop) focus = { title: tx('Next stop'), detail: nextStop.place || briefing.tripTitle || tx('Tracked flight plan'), view: 'map', action: tx('Map'), urgency: 'ready', placeId: nextStop.placeId, place: nextStop.place };
   else if (state?.contracts?.length) focus = { ...contractFocus(state.contracts), urgency: 'ready' };
   else if (state?.location) focus = { title: tx('At location'), detail: state.location, view: 'map', action: tx('Map'), urgency: 'quiet', placeId: state.locationId, place: state.location };
+  return focus;
+}
 
+function renderNowFocus(state, briefing = pilotBriefing) {
+  renderOverlayStrip(state, briefing);
+  const strip = $('#now-focus');
+  const title = $('#now-focus-title');
+  const detail = $('#now-focus-detail');
+  const open = $('#now-focus-open');
+  if (!strip || !title || !detail || !open) return;
+
+  const focus = nowFocus(state, briefing);
   strip.hidden = !focus;
   if (!focus) return;
   strip.dataset.urgency = focus.urgency || 'quiet';
@@ -1243,6 +1250,83 @@ function renderNowFocus(state, briefing = pilotBriefing) {
     else showView(focus.view);
   };
 }
+
+/*
+ * The overlay's strip: the compact view (Ctrl+Alt+C) as two or three lines
+ * instead of the status card, which at 360 px was mostly source tags, labels
+ * and dashes (1.2.4). Where you are and in what; the next thing to do; and a
+ * third line only while something needs the eyes - a lock, a fracture under
+ * way, a tracked event - with cash on hand in its place otherwise. A line with
+ * nothing to say is left out, and the shell sizes the window to what is left.
+ */
+function overlayStripLines(state, briefing, live, event, cash) {
+  const closed = gameClosed(state);
+  const where = !state ? tx('Waiting for the game')
+    : closed ? tx('Game closed')
+      : state.travelling ? `${tx('In quantum')} → ${state.travellingTo || tx('Destination not identified')}`
+        : state.location || (state.inGame ? tx('Location unknown') : tx('In menus'));
+  const ship = !closed && state?.inGame && state.ship ? state.ship : '';
+
+  // Travelling and "At location" are line one already; the strip does not say them twice.
+  const focus = state && !closed ? nowFocus(state, briefing) : null;
+  const next = focus && focus.urgency !== 'live' && focus.urgency !== 'quiet' ? `${focus.title} · ${focus.detail}` : '';
+
+  let alert = null;
+  const target = live?.enabled ? live?.status?.combat?.target : null;
+  const fracture = live?.enabled ? live?.status?.fracture : null;
+  if (target) {
+    alert = { tone: target.stance === 'hostile' ? 'hostile' : 'target', text: `${targetTitle(target)} · ${targetDetail(target)}` };
+  } else if (fracture?.active) {
+    const fill = Math.round((fracture.fill || 0) * 100);
+    const said = fracture.state === 'in' ? tx('In the window')
+      : fracture.state === 'above' ? tx('Overcharge - back off') : tx('Charging');
+    alert = { tone: fracture.state === 'above' ? 'hostile' : 'fracture', text: `${tx('Fracture')} · ${said} · ${fill}%` };
+  } else if (event?.text) {
+    alert = { tone: 'event', text: event.text };
+  } else if (cash) {
+    alert = { tone: 'cash', text: Number(cash.movementsSince) ? tx('about {money}', { money: money(cash.estimate) }) : money(cash.balance) };
+  }
+  return { where, ship, next, alert };
+}
+
+let nowCashRead = null;
+let overlayStripHeight = 0;
+
+/** The tracked event as one line, or null when none is being followed. */
+function overlayStripEvent() {
+  const event = currentEvent();
+  if (!event || eventsData?.tracked !== event.id) return null;
+  const overall = event.tracks.find((t) => t.overall) || event.tracks[0];
+  return overall ? { text: `${event.title} · ${eventPoints(overall.points)} · ${eventNextText(overall)}` } : null;
+}
+
+function renderOverlayStrip(state = nowState, briefing = pilotBriefing) {
+  const strip = $('#overlay-strip');
+  if (!strip) return;
+  const lines = overlayStripLines(state, briefing, liveState, overlayStripEvent(), nowCashRead);
+  $('#strip-where').textContent = lines.where;
+  $('#strip-ship').textContent = lines.ship ? ` · ${lines.ship}` : '';
+  $('#strip-next').textContent = lines.next;
+  $('#strip-next-line').hidden = !lines.next;
+  $('#strip-alert').textContent = lines.alert?.text || '';
+  $('#strip-alert-line').hidden = !lines.alert;
+  $('#strip-alert-line').dataset.tone = lines.alert?.tone || '';
+  postOverlayStripHeight();
+}
+
+/* The shell sizes the window to the strip, so the page says how tall it is
+   whenever a line comes or goes. Posted from the render rather than watched:
+   an observer left connected keeps a headless page from ever settling. */
+function postOverlayStripHeight() {
+  const strip = $('#overlay-strip');
+  if (!strip || !document.body.classList.contains('glance')) return;
+  const height = Math.ceil(strip.getBoundingClientRect?.().height || 0);
+  if (!height || height === overlayStripHeight) return;
+  overlayStripHeight = height;
+  window.chrome?.webview?.postMessage?.({ kind: 'strip', height });
+}
+
+$('#overlay-strip')?.addEventListener('click', () => window.chrome?.webview?.postMessage?.({ kind: 'expand' }));
 
 /* The shared flight line is deliberately a summary, not a second copy of the
  * Now card. It keeps orientation while the pilot works in a deep table, and
@@ -1289,6 +1373,20 @@ function applyFlightAtmosphere(state) {
           : 'ship';
 }
 
+/* Which status fields have nothing to show, for the overlay to leave out.
+   The dashboard ignores the mark and keeps its dashes, which say "not read". */
+function markEmptyStatusFields(state) {
+  const empty = {
+    ship: !state?.ship,
+    handle: !state?.handle,
+    health: !(state?.deaths || state?.incapacitations),
+  };
+  for (const [field, none] of Object.entries(empty)) {
+    const node = document.querySelector?.(`[data-status-field="${field}"]`);
+    if (node) node.toggleAttribute?.('data-empty', none);
+  }
+}
+
 let newestLiveFeedKey = '';
 let liveFeedPrimed = false;
 
@@ -1330,6 +1428,7 @@ function renderNow(state) {
     : state.inGame ? (state.gameRules || tx('in game')) : tx('frontend / menus');
   $('#now-clock').textContent = nowClock(state);
   renderNowClosed(state);
+  markEmptyStatusFields(state);
   $('#now-deaths').textContent = state.deaths ?? 0;
   $('#now-incaps').textContent = state.incapacitations ?? 0;
 
@@ -1372,7 +1471,9 @@ function renderNow(state) {
     feed.append(el('li', 'empty', state.connected ? tx('Nothing yet this session.') : tx('Waiting for the game…')));
   } else {
     // The widget shows a short tail; the full feed belongs on the page.
-    const entries = isOverlay ? state.recentEvents.slice(0, 12) : state.recentEvents;
+    // Five in the widget: the feed is "what just happened", and twelve rows were
+    // most of its height (1.2.4).
+    const entries = isOverlay ? state.recentEvents.slice(0, 5) : state.recentEvents;
 
     for (const [index, entry] of entries.entries()) {
       const li = el('li');
@@ -1666,6 +1767,8 @@ async function loadEarnings() {
  * card in the overlay has no room to.
  */
 function renderNowCash(read) {
+  nowCashRead = read || null;
+  renderOverlayStrip();
   const line = $('#now-cash');
   const note = $('#now-cash-note');
   if (!line || !note) return;
@@ -15199,6 +15302,7 @@ $('#event-preferences')?.addEventListener('click', event => {
  * next tiers, and what finishing each contract in the journal would add.
  */
 function renderNowEvent() {
+  renderOverlayStrip();
   const card = $('#now-event-card');
   const status = $('#operations-event-status');
   const event = currentEvent();
@@ -36728,6 +36832,7 @@ function targetDetail(target) {
  * would be one more thing in the overlay that is never news.
  */
 function renderNowTarget() {
+  renderOverlayStrip();
   const card = $('#now-target-card');
   if (!card) return;
   const combat = liveState?.enabled ? liveState?.status?.combat : null;
@@ -36804,6 +36909,7 @@ function popTargetCard() {
  * charge window - a card that said "not cracking" all evening is not news.
  */
 function renderNowFracture() {
+  renderOverlayStrip();
   const card = $('#now-fracture-card');
   if (!card) return;
   const fracture = liveState?.enabled ? liveState?.status?.fracture : null;

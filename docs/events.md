@@ -166,9 +166,10 @@ Every total is a floor, and the page says so:
   finishing each open contract adds. The choice is kept on the server
   (`event-track.json`, `POST /api/events/track`), because the overlay runs in
   its own browser profile and would never see a choice kept in browser storage.
-- **Overlay glance view.** A tracked event is one line above Current status:
-  the overall points and every bar against its next tier. The overlay drops
-  the feed's detail text to stay dense, so the bar figures sit outside it.
+- **Overlay strip.** A tracked event is the strip's third line when no lock or
+  fracture needs it: the event, its overall points and the next tier (1.2.4).
+  The full overlay keeps the card, with every bar's figures outside the feed's
+  detail text, which the overlay drops to stay dense.
 - **Focus strip.** An open event contract leads it: "+417 pts to Your total,
   Defense".
 - **Contracts table.** Every row that pays into an event carries a `pts` chip.

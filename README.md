@@ -140,7 +140,7 @@ QuantumWake.exe --path "D:\...\StarCitizen\LIVE"
 The overlay starts off. Star Citizen needs **Borderless Windowed** mode for it
 to sit above the game. Use the tray icon or `Ctrl+Alt+O` to show it. Its pin
 button makes it click-through; `Ctrl+Alt+←/→` changes page, `Ctrl+Alt+F`
-expands it and `Ctrl+Alt+C` switches to a small glance view.
+expands it and `Ctrl+Alt+C` shrinks it to a two- or three-line strip.
 
 ### Cockpit HUD
 
@@ -352,7 +352,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.2.3
+### 1.2.4
 
 **Voice commands: say it instead of finding the key.** For the things you do once a session and would rather not give a button to. Settings → Voice & callouts has a new Voice commands switch, off until you turn it on. Say "Quantum Wake copilot on", or hold a push-to-talk button or key you pick, and the app listens for a short list of commands:
 
@@ -369,6 +369,15 @@ Each command presses the key the game has for that action, either yours from you
 **More actions show how they fire.** The Controls page now reads every way the game spells an action's activation mode, and the keyboard defaults some actions keep in a separate entry. 22 actions that showed no mode now show one, and five that looked unbound now show their key.
 
 **The MFD's Target page shows the ship as the Garage pictures it.** For a target the app could not name, and for hulls the game has no silhouette for (the Paladin and the Perseus among them), the page showed a picture cut from your screen that reloaded every second, even when nothing had changed. It now shows the same pictures as the Garage. A named hull, or the likeliest one, gets its silhouette, red while hostile. A hull with no silhouette gets its Garage render. A target nothing can name yet gets a plain ship mark. The picture changes only when the lock does. The hull's damage is still read from the screen, and still shown as sound, damaged or critical under the picture.
+
+**A smaller overlay.** The overlay's compact view (the ▾ button or Ctrl+Alt+C) is now a thin strip instead of a 300-pixel card. It shows where you are, or where your jump is going, and your ship. Under that is the next thing to do, such as your plan's next stop or a contract, but only when there is one. A third line appears only while something needs your attention: a target lock (red when hostile), a fracture under way, or an event you track. When none of those is happening it shows your cash, if the app has read it. A line with nothing to say is left out, and the window shrinks or grows to fit, so the strip is usually two lines tall and at most 380 pixels wide. Click it to get the full overlay back. The full overlay is shorter too:
+- The "GAME LOG" tag on every field is gone.
+- Ship, pilot and deaths are left out when there is nothing to show, rather than drawn as dashes.
+- The big focus banner is one line, and is hidden when it would only repeat where you are.
+- "What to do next" keeps its place, plan and next stops, without the planning controls, services, insurance or stash.
+- The feed shows the last five events instead of twelve.
+
+Fullscreen (Ctrl+Alt+F) and the dashboard still show everything.
 
 ### 1.1.25
 

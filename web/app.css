@@ -4707,7 +4707,50 @@ button.briefing-service:hover { border-color: var(--cyan); color: var(--cyan-hot
 body.overlay .now-card-actions, body.overlay .now-card-visibility { display: none; }
 body.overlay .now-status-card { grid-column: span 2; }
 body.overlay .now-status-config, body.overlay .now-status-options { display: none; }
-body.overlay .now-status-readings { grid-template-columns: 1.25fr 1fr; gap: 0 8px; }
+body.overlay .now-status-readings { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 0 8px; }
+/* The overlay shows values, not where each came from (1.2.4): a GAME LOG tag
+   on every field took more room than the field. The dashboard keeps them. A
+   field with nothing to say - no ship, no handle, no deaths - is left out
+   rather than drawn as a dash, and nothing may push the card past the window. */
+body.overlay .card-source { display: none; }
+body.overlay .now-status-field { min-width: 0; }
+body.overlay .now-status-field[data-empty] { display: none; }
+body.overlay .now-status-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.overlay .now-status-health .statline { padding-right: 10px; }
+
+/* The widget, as against the dashboard, keeps what is worth a look in flight
+   (1.2.4). Measured at its 360 px on a real session, these took most of its
+   height and said nothing the cards above them did not:
+   - the focus banner, in a headline face, when all it says is the place the
+     status card already leads with - it stays, as one line, for a jump, a
+     next stop or a contract;
+   - the briefing's planning half: the focus picker and its buttons, the
+     services list, insurance, stash and best rocks. Its place, plan line and
+     next stops stay;
+   - the confidence line, the game version, and the wake-up place's two lines
+     of reasoning.
+   Fullscreen (Ctrl+Alt+F) is the dashboard again and shows all of it. */
+body.overlay:not(.expanded) .now-focus[data-urgency="quiet"] { display: none !important; }
+body.overlay:not(.expanded) .now-focus:not([hidden]) {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 8px; align-items: baseline;
+  margin: 0 0 6px; padding: 5px 8px; min-height: 0;
+}
+body.overlay:not(.expanded) .now-focus-mark { margin: 0; font-size: 8px; }
+body.overlay:not(.expanded) .now-focus-copy { display: flex; gap: 6px; min-width: 0; align-items: baseline; }
+body.overlay:not(.expanded) .now-focus-title { font: 600 10px/1.3 var(--mono, monospace); letter-spacing: .12em; text-transform: uppercase; white-space: nowrap; }
+body.overlay:not(.expanded) .now-focus-copy .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text); }
+body.overlay:not(.expanded) #now-focus-open { display: none; }
+body.overlay:not(.expanded) .briefing-actions,
+body.overlay:not(.expanded) #briefing-why,
+body.overlay:not(.expanded) #briefing-services-section,
+body.overlay:not(.expanded) #briefing-claim-section,
+body.overlay:not(.expanded) #briefing-stash-section,
+body.overlay:not(.expanded) #briefing-mining-section,
+body.overlay:not(.expanded) #now-event-card .actions,
+body.overlay:not(.expanded) #now-confidence,
+body.overlay:not(.expanded) #now-version,
+body.overlay:not(.expanded) .now-status-respawn .sub,
+body.overlay:not(.expanded) .now-status-respawn .note { display: none !important; }
 body.overlay .now-status-location { grid-column: 1 / -1; grid-row: auto; padding: 0 0 4px; border-right: 0; }
 body.overlay .now-status-field { padding: 4px 0; }
 body.overlay .now-status-label { font-size: 7px; }
@@ -4715,21 +4758,34 @@ body.overlay .now-status-field .value { font-size: 12px; }
 
 /* The native shell lowers itself to this card. It remains a flight status, not
    a shrunken dashboard: selected status fields still decide what is useful. */
+/* The overlay's compact view is the strip and nothing else (1.2.4). The
+   window is sized to it by the shell, so nothing here may add height. */
+.overlay-strip { display: none; }
 body.overlay.glance .topbar,
-body.overlay.glance .now-focus,
-body.overlay.glance .view:not(#view-now),
-body.overlay.glance #view-now > .now-card-visibility,
-body.overlay.glance #view-now .now-grid > .card:not(.now-status-card):not(.event-tracked) { display: none !important; }
-body.overlay.glance main { padding: 4px 7px 7px; }
-body.overlay.glance #view-now { display: block !important; }
-/* The glance view is the status card; a layout that switched it off cannot leave the glance empty. */
-body.overlay.glance .now-status-card.layout-off { display: block; }
-body.overlay.glance .now-grid { display: block; }
-body.overlay.glance .now-status-card { min-height: 0; padding: 7px 9px; }
-body.overlay.glance .now-status-card .card-label { margin-bottom: 4px; }
-body.overlay.glance .now-status-readings { grid-template-columns: 1.25fr 1fr; gap: 0 8px; }
-body.overlay.glance .now-status-location { padding-bottom: 4px; }
-body.overlay.glance .now-status-field { padding: 3px 0; }
+body.overlay.glance main > *:not(#overlay-strip) { display: none !important; }
+body.overlay.glance main { padding: 0; }
+body.overlay.glance::before { display: none; }
+/* A toast would cover the whole strip; the strip itself is the news. */
+body.overlay.glance .toast { display: none !important; }
+body.overlay.glance .overlay-strip {
+  display: block; padding: 5px 9px 6px; cursor: pointer;
+  border-left: 2px solid var(--cyan, #35c8f0);
+  background: rgba(6, 14, 22, .55);
+  font-size: 12px; line-height: 1.45;
+}
+.overlay-strip .strip-line { display: flex; align-items: baseline; gap: 6px; min-width: 0; white-space: nowrap; }
+.overlay-strip .strip-line[hidden] { display: none; }
+.overlay-strip .strip-line > span:last-child,
+.overlay-strip #strip-where { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.overlay-strip #strip-where { flex: 0 1 auto; color: var(--text, #e6f4ff); font-weight: 600; }
+.overlay-strip .strip-ship { flex: 1 1 auto; color: var(--muted, #8aa4b8); }
+.overlay-strip .strip-mark { flex: 0 0 auto; font-size: 8px; color: var(--cyan-hot, #7fe4ff); }
+.overlay-strip .strip-next { color: var(--text, #e6f4ff); }
+.overlay-strip .strip-alert { color: var(--muted, #8aa4b8); }
+.overlay-strip .strip-alert[data-tone="hostile"], .overlay-strip .strip-alert[data-tone="hostile"] .strip-mark { color: #ff5a4d; }
+.overlay-strip .strip-alert[data-tone="target"], .overlay-strip .strip-alert[data-tone="fracture"] { color: var(--text, #e6f4ff); }
+.overlay-strip .strip-alert[data-tone="fracture"] .strip-mark { color: #ffb347; }
+.overlay-strip .strip-alert[data-tone="event"] .strip-mark { color: #b48cff; }
 body.overlay .briefing-head { margin-bottom: 6px; }
 body.overlay .briefing-title { font-size: 13px; }
 body.overlay .briefing-sub, body.overlay .briefing-detail { font-size: 9px; }
@@ -5787,19 +5843,6 @@ button.event-tier-head:hover .what, button.event-tier-head:focus-visible .what {
 .event-contracts { margin-top: var(--gap); }
 .now-event-list { margin-top: 4px; }
 .event-pts { margin-left: 6px; font-family: var(--mono); color: var(--text); }
-/* The glance view's event line: a tracked event as one dense row under the
-   status card, inside the 270-pixel footprint the shell gives the glance. */
-/* First, not after the status card: that card fills the glance on its own, and
-   an event the pilot chose to track is the line they asked to keep in view. */
-body.overlay.glance .now-grid:has(> #now-event-card.event-tracked:not([hidden])) { display: flex; flex-direction: column; gap: 5px; }
-body.overlay.glance .now-grid:has(> #now-event-card.event-tracked:not([hidden])) > .card { width: 100%; box-sizing: border-box; }
-body.overlay.glance #now-event-card.event-tracked { order: -1; padding: 5px 9px; min-height: 0; }
-body.overlay.glance #now-event-card .card-source,
-body.overlay.glance #now-event-card .actions { display: none; }
-body.overlay.glance #now-event-card .card-label { margin-bottom: 1px; }
-body.overlay.glance #now-event-card .value { font-size: 12px; margin: 0 0 2px; }
-body.overlay.glance #now-event-list { display: flex; flex-wrap: wrap; gap: 0 12px; margin: 0; }
-body.overlay.glance #now-event-list li { padding: 0; border: 0; }
 .point-here { font-size: 12px; color: var(--cyan-hot); }
 #points-from { margin: 10px 0 14px; }
 .point-here .muted { color: var(--dim); }
@@ -7135,42 +7178,6 @@ td.armoury-cost { color: var(--amber); }
 .controls-mode-pick { max-width: 110px; font-size: 11px; }
 .controls-axis-live { font: 11px var(--mono); margin-left: 6px; }
 
-/* ---------- overlay flight deck ----------
- *
- * The desktop surface can afford a dashboard; the in-game widget has to answer
- * one question before the player reads anything else. In Glance mode that is
- * the live focus strip, then an optional tracked campaign rail, then status.
- */
-body.overlay.glance .now-focus:not([hidden]) {
-  display: grid !important;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 5px 9px;
-  align-items: center;
-  margin: 0 0 5px;
-  min-height: 0;
-  padding: 6px 8px;
-  border: 1px solid var(--cyan-deep);
-  border-left: 3px solid var(--cyan);
-  background: linear-gradient(100deg, rgba(53, 200, 240, .12), rgba(7, 15, 24, .9) 48%);
-}
-body.overlay.glance .now-focus-mark { grid-row: span 2; margin: 0; font-size: 8px; color: var(--cyan-hot); }
-body.overlay.glance .now-focus-copy { min-width: 0; }
-body.overlay.glance .now-focus-title { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
-body.overlay.glance .now-focus-copy .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text); }
-body.overlay.glance #now-focus-open { display: none; }
-body.overlay.glance .now-focus[data-urgency="attention"] { border-left-color: var(--amber); background: linear-gradient(100deg, rgba(255, 171, 61, .14), rgba(7, 15, 24, .9) 48%); }
-body.overlay.glance .now-focus[data-urgency="attention"] .now-focus-mark { color: var(--amber); }
-body.overlay.glance .now-focus[data-urgency="live"] .now-focus-mark { animation: overlay-live-pulse 1.6s ease-in-out infinite; }
-
-/* The tracked event is a deliberate second signal, therefore a rail rather
-   than another card competing with the current flight state. */
-body.overlay.glance #now-event-card.event-tracked {
-  border-color: rgba(155, 113, 255, .56);
-  border-left: 3px solid #ad8cff;
-  background: linear-gradient(100deg, rgba(155, 113, 255, .13), rgba(10, 16, 29, .88) 56%);
-}
-body.overlay.glance #now-event-card.event-tracked .card-label { color: #cebfff; }
-
 /* The small action confirmations are visible even after the shell pins itself
    and hides its header. They leave no permanent overlay over the game. */
 body.overlay .toast.overlay-action {
@@ -7193,9 +7200,7 @@ body.overlay.high-contrast { --text: #f5fbff; --muted: #b5d0df; --dim: #8eafc3; 
 body.overlay.high-contrast .card { border-color: #4c85a4; background: linear-gradient(160deg, rgba(12, 27, 42, .98), rgba(4, 12, 21, .98)); }
 body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-label { color: #b7f1ff; }
 
-@keyframes overlay-live-pulse { 50% { opacity: .58; } }
 @media (prefers-reduced-motion: reduce) {
-  body.overlay.glance .now-focus[data-urgency="live"] .now-focus-mark { animation: none; }
   .toast { animation: none; }
 }
 
