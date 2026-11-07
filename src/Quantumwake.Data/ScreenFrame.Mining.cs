@@ -112,13 +112,24 @@ public static partial class ScreenFrames
     private static readonly Regex ScuFigure = new(@"^(\d+(?:[.,]\d+)?)\s*(m)?\s*SCU$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex WholeFigure = new(@"^\d{1,6}(?:[.,]\d{1,3})?$", RegexOptions.Compiled);
     private static readonly Regex LeadingShare = new(@"^\s*(?<share>\S+%)\s+(?<name>.+)$", RegexOptions.Compiled);
+    /// <summary>
+    /// The panel's title: RESULTS on the 3440 Golem frames, SCAN RESULTS on the
+    /// wiki's - and "117RKICAN RESULTS" on a 2560 MOLE stream of 2026-08-31,
+    /// where the rock's floating label ran into it. Anything ending RESULTS
+    /// counts; the three labels under it are still what make it this panel.
+    /// </summary>
+    public static bool IsScanTitle(string text)
+    {
+        var folded = ScreenInsight.Fold(text);
+        return folded.EndsWith(ScreenInsight.Fold("RESULTS"), StringComparison.Ordinal) && folded.Length <= 24;
+    }
 
     private static MiningScanReading? ReadMiningScan(IReadOnlyList<ScreenTextLine> lines, IReadOnlyList<string> commodityNames) =>
         LookAtScan(lines, commodityNames)?.Reading;
 
     internal static ScanLook? LookAtScan(IReadOnlyList<ScreenTextLine> lines, IReadOnlyList<string> commodityNames)
     {
-        var title = lines.FirstOrDefault(line => Is(line.Text, "SCAN RESULTS") || Is(line.Text, "RESULTS"));
+        var title = lines.FirstOrDefault(line => IsScanTitle(line.Text));
         if (title is null) return null;
 
         var h = title.Height;
@@ -228,6 +239,56 @@ public static partial class ScreenFrames
     }
 
     /// <summary>
+    /// The panel's patch from its title alone - or, when even the title was
+    /// lost, from COMPOSITION with an SCU figure on its row - for a second look
+    /// by a reader that may see what the first missed. Null with neither.
+    /// </summary>
+    /// <remarks>
+    /// On the 2560 MOLE stream Windows' engine read no title on the 839 kg
+    /// rock's frames but did read "COMPOSITION" and "3.39 SCU"; the title sat
+    /// 13 line heights above COMPOSITION on every frame where both were read.
+    /// On the 1,036 kg rock it read neither - COMPOSITION came out
+    /// "z:coMAOS1it0N" - but did read the difficulty, "EASY", with "4.22 scu"
+    /// 3.5 heights below it; the title sat 11 heights above the difficulty.
+    /// The difficulty words are the game's own
+    /// (ui_Mining_MiningLaser_DifficultyForecast_*): Easy, Medium, Hard,
+    /// Challenging, Impossible.
+    /// </remarks>
+    public static ScreenPatch? ScanTitlePatch(IReadOnlyList<ScreenTextLine> lines)
+    {
+        if (lines.FirstOrDefault(line => IsScanTitle(line.Text.Trim())) is { } title)
+        {
+            var h = title.Height;
+            return new ScreenPatch(Math.Max(0, title.Left - h * 2), Math.Max(0, title.Top - h), h * 26, h * 30);
+        }
+
+        bool ScuOnRow(ScreenTextLine line, double below) => lines.Any(other => other != line
+            && other.Text.Contains("SCU", StringComparison.OrdinalIgnoreCase)
+            && other.Top - line.Top >= below - line.Height && other.Top - line.Top <= below + line.Height * 2);
+
+        var composition = lines.FirstOrDefault(line => Opens(line.Text.Trim(), "COMPOSITION")
+            && lines.Any(other => other != line && other.Left > line.Left
+                && Math.Abs(other.Top - line.Top) < line.Height
+                && other.Text.Contains("SCU", StringComparison.OrdinalIgnoreCase)));
+        if (composition is not null)
+        {
+            var u = composition.Height * 1.1;
+            return new ScreenPatch(Math.Max(0, composition.Left - u * 2), Math.Max(0, composition.Top - u * 15), u * 26, u * 30);
+        }
+
+        var difficulty = lines.FirstOrDefault(line => Difficulties.Contains(ScreenInsight.Fold(line.Text.Trim()))
+            && ScuOnRow(line, line.Height * 3.5));
+        if (difficulty is null) return null;
+
+        var d = difficulty.Height * 1.1;
+        return new ScreenPatch(Math.Max(0, difficulty.Left - d * 10), Math.Max(0, difficulty.Top - d * 12), d * 26, d * 30);
+    }
+
+    /// <summary>The scan's difficulty forecast, as the game's strings spell it, folded.</summary>
+    private static readonly HashSet<string> Difficulties =
+        [.. new[] { "EASY", "MEDIUM", "HARD", "CHALLENGING", "IMPOSSIBLE" }.Select(ScreenInsight.Fold)];
+
+    /// <summary>
     /// Where a second look at the scan panel should point, or null when the
     /// frame is not a scan.
     /// </summary>
@@ -256,7 +317,7 @@ public static partial class ScreenFrames
 
         if (LookAtScan(all, []) is null) return null;
 
-        var title = all.First(line => Is(line.Text, "SCAN RESULTS") || Is(line.Text, "RESULTS"));
+        var title = all.First(line => IsScanTitle(line.Text));
         var h = title.Height;
 
         return new ScreenPatch(

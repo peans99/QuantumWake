@@ -14,6 +14,15 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
 
+  <!-- The recorded callout voice, inside the assembly: a single-file build has
+       no folder beside it. Named by path with forward slashes, so a lookup
+       does not depend on how the build spells a directory. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Voices\**\*">
+      <LogicalName>Voices/$([System.String]::Copy('%(RecursiveDir)').Replace('\', '/'))%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Quantumwake.Data\Quantumwake.Data.csproj" />
   </ItemGroup>

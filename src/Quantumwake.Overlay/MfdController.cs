@@ -203,7 +203,8 @@ internal sealed class MfdController : IDisposable
     {
         type = "display", buttons = layout.Buttons,
         brightness = layout.Brightness, textScale = layout.TextScale,
-        sleepAfterMinutes = layout.SleepAfterMinutes
+        sleepAfterMinutes = layout.SleepAfterMinutes,
+        follow = layout.Follow
     };
 
     private void SendDeviceStatus()

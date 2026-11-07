@@ -13,6 +13,13 @@ waiting on a real screenshot and is marked as waiting rather than guessed at.
 
 **The app reads a file. It never reads the screen.**
 
+> Since 1.1 this is the rule for screenshots, and no longer the rule for the
+> app: on 2026-11-05 Nicolas chose to read the screen live as well, opt-in and
+> asked at start. What changed, what did not, and why is under
+> [Reading the screen live](#reading-the-screen-live-2026-11-05) below. This
+> section is left as it was written, because the reasoning in it is what the
+> live reader is still held to.
+
 Enumerating windows, grabbing a framebuffer, or hooking a hotkey that captures
 the display is the class of thing anti-cheat exists to notice, and it is not
 worth a feature. A PNG the pilot saved is inert — reading it is the same act as
@@ -91,6 +98,442 @@ runs. The image is a file on disk like `Game.log` is a file on disk.
 
 If that ever stops being enough, the answer is to stop — not to find a cleverer
 way in.
+
+---
+
+## Reading the screen live (2026-11-05)
+
+Nicolas decided to prototype reading the screen while the game runs, on the
+`dev110` line, as a feature each pilot turns on or off and is asked about when
+the app starts. This section is the evidence that decision was made on.
+
+### The clause the table above left half-quoted
+
+The EULA's §I bullet is longer than the table quotes it. In full it opens:
+"Use any unauthorized third party software that intercepts, "mines", or
+otherwise collects information from or through the Game or the Website" - the
+part about reading RAM is its example, not its limit - and it ends by saying
+RSII "may allow certain third-party user interfaces at its discretion". That is
+broad enough to reach a screen reader. It is equally broad enough to reach what
+this app has done since its first release - read `Game.log` and `Data.p4k` -
+so reading the screen live is more of the same exposure, not a new kind. The
+Terms of Service were updated on 2026-10-30 and still say nothing about screen
+capture.
+
+### What others do, openly
+
+Smart Citizen 3.0 (released 2026-11-04) has an overlay that reads pixels under
+the radar and reads `Game.log`; its FAQ says "CIG has not said anything about
+overlays like this". SC Toolbox and SC Assistant capture the screen with
+`mss` and run OCR on it. Datarunner OCRs trading terminals for UEX. Each draws
+the same line: no memory, no injection, no input. No report of a ban for any of
+them was found - which is not evidence of safety, and is said as such to the
+pilot when asked.
+
+### The line it holds
+
+- Pixels copied from the desktop over the game's window - what a screenshot
+  key would save - and nothing else.
+- Only while Star Citizen is the window in front. Alt-tabbing stops it.
+- The game is found by its window title and class. Its process is never opened,
+  its memory never read, nothing is injected or hooked, no input is sent.
+- Each frame is overwritten by the next and deleted when reading stops. What is
+  kept is the reading, not the picture.
+- Off until the pilot says yes. The question is asked once at start - after
+  first flight on a new install, on the next start on an existing one - and
+  "Not now" is an answer that is kept.
+
+### Why GDI, and what that settles for the Store
+
+Windows.Graphics.Capture was the obvious API and the wrong one here. With a
+package identity - the Microsoft Store's MSIX - a program capturing a window on
+its own needs the `graphicsCaptureProgrammatic` capability and sits behind a
+per-app "Screenshots and screen recording" privacy switch, which has been
+reported to default to off and to turn itself off again across updates; hiding
+the yellow border needs a second capability and a second consent. All three
+capture capabilities are general-use, not restricted, so none would have needed
+Store approval - but the downloaded exe and the Store copy would have behaved
+differently, and the Store copy unreliably.
+
+`BitBlt` from the desktop needs none of it. The desktop is already composited,
+so a game in borderless or windowed mode is on it; the copy works the same in
+both editions, with no capability, no prompt and no border. The one thing it
+cannot see is exclusive fullscreen, which never reaches the desktop and copies
+as pure black - detected, and said on the page.
+
+### The prototype
+
+One screen: the mining scan panel, which the screenshot reader already reads.
+A frame every two seconds goes through exactly the screenshot path - same
+engine, same second looks - and a scan is kept as one reading a rock, updated
+while the rock stays selected (`LiveRocks`). Every other kind of frame is read
+and shown as "last seen" on the Log page, and not stored: which screens are
+worth keeping live is the next decision, one screen at a time.
+
+Not yet seen on a running game: the window class (`CryENGINE` is assumed, and a
+mismatch says what it found instead), how long the engine takes over a live
+frame at full resolution, and whether a scan read live agrees with the same
+panel screenshotted.
+
+### The target panel (1.1.2)
+
+Measured on Nicolas's OBS recording of 2026-11-05 (`2026-11-05 20-55-25.mp4`,
+2 h 24 min at 1716x720, half his 3440x1440), a Tactical Strike Group run with
+two long fights. Frames were taken every 6 s over 00:29-00:36 and
+01:57-02:04, scaled back to 3440x1440 and read with
+`Quantumwake.Cli --target <folder>`. Nothing was measured on a live game yet:
+live reading was not switched on that night (no `live` folder), and the
+recording is blurrier than the screen, so these numbers are a floor.
+
+**`Game.log` names the hulls around, never the one locked.** That session's
+log has an `ATC_Reset_VehiclesBeingStoredCleared` line for each ship that
+streamed in - `ANVL_Paladin` 33, `VNCL_Blade` 21, `VNCL_Scythe` 18,
+`VNCL_Glaive` 17 - and `CEntity::OnOwnerRemoved` force-detaching a ship's
+parts when one went away (`VNCL_Glaive_Thruster_side_left`). No line says
+which ship was locked, whether it was hostile, or its name as the panel
+prints it; `SD-5313`, the callsign on a locked Outlaw, appears nowhere. So
+the screen is the only source for the lock. The log's list of hulls nearby
+is a cross-check the signature candidates could use - not used yet.
+
+**What the panel carries.** Under the mission box, top right, four rows in
+the same order on both ship HUDs seen: three signature figures - EM, IR, CS,
+each with a smaller figure under it - then the name, `FACTION`, and
+`VELOCITY` with the range in brackets: `VELOCITY • 43M/S (2.55KM)`. One HUD
+writes the rows as loose text, the other in boxes with label and value
+apart, and the panel sits in a different place in each - so it is found by
+its words, never by position.
+
+**The name is often UNKNOWN.** Most fighters stayed `UNKNOWN / FACTION •
+UNKNOWN` for their whole fight; a name appears once the target is scanned,
+and the moment it does - 02:00:10, `UNKNOWN` turning into `VANDUUL BLADE` -
+is the "target identified" callout.
+
+**CS names the hull anyway.** The third figure is the hull's largest
+cross-section face times its armour, cut (not rounded) to a hundred:
+Idris-P 60,000 read `60.0K`, Perseus 35,430 read `35.4K`, Vanduul Blade 10,418
+read `10.4K`, Glaive 11,922 read `11.9K`, Gladius 9,779 read `9.7K`, Paladin
+28,580 read `28.5K` - the Paladin is the one that shows it is cut. It is
+steady through a fight (23.9K on every frame of one lock for 30 s), so an
+UNKNOWN can be narrowed to the hulls in that hundred; `ShipSignatureBook`
+does it from the Garage digests. The Blade's `10.4K` was on screen for 25 s
+before the game printed its name.
+
+**The hologram is damage, not hostility.** It turns red, but the Idris-P the
+party was defending (ship health 24%) was drawn red, and Vanduul fighters
+went from white to red over a fight. Hostility is the colour of the locked
+target's label in the world - the only label with a speed in brackets,
+`1.2km (26m/s)` - red for hostile, blue for party; and, when that label is not
+read, a faction that was only ever shooting: Vanduul, Outlaws, Shattered
+Blade.
+
+**0 m/s is not disabled.** The Idris-P and a turret both sat at 0 m/s for
+minutes. "Target disabled" is said only of a lock seen moving above 15 m/s
+that then reads zero twice.
+
+**The engines are not equal here.** Over the 137 frames:
+
+| | panel found | named | CS | speed | time a frame |
+|---|---|---|---|---|---|
+| ONNX, whole frame then panel | 109 | 56 | 68 | 71 | ~1 s whole, ~130 ms panel |
+| Windows OCR alone | 73 | 27 | 45 | 10 | ~120 ms whole, ~30 ms panel |
+| Windows whole frame, ONNX panel | 109 | 57 | 67 | 68 | ~175 ms whole + panel (~256 ms with the label search), ~126 ms panel |
+
+Windows' engine read the boxed HUD's `VELOCITY` and `FACTION` labels on no
+frame at all, and named a Vanduul fighter on two. So the panel is read with
+ONNX whenever its models are already on disk - never fetching them for this -
+and the panel's own range, upper-case `KM` in a bracket, finds the row when
+the label is missing.
+
+Misreadings folded, all seen: `VELOCTY`, `VELOCY`, `VELCCITY`, `l_VECCtry`;
+`FAETION`, `PACTION`, `FASTION`, `FACTON`, `AGTON`, `CTION`, `STION`; `UNKNOWH`,
+`UMKOWN`; `OM/S` for 0, `1B3M` for 183, `IO.4K` and `10.AK` for 10.4K;
+`Yanduul`, `Vandull`, `Vanduley`.
+
+**Not ONNX for everything (1.1.5).** Asked whether to switch fully. On the
+recording, ONNX for the whole frame as well read the panel no better (found
+109, named 56 against the mixed 109 and 57) and the lock label somewhat more
+often (47 frames against 34; 13 hostile locks against 11), at about 1.0 s a
+whole frame against 0.26 s. On the 83 screenshots in this install, through
+the whole screenshot path, ONNX took 978 ms a shot against Windows' 105,
+read the Map footer on 2 where Windows read 5, lost a refinery quote's price
+and a scan's SCU, and gained one Mining and one Reputation frame. The
+screenshot readers were tuned on Windows' engine; it stays for whole frames,
+and ONNX for the target panel and the label search.
+
+**Odds for an UNKNOWN (1.1.5).** `ShipSignatureBook.Weigh` turns three clues
+into rough odds: the cross-section (a hull inside the panel's hundred counts
+in full, one just outside a third), the ship classes `Game.log` saw stream in
+over the last twenty minutes (`NearbyHulls`, x8), and the faction line
+(Vanduul x20 for a Vanduul hull, any other faction x1/20 for one). They are
+weights, not measured frequencies, and both pages say "rough odds". Replayed
+on the recording with the session's own log (`--target <frames> --log
+<Game.log> --start <UTC> --step 6`): an 11.9K fighter that stayed UNKNOWN
+from 02:00:54 to 02:01:18 into the recording showed Vanduul Glaive 80%,
+Mustang Gamma 10%, Mustang Omega 10% - the game printed VANDUUL GLAIVE on a
+lock of the same figure at 02:02:48, though whether it was the same ship
+the frames cannot say; the first fight's 13.5K fighter showed RSI Scorpius
+75%, Ares Ion 20%, Aurora Mk II 5%.
+
+The same replay found two lock-tracking faults, fixed with it: a 12% change
+of figure was taken for the same ship, which kept the Glaive (11.9K) on the
+Scythe's named lock (13.5K is 12.7% away); and an unread figure between two
+changed ones reset the count, so the switch from the Perseus to a Blade was
+missed. Now 5%, an unread figure counts for nothing either way, and a named
+lock that reads UNKNOWN twice is a new ship.
+
+Open: the same numbers on a live game at full resolution, how much the
+second-a-tick pace costs the game's frame rate, and whether a lock label read
+live is red as often as the panel says hostile.
+
+### The scan panel at 2560, from a MOLE (1.1.10)
+
+Measured on a public stream rather than this install: Elguapoe's "Star
+Citizen 4.10 | Solo Mole Mining High QUALITY MINERALS -- LIVE"
+(<https://www.youtube.com/watch?v=I_-XJnIwOy0>, 2026-08-31), 2560x1440, MOLE
+turret at Daymar's dust. Two stretches, 01:06:00-01:20:00 and
+01:31:30-01:34:00, one frame every 5 s: 200 frames, read through the whole
+screenshot path. The stream is someone else's and stays out of the repo.
+
+| | frames made a scan | time a frame |
+|---|---|---|
+| Windows' engine alone | 3 | ~106 ms |
+| ONNX alone | 135 | ~1.6 s |
+| Windows whole frame, ONNX second look (1.1.10) | 128 | ~0.7 s |
+
+Every rock in the stretch was read on at least one frame by the last; the
+one exception is a 121 kg rock ONNX also caught on one frame only.
+
+Three things stood in the way, each seen:
+
+- The rock's floating label runs into the title: "117RKICAN RESULTS",
+  "117kb6CAN RESULTS". Any line ending RESULTS is the title now; the three
+  labels under it are still what make it the panel.
+- Windows' engine often loses the title altogether. The second look then
+  starts from COMPOSITION with an SCU figure on its row (the 839 kg rock,
+  "COMPOSITION" / "3.39 SCU"), or, when COMPOSITION is lost too - read
+  "z:coMAOS1it0N" - from the difficulty word with an SCU figure 3.5 heights
+  under it (the 1,036 kg rock, "EASY" / "4.22 scu"). The words are the
+  game's: Easy, Medium, Hard, Challenging, Impossible
+  (`ui_Mining_MiningLaser_DifficultyForecast_*`).
+- The second look now reads with ONNX when its models are on disk, and a
+  scan two of its looks agree on makes the frame a scan even when the whole
+  read did not.
+
+During extraction the panel keeps its title and shows 0.00 for everything;
+those frames read as "0 kg, 0% resistance, 0 SCU", which is what is there.
+
+Single frames still misread a digit - 5,198 for 6,198 kg, 939 for 839 kg -
+which LiveRocks' 2% mass rule would take for a second rock.
+
+Seen on the same frames and not read yet: LASER INTENSITY; the laser and
+module stats; and the CARGO block - "CARGO 10.22 / 100.00 SCU" with each
+material's quality and SCU underneath.
+
+### The charge window (1.1.11)
+
+Same stream, 01:06:00-01:20:00 at one frame a second: 845 frames.
+
+**What the HUD draws.** Right of the reticle, two green arcs climb from
+CHARGE LEVEL: the outer one is the charge, the inner one the laser
+intensity. The optimal window is a short yellow bar, about 60 x 24 at 1440
+high, with "◄ OPTIMAL" beside it and OVERCHARGE above; the charge arc's top
+meets the bar's right end. While the charge sits in the window the bar
+turns green from the left, and when it is full the rock breaks and the bar
+goes. Red on that HUD is the overcharge zone; the bar never turned red.
+
+**Read from pixels, not words.** Windows' engine read the "OPTIMAL" label on
+none of 11 frames sampled, and "CHARGE" only as half of OVERCHARGE. So
+`ChargeWindow` finds the bar by colour - its yellow, about 230/205/70, at
+least 0.8 of its red in green and blue under 0.45 of the green, which
+Daymar's sand (232/115/53) and sky (249/179/113) both fail - then reads the
+fill as the bar's green share and the charge as the topmost green in a lane
+just right of it. About 22 ms a frame, the pixel read included. While a bar
+is held only its neighbourhood is read, so the loop takes a frame a second.
+
+**The rock at 01:09:55-01:10:28**, second by second: the tip 5.8 bar heights
+under the window, then 5.4-5.9 for fourteen seconds, 2.5, 1.5, 0.6; in the
+window from 01:10:15 with the bar filling 3%, 14%, 22%, 28%, 33%, 43%, 50%,
+57%, 66%, 73%, 79%, 87%, 91%, 96%; then no bar. Over the 845 frames the
+watch said "In the window" and "Rock cracked" eight times each, and "Out of
+the window" once. Two of the cracks, checked by eye: the rock in fragments,
+then EXTRACTION MODE.
+
+**Noise, and the rule it set.** Single frames made a bar of the ship's yellow
+floor and of the cargo arc in extraction mode, a frame each. Every change
+waits for two frames that agree, and a bar that goes away counts as a crack
+only past 85% filled - every crack measured went at 91-97%.
+
+**Not seen: an overcharge.** No frame of the stretch had the charge over the
+window; the two that read so were the floor and the cargo arc. "Overcharge,
+back off" is said on two frames of the tip above the bar, and is unproven
+until a real one is recorded.
+
+Replayed through the server (`--Replay` with the 48 frames of that rock):
+`/api/live` went charging 5.8, ... 1.4, in the window with "In the window",
+filling to 96%, then "Rock cracked" and a count of one.
+
+### The radar ping (1.1.12)
+
+The MOLE stream never pings, so this was measured on RisboTheBlade's "4.7
+RICCITE - How To Scan For It, Signatures, Number Of Rocks"
+(<https://www.youtube.com/watch?v=WyCv6-DQYDE>, 2560x1440), 80 frames two
+seconds apart from 02:40. Also someone else's, also kept out of the repo.
+
+**Where the figure is.** After a ping the contacts show as "UNKNOWN" with a
+range; the signature of whichever one the pilot points at is a boxed figure
+with a pin icon just above the compass heading - at 1280, 500 on every frame
+that had one, the screen's centre a third of the way down. It read 17,080,
+12,810, 25,620, 60,000, 96,000, 10,155, 47,385, 3,570 and 3,385 across the
+sweep. The video's own caption says three Riccite read 10,155, which is 3 x
+3,385 - this install's Riccite figure - so a ping is a whole number of one
+kind of rock, as the Radar page assumed and had not seen.
+
+**Read by ONNX only.** Windows' engine read nothing in that box on any of the
+80 frames; ONNX read it on every frame that had one, at about 40 ms for the
+patch. The compass headings under it - 240, 260, 280 - are three digits
+without a separator and are skipped.
+
+**What it decodes to**, against this install's 36 radar rows: 17,080 four
+Iron, 12,810 three Iron, 25,620 six Iron, 3,570 one Borase, 10,155 three
+Riccite, 60,000 fifteen I-type asteroid or ground deposit. 96,000 and
+160,000 are more than the twenty rocks the Radar page reads to; 47,385 is no
+whole number of any one rock; 3,386 is 3,385 misread. None of those is said.
+
+**When it is said.** On two reads that agree, then not again for half a
+minute while the figure stays. Replayed through the server, the sweep's Iron
+figures - one frame each - were not said, and the Riccite cluster the pilot
+held on for eight seconds was: "Three Riccite", then "One Riccite".
+
+### The hologram's colour (1.1.13)
+
+Measured on the 480 demo frames of the 2026-11-05 recording (3440x1440, one a
+second, 00:31:00 and 01:59:30 for 240 s each), cutting the same rectangle the
+MFD shows: from the panel's left + 120 and top + 230, 420 by 190, scaled with
+the frame's height.
+
+**What the colours mean.** Tiled side by side, every target seen at speed
+starts white and goes orange in patches, then red; every target at 0 m/s after
+moving is solid red. It is not the hostile marking: a Vanduul Blade with the
+Vanduul faction line is drawn white until it is hit, and the Paladin went
+white (a_037 to a_042, 0%) to orange (a_044, 47%) to red (a_070, 95%) over
+half a minute of the fight.
+
+**The measure.** A pixel is red with r >= 120, b < 0.55r and g < 0.45r;
+orange with the same r and b and g below 0.85r; white with every channel
+>= 150 and within 40 of each other. The nebula behind the glass is bright
+but tinted green-blue past that spread. Damage is (orange / 2 + red) over
+the lit pixels, and fewer than 400 lit pixels at 1440 lines is not judged.
+
+**Why only the red end is said.** Two things lift a sound ship off zero. A
+cockpit lit orange (b_006 to b_010) put white Blades at 41 to 55%, and one
+frame in three swings as the hologram turns or fire crosses it: one lock read
+46%, 87% and 49% on consecutive frames. So the band is the median of the
+last three reads, the voice says "Target critical" only past 80% on a lock
+seen moving, and the page shows sound (under 30%), damaged or critical
+rather than a figure.
+
+**What it said.** Seven "Target critical" calls over the 480 frames: the
+Paladin at a_051, the Scythe at b_077, Blades at b_125, b_169, b_183 and
+b_194 - every one a hologram plainly red - and a Glaive at b_236, red too.
+The one doubtful call is b_141's Blade, orange with red tracer across the
+cut. A ship already stopped when it is locked is red and never called.
+
+### NPC ships the log names (1.1.13)
+
+The same session's Game.log named nine NPC hulls by class in lines that are
+not about air traffic: a wreck's debris (`SCItem_Debris_916483015360_CRUS_Starfighter_Ion_PU_AI_CRIM_…`,
+nine wrecks between 02:24 and 03:47 UTC), physics-grid notices
+(`RSI_Scorpius_Antares_PU_AI_CRIM_…`) and hit-effect budgets
+(`Max Impacts: 'VNCL_Glaive_PU_AI_VAN_…'`). All nine are hulls fought in the
+recording; no player ship carries `_AI_`. They weigh 16 in the odds, against
+8 for a hull merely streamed in.
+
+Debris is not a kill count: the line is written only when an item has to be
+detached from a wreck, so nine wrecks were logged in a session that destroyed
+far more Blades than that. It is not used to say "destroyed".
+
+Replayed against the log, time-aligned (a frames from 02:26:25 UTC, b from
+03:54:55): the same callouts with and without the NPC list. The odds on the
+page moved only at the first lock (RSI Scorpius 75% / Ares Ion 20% / Aurora
+5% became Scorpius 75% / Ares Ion 25%), because the ATC list already held the
+same classes and a Vanduul faction settles a Blade on its own.
+
+### Missile, territory, objective health and the flight HUD (1.1.14)
+
+None of these is in the log. The 2026-11-06 session has one line naming a
+missile at all (`Controller_Missile_…` detached from a wreck's debris), no
+seat or vehicle-control line in its 33,215 lines - `Vehicle Control Flow`,
+which the parser still knows, appears nowhere in it - and no
+territory line. So all four come from the screen, measured on the same 137
+frames as the target panel (a_000-a_069, b_000-b_066, 1 fps, 3440×1440), read
+whole by the Windows engine as the live loop reads them. `--hud <frames>
+--lines <dumps>` in the CLI replays them.
+
+- **INBOUND MISSILE** is red (about 144,80,64 - orange by the hologram's
+  rule, so that rule is not reused), ~30 px tall, and drawn on the canopy: it
+  sat at 1487,413 on b_024 and 1617,311 on b_051. It showed on b_023-024 and
+  b_051-052, two seconds each time, with a flare icon and a 2 beside it whose
+  meaning is not known. The band from 0.17h to 0.37h down, ±0.32h across the
+  centre, read with ONNX at scale 1, took 77 ms a frame on average and read it
+  on all 4 frames (`INBOUND MISILE`, `INBLNDISILE`, `INBOUND MISSILE 3 2`) and
+  on none of the other 133. Global chat about missiles (b_042-046, "getting a
+  missle lock warning") is outside the band. The band is read on every tick
+  that does not read the whole frame - with a panel held, or with the
+  territory banner seen in the last 90 s - and the whole frame's own lines
+  count too.
+- **HOSTILE TERRITORY** sits at about 1600,120 and was read on 107 of the 137
+  frames; gaps of a few frames are the engine, so it is said again only after
+  90 s unseen.
+- **Mission health**: the right-hand panel under the contract title.
+  `Ship Health: 24%` (Defend Tranquility, a_000), `Power Relay Health 100%`
+  on one line (a_036), `Ship Hull Integrity` with `100%` a row above the
+  label's middle (b_014, Escort Gabe). Taken only with its %: a_002 read 24%
+  as `248`. The relay went 100, 83, 66, 50, 16 across a_047-a_053, which two
+  agreeing reads would never have called in time, so a figure is taken on
+  its own when the bar was already below 90 and this is a step of 40 or less
+  further down; otherwise the milder of two reads in a row.
+- **Flight HUD**: two or more of H-FUEL, Q-FUEL, SCM, NAV, GUN(S), MSL, ESP,
+  CPLD on one frame. 125 of the 137 cockpit frames; 5 of the 154 screenshots
+  in this install, and all five are cockpit shots (a MOLE three times, a
+  hauling ship twice).
+
+The mission toasts are the log's own and need none of this:
+`SHUDEvent_OnNotification` across the backups has 1,288 New Objective, 383
+Objective Complete, 100 Objective Withdrawn, 7 Objective Failed, 515 Contract
+Complete and 40 Contract Failed. Each is logged several times under one
+notification number; a number and text seen in the last minute is the same
+toast, and one more than 30 s old is the start-up read of the log.
+
+### A ping read against the place (1.1.15)
+
+Two community tools do what the ping readout does, and were looked at for
+what they add: Miner Scanner Tool (miner-scanner.com, Python, a hand-filled
+table, an ore colour each and a filter by system) and SC_Signature_Scanner
+(github.com/Diftic, Python/EasyOCR on screenshots, a detection log, tier
+colours, salvage panels at 2,000 each). Both need a capture box drawn by hand;
+the readout here finds its box. What was taken: the place, wanted rocks, and
+the log of pings.
+
+The install's `HarvestableProviderPreset`s give 45 places with mineables
+(`--ping-places` in the CLI prints them), each with a SpaceShip group naming
+the ship rocks by deposit ("Riccite Ore", "Aluminium Ore", "Sileron Ore") and
+FPS and GroundVehicle groups. Spelt alike with the radar rows' ores (Aluminium
+→ aluminum, Sileron → stileron), every table ore has a radar row. Asteroid
+fields are the places named for a belt, ring, halo, cluster, Lagrange point or
+Pyro's Cool/Warm/DeepSpace fields; the rest are bodies.
+
+Over every ping a place's own rocks can make (1 to 8 of each, 4,864 pings),
+more than one reading fits 16% against every rock and 10% against the place,
+and the true reading is never dropped. Fields fall to 0-4 of 104-160; bodies
+barely move (22 → 18-20 of 64-128), because hand (3,000) and ground (4,000)
+deposits are on every surface and their multiples meet.
+
+The place is the log's body, then its place, then the quantum target, matched
+by name exactly; nothing maps the log's Lagrange stations to the tables'
+Lagrange A-G, so those are picked by hand. A ping the place cannot read is
+read against every rock and shown with no place - with RisboTheBlade's Riccite
+video's frames replayed and Lagrange A picked (no Riccite there), 10,155 still came
+out three Riccite.
 
 ---
 

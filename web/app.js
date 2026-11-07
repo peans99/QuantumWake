@@ -8804,6 +8804,7 @@ function renderRadar() {
 
   const body = $('#radar-table tbody');
   body.textContent = '';
+  radarWantedBoxes = [];
   for (const row of radarModel.rows) {
     const tr = el('tr');
     tr.dataset.kind = row.kind;
@@ -8820,8 +8821,17 @@ function renderRadar() {
     tr.append(el('td', null, radarTier(row.tier)));
     tr.append(el('td', null, radarFound(row)));
     for (let n = 2; n <= 6; n++) tr.append(el('td', 'num', fmtInt(row.signature * n)));
+    const want = el('input');
+    want.type = 'checkbox';
+    want.dataset.wanted = radarSpokenName(row);
+    want.title = tx('Wanted: said with “wanted” after it');
+    radarWantedBoxes.push(want);
+    const wantCell = el('td', 'radar-wanted');
+    wantCell.append(want);
+    tr.append(wantCell);
     body.append(tr);
   }
+  syncRadarWanted();
 
   $('#radar-note').textContent = tx('{rows} rows from {read} rocks in the install. {unplaced} more are templates, test rocks or rocks no deposit places, and are left out.',
     { rows: radarModel.rows.length, read: radarModel.read, unplaced: radarModel.unplaced });
@@ -8864,6 +8874,108 @@ function renderRadarMatches() {
 }
 
 $('#radar-ping')?.addEventListener('input', renderRadarMatches);
+
+/* ---------- Mining → Radar: how pings are read live (1.1.15) ---------- */
+
+/** The Wanted boxes the table drew, to tick from what the server says without redrawing the table. */
+let radarWantedBoxes = [];
+let radarPlacesDrawn = '';
+
+/**
+ * A rock as the voice says it, in English whatever the page's language:
+ * the name the server marks wanted, so it has to be spelt its way.
+ */
+function radarSpokenName(row) {
+  if (row.kind === 'ship') return row.name;
+  if (row.kind === 'asteroid') return `${row.name.charAt(0)}-type asteroid`;
+  if (row.kind === 'hand') return 'Hand-mining deposit';
+  if (row.kind === 'ground') return 'Ground-vehicle deposit';
+  return 'Older deposit rock';
+}
+
+/** Ticks the Wanted boxes from /api/live; greys them where nothing reads pings. */
+function syncRadarWanted() {
+  const pings = liveState?.available ? liveState.pings : null;
+  const wanted = new Set(pings?.wanted || []);
+  for (const box of radarWantedBoxes) {
+    box.checked = wanted.has(box.dataset.wanted);
+    box.disabled = !pings;
+  }
+}
+
+/**
+ * The Radar page's live block: which place pings are read against - where
+ * the log puts the pilot, every rock, or a place picked here - and whether
+ * only wanted rocks are said. Only where the screen can be read live.
+ */
+function renderRadarLive() {
+  const block = $('#radar-live');
+  if (!block) return;
+  const pings = liveState?.available ? liveState.pings : null;
+  block.hidden = !pings;
+  syncRadarWanted();
+  if (!pings) return;
+
+  const select = $('#radar-place');
+  const value = pings.place == null ? 'auto' : pings.place;
+  const drawn = JSON.stringify([pings.here, (pings.places || []).map((p) => p.name)]);
+  if (select && drawn !== radarPlacesDrawn) {
+    radarPlacesDrawn = drawn;
+    select.replaceChildren();
+    const option = (val, text) => {
+      const o = el('option', null, text);
+      o.value = val;
+      return o;
+    };
+    select.append(option('auto', pings.here
+      ? tx('Where the log puts you ({place})', { place: pings.here })
+      : tx('Where the log puts you')));
+    select.append(option('*', tx('Every rock, anywhere')));
+    for (const p of pings.places || [])
+      select.append(option(p.name, p.asteroids ? tx('{place} · asteroid field', { place: p.name }) : p.system ? `${p.name} · ${p.system}` : p.name));
+  }
+  if (select) select.value = value;
+
+  const only = $('#radar-wanted-only');
+  if (only) only.checked = Boolean(pings.wantedOnly);
+
+  const note = $('#radar-place-note');
+  if (note) {
+    note.textContent = pings.place === '*' ? tx('Pings are read against every rock.')
+      : pings.place ? tx('Pings are read against the rocks that spawn at {place}, as picked here.', { place: pings.place })
+        : pings.here ? tx('Pings are read against the rocks that spawn at {place}, where the log puts you. A field with no ground deposits drops them, and a moon drops the asteroid classes.', { place: pings.here })
+          : tx('The log does not put you anywhere with a deposit table yet, so pings are read against every rock. Pick the place if you know it.');
+  }
+}
+
+/** Posts how pings are read; whatever is left out stays as the server has it. */
+async function postPing(event, body) {
+  try {
+    const response = await fetch('/api/live/ping', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(`ping ${response.status}`);
+    liveState = await response.json();
+    renderLiveScreen();
+  } catch {
+    if (event.target.type === 'checkbox') event.target.checked = !event.target.checked;
+    const note = $('#radar-place-note');
+    if (note) note.textContent = tx('The change did not save.');
+  }
+}
+
+$('#radar-place')?.addEventListener('change', (event) => postPing(event, { place: event.target.value }));
+$('#radar-wanted-only')?.addEventListener('change', (event) => postPing(event, { wantedOnly: event.target.checked }));
+$('#radar-table')?.addEventListener('change', (event) => {
+  const name = event.target?.dataset?.wanted;
+  if (!name) return;
+  const wanted = new Set(liveState?.pings?.wanted || []);
+  if (event.target.checked) wanted.add(name);
+  else wanted.delete(name);
+  postPing(event, { wanted: [...wanted] });
+});
 
 /* ---------- the Mining page's five panes ---------- */
 
@@ -11953,7 +12065,7 @@ const OVERLAY_LABELS = {
   loadout: 'Loadout', stash: 'Stash', logbook: 'Logbook', fleet: 'Fleet', places: 'Places',
   location: 'Location', ship: 'Ship', session: 'Session', handle: 'Handle',
   feed: 'Live feed', stats: 'This session', job: 'Job in hand', trade: 'Trade from here',
-  checklist: 'Checklist', refinery: 'Refinery', event: 'Event',
+  checklist: 'Checklist', refinery: 'Refinery', event: 'Event', target: 'Target', fracture: 'Fracture',
   // Named as the Now page titles them, so the tick and the card read alike.
   briefing: 'What to do next', trip: 'Flight plan', respawn: 'Respawn', status: 'Current status',
 };
@@ -18096,6 +18208,12 @@ async function renderOverlayLayout() {
     contrast.onchange = saveOverlayLayout;
   }
 
+  const pop = $('#overlay-pop-target');
+  if (pop) {
+    pop.checked = data.current.popTarget !== false;
+    pop.onchange = saveOverlayLayout;
+  }
+
   $('#overlay-layout-status').textContent = '';
 }
 
@@ -18435,6 +18553,7 @@ async function saveOverlayLayout(savedMessage = tx('saved'), chosen = null) {
     cards: pick('#overlay-cards'),
     density: $$('#overlay-density input').find((r) => r.checked)?.value || 'normal',
     highContrast: Boolean($('#overlay-high-contrast')?.checked),
+    popTarget: $('#overlay-pop-target') ? Boolean($('#overlay-pop-target').checked) : true,
   };
 
   const status = $('#overlay-layout-status');
@@ -18466,8 +18585,10 @@ const OVERLAY_PRESETS = {
   // The event card hides itself when no event is being played, so the layouts
   // whose work pays into one carry it without costing anyone a row.
   flight: { tabs: ['now', 'map', 'logbook'], cards: ['location', 'briefing', 'ship', 'session', 'feed', 'event'], density: 'compact' },
-  mining: { tabs: ['now', 'map', 'commodities', 'market'], cards: ['location', 'briefing', 'ship', 'session', 'feed', 'trade', 'event'], density: 'compact' },
-  combat: { tabs: ['now', 'jobs', 'map', 'loadout', 'stash'], cards: ['location', 'briefing', 'ship', 'session', 'handle', 'feed', 'stats', 'respawn', 'event'], density: 'compact' },
+  // The fracture card hides itself until live reading has seen a charge window.
+  mining: { tabs: ['now', 'map', 'commodities', 'market'], cards: ['fracture', 'location', 'briefing', 'ship', 'session', 'feed', 'trade', 'event'], density: 'compact' },
+  // The target card hides itself until live reading has seen a lock.
+  combat: { tabs: ['now', 'jobs', 'map', 'loadout', 'stash'], cards: ['target', 'location', 'briefing', 'ship', 'session', 'handle', 'feed', 'stats', 'respawn', 'event'], density: 'compact' },
   trading: { tabs: ['now', 'jobs', 'commodities', 'market'], cards: ['location', 'briefing', 'ship', 'trip', 'trade', 'event'], density: 'compact' },
   minimal: { tabs: ['now', 'map'], cards: ['location', 'ship', 'session'], density: 'tiny' },
   full: null,
@@ -18515,8 +18636,8 @@ async function applyOverlayPreset(name) {
   // offered lists when this browser has no cached copy yet.
   const available = overlayLayoutData || await getJson('/api/overlay/layout');
   const next = preset
-    ? { ...preset, highContrast: Boolean(available?.current?.highContrast) }
-    : { tabs: available?.tabs || [], cards: available?.cards || [], density: 'normal', highContrast: Boolean(available?.current?.highContrast) };
+    ? { ...preset, highContrast: Boolean(available?.current?.highContrast), popTarget: available?.current?.popTarget !== false }
+    : { tabs: available?.tabs || [], cards: available?.cards || [], density: 'normal', highContrast: Boolean(available?.current?.highContrast), popTarget: available?.current?.popTarget !== false };
   all('#overlay-tabs', next.tabs); all('#overlay-cards', next.cards);
   $$('#overlay-density input').forEach(box => { box.checked = box.value === next.density; });
   const contrast = $('#overlay-high-contrast');
@@ -18539,6 +18660,8 @@ window.scOverlayPreset = name => applyOverlayPreset(String(name));
  * is a separate browser and a few seconds of lag costs nothing.
  */
 let lastReloadToken = null;
+/** The layout the widget last applied: what the Target pop asks before it moves anything. */
+let overlayApplied = null;
 
 async function applyOverlayLayout() {
   let data;
@@ -18557,6 +18680,7 @@ async function applyOverlayLayout() {
   lastReloadToken = data.reloadToken;
 
   const layout = data.current;
+  overlayApplied = layout;
 
   const expanded = document.body.classList.contains('expanded');
 
@@ -25019,6 +25143,8 @@ function applyLabelOptions(options) {
   facts.checked = options ? options.facts !== false : true;
   const routes = $('#label-routes');
   if (routes) routes.checked = options ? options.routes !== false : true;
+  const stats = $('#label-stats');
+  if (stats) stats.checked = options ? options.stats !== false : true;
   colour.checked = !!(options && options.colour);
   level.value = String((options && options.level) || 3);
   level.disabled = !colour.checked;
@@ -25031,6 +25157,7 @@ async function saveLabelOptions() {
     level: Number($('#label-level').value) || 3,
     facts: $('#label-facts').checked,
     routes: $('#label-routes') ? $('#label-routes').checked : true,
+    stats: $('#label-stats') ? $('#label-stats').checked : true,
   };
 
   $('#label-level').disabled = !body.colour;
@@ -25052,7 +25179,7 @@ async function saveLabelOptions() {
   await loadTextOverlay().catch(() => {});
 }
 
-for (const id of ['#label-facts', '#label-routes', '#label-colour', '#label-level']) {
+for (const id of ['#label-facts', '#label-routes', '#label-stats', '#label-colour', '#label-level']) {
   $(id)?.addEventListener('change', () => { saveLabelOptions().catch(() => {}); });
 }
 
@@ -25088,6 +25215,7 @@ async function loadTextOverlay() {
     // Hauling titles are the overlay's other half: they ask the game to print
     // a contract's places, which is how the logs come to name them at all.
     ...(state.routed ? [[tx('Hauling titles naming places'), state.routed]] : []),
+    ...(state.described ? [[tx('Part descriptions with figures'), state.described]] : []),
   ]);
 
   // Which file it builds on decides whether another mod survives, so it is
@@ -36193,14 +36321,15 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let setupWipeOffered = null;
 let setupWipePatch = 'set at first run';
 
+/** Shows first flight setup when it is due; true when it did, so nothing else asks over it. */
 async function maybeShowSetup() {
 
-  if (isOverlay) return;
+  if (isOverlay) return false;
 
   // ?setup=1 forces the wizard - a preview that skips nothing permanent.
   if (!params.has('setup')) {
-    if (isSnapshot) return;
-    if ((await getJson('/api/setup')).done) return;
+    if (isSnapshot) return false;
+    if ((await getJson('/api/setup')).done) return false;
   }
 
   const panel = $('#setup');
@@ -36342,7 +36471,528 @@ async function maybeShowSetup() {
       button.disabled = false;
     }
   });
+
+  return true;
 }
+
+/* ---------- live screen reading ---------- */
+
+let liveState = null;
+
+/**
+ * Asks once whether the screen may be read live, when the server says it can
+ * be and nobody has answered. "Not now" is an answer: it is kept, and the
+ * question does not come back on the next start - the switch on the Log page
+ * is where it is changed after that.
+ */
+async function maybeAskLive() {
+  if (isOverlay || isSnapshot) return;
+  let state;
+  try {
+    state = await getJson('/api/live');
+  } catch {
+    return;
+  }
+  if (!state.ask) return;
+
+  const panel = $('#live-ask');
+  if (!panel) return;
+  panel.hidden = false;
+
+  const answer = async (enabled) => {
+    $('#live-ask-yes').disabled = true;
+    $('#live-ask-no').disabled = true;
+    try {
+      await postLiveAnswer(enabled);
+      panel.hidden = true;
+    } catch {
+      $('#live-ask-status').textContent = tx('The answer did not save. It is asked again next start, and the Log page has the switch.');
+      $('#live-ask-yes').disabled = false;
+      $('#live-ask-no').disabled = false;
+    }
+  };
+
+  $('#live-ask-yes').onclick = () => answer(true);
+  $('#live-ask-no').onclick = () => answer(false);
+}
+
+async function postLiveAnswer(enabled) {
+  const response = await fetch('/api/live', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+  if (!response.ok) throw new Error(`live answer ${response.status}`);
+  liveState = await response.json();
+  renderLiveScreen();
+}
+
+/** The switch and its status line on the Log page; hidden where the screen cannot be read. */
+function renderLiveScreen() {
+  // The card is on Now, not the Log page, and the overlay shows it without
+  // the Log page ever being opened.
+  renderNowTarget();
+  if (isOverlay) popTargetCard();
+  renderNowFracture();
+  renderCalloutSettings();
+  renderSettingsVoice();
+  renderRadarLive();
+
+  const block = $('#live-block');
+  if (!block) return;
+  const state = liveState;
+  block.hidden = !state?.available;
+  if (!state?.available) return;
+
+  $('#live-enabled').checked = Boolean(state.enabled);
+
+  // The voice only where there is one, and only under a yes to reading:
+  // with reading off there is nothing for it to say.
+  const voiceRow = $('#live-voice-row');
+  if (voiceRow) {
+    voiceRow.hidden = !(state.enabled && state.canSpeak);
+    $('#live-voice').checked = Boolean(state.voice);
+    const kinds = $('#live-voice-kinds');
+    if (kinds) {
+      kinds.hidden = voiceRow.hidden || !state.voice;
+      // Absent from an older server's answer, which spoke both.
+      $('#live-voice-combat').checked = state.voiceCombat !== false;
+      $('#live-voice-mining').checked = state.voiceMining !== false;
+      const missions = $('#live-voice-missions');
+      if (missions) missions.checked = state.voiceMissions !== false;
+    }
+    const trouble = $('#live-voice-trouble');
+    if (trouble) {
+      trouble.hidden = !(state.enabled && state.voice && state.voiceTrouble);
+      trouble.textContent = state.voiceTrouble ? tx('Not heard: {why}.', { why: state.voiceTrouble }) : '';
+    }
+  }
+
+  const status = state.status || {};
+  const line = $('#live-status');
+  if (!line) return;
+  if (!state.enabled) {
+    line.textContent = tx('Off.');
+  } else if (status.state === 'reading') {
+    const when = status.lastFrameAt ? new Date(status.lastFrameAt).toLocaleTimeString(QW_DATE_LOCALES) : '';
+    line.textContent = tx('Reading: {frames} frames, {kept} rock scans kept. Last at {when}: {summary}', {
+      frames: (status.frames || 0).toLocaleString(),
+      kept: (status.kept || 0).toLocaleString(),
+      when,
+      summary: screenText(status.lastSummary || status.lastKind || ''),
+    });
+  } else {
+    line.textContent = status.why ? tx('Waiting: {why}.', { why: screenText(status.why) }) : tx('Starting…');
+  }
+}
+
+async function loadLiveScreen() {
+  try {
+    liveState = await getJson('/api/live');
+  } catch {
+    liveState = null;
+  }
+  renderLiveScreen();
+}
+
+/** "Hostile", "Friendly"… for a stance the server sends lower-case. */
+const TARGET_STANCES = { hostile: 'Hostile', friendly: 'Friendly', neutral: 'Neutral' };
+
+const oddsPercent = (odds) => `${Math.round((odds.chance || 0) * 100)}%`;
+
+/**
+ * What the Target card says the ship is: the panel's name when the game
+ * printed one; otherwise the likeliest hull when it is clearly ahead, or
+ * plain Unknown, with the odds on their own line below.
+ */
+function targetTitle(target) {
+  if (!target) return tx('No target');
+  if (target.name) return target.name;
+  const odds = target.candidates || [];
+  if (odds.length && odds[0].chance >= 0.6) {
+    return tx('Unknown · likely {hull} ({chance})', { hull: odds[0].name, chance: oddsPercent(odds[0]) });
+  }
+  return tx('Unknown');
+}
+
+/**
+ * The odds for an UNKNOWN, said as what they are: weights from the
+ * signature, the ships the log saw nearby and the faction, not a measured
+ * frequency. Empty for a named target or a single certain hull.
+ */
+function targetOdds(target) {
+  const odds = target?.name ? [] : (target?.candidates || []);
+  if (!odds.length || (odds.length === 1 && odds[0].chance >= 1)) return '';
+  return tx('Rough odds: {odds} - from the signature, ships seen nearby and the faction', {
+    odds: odds.slice(0, 4).map((c) => `${c.name} ${oddsPercent(c)}`).join(' · '),
+  });
+}
+
+/** Speed, range, stance and signature, each only when it was read. */
+/** The hologram's colour, as the card says it. */
+const TARGET_HULLS = { sound: 'hull looks sound', damaged: 'hull looks damaged', critical: 'hull looks critical' };
+
+function targetDetail(target) {
+  if (!target) return '';
+  const parts = [];
+  parts.push(tx(TARGET_STANCES[target.stance] || 'Stance unread'));
+  if (target.faction) parts.push(target.faction);
+  if (target.disabled) parts.push(tx('stopped after moving'));
+  else if (target.speedMs != null) parts.push(`${Math.round(target.speedMs)} m/s`);
+  if (target.rangeKm != null) parts.push(`${target.rangeKm.toFixed(2)} km`);
+  if (target.crossSection != null) parts.push(tx('CS {figure}K', { figure: (target.crossSection / 1000).toFixed(1) }));
+  // Read off the hologram's colour, so "looks": an estimate, not hit points.
+  if (TARGET_HULLS[target.hull]) parts.push(tx(TARGET_HULLS[target.hull]));
+  return parts.join(' · ');
+}
+
+/**
+ * The Now page's Target card. Shown only while live reading is on and has
+ * seen a lock or said something; a card that said "no target" all evening
+ * would be one more thing in the overlay that is never news.
+ */
+function renderNowTarget() {
+  const card = $('#now-target-card');
+  if (!card) return;
+  const combat = liveState?.enabled ? liveState?.status?.combat : null;
+  const target = combat?.target || null;
+  const calls = combat?.callouts || [];
+
+  card.hidden = !target && !calls.length;
+  card.classList.toggle('target-hostile', target?.stance === 'hostile');
+  card.classList.toggle('target-combat', Boolean(combat?.combat));
+  if (card.hidden) return;
+
+  $('#now-target-label').textContent = combat.combat ? tx('Target · in combat') : tx('Target');
+  $('#now-target').textContent = targetTitle(target);
+  $('#now-target-detail').textContent = target ? targetDetail(target)
+    : tx('No target held · {locks} locks this session, {hostile} hostile', { locks: combat.locks || 0, hostile: combat.hostileLocks || 0 });
+  const odds = $('#now-target-odds');
+  if (odds) {
+    odds.textContent = targetOdds(target);
+    odds.hidden = !odds.textContent;
+  }
+
+  const list = $('#now-target-calls');
+  list.textContent = '';
+  for (const call of calls.slice(0, 4)) {
+    const li = el('li', call.kind === 'hostile' ? 'want' : null);
+    li.append(el('span', 'what', call.text));
+    li.append(el('span', 'd', ' · ' + new Date(call.at).toLocaleTimeString(QW_DATE_LOCALES)));
+    list.append(li);
+  }
+}
+
+/**
+ * Pop the Target card (1.1.19), for pilots without the MFD frames: in the
+ * widget, a lock turns the page to Now with the Target card first, and 20 s
+ * after the lock is gone the page goes back to where it was. A pilot who
+ * left Now meanwhile chose somewhere else, and is not taken anywhere. Pure,
+ * so the rules are tested rather than flown.
+ */
+const TARGET_POP_RETURN = 20000;
+const targetPopIdle = () => ({ popped: false, back: null, lostAt: null });
+function targetPopStep(memory, { want, view, now }) {
+  const m = memory || targetPopIdle();
+  if (want) {
+    if (m.popped) return { memory: { ...m, lostAt: null }, go: null, first: false };
+    return { memory: { popped: true, back: view, lostAt: null }, go: view === 'now' ? null : 'now', first: true };
+  }
+  if (!m.popped) return { memory: m, go: null, first: false };
+  // A lock dropped for a second in a turn is not the end of a fight.
+  const lostAt = m.lostAt ?? now;
+  if (now - lostAt < TARGET_POP_RETURN) return { memory: { ...m, lostAt }, go: null, first: false };
+  return { memory: targetPopIdle(), go: view === 'now' && m.back && m.back !== 'now' ? m.back : null, first: false };
+}
+
+let targetPop = targetPopIdle();
+
+function popTargetCard() {
+  const card = $('#now-target-card');
+  if (!card) return;
+  const layout = overlayApplied;
+  const wanted = Boolean(layout && layout.popTarget !== false && (layout.cards || []).includes('target')
+    && liveState?.enabled && liveState?.status?.combat?.target);
+  const view = $('#tabs button.active[data-view]')?.dataset.view || 'now';
+  const { memory, go, first } = targetPopStep(targetPop, { want: wanted, view, now: Date.now() });
+  targetPop = memory;
+  card.classList.toggle('card-popped', targetPop.popped);
+  if (go) showView(go);
+  if (first) card.scrollIntoView?.({ block: 'nearest' });
+}
+
+/**
+ * The Now page's Fracture card: where the charge stands against the laser's
+ * optimal window while a rock is being cracked, the crack's progress, and
+ * the rocks cracked so far. Shown while live reading is on and has seen a
+ * charge window - a card that said "not cracking" all evening is not news.
+ */
+function renderNowFracture() {
+  const card = $('#now-fracture-card');
+  if (!card) return;
+  const fracture = liveState?.enabled ? liveState?.status?.fracture : null;
+  const calls = fracture?.callouts || [];
+  // A ping read in the last two minutes is still the rock being flown to.
+  const ping = fracture?.ping && fracture.pingAt && Date.now() - new Date(fracture.pingAt).getTime() < 120000 ? fracture.ping : null;
+  // The sweep: every ping this session, newest first, while the newest is
+  // under ten minutes old - long enough to fly the field and come back.
+  const pings = (fracture?.pings || []).filter((p) => p.at);
+  const sweep = pings.length && Date.now() - new Date(pings[0].at).getTime() < 600000 ? pings : [];
+  card.hidden = !fracture || !(fracture.active || fracture.cracked || calls.length || ping || sweep.length);
+  if (card.hidden) return;
+
+  const list = $('#now-fracture-pings');
+  if (list) {
+    list.hidden = fracture.active || sweep.length < 2;
+    list.replaceChildren();
+    if (!list.hidden) {
+      for (const p of sweep.slice(0, 8)) {
+        const li = el('li', p.wanted ? 'fracture-ping fracture-ping-wanted' : 'fracture-ping');
+        li.append(el('span', 'muted', new Date(p.at).toLocaleTimeString(QW_DATE_LOCALES, { hour: '2-digit', minute: '2-digit' })));
+        li.append(el('b', null, ` ${Math.round(p.value).toLocaleString()} `));
+        li.append(el('span', null, pingSaid(p)));
+        list.append(li);
+      }
+    }
+  }
+
+  const state = fracture.active ? fracture.state : null;
+  card.classList.toggle('fracture-in', state === 'in');
+  card.classList.toggle('fracture-over', state === 'above');
+  $('#now-fracture-label').textContent = fracture.active ? tx('Fracture · under way')
+    : ping ? tx('Radar ping · {value}', { value: Math.round(ping.value).toLocaleString() }) : tx('Fracture');
+  $('#now-fracture').textContent = !fracture.active && ping
+    ? pingSaid(ping)
+    : !fracture.active
+    ? txn(fracture.cracked || 0, '{count} rock cracked', '{count} rocks cracked')
+    : state === 'in' ? tx('In the window')
+      : state === 'above' ? tx('Overcharge - back off')
+        : fracture.belowBy != null ? tx('Charging · {bars} bars under the window', { bars: fracture.belowBy.toFixed(1) })
+          : tx('Charging');
+
+  const fill = Math.round((fracture.fill || 0) * 100);
+  $('#now-fracture-meter').hidden = !fracture.active;
+  $('#now-fracture-fill').style.width = fill + '%';
+  $('#now-fracture-detail').textContent = fracture.active
+    ? tx('Crack {fill}% · {count} cracked so far', { fill, count: fracture.cracked || 0 })
+    : ping ? (ping.place ? tx('Read against the rocks at {place}', { place: ping.place }) : tx('Read against every rock'))
+      : fracture.lastCrackAt ? tx('Last at {when}', { when: new Date(fracture.lastCrackAt).toLocaleTimeString(QW_DATE_LOCALES) }) : '';
+}
+
+/**
+ * What a ping is, as the card says it: every exact reading, fewest rocks
+ * first, or that it is no whole number of any one rock - a figure the Radar
+ * page can still be asked about by hand.
+ */
+function pingSaid(ping) {
+  const matches = ping.matches || [];
+  if (!matches.length) return tx('No whole number of one rock');
+  return matches.slice(0, 3).map((m) => `${m.wanted ? '★ ' : ''}${m.count} × ${m.name}${m.tier ? ` (${radarTier(m.tier)})` : ''}`).join(tx(' or '));
+}
+
+/** Posts the voice switches; a kind left out stays as the server has it. */
+async function postLiveVoice(event, body) {
+  try {
+    const response = await fetch('/api/live/voice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(`voice ${response.status}`);
+    liveState = await response.json();
+    renderLiveScreen();
+  } catch {
+    event.target.checked = !event.target.checked;
+    const line = $('#live-status');
+    if (line) line.textContent = tx('The change did not save.');
+  }
+}
+
+$('#live-voice')?.addEventListener('change', (event) => postLiveVoice(event, { enabled: event.target.checked }));
+$('#live-voice-combat')?.addEventListener('change', (event) =>
+  postLiveVoice(event, { enabled: Boolean(liveState?.voice), combat: event.target.checked }));
+$('#live-voice-mining')?.addEventListener('change', (event) =>
+  postLiveVoice(event, { enabled: Boolean(liveState?.voice), mining: event.target.checked }));
+$('#live-voice-missions')?.addEventListener('change', (event) =>
+  postLiveVoice(event, { enabled: Boolean(liveState?.voice), missions: event.target.checked }));
+
+/** Settings → Voice & callouts' groups, in the order the Log page lists their switches. */
+const CALLOUT_GROUPS = [
+  ['ship', 'Ship'],
+  ['combat', 'Combat'],
+  ['missions', 'Missions'],
+  ['mining', 'Mining'],
+];
+
+/** The group's switch as /api/live names it; the ship's sounds have none of their own. */
+const calloutGroupOn = (state, group) =>
+  group === 'ship' ? true
+  : group === 'mining' ? state.voiceMining !== false
+    : group === 'missions' ? state.voiceMissions !== false
+      : state.voiceCombat !== false;
+
+let calloutSettingsDrawn = '';
+
+/**
+ * Settings → Voice & callouts (1.1.14): every sound the voice can make with its own
+ * switch and a button to hear it, under the Log page's three group switches.
+ * Drawn from /api/live, which the page asks again every few seconds in a
+ * fight, so the list is only rebuilt when something on it changed - a
+ * checkbox replaced under the pointer loses the click.
+ */
+function renderCalloutSettings() {
+  const list = $('#settings-callouts');
+  const line = $('#settings-callouts-state');
+  if (!list || !line) return;
+  const state = liveState;
+
+  line.textContent = !state ? tx('Asking the app what it can say…')
+    : !state.available || !state.canSpeak ? tx('Only the Windows app speaks callouts; this copy has no voice.')
+      : !state.enabled ? tx('Reading the game is off. Callouts are said once Read the game’s screen live and Speak callouts are on, above; these switches are kept until then.')
+        : !state.voice ? tx('Speak callouts is off, above. These switches are kept for when it is on.')
+          : tx('Switch a sound off and it is still listed on the page, just not said.');
+
+  const callouts = state?.callouts || [];
+  const drawn = JSON.stringify([state?.canSpeak, state?.voiceCombat, state?.voiceMissions, state?.voiceMining,
+    callouts.map((c) => [c.kind, c.on, c.voice])]);
+  if (drawn === calloutSettingsDrawn) return;
+  calloutSettingsDrawn = drawn;
+
+  const toggle = (input, text, note) => {
+    const label = el('label', 'toggle');
+    const span = el('span', '', text);
+    if (note) {
+      span.append(' ');
+      span.append(el('em', 'muted', note));
+    }
+    label.append(input, span);
+    return label;
+  };
+  const box = (data, value, checked, disabled) => {
+    const input = el('input');
+    input.type = 'checkbox';
+    input.dataset[data] = value;
+    input.checked = checked;
+    input.disabled = Boolean(disabled);
+    return input;
+  };
+
+  list.replaceChildren();
+  for (const [group, label] of CALLOUT_GROUPS) {
+    const rows = callouts.filter((c) => c.group === group);
+    if (!rows.length) continue;
+    const groupOn = calloutGroupOn(state, group);
+    const block = el('div', `callout-group${groupOn ? '' : ' callout-group-off'}`);
+    // Ship has no switch on the Log page, so none here either: a title only.
+    const head = group === 'ship' ? el('div', '', tx(label)) : toggle(box('calloutGroup', group, groupOn), tx(label));
+    head.classList.add('callout-group-head');
+    block.append(head);
+
+    for (const c of rows) {
+      const row = el('div', 'callout-row');
+      row.dataset.kind = c.kind;
+      const note = `“${c.sample}”${c.voice === 'windows' ? ` · ${tx('Windows voice')}` : ''}`;
+      const hear = el('button', 'ghost tiny', tx('Hear it'));
+      hear.type = 'button';
+      hear.dataset.calloutHear = c.kind;
+      hear.disabled = !state.canSpeak;
+      row.append(toggle(box('calloutKind', c.kind, Boolean(c.on), !groupOn), tx(c.name), note), hear);
+      block.append(row);
+    }
+    list.append(block);
+  }
+}
+
+/**
+ * Settings → Voice & callouts' two master switches (1.1.16): the same
+ * settings as Log → Read from the game, shown here as well because that card
+ * starts folded and a pilot looking for the voice looks in Settings. Speak
+ * callouts stays visible with reading off, greyed, so it can be found before
+ * it can be used.
+ */
+function renderSettingsVoice() {
+  const block = $('#settings-voice-block');
+  if (!block) return;
+  const state = liveState;
+  block.hidden = !(state?.available && state.canSpeak);
+  if (block.hidden) return;
+  const reading = $('#settings-live-enabled');
+  if (reading) reading.checked = Boolean(state.enabled);
+  const voice = $('#settings-live-voice');
+  if (voice) {
+    voice.checked = Boolean(state.voice);
+    voice.disabled = !state.enabled;
+  }
+  const test = $('#settings-live-voice-test');
+  if (test) test.disabled = !state.canSpeak;
+  const note = $('#settings-live-voice-note');
+  if (note) {
+    note.textContent = state.enabled
+      ? tx('Said by a voice carried in the app. Nothing is sent anywhere.')
+      : tx('Turn on reading the screen first: with it off there is nothing to say.');
+  }
+  const trouble = $('#settings-live-voice-trouble');
+  if (trouble) {
+    trouble.hidden = !(state.enabled && state.voice && state.voiceTrouble);
+    trouble.textContent = state.voiceTrouble ? tx('Not heard: {why}.', { why: state.voiceTrouble }) : '';
+  }
+}
+
+$('#settings-live-enabled')?.addEventListener('change', (event) => {
+  postLiveAnswer(event.target.checked).catch(() => {
+    event.target.checked = !event.target.checked;
+    const line = $('#settings-callouts-state');
+    if (line) line.textContent = tx('The change did not save.');
+  });
+});
+$('#settings-live-voice')?.addEventListener('change', (event) => postLiveVoice(event, { enabled: event.target.checked }));
+$('#settings-live-voice-test')?.addEventListener('click', () => {
+  fetch('/api/live/voice/test', { method: 'POST' }).catch(() => { /* the button is only a sample */ });
+});
+
+/** Posts one sound's switch; the page shows what the server then says. */
+async function postCallout(event, kind, on) {
+  try {
+    const response = await fetch('/api/live/callout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind, on }),
+    });
+    if (!response.ok) throw new Error(`callout ${response.status}`);
+    liveState = await response.json();
+    renderLiveScreen();
+  } catch {
+    event.target.checked = !event.target.checked;
+    const line = $('#settings-callouts-state');
+    if (line) line.textContent = tx('The change did not save.');
+  }
+}
+
+$('#settings-callouts')?.addEventListener('change', (event) => {
+  const target = event.target;
+  const kind = target?.dataset?.calloutKind;
+  const group = target?.dataset?.calloutGroup;
+  if (kind) postCallout(event, kind, target.checked);
+  else if (group) postLiveVoice(event, { enabled: Boolean(liveState?.voice), [group]: target.checked });
+});
+
+$('#settings-callouts')?.addEventListener('click', (event) => {
+  const kind = event.target?.dataset?.calloutHear ?? event.target?.closest?.('[data-callout-hear]')?.dataset?.calloutHear;
+  if (!kind) return;
+  fetch(`/api/live/voice/test?kind=${encodeURIComponent(kind)}`, { method: 'POST' }).catch(() => { /* only a sample */ });
+});
+
+$('#live-voice-test')?.addEventListener('click', () => {
+  fetch('/api/live/voice/test', { method: 'POST' }).catch(() => { /* the button is only a sample */ });
+});
+
+$('#live-enabled')?.addEventListener('change', (event) => {
+  postLiveAnswer(event.target.checked).catch(() => {
+    event.target.checked = !event.target.checked;
+    const line = $('#live-status');
+    if (line) line.textContent = tx('The change did not save.');
+  });
+});
 
 async function boot() {
   decorateNavigationGlyphs();
@@ -36447,7 +37097,32 @@ async function boot() {
 
   loadWipe().catch(() => { /* Settings shows it on its next visit */ });
 
-  maybeShowSetup().catch(() => { /* wizard is a nicety, never a blocker */ });
+  // The live-reading question waits for first flight: on a new install the
+  // wizard reloads the page when it is done, and the question comes then.
+  maybeShowSetup()
+    .then((shown) => (shown ? null : maybeAskLive()))
+    .catch(() => { /* wizard and question are niceties, never blockers */ });
+
+  loadLiveScreen().catch(() => { /* the Log page shows it on its next visit */ });
+
+  // The status line moves while reading is on; nothing is polled while it is off.
+  setInterval(() => {
+    if (liveState?.enabled && document.visibilityState === 'visible') loadLiveScreen().catch(() => {});
+  }, 5000);
+
+  // The widget pops the Target card on a lock, so it asks sooner than the
+  // dashboard does: within two seconds rather than five.
+  if (isOverlay) setInterval(() => {
+    if (liveState?.enabled && overlayApplied?.popTarget !== false && !liveState?.status?.combat?.target)
+      loadLiveScreen().catch(() => {});
+  }, 2000);
+
+  // A fight moves faster than that: while a lock is held the Target card is
+  // asked again every second and a half, and not at all otherwise.
+  setInterval(() => {
+    if (liveState?.enabled && (liveState?.status?.combat?.target || liveState?.status?.fracture?.active) && document.visibilityState === 'visible')
+      loadLiveScreen().catch(() => {});
+  }, 1500);
 
   // The first scan may still be running; retry until sessions appear.
   for (let attempt = 0; attempt < 30; attempt++) {

@@ -208,9 +208,14 @@ public sealed class OnnxScreenReader(OnnxModel? recogniser = null) : IScreenRead
                 var options = new SessionOptions
                 {
                     GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-                    // Half the cores: a read runs while the game does, and the
-                    // game is what the cores are for.
-                    IntraOpNumThreads = Math.Max(1, Environment.ProcessorCount / 2),
+                    // Two threads at most (1.1.17). Half the cores was the
+                    // rule until a pilot felt the game lag in a fight, when
+                    // reads come every second: a burst across half the cores
+                    // lands on the game's own threads. A read takes longer
+                    // this way; one that outlasts the one-second tick costs
+                    // the next tick (PeriodicTimer does not queue), never a pile-up.
+                    IntraOpNumThreads = Math.Clamp(Environment.ProcessorCount / 4, 1, 2),
+                    InterOpNumThreads = 1,
                 };
 
                 _detectorSession = new InferenceSession(OnnxModels.Detector.Path0, options);

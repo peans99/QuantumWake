@@ -64,6 +64,19 @@ public class OverlayLayoutTests : IDisposable
     }
 
     [Fact]
+    public void The_target_pop_is_on_unless_switched_off_and_survives_saving()
+    {
+        Assert.True(OverlayLayout.Default.PopTarget);
+        // A layout saved before the switch existed reads as on.
+        Assert.True(System.Text.Json.JsonSerializer.Deserialize<OverlayLayout>(
+            """{"Tabs":["now"],"Cards":["target"],"Density":"normal"}""")!.PopTarget);
+
+        var store = new OverlayLayoutStore(_directory);
+        Assert.False(store.Save(new OverlayLayout(["now"], ["target"], "normal", PopTarget: false)).PopTarget);
+        Assert.False(new OverlayLayoutStore(_directory).Current.PopTarget);
+    }
+
+    [Fact]
     public void Unknown_names_are_dropped_and_the_widget_keeps_a_tab()
     {
         var store = new OverlayLayoutStore(_directory);

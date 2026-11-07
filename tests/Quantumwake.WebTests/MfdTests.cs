@@ -577,7 +577,7 @@ public class MfdTests
     public void EveryPageIsReachableThroughADeepMenuAndHasAWayBack()
     {
         var e = Engine();
-        Assert.Equal(19, e.Evaluate("QwMfd.pageIds.length").AsNumber());
+        Assert.Equal(22, e.Evaluate("QwMfd.pageIds.length").AsNumber());
         Assert.True(e.Evaluate(
             "QwMfd.pageIds.every(id => QwMfd.trail(id)[0] === 'home'"
             + " && QwMfd.trail(id)[QwMfd.trail(id).length - 1] === id"
@@ -608,8 +608,8 @@ public class MfdTests
         // Standing on a screen, the row still offers its siblings.
         Assert.Equal("map", e.Evaluate("QwMfd.resolveCommand('menu-2','nav')").AsString());
 
-        // Navigation rides Home's fifth slot, which the four categories left empty.
-        Assert.Equal("nav", e.Evaluate("QwMfd.resolveCommand('menu-5','home')").AsString());
+        // Combat is Home's fifth slot; Navigation is Flight's first page.
+        Assert.Equal("combat", e.Evaluate("QwMfd.resolveCommand('menu-5','home')").AsString());
         // Pilot fills all five: Session, Server, Activity, Crew, Log.
         Assert.Equal("server", e.Evaluate("QwMfd.resolveCommand('menu-2','pilot')").AsString());
         Assert.Equal("log", e.Evaluate("QwMfd.resolveCommand('menu-5','pilot')").AsString());

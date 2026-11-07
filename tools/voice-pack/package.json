@@ -1,0 +1,10 @@
+{
+  "name": "quantumwake-voice-pack",
+  "private": true,
+  "description": "Records the combat callout voice pack. Not part of the app; run by hand after a patch adds hulls.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "dependencies": {
+    "kokoro-js": "1.2.1"
+  }
+}

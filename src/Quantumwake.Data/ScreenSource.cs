@@ -151,9 +151,12 @@ public interface IClipboardReader
 /// assumed. The folder does not exist until the pilot takes their first shot.
 /// </para>
 /// <para>
-/// This looks at files and never at the screen. That is the rule the whole
-/// feature is built around and the reason it is a folder listing rather than
-/// a capture: what gets read is something the pilot chose to save.
+/// This looks at files and never at the screen. That is the rule the
+/// screenshot feature is built around and the reason it is a folder listing
+/// rather than a capture: what gets read is something the pilot chose to save.
+/// Reading the screen live is a separate thing the pilot is asked about and
+/// can refuse - see <see cref="IGameScreenCapture"/> - and never rides in on
+/// this one.
 /// </para>
 /// </remarks>
 public static class Screenshots

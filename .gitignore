@@ -79,3 +79,7 @@ desktop.ini
 # than in it, but when one lands here it must not be committed: git records it
 # as a gitlink to a commit no clone can fetch.
 .worktrees/
+
+# The voice-pack recorder's dependencies; the recordings it makes are committed.
+tools/voice-pack/node_modules/
+tools/voice-pack/names.txt

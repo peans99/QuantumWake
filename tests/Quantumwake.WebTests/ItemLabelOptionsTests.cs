@@ -74,6 +74,31 @@ public class ItemLabelOptionsTests
         Assert.Contains("21", summary);
     }
 
+    /// <summary>Part figures default on, like routes: a stored preference from before them has no such field.</summary>
+    [Fact]
+    public void Part_figures_are_on_unless_turned_off_and_post_with_the_rest()
+    {
+        var page = Loaded();
+        Assert.True(page.Truth("__dom.node('#label-stats').checked"));
+
+        page.Serve("/api/labels/options", """{"colour":true,"level":4,"facts":false,"routes":true,"stats":false}""");
+        page.Do("__dom.node('#label-stats').checked = false; await saveLabelOptions();");
+
+        Assert.Contains("\"stats\":false", page.BodyOf("/api/labels/options"));
+    }
+
+    [Fact]
+    public void The_summary_counts_the_part_descriptions_it_would_fill()
+    {
+        var page = new Page();
+        page.Serve("/api/labels", Status.Replace("\"annotated\":7", "\"annotated\":7,\"described\":477"));
+        page.Do("await loadTextOverlay();");
+
+        var summary = page.NodeText("#textoverlay-summary");
+        Assert.Contains("Part descriptions with figures", summary);
+        Assert.Contains("477", summary);
+    }
+
     [Fact]
     public void Saving_a_choice_posts_it_and_says_it_is_not_installed_yet()
     {

@@ -316,6 +316,30 @@
     </div>
     <div class="now-grid">
 
+      <!-- The ship targeted in the cockpit, as live reading last saw its
+           panel: a name or the hulls its cross-section fits, whether it is
+           hostile, its speed and range, and what was called out. Hidden until
+           live reading has seen a lock. First in the grid: when it shows, a
+           fight is on, and nothing else on the page matters as much. -->
+      <!-- A rock being cracked: the charge against the laser's optimal window,
+           read off the fracture HUD's pixels, the crack's progress and the
+           rocks cracked so far. Hidden until live reading has seen a window. -->
+      <article class="card span2" id="now-fracture-card" data-card="fracture" hidden>
+        <div class="card-label" id="now-fracture-label">Fracture</div>
+        <div class="value" id="now-fracture">&mdash;</div>
+        <div class="fracture-meter" id="now-fracture-meter" hidden><span id="now-fracture-fill"></span></div>
+        <div class="muted now-target-detail" id="now-fracture-detail"></div>
+        <ol class="fracture-pings" id="now-fracture-pings" hidden></ol>
+      </article>
+
+      <article class="card span2" id="now-target-card" data-card="target" hidden>
+        <div class="card-label" id="now-target-label">Target</div>
+        <div class="value" id="now-target">&mdash;</div>
+        <div class="muted now-target-detail" id="now-target-detail"></div>
+        <div class="muted now-target-detail" id="now-target-odds" hidden></div>
+        <ul class="feed now-target-calls" id="now-target-calls"></ul>
+      </article>
+
       <article class="card now-status-card" id="now-status-card" data-card="status">
         <div class="card-label">Current status</div>
         <button class="now-status-config now-card-action" id="now-status-config" type="button"
@@ -1313,6 +1337,36 @@
           <p class="muted" id="screen-folder" hidden></p>
           <p class="muted" id="screen-status" aria-live="polite"></p>
           <div id="screen-result"></div>
+        </div>
+        <div class="live-screen" id="live-block" hidden>
+          <label class="toggle">
+            <input type="checkbox" id="live-enabled">
+            <span>
+              Read the game&rsquo;s screen live
+              <em class="muted">While Star Citizen is the window in front, a frame every two seconds is read like a screenshot and thrown away, every second while a ship is targeted. Rock scans are kept, one per rock; the target is only shown. Nothing touches the game itself.</em>
+            </span>
+          </label>
+          <p class="muted" id="live-status" aria-live="polite"></p>
+          <!-- Its own switch: reading the screen is one agreement, a voice in
+               the headset another, and the first never turns on the second. -->
+          <div class="live-voice" id="live-voice-row" hidden>
+            <label class="toggle">
+              <input type="checkbox" id="live-voice">
+              <span>
+                Speak callouts
+                <em class="muted">&ldquo;Target identified&rdquo;, &ldquo;Hostile&rdquo;, &ldquo;Missile inbound&rdquo;, mission objectives, the charge window and the radar ping, said by a voice carried in the app. Each sound has its own switch in Settings &rarr; Voice &amp; callouts. Nothing is sent anywhere.</em>
+              </span>
+            </label>
+            <button type="button" class="ghost tiny" id="live-voice-test">Hear it</button>
+          </div>
+          <!-- One activity quieted without the other: mining calls in a fight
+               that started at a rock are noise. -->
+          <div class="live-voice-kinds" id="live-voice-kinds" hidden>
+            <label class="toggle"><input type="checkbox" id="live-voice-combat"><span>Combat</span></label>
+            <label class="toggle"><input type="checkbox" id="live-voice-missions"><span>Missions</span></label>
+            <label class="toggle"><input type="checkbox" id="live-voice-mining"><span>Mining</span></label>
+          </div>
+          <p class="muted" id="live-voice-trouble" hidden></p>
         </div>
         </div>
       </details>
@@ -2714,6 +2768,19 @@
         <div id="radar-matches" aria-live="polite"></div>
       </div>
 
+      <!-- 1.1.15: how the live reader reads a ping - against the place the log
+           puts the pilot, or one picked here - and which rocks are worth a call. -->
+      <div class="radar-live" id="radar-live" hidden>
+        <h4 class="spaced">Pings read live</h4>
+        <div class="radar-live-row">
+          <label><span>Read pings against</span>
+            <select id="radar-place"></select>
+          </label>
+          <label class="toggle"><input type="checkbox" id="radar-wanted-only"><span>Only say wanted rocks <em class="muted">The rest are still listed on the Fracture card.</em></span></label>
+        </div>
+        <p class="muted small" id="radar-place-note"></p>
+      </div>
+
       <h4 class="spaced">Every rock's signature</h4>
       <div class="table-wrap">
         <table id="radar-table">
@@ -2725,6 +2792,7 @@
             <th>Found</th>
             <th class="num">×2</th><th class="num">×3</th><th class="num">×4</th>
             <th class="num">×5</th><th class="num">×6</th>
+            <th title="Said with &ldquo;wanted&rdquo; after it, and the only rocks said when Only say wanted rocks is on">Wanted</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -3964,6 +4032,11 @@
         <label class="toggle"><input type="checkbox" id="overlay-high-contrast"><span>High visibility</span></label>
         <p class="muted">Brighter text and markers for a widget you read over the game.</p>
       </div>
+      <div class="layout-group">
+        <div class="layout-label">In a fight</div>
+        <label class="toggle"><input type="checkbox" id="overlay-pop-target"><span>Bring the Target card forward</span></label>
+        <p class="muted">When you lock a ship, the widget turns to Now with the Target card first, and goes back to where you were 20 seconds after the lock is gone - unless you have moved on yourself. For pilots without the MFD frames. Needs reading the game's screen on, and the Target card ticked above.</p>
+      </div>
     </div>
   </section>
 
@@ -4053,6 +4126,14 @@
           <span>
             Name the places on hauling contract titles
             <em class="muted">The game fills them in when it shows the contract, so the logs say where a haul goes and the hauling planner can route it.</em>
+          </span>
+        </label>
+
+        <label class="toggle">
+          <input type="checkbox" id="label-stats" checked>
+          <span>
+            Add figures to ship part descriptions
+            <em class="muted">Shield HP and regeneration, power and cooling output, quantum speed, gun damage and range, missile lock. Read from your install; a gun whose fire rate the files leave open gets no rate rather than a guess.</em>
           </span>
         </label>
 
@@ -4551,9 +4632,51 @@
       </div>
     </details>
 
-    <details class="settings-group">
+    <!-- The voice itself, then every sound it can make. The two master
+         switches are the same ones as Log → Read from the game: that card
+         starts folded, and a pilot looking for the voice looks in Settings. -->
+    <details class="settings-group" id="settings-callouts-group">
       <summary>
         <span class="settings-group-index">03</span>
+        <span class="settings-group-copy"><strong>Voice &amp; callouts</strong><span>Switch the voice on, then each sound it can make on its own.</span></span>
+      </summary>
+      <div class="settings-group-content">
+    <div class="option-block" id="settings-voice-block" hidden>
+      <div class="option-head">
+        <h3>Voice</h3>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="settings-live-enabled">
+        <span>
+          Read the game&rsquo;s screen live
+          <em class="muted">Needed for every callout: the voice only says what the screen shows. While Star Citizen is the window in front, a frame is read like a screenshot and thrown away. Nothing touches the game itself.</em>
+        </span>
+      </label>
+      <div class="live-voice">
+        <label class="toggle">
+          <input type="checkbox" id="settings-live-voice">
+          <span>
+            Speak callouts
+            <em class="muted" id="settings-live-voice-note">Said by a voice carried in the app. Nothing is sent anywhere.</em>
+          </span>
+        </label>
+        <button type="button" class="ghost tiny" id="settings-live-voice-test">Hear it</button>
+      </div>
+      <p class="muted" id="settings-live-voice-trouble" hidden></p>
+    </div>
+    <div class="option-block">
+      <div class="option-head">
+        <h3>Spoken callouts</h3>
+      </div>
+      <p class="muted" id="settings-callouts-state">Asking the app what it can say…</p>
+      <div class="callout-list" id="settings-callouts"></div>
+    </div>
+      </div>
+    </details>
+
+    <details class="settings-group">
+      <summary>
+        <span class="settings-group-index">04</span>
         <span class="settings-group-copy"><strong>Log maintenance</strong><span>Re-read history, and see what was read from where.</span></span>
       </summary>
       <div class="settings-group-content">
@@ -4978,6 +5101,34 @@
       <div class="setup-actions">
         <button id="setup-start" class="primary">Start flying</button>
         <span class="muted" id="setup-status"></span>
+      </div>
+    </div>
+  </div>
+  <!-- Asked once, at start, until answered either way: whether the screen may
+       be read live. After first flight on a new install, on the next start on
+       an existing one. Never shown where the screen cannot be read. -->
+  <div class="setup" id="live-ask" hidden role="dialog" aria-modal="true" aria-labelledby="live-ask-title">
+    <div class="setup-card">
+      <div class="setup-brand">
+        <img src="assets/mark.svg" width="30" height="30" alt="">
+        <div>
+          <b id="live-ask-title">Read the game&rsquo;s screen?</b>
+          <span>a question, once</span>
+        </div>
+      </div>
+      <p>Quantum Wake can read Star Citizen&rsquo;s screen while you play. For now that is the mining scan panel: the rock you select lands on the Mining page without a screenshot.</p>
+      <ul class="muted live-ask-list">
+        <li>Only while Star Citizen is the window in front, about once every two seconds.</li>
+        <li>It copies the pixels a screenshot would and reads them on this PC. Nothing is sent anywhere, and each frame is thrown away once read.</li>
+        <li>It never opens the game&rsquo;s process, reads its memory or sends it input.</li>
+        <li>It works in borderless or windowed mode, not exclusive fullscreen.</li>
+        <li>CIG&rsquo;s terms neither allow nor forbid reading the screen in so many words; other community tools do it.</li>
+      </ul>
+      <p class="muted">You can change this at any time in Settings &rarr; Voice &amp; callouts, or on the Log page under Read from the game.</p>
+      <div class="setup-actions">
+        <button id="live-ask-yes" class="primary">Turn it on</button>
+        <button id="live-ask-no" class="ghost">Not now</button>
+        <span class="muted" id="live-ask-status"></span>
       </div>
     </div>
   </div>

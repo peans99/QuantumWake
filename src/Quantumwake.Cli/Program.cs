@@ -22,6 +22,140 @@ using Quantumwake.Data;
 if (GetOption(args, "--garage-check") is { } dumpDir)
     return GarageCheck(dumpDir);
 
+// The combat reader run over frames in order - recorded video, extracted with
+// ffmpeg - the way the live loop would see them a few seconds apart: what the
+// target panel read, the lock label's colour, the hulls the cross-section
+// fits, and what would have been said. Needs the models and, for the hull
+// candidates, the community dataset.
+// --near <figure>: the hulls a cross-section fits, closest first.
+if (GetOption(args, "--near") is { } nearFigure && double.TryParse(nearFigure, out var nearCs))
+{
+    foreach (var hull in ShipSignatureBook.From(new CommunityData()).Near(nearCs, 12))
+        Console.WriteLine($"{hull.CrossSection,8:0}  {hull.Name}");
+    return 0;
+}
+
+// --hull-names: every hull name the combat voice can say, one a line - the
+// list tools/voice-pack records.
+if (args.Contains("--hull-names"))
+{
+    foreach (var name in ShipSignatureBook.From(new CommunityData()).Names())
+        Console.WriteLine(name);
+    return 0;
+}
+
+if (GetOption(args, "--hull") is { } hullName)
+{
+    Console.WriteLine(ShipSignatureBook.From(new CommunityData()).Hull(hullName) ?? "(no hull)");
+    return 0;
+}
+
+// --charge <frames>: the fracture HUD's charge against its window, frame by
+// frame, from pixels - what the live loop reads while a rock is being cracked.
+if (GetOption(args, "--charge") is { } chargeFrames)
+{
+    using var pixels = new Quantumwake.Ocr.Onnx.OnnxScreenReader();
+    var mining = new MiningWatch();
+    var second = 0;
+    foreach (var file in Directory.GetFiles(chargeFrames, "*.jpg").Concat(Directory.GetFiles(chargeFrames, "*.png")).Order())
+    {
+        var (w, h) = ImageSize(file);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var patch = await pixels.PixelsAsync(file, ChargeWindow.SearchArea(w, h));
+        var read = patch is null ? null : ChargeWindow.Read(patch, h);
+        foreach (var callout in mining.See(read, DateTimeOffset.UnixEpoch.AddSeconds(second++)))
+            Console.WriteLine($"    >> {callout.Text}");
+        Console.WriteLine($"{Path.GetFileName(file),-12} {clock.ElapsedMilliseconds,4} ms  " + (read is null ? "-" : $"{read.State,-5} fill {read.Fill:P0}" + (read.BelowBy is { } by ? $" below by {by:0.0} bars" : "") + $"  bar {read.Bar.Left:0},{read.Bar.Top:0} {read.Bar.Width:0}x{read.Bar.Height:0}"));
+    }
+    return 0;
+}
+
+// --ping-places <game cache json>: the places with mineables, what spawns at
+// each, every table ore with no radar row (a spelling the two disagree on),
+// and how often a ping has more than one reading with and without the place.
+if (GetOption(args, "--ping-places") is { } pingCache)
+{
+    var pingInstall = GameInstallLocator.Preferred();
+    var game = Quantumwake.Core.GameData.GameCommodities.Load(pingInstall?.RootPath, pingCache);
+    var rows = Quantumwake.Core.GameData.GameRockSignatures.Radar(game.Mining.Signatures ?? []);
+    var places = PingPlaces.From(game.Spawns);
+    var shipOres = rows.Where(r => r.Kind == "ship").Select(r => PingPlaces.Ore(r.Name)).ToHashSet();
+    Console.WriteLine($"{rows.Count} radar rows, {places.Count} places");
+    foreach (var orphan in places.SelectMany(p => p.Ores).Distinct().Where(o => !shipOres.Contains(o)).Order())
+        Console.WriteLine($"  table ore with no radar row: {orphan}");
+
+    int pings = 0, manyAnywhere = 0, manyHere = 0, wrongHere = 0;
+    foreach (var place in places)
+    {
+        var here = PingPlaces.Rows(rows, place);
+        int placePings = 0, placeMany = 0, placeManyAnywhere = 0;
+        foreach (var row in here)
+        for (var n = 1; n <= 8; n++)
+        {
+            var ping = n * row.Signature;
+            var anywhere = PingReadout.Decode(ping, rows);
+            var narrowed = PingReadout.Decode(ping, here);
+            pings++; placePings++;
+            if (anywhere.Count > 1) { manyAnywhere++; placeManyAnywhere++; }
+            if (narrowed.Count > 1) { manyHere++; placeMany++; }
+            if (!narrowed.Any(m => m.Count == n && m.Signature == row.Signature)) wrongHere++;
+        }
+        Console.WriteLine($"{place.Name,-28} {place.System ?? "-",-8} {(place.Asteroids ? "field  " : "surface")} {here.Count,3} rows  ambiguous {placeManyAnywhere,3} -> {placeMany,3} of {placePings,3}  ores {string.Join(",", place.Ores.Order())}{(place.Hand ? " +hand" : "")}{(place.Ground ? " +ground" : "")}");
+    }
+    Console.WriteLine($"Pings {pings}: more than one reading anywhere {manyAnywhere} ({manyAnywhere * 100.0 / pings:0}%), at the place {manyHere} ({manyHere * 100.0 / pings:0}%); true reading lost {wrongHere}");
+    return 0;
+}
+
+// --hud <frames> [--lines <dumps>]: the missile band read up close on every
+// frame, and - from the whole-frame dumps the Windows engine wrote, one .txt
+// a frame as "[ left top hN]  text" - the territory banner and the mission's
+// health figures, with what the HUD watch would have said.
+if (GetOption(args, "--hud") is { } hudFrames)
+{
+    using var engine = new Quantumwake.Ocr.Onnx.OnnxScreenReader();
+    var hud = new HudWatch();
+    var dumps = GetOption(args, "--lines");
+    var at = DateTimeOffset.UnixEpoch;
+    long ms = 0;
+    int frames = 0, missiles = 0;
+    foreach (var file in Directory.GetFiles(hudFrames, "*.png").Concat(Directory.GetFiles(hudFrames, "*.jpg")).Order())
+    {
+        at = at.AddSeconds(1);
+        var (w, h) = ImageSize(file);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var band = await engine.ReadAsync(file, HudText.MissileBand(w, h), new ScreenTreatment(Scale: 1, Shear: 0));
+        clock.Stop();
+        ms += clock.ElapsedMilliseconds;
+        frames++;
+        var missile = HudText.Missile(band, w, h);
+        if (missile) missiles++;
+        var said = hud.SeeMissile(missile, at).ToList();
+
+        string extra = "";
+        var dump = dumps is null ? null : Path.Combine(dumps, Path.GetFileNameWithoutExtension(file) + ".txt");
+        if (dump is not null && File.Exists(dump))
+        {
+            var lines = File.ReadLines(dump)
+                .Select(l => System.Text.RegularExpressions.Regex.Match(l, @"^\[\s*(\d+)\s+(\d+)\s+h(\d+)\]\s+(.*)$"))
+                .Where(m => m.Success)
+                .Select(m => new ScreenTextLine(m.Groups[4].Value, double.Parse(m.Groups[1].Value), double.Parse(m.Groups[2].Value), double.Parse(m.Groups[3].Value)))
+                .ToList();
+            var territory = HudText.HostileTerritory(lines, w, h);
+            var health = HudText.Health(lines, w, h);
+            said.AddRange(hud.SeeWhole(territory, health, at));
+            extra = $"  territory {(territory ? "yes" : "-  ")}  health {string.Join(" ", health.Select(p => $"{p.Key} {p.Value}%"))}";
+        }
+
+        Console.WriteLine($"{Path.GetFileName(file),-12} {clock.ElapsedMilliseconds,4} ms  missile {(missile ? "YES" : "-  ")}  [{string.Join(" | ", band.Select(l => l.Text))}]{extra}");
+        foreach (var callout in said) Console.WriteLine($"    >> {callout.Text}");
+    }
+    Console.WriteLine($"Frames {frames}, missile on {missiles}, band read {ms / Math.Max(1, frames)} ms a frame on average");
+    return 0;
+}
+
+if (GetOption(args, "--target") is { } targetFrames)
+    return await TargetCheck(targetFrames, GetOption(args, "--log"), GetOption(args, "--start"), GetOption(args, "--step"), args.Contains("--no-npc"));
+
 // The screen reader run over a screenshot, or a folder of them, the way the
 // backups are run through the parser: what each frame read, how long it took,
 // and the lines written out so --screen and a diff can be asked about them.
@@ -384,9 +518,88 @@ if (args.Contains("--climate", StringComparer.OrdinalIgnoreCase))
     return 0;
 }
 
+// The ship-part figures the item labels write into descriptions, held up
+// against the community dataset's own - a source the reader never uses - so a
+// field read from the wrong place shows up as a disagreement rather than as a
+// plausible number. Run with a scratch --data: it rebuilds the cache.
+if (args.Contains("--ship-parts", StringComparer.OrdinalIgnoreCase))
+{
+    var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
+    var parts = GameCommodities.Load(install.RootPath, Path.Combine(data, "commodities.json")).Armoury.ShipParts ?? [];
+    Console.WriteLine($"{parts.Count} ship parts with figures: " + string.Join(", ", parts.Values.GroupBy(p => p.Type).OrderBy(g => g.Key).Select(g => $"{g.Count()} {g.Key}")));
+
+    var digest = Path.Combine(GetOption(args, "--community") ?? Path.Combine(Quantumwake.Core.AppPaths.Root, "community"), "digest-part-stats.json");
+    if (!File.Exists(digest)) { Console.WriteLine("no community digest to check against"); return 0; }
+    using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(digest));
+
+    var checks = new Dictionary<string, (int Agree, int Differ, List<string> Examples)>();
+    void Check(string field, string cls, double? ours, double theirs)
+    {
+        if (ours is null || theirs <= 0) return;
+        var entry = checks.TryGetValue(field, out var e) ? e : (Agree: 0, Differ: 0, Examples: new List<string>());
+        if (Math.Abs(ours.Value - theirs) <= Math.Max(0.06, theirs * 0.001)) entry.Agree++;
+        else { entry.Differ++; if (entry.Examples.Count < 40) entry.Examples.Add($"{cls}: {ours} vs {theirs}  [{parts[cls].FireKind} x{parts[cls].FireModes}]"); }
+        checks[field] = entry;
+    }
+    static double Num(System.Text.Json.JsonElement e, string name) =>
+        e.ValueKind == System.Text.Json.JsonValueKind.Object && e.TryGetProperty(name, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Number ? v.GetDouble() : 0;
+
+    foreach (var entry in doc.RootElement.EnumerateObject())
+    {
+        var e = entry.Value;
+        var cls = e.TryGetProperty("Class", out var c) ? c.GetString() ?? entry.Name : entry.Name;
+        if (!parts.TryGetValue(cls, out var p)) continue;
+        if (e.TryGetProperty("Shield", out var sh)) { Check("shield HP", cls, p.ShieldHp, Num(sh, "Hp")); Check("shield regen", cls, p.ShieldRegen, Num(sh, "Regen")); Check("damaged delay", cls, p.DamagedDelay, Num(sh, "DamagedDelay")); Check("downed delay", cls, p.DownedDelay, Num(sh, "DownedDelay")); }
+        if (p.Type == "PowerPlant") Check("power output", cls, p.PowerOutput, Num(e, "PowerGen"));
+        if (p.Type == "Cooler") Check("cooling output", cls, p.CoolingOutput, Num(e, "CoolantGen"));
+        if (e.TryGetProperty("Quantum", out var q)) { Check("quantum speed", cls, p.QuantumSpeed, Num(q, "Speed")); Check("spool", cls, p.SpoolTime, Num(q, "SpoolTime")); Check("quantum cooldown", cls, p.QuantumCooldown, Num(q, "Cooldown")); }
+        if (e.TryGetProperty("Weapon", out var w)) { Check("gun alpha", cls, p.Alpha, Num(w, "Alpha")); Check("gun rpm", cls, p.RoundsPerMinute, Num(w, "RateOfFire")); Check("gun dps", cls, p.Dps, Num(w, "Dps")); Check("gun speed", cls, p.ProjectileSpeed, Num(w, "AmmoSpeed")); Check("gun range", cls, p.Range, Num(w, "Range")); }
+        if (e.TryGetProperty("Missile", out var m)) { Check("missile damage", cls, p.MissileDamage, Num(m, "Damage")); Check("missile speed", cls, p.MissileSpeed, Num(m, "Speed")); Check("lock time", cls, p.LockTime, Num(m, "LockTime")); }
+    }
+    foreach (var (field, (agree, differ, examples)) in checks.OrderBy(k => k.Key))
+    {
+        Console.WriteLine($"  {field,-16} {agree,5} agree  {differ,4} differ");
+        foreach (var x in examples) Console.WriteLine($"      {x}");
+    }
+    return 0;
+}
+
 // Every mineable rock's radar signature, grouped by value, and which counts of
 // which rocks a ping could not tell apart. The numbers behind docs/mining.md's
 // radar section.
+// --voice-names: every name the voice can say - the hulls, then the rocks a
+// ping decodes to - one a line, for tools/voice-pack.
+if (args.Contains("--voice-names"))
+{
+    var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
+    foreach (var name in ShipSignatureBook.From(new CommunityData()).Names())
+        Console.WriteLine(name);
+    foreach (var name in GameRockSignatures.Radar(GameCommodities.Load(install.RootPath, Path.Combine(data, "commodities.json")).Mining.Signatures ?? []).Select(PingReadout.Spoken).Distinct())
+        Console.WriteLine(name);
+    return 0;
+}
+
+// --ping <frames>: the mining radar's signature readout read off each frame and
+// decoded against this install's rocks - what the live loop says after a ping.
+if (GetOption(args, "--ping") is { } pingFrames)
+{
+    var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
+    var radar = GameRockSignatures.Radar(GameCommodities.Load(install.RootPath, Path.Combine(data, "commodities.json")).Mining.Signatures ?? []);
+    using var engine = new Quantumwake.Ocr.Onnx.OnnxScreenReader();
+    Console.WriteLine($"{radar.Count} radar rows");
+    foreach (var file in Directory.GetFiles(pingFrames, "*.jpg").Concat(Directory.GetFiles(pingFrames, "*.png")).Order())
+    {
+        var (w, h) = ImageSize(file);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var lines = await engine.ReadAsync(file, PingReadout.Patch(w, h), new ScreenTreatment(2, 0));
+        var value = PingReadout.Value(lines);
+        clock.Stop();
+        var said = value is { } v ? PingReadout.Sentence(new PingReading(v, PingReadout.Decode(v, radar))) : null;
+        Console.WriteLine($"{Path.GetFileName(file),-12} {clock.ElapsedMilliseconds,4} ms  {(value is { } x ? x.ToString("N0") : "-"),8}  {said ?? (value is null ? "" : "no whole number of one rock")}");
+    }
+    return 0;
+}
+
 if (args.Contains("--signatures", StringComparer.OrdinalIgnoreCase))
 {
     var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
@@ -1496,6 +1709,103 @@ static int Screen(string linesFile, string installRoot, string? catalogueQuery)
 }
 
 /// <summary>Aggregates parsed events into the figures worth eyeballing.</summary>
+
+// --log <Game.log> --start <UTC time of the first frame> [--step <seconds>]:
+// the frames are placed in that session, and the ships its log saw stream in
+// up to each frame weigh the odds for an UNKNOWN, as they would live.
+static async Task<int> TargetCheck(string target, string? logPath = null, string? start = null, string? step = null, bool noNpc = false)
+{
+    var files = Directory.Exists(target)
+        ? Directory.GetFiles(target, "*.png").Concat(Directory.GetFiles(target, "*.jpg")).OrderBy(f => f).ToArray()
+        : File.Exists(target) ? [target] : [];
+
+    if (files.Length == 0)
+    {
+        Console.Error.WriteLine($"No frames at {target}");
+        return 1;
+    }
+
+    using var reader = new Quantumwake.Ocr.Onnx.OnnxScreenReader();
+    var book = ShipSignatureBook.From(new CommunityData());
+    Console.WriteLine($"Hulls by cross-section: {book.Count}");
+
+    var watch = new CombatWatch(book);
+    var nearby = new Quantumwake.Data.NearbyHulls();
+    var logged = new List<(DateTimeOffset At, string Line)>();
+    if (logPath is not null)
+        foreach (var raw in File.ReadLines(logPath))
+            if (raw.Length > 26 && raw[0] == '<' && DateTimeOffset.TryParse(raw.AsSpan(1, 24), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var stamp))
+                logged.Add((stamp, raw));
+    var fedTo = 0;
+    var seconds = double.TryParse(step, out var s1) ? s1 : 2;
+    var clockAt = start is not null && DateTimeOffset.TryParse(start, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var s0) ? s0 : DateTimeOffset.UnixEpoch;
+    watch.Nearby = () => nearby.Classes(clockAt);
+    if (!noNpc) watch.Npcs = () => nearby.Npcs(clockAt);
+    ScreenPatch? known = null;
+    var at = DateTimeOffset.UnixEpoch;
+    int panels = 0, named = 0, withCs = 0, withSpeed = 0;
+
+    foreach (var file in files)
+    {
+        // Frames are taken a fixed step apart; the watch only needs them in order.
+        at = at.AddSeconds(2);
+        clockAt = clockAt.AddSeconds(seconds);
+        while (fedTo < logged.Count && logged[fedTo].At <= clockAt) { nearby.Line(logged[fedTo].Line, logged[fedTo].At); fedTo++; }
+        var (w, h) = ImageSize(file);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        var (panel, stance) = known is null
+            ? (null, TargetStance.Unread)
+            : await TargetLook.ReadAsync(reader, file, null, known, w, h);
+        var whole = false;
+
+        if (panel is null)
+        {
+            var lines = await reader.ReadAsync(file);
+            (panel, stance) = await TargetLook.ReadAsync(reader, file, lines, null, w, h);
+            whole = true;
+        }
+        clock.Stop();
+
+        known = panel?.Panel;
+        HologramReading? hull = null;
+        if (panel?.Panel is { } where && await reader.PixelsAsync(file, HologramDamage.Area(where, h)) is { } pixels)
+            hull = HologramDamage.Read(pixels, h);
+        var said = watch.See(panel, stance, at, hull);
+
+        if (panel is not null)
+        {
+            panels++;
+            if (panel.Name is not null) named++;
+            if (panel.CrossSection is not null) withCs++;
+            if (panel.SpeedMs is not null) withSpeed++;
+        }
+
+        var near = panel?.CrossSection is { } cs && panel.Name is null ? watch.Picture(at).Target?.Candidates ?? [] : [];
+        Console.WriteLine($"{Path.GetFileName(file),-12} {clock.ElapsedMilliseconds,5} ms {(whole ? "whole" : "patch"),-5} " +
+            (panel is null ? "-" :
+                $"{panel.Name ?? (panel.Unknown ? "UNKNOWN" : "?"),-20} {panel.Faction ?? "",-14} " +
+                $"{panel.SpeedMs?.ToString("0") ?? "?",4} m/s {panel.RangeKm?.ToString("0.00") ?? "?",6} km  " +
+                $"EM {panel.Em?.ToString("0") ?? "?"} IR {panel.Ir?.ToString("0") ?? "?"} CS {panel.CrossSection?.ToString("0") ?? "?"}  " +
+                $"{stance,-8} " +
+                (hull is null ? "holo -  " : $"holo {hull.Damage,4:P0} w{hull.White} o{hull.Orange} r{hull.Red}  ") +
+                $"{string.Join(" / ", near.Select(n => $"{n.Name} {n.Chance:P0}"))}"));
+
+        foreach (var callout in said)
+            Console.WriteLine($"    >> {callout.Text}");
+    }
+
+    var picture = watch.Picture(at);
+    Console.WriteLine($"Frames {files.Length}, panel on {panels}, named on {named}, CS on {withCs}, speed on {withSpeed}; locks {picture.Locks}, hostile {picture.HostileLocks}");
+    return 0;
+}
+
+static (int Width, int Height) ImageSize(string file)
+{
+    using var codec = SkiaSharp.SKCodec.Create(file);
+    return (codec.Info.Width, codec.Info.Height);
+}
+
 internal sealed class Report
 {
     private readonly Dictionary<string, int> _locations = [];

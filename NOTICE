@@ -86,3 +86,16 @@ are PaddleOCR's and are embedded.
     PaddleOCR - Copyright (c) 2020 PaddlePaddle Authors
     RapidOCR  - Copyright (c) RapidAI
     Both licensed under the Apache License, Version 2.0.
+
+--------------------------------------------------------------------------------
+COMBAT CALLOUT VOICE
+--------------------------------------------------------------------------------
+
+The recorded callout voice in src/Quantumwake.Ocr/Voices/af_bella was spoken by
+Kokoro-82M v1.0 (voice "af_bella"), run through kokoro-js, by the recorder in
+tools/voice-pack. Neither the model nor kokoro-js is contained in the app; only
+the recordings are.
+
+    Kokoro-82M - Copyright (c) hexgrad
+    kokoro-js  - Copyright (c) Xenova
+    Both licensed under the Apache License, Version 2.0.

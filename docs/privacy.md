@@ -6,7 +6,8 @@ to its author. This page says what it reads, what it keeps, and every
 occasion on which it talks to the internet, with the switch that controls each
 one.
 
-In force from version 1.0 (November 2026). Changes to this page are dated in
+In force from version 1.0 (November 2026); reading the screen live was added
+in 1.1 (November 2026). Changes to this page are dated in
 the project's history on GitHub. Questions go to the project's issue tracker,
 <https://github.com/peans99/QuantumWake/issues>.
 
@@ -17,7 +18,8 @@ Games or Roberts Space Industries.
 
 ## In one paragraph
 
-Everything the app learns, it learns from files already on your machine, and
+Everything the app learns, it learns from files already on your machine - and,
+only if you say yes when it asks, from the game's screen while you play - and
 it keeps what it learns in your own user profile. It collects no telemetry, no
 analytics, no crash reports and no identifier of any kind. It reaches the
 internet only for the optional features listed below. Each one is off until you
@@ -37,6 +39,23 @@ send nothing about you.
   settings. They are read on your machine by Windows' own text recognition, or
   by the open models described under "Text recognition models" below. No image
   leaves your computer.
+- **The game's screen, live**, only if you said yes when the app asked (it
+  asks once, at start) or turned it on later on the Log page. While Star
+  Citizen is the window in front, the app copies the pixels of the game's
+  window about every two seconds - every second while a ship is targeted -
+  the same pixels a screenshot would hold, and reads them on your machine
+  like a screenshot. Each frame is overwritten by the next and deleted when
+  reading stops; what is kept is the reading of a mining scan panel, one per
+  rock. The ship you have targeted - its name, signatures, speed and whether
+  it is marked hostile - is held in memory for the combat page and never
+  written down. The MFD's Target page can show the game's hologram of that
+  ship, cut from the frame being read when the page asks and sent only to
+  the page on your own machine. A frame can show anything the game does, other players' names
+  included, and none of it leaves your computer. The app never opens the
+  game's process, reads its memory or sends it input.
+- **Spoken callouts**, only if you turn on the voice on the Log page: the
+  app says things like "Target identified" with the speech voice Windows
+  already has, on your PC. The sentence is not sent anywhere.
 - **Joysticks and the game's key bindings**, on the Controls page, to show and
   back up your bindings.
 
@@ -49,6 +68,12 @@ send nothing about you.
   reinstall; delete the folder to remove it.
   The Microsoft Store edition uses this same folder, and uninstalling it
   leaves the folder in place too.
+- **One frame of the game's screen**, while live reading is on:
+  `live\frame.bmp` in the data folder, replaced every couple of seconds and
+  deleted when reading is switched off or the app closes.
+  Beside it, `live\frames-<date>.csv` notes when each frame was taken, what
+  kind of screen it was and how long reading it took - no text from the
+  screen - one file a day, a week of them kept.
 - **The game folder, only when you ask**: installing item labels writes a text
   table into `Data\Localization\english` and, when `user.cfg` names no
   language, adds `g_language = english` to it. Removing the labels takes back
@@ -102,7 +127,7 @@ reads.
 
 ## What it will not do
 
-It does not send your logs, your handle, your history or your screenshots
-anywhere. It does not show advertising. It does not sell or share data, because
+It does not send your logs, your handle, your history, your screenshots or
+anything read from your screen anywhere. It does not show advertising. It does not sell or share data, because
 it has none to share: what it knows stays in the folder above, on your
 machine.

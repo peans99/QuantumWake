@@ -615,6 +615,9 @@ h2.spaced { margin-top: 32px; }
 
 /* ---------- panels ---------- */
 
+/* Pop the Target card (1.1.19): first in the widget while a lock is held. */
+.now-grid > .card-popped { order: -1; }
+
 .now-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -3477,6 +3480,7 @@ td.with-track { display: flex; align-items: center; gap: 9px; }
 .operations-live-workspace { border-left-color: var(--green); }
 .operations-workspace-head { display: flex; justify-content: space-between; gap: 16px; align-items: end; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--rule); }
 .operations-workspace-head > .muted { max-width: 56ch; font-size: 11px; line-height: 1.42; text-align: right; }
+.operations-workspace-head a { color: var(--cyan); }
 @media (max-width: 980px) { .operations-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .operations-deck-head, .operations-workspace-head { align-items: start; flex-direction: column; gap: 7px; } .operations-deck-head p, .operations-workspace-head > .muted { text-align: left; } .operations-grid { grid-template-columns: 1fr; } .operation-card { min-height: 102px; } }
 
@@ -3848,6 +3852,10 @@ tr:hover .drill, .drill:focus-visible { opacity: 1; }
 }
 
 .setup-actions { display: flex; align-items: center; gap: 15px; margin-top: 17px; }
+.live-ask-list { margin: 10px 0 12px; padding-left: 18px; font-size: 12px; line-height: 1.6; }
+.live-screen { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.live-screen[hidden] { display: none; }
+.live-screen #live-status { margin: 6px 0 0; }
 
 /* The wizard's is the same button with more air around the words. */
 .setup .primary { font-size: 13px; padding: 9px 22px; }
@@ -6720,7 +6728,9 @@ body:not(.overlay) #now-server-star::after { display: none; }
 .encounter-unused { columns: 2; column-gap: 28px; font-size: 12px; }
 @media (max-width: 900px) { .encounter-unused { columns: 1; } }
 #missions-table tbody tr.mission-row { cursor: pointer; }
-#missions-table td:first-child { max-width: 360px; }
+/* tbody td is nowrap, so the capped first cell kept a long internal name on one
+   line and the sticky column painted it over Offered by. */
+#missions-table td:first-child { max-width: 360px; white-space: normal; }
 #missions-table .armoury-kind { overflow-wrap: anywhere; }
 .mission-brief { white-space: pre-line; margin: 0 0 10px; line-height: 1.55; }
 .ref-debug { margin-top: 14px; font: 11px var(--mono); overflow-wrap: anywhere; }
@@ -8777,3 +8787,34 @@ tr.landed { outline-offset: -2px; }
 @keyframes qw-landed { from { box-shadow: 0 0 0 6px rgba(53, 200, 240, .35); } to { box-shadow: 0 0 0 0 rgba(53, 200, 240, 0); } }
 @media (prefers-reduced-motion: reduce) { .landed { animation: none; } }
 .session-metric-line .place-link, .session-metric-value .place-link { font: inherit; }
+
+/* Combat callouts under the live switch, and the Now page's Target card. */
+.live-voice { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.live-voice[hidden] { display: none; }
+.live-voice-kinds { display: flex; flex-wrap: wrap; gap: 18px; margin: 6px 0 0 28px; }
+.live-voice-kinds[hidden] { display: none; }
+/* Settings → Voice & callouts: the notes are a sentence long, and a toggle
+   will not wrap them on its own. */
+#settings-voice-block .toggle { white-space: normal; align-items: flex-start; line-height: 1.5; }
+#settings-voice-block .toggle input { margin-top: 3px; }
+.now-target-detail { margin-top: 4px; font-size: 12px; }
+#now-target-card.target-hostile #now-target { color: var(--red); }
+#now-target-card.target-combat { border-color: var(--red); }
+.now-target-calls { margin-top: 8px; }
+
+/* Settings → Callouts (1.1.14): a switch and a "Hear it" for every sound,
+   under its group's switch. */
+.callout-list { display: grid; gap: 14px; margin-top: 10px; }
+.callout-group { display: grid; gap: 6px; }
+.callout-group-head { font-weight: 600; }
+.callout-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-left: 28px; }
+.callout-row .toggle { flex: 1 1 auto; min-width: 0; }
+.callout-group-off .callout-row { opacity: .55; }
+
+/* Mining → Radar's live block and the Fracture card's sweep (1.1.15). */
+.radar-live-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 18px; }
+.radar-live-row select { min-width: 240px; }
+.radar-wanted { text-align: center; }
+.fracture-pings { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; font-size: 12px; }
+.fracture-ping b { font-family: var(--mono); }
+.fracture-ping-wanted { color: var(--amber, #f0b429); }

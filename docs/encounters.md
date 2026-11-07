@@ -1,5 +1,7 @@
 # NPC encounters and what their holds carry, from the game files
 
+![Reference: Encounters](images/encounters.png)
+
 Measured on 4.10.2 against this install. Every figure below is printed again by:
 
 ```powershell

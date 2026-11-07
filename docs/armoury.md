@@ -389,6 +389,8 @@ saved kits or game data are changed by using the bench.
 
 ## Climate: which suit copes where (0.20.41)
 
+![The Climate tab in the Armoury](images/climate.png)
+
 Measured on 4.10.2; `dotnet run --project src\Quantumwake.Cli -c Release -- --climate --data <scratch folder>`
 reprints all of it.
 

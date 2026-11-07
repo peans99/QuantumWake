@@ -32,11 +32,18 @@ public static partial class ServerHost
     /// server is run on its own, and the screen endpoints then say so rather
     /// than failing.
     /// </param>
+    /// <param name="capture">
+    /// How to copy the game window for live reading. Supplied by the overlay on
+    /// Windows; null otherwise, and the live switch then says it is unavailable.
+    /// </param>
+    /// <param name="voice">Speaks combat callouts; supplied by the overlay on Windows, null otherwise.</param>
     public static WebApplication Build(
         string[] args,
         IScreenReader? screen = null,
         IClipboardReader? clipboard = null,
-        IJoystickReader? joysticks = null)
+        IJoystickReader? joysticks = null,
+        IGameScreenCapture? capture = null,
+        ICalloutVoice? voice = null)
     {
 
         // Quantumwake server.
@@ -107,6 +114,9 @@ public static partial class ServerHost
         builder.Services.AddSingleton(new ModelLibrary(install));
         builder.Services.AddSingleton<ScanStatus>();
         builder.Services.AddSingleton<ActivityBoard>();
+        // Ship classes the log says streamed in lately: a clue the combat
+        // watch weighs an UNKNOWN target with. Memory only.
+        builder.Services.AddSingleton<NearbyHulls>();
         builder.Services.AddSingleton<LiveSessionService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<LiveSessionService>());
 
@@ -152,17 +162,42 @@ public static partial class ServerHost
         if (clipboard is null && LinuxClipboardReader.Available)
             clipboard = new LinuxClipboardReader();
 
+        // The target panel reads with ONNX when its models are already on
+        // disk, whichever engine reads everything else. On the 2026-11-05
+        // recording Windows' engine read the boxed HUD's labels on no frame
+        // and named a Vanduul fighter on two of sixty; ONNX found the panel
+        // on 109 of 137 frames. Only when present: this never starts the
+        // 14 MB download, which stays the screen settings' business.
+        var panelOnnx = screen as Quantumwake.Ocr.Onnx.OnnxScreenReader ?? new Quantumwake.Ocr.Onnx.OnnxScreenReader();
+
         // Built by hand rather than resolved, because the two readers come from
         // the host and may not exist at all.
         builder.Services.AddSingleton(sp =>
             new ScreenInsightService(
                 sp.GetRequiredService<LogLibrary>(),
                 sp.GetRequiredService<ScreenReadingStore>(),
-                screen, clipboard));
+                screen, clipboard,
+                () => panelOnnx.Ready ? panelOnnx : null));
 
         // Reads each screenshot as it lands, while the pilot has asked for that.
         // Idle otherwise: it checks the setting, not the folder.
         builder.Services.AddHostedService<ScreenWatchService>();
+
+        // Reads the game's screen while the pilot said yes when asked. Its own
+        // answer, so screenshot reading being on never turns this on.
+        builder.Services.AddSingleton<LiveScreenStore>();
+        // A demo: recorded frames stand in for the game window, on purpose
+        // only - a command-line switch or an environment variable, never a
+        // setting. The live answer still has to be yes.
+        if (ReplayGameCapture.From(builder.Configuration["Replay"] ?? Environment.GetEnvironmentVariable("QUANTUMWAKE_REPLAY")) is { } replay)
+        {
+            capture = replay;
+            Console.WriteLine($"Replaying {replay.Count} recorded frames in place of the game window.");
+        }
+        if (capture is not null) builder.Services.AddSingleton(capture);
+        if (voice is not null) builder.Services.AddSingleton(voice);
+        builder.Services.AddSingleton<LiveScreenService>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<LiveScreenService>());
 
         // The keybinding profile, kept whenever the game rewrites it, and the
         // stick pictures the Controls page draws bindings on.
@@ -3788,6 +3823,55 @@ public static partial class ServerHost
         // Nothing here reads the screen. It reads a file the pilot saved and
         // the clipboard the pilot filled, both on a button, and it says which
         // of those it is able to do at all.
+
+        // Live reading is the exception, and only after a yes: the dashboard
+        // asks at start until it has an answer, and both answers are kept.
+        app.MapGet("/api/live", (LiveScreenStore live, LiveScreenService service) => Results.Ok(service.Describe(live)));
+
+        app.MapPost("/api/live", (LiveAnswer answer, LiveScreenStore live, LiveScreenService service) =>
+        {
+            // A yes on a copy that cannot read the screen is kept as a no:
+            // nothing should come on later, on another machine, unasked.
+            live.Answer(answer.Enabled && service.Available);
+            return Results.Ok(service.Describe(live));
+        });
+
+        // The voice is a switch of its own, under the reading one: on means
+        // callouts are spoken, and it is never turned on by anything else.
+        app.MapPost("/api/live/voice", (LiveVoice body, LiveScreenStore live, LiveScreenService service) =>
+        {
+            live.SetVoice(body.Enabled, body.Combat, body.Mining, body.Missions);
+            return Results.Ok(service.Describe(live));
+        });
+
+        // One sound on or off, from Settings → Callouts. The voice and the
+        // group switches are left alone; a kind this build does not know is
+        // refused rather than stored.
+        app.MapPost("/api/live/callout", (LiveCallout body, LiveScreenStore live, LiveScreenService service) =>
+            live.SetCallout(body.Kind, body.On) is null
+                ? Results.Problem($"no callout called '{body.Kind}'", statusCode: 400)
+                : Results.Ok(service.Describe(live)));
+
+        // How pings are read, from Mining → Radar: the place, the wanted
+        // rocks, and whether only those are said.
+        app.MapPost("/api/live/ping", (LivePing body, LiveScreenStore live, LiveScreenService service) =>
+        {
+            live.SetPing(body.Place, body.Wanted, body.WantedOnly);
+            return Results.Ok(service.Describe(live));
+        });
+
+        // The game's hologram of the locked ship, cut from the frame being read;
+        // see LiveScreenService.Hologram. Never cached: it is the frame of now.
+        app.MapGet("/api/live/hologram", (LiveScreenService service, HttpContext ctx) =>
+        {
+            ctx.Response.Headers.CacheControl = "no-store";
+            return service.Hologram() is { } png ? Results.File(png, "image/png") : Results.NotFound();
+        });
+
+        // Says one sample callout, so the pilot hears the voice before a fight
+        // does: ?kind= picks the sound, as each row of Settings → Callouts does.
+        app.MapPost("/api/live/voice/test", (string? kind, LiveScreenService service) =>
+            service.TestVoice(kind) ? Results.Ok() : Results.Problem("this copy has no voice - only the Windows app speaks", statusCode: 409));
 
         // The install comes from the closure and not the container: on a
         // machine with none it is not registered, and a GET cannot take it

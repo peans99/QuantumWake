@@ -363,6 +363,13 @@ public sealed record GameArmouryData(
     /// calculator; see <see cref="GameBody"/>. Null in a cache written before it.
     /// </summary>
     public GameBody? Body { get; init; }
+
+    /// <summary>
+    /// Ship components, guns and missiles with the figures their descriptions
+    /// leave out, keyed by class; see <see cref="GameShipParts"/>. Null in a
+    /// cache written before it.
+    /// </summary>
+    public Dictionary<string, ShipPartStats>? ShipParts { get; init; }
 }
 
 /// <summary>
@@ -968,7 +975,7 @@ public static class GameArmoury
     }
 
     /// <summary>What an ammo record's projectile does: its hit, flight and drop, and its blast if it has one.</summary>
-    private static (DamageKinds Hit, double Speed, double Lifetime, double DropStart, double DropPerMetre, double DropFloor, Explosion? Explosion) Projectile(DataCore core, DataRecord ammo)
+    internal static (DamageKinds Hit, double Speed, double Lifetime, double DropStart, double DropPerMetre, double DropFloor, Explosion? Explosion) Projectile(DataCore core, DataRecord ammo)
     {
         var ammoAt = core.InstanceAt(ammo, ammo.VariantIndex);
         var speed = R(core.SingleAt(ammoAt, ammo.StructIndex, "speed"));
@@ -1013,7 +1020,7 @@ public static class GameArmoury
     /// The fire modes under one action, flattened: a wrapper yields what its
     /// leaves do, in the wrapper's name.
     /// </summary>
-    private static IEnumerable<FireMode> Modes(DataCore core, IReadOnlyDictionary<string, string> text, DataCore.Pointer action, string condition)
+    internal static IEnumerable<FireMode> Modes(DataCore core, IReadOnlyDictionary<string, string> text, DataCore.Pointer action, string condition)
     {
         var at = core.InstanceAt(action);
         var s = action.StructIndex;
@@ -1220,7 +1227,7 @@ public static class GameArmoury
             string.Equals(core.EnumAt(lat, ls, "projectileType"), "Secondary", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static DamageKinds Damage(DataCore core, DataCore.Pointer? pointer)
+    internal static DamageKinds Damage(DataCore core, DataCore.Pointer? pointer)
     {
         if (pointer is not { } p) return DamageKinds.None;
         var at = core.InstanceAt(p);

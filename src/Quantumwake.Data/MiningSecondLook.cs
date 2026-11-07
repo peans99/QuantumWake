@@ -52,9 +52,13 @@ public static class MiningSecondLook
         IReadOnlyList<ScreenTextLine> lines,
         WalletSecondLook.PatchReader read,
         IReadOnlyList<string> commodityNames,
+        bool fromTitle = false,
         CancellationToken token = default)
     {
-        if (ScreenFrames.ScanPanel(lines) is not { } panel)
+        // From the title alone when asked: the whole read that only found
+        // RESULTS - Windows' engine on 2560 MOLE frames - can still hand the
+        // panel to a better reader for this look.
+        if ((ScreenFrames.ScanPanel(lines) ?? (fromTitle ? ScreenFrames.ScanTitlePatch(lines) : null)) is not { } panel)
             return null;
 
         var looks = new List<ScreenFrames.ScanLook>();

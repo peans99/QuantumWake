@@ -23,6 +23,11 @@ let brightness = 1, textScale = 1;
    than for protecting anything. It dims and never blanks - a frame you can
    still glance at beats one that has to be woken before it will answer. */
 let sleepAfterMinutes = 0, lastPress = Date.now(), dozing = false;
+/* Follow the action: which frame changes page on its own, from setup. Right
+   until the host says otherwise, which is also what a frame opened in a
+   browser does. */
+let follow = 'right', followMemory = QwMfd.followIdle();
+const followsHere = () => follow === panelId;
 let bindings = QwMfd.buttons(null);
 /* Body coordinates and the place gazetteer. Fetched once and kept: it is
    reference data that only changes when the game does, and re-pulling 294
@@ -189,12 +194,23 @@ function savePreferences() {
   try { localStorage.setItem(mfdKey, JSON.stringify({ screen })); } catch { }
 }
 const isMenu = () => !QwMfd.pageIds.includes(screen);
-function navigate(target) {
+function navigate(target, auto = false) {
   if (!QwMfd.validScreen(target)) return;
   standDown(); notice = ''; saved = ''; details = false; selected = 0; radarFocus = 0; offset = 0;
   screen = target; page = Math.max(0, QwMfd.pageIds.indexOf(screen));
   byId('content').scrollTop = 0;
-  savePreferences(); render();
+  // A page the fight chose is not the pilot's choice to come back to.
+  if (!auto) savePreferences();
+  render();
+}
+/* One step of Follow the action, after each live reading. */
+function followTheAction() {
+  if (!followsHere()) return;
+  const now = Date.now();
+  const { memory, go } = QwMfd.followStep(followMemory, {
+    want: QwMfd.followWant(extra.live, now), screen, now, lastPress });
+  followMemory = memory;
+  if (go && go !== screen) navigate(go, true);
 }
 function back() {
   if (details) { details = false; lastRows = ''; byId('content').scrollTop = 0; render(); }
@@ -272,6 +288,7 @@ function render() {
   radarPlan = plan;
   drawMenu(plan);
   drawMap(showing === 'map', plan, true);
+  drawTarget(showing === 'target');
   drawMaker();
   const view = QwMfd.readingView(screen, isMenu() ? [] : QwMfd.rows(page, state, briefing, briefingUnavailable,
     { selected, armed, map: plan, extra: { ...extra, nearestServices: nearestServices() }, offset, now: Date.now() }), details);
@@ -429,6 +446,37 @@ function drawSweep(group) {
   });
 }
 
+/* The Target page's picture; see QwMfd.targetPicture for which one. A mask
+   cannot say its image failed to load, so a silhouette is probed first, and
+   a hull without an icon falls back to the hologram for as long as it is
+   locked. The hologram's address carries the read's time, so it follows the
+   lock frame by frame without being cached. */
+let targetShape = '', targetFellBack = false;
+function drawTarget(visible) {
+  const figure = byId('target-view');
+  const picture = visible ? QwMfd.targetPicture(extra.live) : null;
+  figure.hidden = !picture;
+  if (!picture) { targetShape = ''; targetFellBack = false; return; }
+  figure.classList.toggle('hostile', picture.tone === 'hostile');
+  figure.classList.toggle('likely', picture.likely);
+  byId('target-note').textContent = picture.note;
+  const shape = byId('target-shape'), hologram = byId('target-hologram');
+  const showHologram = src => { shape.hidden = true; hologram.hidden = false; if (hologram.getAttribute('src') !== src) hologram.src = src; };
+  if (picture.kind !== 'silhouette') { targetShape = ''; targetFellBack = false; showHologram(picture.src); return; }
+  if (picture.src === targetShape) { if (targetFellBack) showHologram(picture.fallback); return; }
+  targetShape = picture.src; targetFellBack = false;
+  const probe = new Image();
+  probe.onload = () => {
+    if (targetShape !== picture.src) return;
+    shape.style.setProperty('--shape', `url("${picture.src}")`);
+    shape.hidden = false; hologram.hidden = true;
+  };
+  probe.onerror = () => {
+    if (targetShape !== picture.src) return;
+    targetFellBack = true; showHologram(picture.fallback);
+  };
+  probe.src = picture.src;
+}
 function drawMap(visible, view, big) {
   const figure = byId('map');
   figure.hidden = !visible;
@@ -629,6 +677,10 @@ function hostMessage(data) {
     bindings = QwMfd.buttons(data.buttons);
     if (Number.isFinite(data.brightness)) brightness = QwMfd.brightnessAt(QwMfd.brightnessLevel(data.brightness));
     if (Number.isFinite(data.textScale)) textScale = QwMfd.clamp(data.textScale, .8, 1.5);
+    if (typeof data.follow === 'string') {
+      follow = data.follow;
+      if (!followsHere()) followMemory = QwMfd.followIdle();
+    }
     if (Number.isFinite(data.sleepAfterMinutes)) {
       sleepAfterMinutes = QwMfd.clamp(data.sleepAfterMinutes, 0, 120);
       lastPress = Date.now(); dozing = false;
@@ -703,7 +755,7 @@ async function refreshExtras() {
   };
   await Promise.all([grab('/api/earnings?days=30', 'earnings'), grab('/api/jobs', 'jobs'),
     grab('/api/respawn', 'respawn'), grab('/api/ledger?days=30', 'ledger'), grab('/api/ledger/wallet', 'wallet'),
-    grab('/api/screen/readings?take=8', 'screenLog'), grab('/api/events', 'events')]);
+    grab('/api/screen/readings?take=8', 'screenLog'), grab('/api/events', 'events'), grab('/api/live', 'live')]);
   lastRows = ''; render();
 }
 async function loadMakers() {
@@ -733,6 +785,22 @@ async function bootMfd() {
   stream = new EventSource('/api/stream');
   const briefingTimer = setInterval(refreshBriefing, 5000);
   const extraTimer = setInterval(refreshExtras, 30000);
+  /* A fight moves by the second, and the other extras by the half minute:
+     the combat pages ask for the live reading on their own, and only while
+     one of them is on the glass. */
+  /* The frame that follows the action asks too, wherever it is - slowly
+     while reading is off, since then there is nothing to follow. */
+  let liveTicks = 0;
+  const liveTimer = setInterval(async () => {
+    liveTicks++;
+    const onCombat = ['target', 'calls', 'charge'].includes(screen);
+    if (!onCombat && !followsHere()) return;
+    if (!onCombat && extra.live && !extra.live.enabled && liveTicks % 8) return;
+    try {
+      const response = await fetch('/api/live', { signal: AbortSignal.timeout(4000) });
+      if (response.ok) { extra = { ...extra, live: await response.json() }; lastRows = ''; followTheAction(); render(); }
+    } catch { /* the page says what it is missing */ }
+  }, 1500);
   /* Its own timer rather than a check inside render: the panel re-renders
      whenever anything changes, and a frame nobody is touching is exactly the
      case where nothing is changing. */
@@ -749,7 +817,7 @@ async function bootMfd() {
   };
   stream.onerror = () => { connection = state ? 'DISCONNECTED · LAST DATA' : 'SERVER UNAVAILABLE'; drawIdentity(); };
   window.addEventListener('beforeunload', () => {
-    stream.close(); clearInterval(briefingTimer); clearInterval(extraTimer); clearInterval(dozeTimer);
+    stream.close(); clearInterval(briefingTimer); clearInterval(extraTimer); clearInterval(liveTimer); clearInterval(dozeTimer);
   });
 }
 bootMfd();
