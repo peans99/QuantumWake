@@ -442,11 +442,17 @@ public sealed class ScreenInsightService(
             return (Nothing(shot, shotAt, $"could not read that screenshot ({e.GetType().Name})"), false, []);
         }
 
+        // The whole read's lines are in the engine's straightened copy of a
+        // tilted frame; every close read below is cut from the frame where the
+        // text really is and handed back in that copy. See ScreenGeometry.
+        var tilt = (reader as ITiltedReader)?.TiltOf(path);
+        var straight = ScreenGeometry.Straight(reader, tilt);
+
         // The balance is the one line the engine drops from a whole frame
         // that it will read from a sheared crop; see WalletSecondLook. Only
         // ever runs when the bar is on the frame and the figure is not.
         lines = await WalletSecondLook.TakeAsync(lines,
-            (patch, treatment, t) => reader.ReadAsync(path, patch, treatment, t), token);
+            (patch, treatment, t) => straight.ReadAsync(path, patch, treatment, t), token);
 
         // The scan panel loses most of its figures in the whole read; see
         // MiningSecondLook. Only runs when the whole read already made the
@@ -454,13 +460,14 @@ public sealed class ScreenInsightService(
         // found the title at all: on 200 frames of a 2560 MOLE stream Windows'
         // engine made a scan of 3, and ONNX read the panel on 135.
         var closer = panelReader?.Invoke();
-        var looks = closer ?? reader;
+        var looks = ScreenGeometry.Straight(closer ?? reader, tilt);
+        var panelLooks = ScreenGeometry.Straight(closer ?? reader, tilt, linesOnFrame: true);
         var scan = await MiningSecondLook.SettleAsync(lines,
-            (patch, treatment, t) => looks.ReadAsync(path, patch, treatment, t), CommodityNames(),
+            (patch, treatment, t) => panelLooks.ReadAsync(path, patch, treatment, t), CommodityNames(),
             fromTitle: closer is not null, token: token);
 
-        // The Freight Manager's crate counts are small green type the whole
-        // read does not get; see FreightSecondLook. Only on its confirmation.
+        // The Freight Manager's commodity under each crate tile, spelled
+        // better up close; see FreightSecondLook. Only on its confirmation.
         lines = await FreightSecondLook.TakeAsync(lines,
             (patch, treatment, t) => looks.ReadAsync(path, patch, treatment, t), token);
 

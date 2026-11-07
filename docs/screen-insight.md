@@ -260,7 +260,34 @@ about the frame's centre lands within a few pixels of ONNX's own boxes (24 Oct
 3:42: 892,607 → 886,632 against 887,628). Uncorrected, a close read sized off a
 Windows line looks 50 px from the tile on a 10° frame, which is how the next
 contract's title was taken for a tile's commodity. 1.1.24 reads these frames
-without the correction; the correction is 1.1.25.
+without the correction.
+
+**1.1.25: close reads are cut where the text is.** `WindowsScreenReader`
+keeps the angle of each whole read (`ITiltedReader`), and every second look in
+`ScreenInsightService` goes through `ScreenGeometry.Straight`: the patch, worked
+out from the whole read's lines, is turned onto the frame (the box around its
+four turned corners) and read there. The whole read's lines are **left in the
+engine's straightened copy**. Turning them all onto the frame was tried first,
+and it slanted the Fleet Manager's rows on a frame at -8.1 degrees and lost a
+ship from it. What a second look reads comes back into that copy when it is
+added to the whole read's lines (the wallet, the Freight Manager), and stays on
+the frame when the look parses its patch alone (the mining scan panel, which is
+HUD type drawn level even when the engine's angle for the frame is not).
+
+Measured over all 155 screenshots in this install's folder, before and after,
+reader by reader (the run before was repeated and matched itself exactly): 3
+changed, none for the worse. The Freight Manager's four frames went from 6 of
+13 crate tiles with a commodity named to 11 (CARBON and POTASSIUM on 24 Oct),
+and a 19 Sep loadout frame now reads its
+balance, 2,316,338 aUEC - the figure three screenshots seconds earlier had read,
+which this one did not use. No kind changed; the 25 Rep readings, 38 Contracts
+and 5 Fleet frames are identical.
+
+A negative result from the same run: the first attempt also turned a 3 Oct
+mining scan from unreadable into Raw Silicon, 4,294 kg, and that was luck. The
+panel's close read flips between all and nothing when its patch moves by a
+pixel - 2615.8,522.5 read the panel, 2616.3,521.5 read nothing - because it needs
+two of four sizes to agree. It is not claimed as a fix.
 
 Not yet seen on a running game: the window class (`CryENGINE` is assumed, and a
 mismatch says what it found instead), how long the engine takes over a live

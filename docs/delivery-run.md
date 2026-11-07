@@ -169,8 +169,9 @@ sizes and capacities read. Commodities mostly did not, and the reason is not
 the type: Windows reports its positions in its own straightened copy of the
 frame, so on a 10° frame a line it reads sits 50 px from where it is, and the
 close read that would have found CARBON under a tile was looking at the next
-contract's title instead. That is fixed in 1.1.25 for every reader, not just
-this one.
+contract's title instead. 1.1.25 cuts every close read where the text really
+is: across the four frames, tiles with their commodity named went from 6 of 13
+to 11, CARBON and POTASSIUM under the right tiles.
 
 **What it means for the build order.** Step 4 is half possible: which
 contract, which sizes and which commodity come off at a drop, but not how
