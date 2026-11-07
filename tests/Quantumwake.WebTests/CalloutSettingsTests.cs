@@ -143,4 +143,53 @@ public class CalloutSettingsTests
             """);
         Assert.Contains("\"missions\":true", page.BodyOf("/api/live/voice"));
     }
+
+    // 1.1.16: the pilot looked for the voice in Settings and found only the
+    // per-sound list - the two switches it needs were in a folded Log card.
+    [Fact]
+    public void Settings_carries_the_reading_and_voice_switches_too()
+    {
+        var page = Loaded(Live.Replace("\"voice\":true", "\"voice\":false"));
+        Assert.False(page.Truth("__dom.node('#settings-voice-block').hidden"));
+        Assert.True(page.Truth("__dom.node('#settings-live-enabled').checked"));
+        Assert.False(page.Truth("__dom.node('#settings-live-voice').checked"));
+        Assert.False(page.Truth("__dom.node('#settings-live-voice').disabled"));
+
+        page.Serve("/api/live/voice", Live);
+        page.Do("""
+            const box = __dom.node('#settings-live-voice');
+            box.checked = true;
+            box.fire('change');
+            await new Promise(r => setTimeout(r, 0));
+            """);
+        Assert.Contains("\"enabled\":true", page.BodyOf("/api/live/voice"));
+        Assert.True(page.Truth("__dom.node('#live-voice').checked"));
+    }
+
+    [Fact]
+    public void With_reading_off_the_voice_switch_is_shown_greyed_and_reading_can_be_turned_on_here()
+    {
+        var off = Live.Replace("\"enabled\":true", "\"enabled\":false").Replace("\"voice\":true", "\"voice\":false");
+        var page = Loaded(off);
+        Assert.False(page.Truth("__dom.node('#settings-voice-block').hidden"));
+        Assert.True(page.Truth("__dom.node('#settings-live-voice').disabled"));
+        Assert.Contains("Turn on reading the screen first", page.Text("__dom.node('#settings-live-voice-note').textContent"));
+
+        page.Serve("/api/live", Live);
+        page.Do("""
+            const box = __dom.node('#settings-live-enabled');
+            box.checked = true;
+            box.fire('change');
+            await new Promise(r => setTimeout(r, 0));
+            """);
+        Assert.Contains("\"enabled\":true", page.BodyOf("/api/live"));
+        Assert.False(page.Truth("__dom.node('#settings-live-voice').disabled"));
+    }
+
+    [Fact]
+    public void A_copy_that_cannot_speak_shows_no_voice_switches()
+    {
+        var page = Loaded(Live.Replace("\"canSpeak\":true", "\"canSpeak\":false"));
+        Assert.True(page.Truth("__dom.node('#settings-voice-block').hidden"));
+    }
 }

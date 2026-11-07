@@ -1354,7 +1354,7 @@
               <input type="checkbox" id="live-voice">
               <span>
                 Speak callouts
-                <em class="muted">&ldquo;Target identified&rdquo;, &ldquo;Hostile&rdquo;, &ldquo;Missile inbound&rdquo;, mission objectives, the charge window and the radar ping, said by a voice carried in the app. Each sound has its own switch in Settings &rarr; Callouts. Nothing is sent anywhere.</em>
+                <em class="muted">&ldquo;Target identified&rdquo;, &ldquo;Hostile&rdquo;, &ldquo;Missile inbound&rdquo;, mission objectives, the charge window and the radar ping, said by a voice carried in the app. Each sound has its own switch in Settings &rarr; Voice &amp; callouts. Nothing is sent anywhere.</em>
               </span>
             </label>
             <button type="button" class="ghost tiny" id="live-voice-test">Hear it</button>
@@ -4627,14 +4627,38 @@
       </div>
     </details>
 
-    <!-- Every sound the voice can make, each with a switch: the Log page's
-         three switches quiet an activity, these quiet one sentence. -->
+    <!-- The voice itself, then every sound it can make. The two master
+         switches are the same ones as Log → Read from the game: that card
+         starts folded, and a pilot looking for the voice looks in Settings. -->
     <details class="settings-group" id="settings-callouts-group">
       <summary>
         <span class="settings-group-index">03</span>
-        <span class="settings-group-copy"><strong>Callouts</strong><span>Every sound the voice can make, each with its own switch.</span></span>
+        <span class="settings-group-copy"><strong>Voice &amp; callouts</strong><span>Switch the voice on, then each sound it can make on its own.</span></span>
       </summary>
       <div class="settings-group-content">
+    <div class="option-block" id="settings-voice-block" hidden>
+      <div class="option-head">
+        <h3>Voice</h3>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="settings-live-enabled">
+        <span>
+          Read the game&rsquo;s screen live
+          <em class="muted">Needed for every callout: the voice only says what the screen shows. While Star Citizen is the window in front, a frame is read like a screenshot and thrown away. Nothing touches the game itself.</em>
+        </span>
+      </label>
+      <div class="live-voice">
+        <label class="toggle">
+          <input type="checkbox" id="settings-live-voice">
+          <span>
+            Speak callouts
+            <em class="muted" id="settings-live-voice-note">Said by a voice carried in the app. Nothing is sent anywhere.</em>
+          </span>
+        </label>
+        <button type="button" class="ghost tiny" id="settings-live-voice-test">Hear it</button>
+      </div>
+      <p class="muted" id="settings-live-voice-trouble" hidden></p>
+    </div>
     <div class="option-block">
       <div class="option-head">
         <h3>Spoken callouts</h3>
@@ -5095,7 +5119,7 @@
         <li>It works in borderless or windowed mode, not exclusive fullscreen.</li>
         <li>CIG&rsquo;s terms neither allow nor forbid reading the screen in so many words; other community tools do it.</li>
       </ul>
-      <p class="muted">You can change this at any time on the Log page, under Read from the game.</p>
+      <p class="muted">You can change this at any time in Settings &rarr; Voice &amp; callouts, or on the Log page under Read from the game.</p>
       <div class="setup-actions">
         <button id="live-ask-yes" class="primary">Turn it on</button>
         <button id="live-ask-no" class="ghost">Not now</button>

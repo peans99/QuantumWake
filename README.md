@@ -352,7 +352,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.1.15
+### 1.1.16
+
+**The voice is switched on in Settings.** Settings → Voice & callouts (it was Callouts) now starts with the two switches the voice needs - Read the game's screen live, and Speak callouts - with a button to hear it, above the list of every sound. They are the same switches as Log → Read from the game, whose card starts folded and was easy to miss. Speak callouts is shown greyed while reading is off rather than hidden, so it can be found before it can be used, and the MFD's combat and charge pages now point to Settings when reading is off.
 
 **Pings read against where you are.** A radar ping is a count times one rock's signature, and some rocks share a signature: I-type asteroids, ground-vehicle deposits and older deposit rocks all read 4,000, so 12,000 alone could be three of any of them. Your install's own deposit tables say which rocks spawn at each of 45 places, so a ping is now read against the rocks of the place you are at: an asteroid field drops ground deposits, a moon drops the asteroid classes, and a ship rock that does not spawn there is left out. The place comes from the game log - the moon or planet you are at, or where you are jumping to - or you can pick it yourself under Mining → Radar, including "Every rock, anywhere". In the tables, a ping has more than one possible reading 16% of the time against every rock and 10% against the place; in asteroid fields it falls to 0-3%, and on moons it barely moves, because hand-mining and ground-vehicle deposits are both on every surface. A ping that none of the place's rocks can explain is read against every rock instead, and says so, since the more likely mistake is the place. The log does not name Lagrange points or belts in a way that matches the tables, so for those, pick the place yourself. This has been checked against recorded frames, not yet in a game where the log has a location to give.
 

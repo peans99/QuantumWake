@@ -1019,7 +1019,7 @@ window.QwMfd = (() => {
         const live = view.extra?.live;
         if (!live) return [['TARGET', say('Asking the app what the screen shows…')]];
         if (!live.available) return [['TARGET', say('Only the Windows app can read the target panel.')]];
-        if (!live.enabled) return [['TARGET', say('Live reading is off. Turn it on under Log → Read from the game.')]];
+        if (!live.enabled) return [['TARGET', say('Live reading is off. Turn it on under Settings → Voice & callouts.')]];
         const combat = live.status?.combat;
         const target = combat?.target;
         if (!target) return [['NO TARGET', combat?.locks
@@ -1054,7 +1054,7 @@ window.QwMfd = (() => {
         const live = view.extra?.live;
         if (!live) return [['CHARGE', say('Asking the app what the screen shows…')]];
         if (!live.available) return [['CHARGE', say('Only the Windows app can read the fracture HUD.')]];
-        if (!live.enabled) return [['CHARGE', say('Live reading is off. Turn it on under Log → Read from the game.')]];
+        if (!live.enabled) return [['CHARGE', say('Live reading is off. Turn it on under Settings → Voice & callouts.')]];
         const fracture = live.status?.fracture;
         // A ping read in the last two minutes leads while no rock is being cracked.
         const ping = fracture?.ping && fracture.pingAt && (view.now ?? Date.now()) - new Date(fracture.pingAt).getTime() < 120000 ? fracture.ping : null;
@@ -1084,7 +1084,7 @@ window.QwMfd = (() => {
       case 'calls': {
         const live = view.extra?.live;
         const calls = live?.status?.combat?.callouts || [];
-        if (!live?.enabled) return [['CALLOUTS', say('Live reading is off. Turn it on under Log → Read from the game.')]];
+        if (!live?.enabled) return [['CALLOUTS', say('Live reading is off. Turn it on under Settings → Voice & callouts.')]];
         if (!calls.length) return [['NOTHING CALLED', say('Identified, hostile and disabled targets are listed here as they are called.')]];
         return calls.slice(0, 8).map(call => [
           String(call.kind || 'call').toUpperCase(),

@@ -36524,6 +36524,7 @@ function renderLiveScreen() {
   renderNowTarget();
   renderNowFracture();
   renderCalloutSettings();
+  renderSettingsVoice();
   renderRadarLive();
 
   const block = $('#live-block');
@@ -36766,7 +36767,7 @@ $('#live-voice-mining')?.addEventListener('change', (event) =>
 $('#live-voice-missions')?.addEventListener('change', (event) =>
   postLiveVoice(event, { enabled: Boolean(liveState?.voice), missions: event.target.checked }));
 
-/** Settings → Callouts' groups, in the order the Log page lists their switches. */
+/** Settings → Voice & callouts' groups, in the order the Log page lists their switches. */
 const CALLOUT_GROUPS = [
   ['ship', 'Ship'],
   ['combat', 'Combat'],
@@ -36784,7 +36785,7 @@ const calloutGroupOn = (state, group) =>
 let calloutSettingsDrawn = '';
 
 /**
- * Settings → Callouts (1.1.14): every sound the voice can make with its own
+ * Settings → Voice & callouts (1.1.14): every sound the voice can make with its own
  * switch and a button to hear it, under the Log page's three group switches.
  * Drawn from /api/live, which the page asks again every few seconds in a
  * fight, so the list is only rebuilt when something on it changed - a
@@ -36798,8 +36799,8 @@ function renderCalloutSettings() {
 
   line.textContent = !state ? tx('Asking the app what it can say…')
     : !state.available || !state.canSpeak ? tx('Only the Windows app speaks callouts; this copy has no voice.')
-      : !state.enabled ? tx('Reading the game is off. Callouts are said once Log → Read from the game and Speak callouts are on; these switches are kept until then.')
-        : !state.voice ? tx('Speak callouts is off on the Log page. These switches are kept for when it is on.')
+      : !state.enabled ? tx('Reading the game is off. Callouts are said once Read the game’s screen live and Speak callouts are on, above; these switches are kept until then.')
+        : !state.voice ? tx('Speak callouts is off, above. These switches are kept for when it is on.')
           : tx('Switch a sound off and it is still listed on the page, just not said.');
 
   const callouts = state?.callouts || [];
@@ -36852,6 +36853,53 @@ function renderCalloutSettings() {
     list.append(block);
   }
 }
+
+/**
+ * Settings → Voice & callouts' two master switches (1.1.16): the same
+ * settings as Log → Read from the game, shown here as well because that card
+ * starts folded and a pilot looking for the voice looks in Settings. Speak
+ * callouts stays visible with reading off, greyed, so it can be found before
+ * it can be used.
+ */
+function renderSettingsVoice() {
+  const block = $('#settings-voice-block');
+  if (!block) return;
+  const state = liveState;
+  block.hidden = !(state?.available && state.canSpeak);
+  if (block.hidden) return;
+  const reading = $('#settings-live-enabled');
+  if (reading) reading.checked = Boolean(state.enabled);
+  const voice = $('#settings-live-voice');
+  if (voice) {
+    voice.checked = Boolean(state.voice);
+    voice.disabled = !state.enabled;
+  }
+  const test = $('#settings-live-voice-test');
+  if (test) test.disabled = !state.canSpeak;
+  const note = $('#settings-live-voice-note');
+  if (note) {
+    note.textContent = state.enabled
+      ? tx('Said by a voice carried in the app. Nothing is sent anywhere.')
+      : tx('Turn on reading the screen first: with it off there is nothing to say.');
+  }
+  const trouble = $('#settings-live-voice-trouble');
+  if (trouble) {
+    trouble.hidden = !(state.enabled && state.voice && state.voiceTrouble);
+    trouble.textContent = state.voiceTrouble ? tx('Not heard: {why}.', { why: state.voiceTrouble }) : '';
+  }
+}
+
+$('#settings-live-enabled')?.addEventListener('change', (event) => {
+  postLiveAnswer(event.target.checked).catch(() => {
+    event.target.checked = !event.target.checked;
+    const line = $('#settings-callouts-state');
+    if (line) line.textContent = tx('The change did not save.');
+  });
+});
+$('#settings-live-voice')?.addEventListener('change', (event) => postLiveVoice(event, { enabled: event.target.checked }));
+$('#settings-live-voice-test')?.addEventListener('click', () => {
+  fetch('/api/live/voice/test', { method: 'POST' }).catch(() => { /* the button is only a sample */ });
+});
 
 /** Posts one sound's switch; the page shows what the server then says. */
 async function postCallout(event, kind, on) {

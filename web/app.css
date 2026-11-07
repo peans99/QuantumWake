@@ -8790,6 +8790,10 @@ tr.landed { outline-offset: -2px; }
 .live-voice[hidden] { display: none; }
 .live-voice-kinds { display: flex; flex-wrap: wrap; gap: 18px; margin: 6px 0 0 28px; }
 .live-voice-kinds[hidden] { display: none; }
+/* Settings → Voice & callouts: the notes are a sentence long, and a toggle
+   will not wrap them on its own. */
+#settings-voice-block .toggle { white-space: normal; align-items: flex-start; line-height: 1.5; }
+#settings-voice-block .toggle input { margin-top: 3px; }
 .now-target-detail { margin-top: 4px; font-size: 12px; }
 #now-target-card.target-hostile #now-target { color: var(--red); }
 #now-target-card.target-combat { border-color: var(--red); }
