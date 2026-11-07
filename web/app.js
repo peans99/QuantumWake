@@ -36411,6 +36411,7 @@ function renderLiveScreen() {
   // the Log page ever being opened.
   renderNowTarget();
   renderNowFracture();
+  renderCalloutSettings();
 
   const block = $('#live-block');
   if (!block) return;
@@ -36432,6 +36433,8 @@ function renderLiveScreen() {
       // Absent from an older server's answer, which spoke both.
       $('#live-voice-combat').checked = state.voiceCombat !== false;
       $('#live-voice-mining').checked = state.voiceMining !== false;
+      const missions = $('#live-voice-missions');
+      if (missions) missions.checked = state.voiceMissions !== false;
     }
     const trouble = $('#live-voice-trouble');
     if (trouble) {
@@ -36627,6 +36630,127 @@ $('#live-voice-combat')?.addEventListener('change', (event) =>
   postLiveVoice(event, { enabled: Boolean(liveState?.voice), combat: event.target.checked }));
 $('#live-voice-mining')?.addEventListener('change', (event) =>
   postLiveVoice(event, { enabled: Boolean(liveState?.voice), mining: event.target.checked }));
+$('#live-voice-missions')?.addEventListener('change', (event) =>
+  postLiveVoice(event, { enabled: Boolean(liveState?.voice), missions: event.target.checked }));
+
+/** Settings → Callouts' groups, in the order the Log page lists their switches. */
+const CALLOUT_GROUPS = [
+  ['ship', 'Ship'],
+  ['combat', 'Combat'],
+  ['missions', 'Missions'],
+  ['mining', 'Mining'],
+];
+
+/** The group's switch as /api/live names it; the ship's sounds have none of their own. */
+const calloutGroupOn = (state, group) =>
+  group === 'ship' ? true
+  : group === 'mining' ? state.voiceMining !== false
+    : group === 'missions' ? state.voiceMissions !== false
+      : state.voiceCombat !== false;
+
+let calloutSettingsDrawn = '';
+
+/**
+ * Settings → Callouts (1.1.14): every sound the voice can make with its own
+ * switch and a button to hear it, under the Log page's three group switches.
+ * Drawn from /api/live, which the page asks again every few seconds in a
+ * fight, so the list is only rebuilt when something on it changed - a
+ * checkbox replaced under the pointer loses the click.
+ */
+function renderCalloutSettings() {
+  const list = $('#settings-callouts');
+  const line = $('#settings-callouts-state');
+  if (!list || !line) return;
+  const state = liveState;
+
+  line.textContent = !state ? tx('Asking the app what it can say…')
+    : !state.available || !state.canSpeak ? tx('Only the Windows app speaks callouts; this copy has no voice.')
+      : !state.enabled ? tx('Reading the game is off. Callouts are said once Log → Read from the game and Speak callouts are on; these switches are kept until then.')
+        : !state.voice ? tx('Speak callouts is off on the Log page. These switches are kept for when it is on.')
+          : tx('Switch a sound off and it is still listed on the page, just not said.');
+
+  const callouts = state?.callouts || [];
+  const drawn = JSON.stringify([state?.canSpeak, state?.voiceCombat, state?.voiceMissions, state?.voiceMining,
+    callouts.map((c) => [c.kind, c.on, c.voice])]);
+  if (drawn === calloutSettingsDrawn) return;
+  calloutSettingsDrawn = drawn;
+
+  const toggle = (input, text, note) => {
+    const label = el('label', 'toggle');
+    const span = el('span', '', text);
+    if (note) {
+      span.append(' ');
+      span.append(el('em', 'muted', note));
+    }
+    label.append(input, span);
+    return label;
+  };
+  const box = (data, value, checked, disabled) => {
+    const input = el('input');
+    input.type = 'checkbox';
+    input.dataset[data] = value;
+    input.checked = checked;
+    input.disabled = Boolean(disabled);
+    return input;
+  };
+
+  list.replaceChildren();
+  for (const [group, label] of CALLOUT_GROUPS) {
+    const rows = callouts.filter((c) => c.group === group);
+    if (!rows.length) continue;
+    const groupOn = calloutGroupOn(state, group);
+    const block = el('div', `callout-group${groupOn ? '' : ' callout-group-off'}`);
+    // Ship has no switch on the Log page, so none here either: a title only.
+    const head = group === 'ship' ? el('div', '', tx(label)) : toggle(box('calloutGroup', group, groupOn), tx(label));
+    head.classList.add('callout-group-head');
+    block.append(head);
+
+    for (const c of rows) {
+      const row = el('div', 'callout-row');
+      row.dataset.kind = c.kind;
+      const note = `“${c.sample}”${c.voice === 'windows' ? ` · ${tx('Windows voice')}` : ''}`;
+      const hear = el('button', 'ghost tiny', tx('Hear it'));
+      hear.type = 'button';
+      hear.dataset.calloutHear = c.kind;
+      hear.disabled = !state.canSpeak;
+      row.append(toggle(box('calloutKind', c.kind, Boolean(c.on), !groupOn), tx(c.name), note), hear);
+      block.append(row);
+    }
+    list.append(block);
+  }
+}
+
+/** Posts one sound's switch; the page shows what the server then says. */
+async function postCallout(event, kind, on) {
+  try {
+    const response = await fetch('/api/live/callout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind, on }),
+    });
+    if (!response.ok) throw new Error(`callout ${response.status}`);
+    liveState = await response.json();
+    renderLiveScreen();
+  } catch {
+    event.target.checked = !event.target.checked;
+    const line = $('#settings-callouts-state');
+    if (line) line.textContent = tx('The change did not save.');
+  }
+}
+
+$('#settings-callouts')?.addEventListener('change', (event) => {
+  const target = event.target;
+  const kind = target?.dataset?.calloutKind;
+  const group = target?.dataset?.calloutGroup;
+  if (kind) postCallout(event, kind, target.checked);
+  else if (group) postLiveVoice(event, { enabled: Boolean(liveState?.voice), [group]: target.checked });
+});
+
+$('#settings-callouts')?.addEventListener('click', (event) => {
+  const kind = event.target?.dataset?.calloutHear ?? event.target?.closest?.('[data-callout-hear]')?.dataset?.calloutHear;
+  if (!kind) return;
+  fetch(`/api/live/voice/test?kind=${encodeURIComponent(kind)}`, { method: 'POST' }).catch(() => { /* only a sample */ });
+});
 
 $('#live-voice-test')?.addEventListener('click', () => {
   fetch('/api/live/voice/test', { method: 'POST' }).catch(() => { /* the button is only a sample */ });

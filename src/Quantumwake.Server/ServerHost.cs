@@ -3840,9 +3840,17 @@ public static partial class ServerHost
         // callouts are spoken, and it is never turned on by anything else.
         app.MapPost("/api/live/voice", (LiveVoice body, LiveScreenStore live, LiveScreenService service) =>
         {
-            live.SetVoice(body.Enabled, body.Combat, body.Mining);
+            live.SetVoice(body.Enabled, body.Combat, body.Mining, body.Missions);
             return Results.Ok(service.Describe(live));
         });
+
+        // One sound on or off, from Settings → Callouts. The voice and the
+        // group switches are left alone; a kind this build does not know is
+        // refused rather than stored.
+        app.MapPost("/api/live/callout", (LiveCallout body, LiveScreenStore live, LiveScreenService service) =>
+            live.SetCallout(body.Kind, body.On) is null
+                ? Results.Problem($"no callout called '{body.Kind}'", statusCode: 400)
+                : Results.Ok(service.Describe(live)));
 
         // The game's hologram of the locked ship, cut from the frame being read;
         // see LiveScreenService.Hologram. Never cached: it is the frame of now.
@@ -3852,9 +3860,10 @@ public static partial class ServerHost
             return service.Hologram() is { } png ? Results.File(png, "image/png") : Results.NotFound();
         });
 
-        // Says one sample callout, so the pilot hears the voice before a fight does.
-        app.MapPost("/api/live/voice/test", (LiveScreenService service) =>
-            service.TestVoice() ? Results.Ok() : Results.Problem("this copy has no voice - only the Windows app speaks", statusCode: 409));
+        // Says one sample callout, so the pilot hears the voice before a fight
+        // does: ?kind= picks the sound, as each row of Settings → Callouts does.
+        app.MapPost("/api/live/voice/test", (string? kind, LiveScreenService service) =>
+            service.TestVoice(kind) ? Results.Ok() : Results.Problem("this copy has no voice - only the Windows app speaks", statusCode: 409));
 
         // The install comes from the closure and not the container: on a
         // machine with none it is not registered, and a GET cannot take it

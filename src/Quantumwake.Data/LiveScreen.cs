@@ -62,15 +62,37 @@ public sealed record GameCapture(bool Taken, string? Why = null, int Width = 0, 
 /// answer saved before they existed reads as both on, which is what it meant.
 /// </param>
 /// <param name="VoiceMining">Whether the voice says mining callouts: the charge window, the crack, the radar ping.</param>
+/// <param name="VoiceMissions">Whether the voice says mission callouts: objectives, contracts, an escort's hull.</param>
+/// <param name="Muted">
+/// The callouts switched off one by one on Settings → Callouts, by kind (see
+/// <see cref="Callouts"/>). A list of what is off rather than of what is on, so
+/// a callout added in a later version is heard rather than silently missing
+/// from an answer saved before it existed.
+/// </param>
 public sealed record LiveScreenSettings(
     bool Asked = false, bool Enabled = false, DateTimeOffset? AnsweredAt = null, bool Voice = false,
-    bool VoiceCombat = true, bool VoiceMining = true)
+    bool VoiceCombat = true, bool VoiceMining = true, bool VoiceMissions = true, IReadOnlyList<string>? Muted = null)
 {
     /// <summary>Whether a combat callout is said now.</summary>
     public bool SpeaksCombat => Voice && VoiceCombat;
 
     /// <summary>Whether a mining callout is said now.</summary>
     public bool SpeaksMining => Voice && VoiceMining;
+
+    /// <summary>Whether a callout of this kind is said now: the voice, its group's switch, and its own.</summary>
+    public bool Speaks(string kind) => Voice && GroupOn(Callouts.GroupOf(kind)) && !IsMuted(kind);
+
+    /// <summary>Whether this one kind has been switched off on its own.</summary>
+    public bool IsMuted(string kind) => Muted?.Contains(kind) == true;
+
+    /// <summary>Whether a group's switch on the Log page is on.</summary>
+    public bool GroupOn(string group) => group switch
+    {
+        Callouts.Mining => VoiceMining,
+        Callouts.Missions => VoiceMissions,
+        Callouts.Ship => true,
+        _ => VoiceCombat,
+    };
 }
 
 /// <summary>
@@ -81,6 +103,9 @@ public interface ICalloutVoice
 {
     /// <summary>Speaks <paramref name="text"/>, or drops it when the voice is still busy with something newer.</summary>
     void Say(string text);
+
+    /// <summary>Which voice would say <paramref name="text"/>: the recorded pack's name, "windows" when the pack lacks a word, null when unknown.</summary>
+    string? VoiceFor(string text) => null;
 
     /// <summary>
     /// Why the last callout was not heard, or null when the last one played:
@@ -131,7 +156,7 @@ public sealed class LiveScreenStore
     /// Turns the spoken callouts on or off, and either kind of them when it is
     /// named; the reading answer, and a kind left unnamed, stay as they were.
     /// </summary>
-    public LiveScreenSettings SetVoice(bool on, bool? combat = null, bool? mining = null)
+    public LiveScreenSettings SetVoice(bool on, bool? combat = null, bool? mining = null, bool? missions = null)
     {
         lock (_gate)
         {
@@ -140,7 +165,26 @@ public sealed class LiveScreenStore
                 Voice = on,
                 VoiceCombat = combat ?? _current.VoiceCombat,
                 VoiceMining = mining ?? _current.VoiceMining,
+                VoiceMissions = missions ?? _current.VoiceMissions,
             };
+            Save();
+            return _current;
+        }
+    }
+
+    /// <summary>
+    /// Switches one callout on or off on its own; the voice and the group
+    /// switches stay as they were. A kind this build does not list is refused
+    /// (null), so a typo cannot sit in the file muting nothing for ever.
+    /// </summary>
+    public LiveScreenSettings? SetCallout(string kind, bool on)
+    {
+        if (Callouts.Find(kind) is null) return null;
+        lock (_gate)
+        {
+            var muted = (_current.Muted ?? []).Where(k => k != kind).ToList();
+            if (!on) muted.Add(kind);
+            _current = _current with { Muted = muted.Count == 0 ? null : muted };
             Save();
             return _current;
         }

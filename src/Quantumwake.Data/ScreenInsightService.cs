@@ -345,6 +345,27 @@ public sealed class ScreenInsightService(
         }
     }
 
+    /// <summary>
+    /// Whether the "INBOUND MISSILE" warning is in the band it moves in, read up
+    /// close by the panel reader: about 77 ms a frame on the 2026-11-06
+    /// recording, which caught it on all 4 frames it showed and on none of the
+    /// other 133. See <see cref="HudText"/>.
+    /// </summary>
+    public async Task<bool> ReadMissileAsync(string path, int width, int height, CancellationToken token = default)
+    {
+        var look = panelReader?.Invoke() ?? reader;
+        if (look is null) return false;
+        try
+        {
+            var lines = await look.ReadAsync(path, HudText.MissileBand(width, height), new ScreenTreatment(Scale: 1, Shear: 0), token);
+            return HudText.Missile(lines, width, height);
+        }
+        catch (Exception e) when (e is not ScreenEngineUnavailableException && !token.IsCancellationRequested)
+        {
+            return false;
+        }
+    }
+
     /// <summary>What each rock reads on the radar, from the install; empty until it has been read.</summary>
     public IReadOnlyList<Quantumwake.Core.GameData.RadarRow> RadarRows()
     {

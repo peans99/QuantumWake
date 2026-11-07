@@ -28,6 +28,8 @@ const phrases = [
   'Hostile contact, likely', 'Unknown contact, likely', 'Hostile contact', 'Unknown contact',
   'Hostile', 'likely', 'or',
   'In the window', 'Out of the window', 'Overcharge, back off', 'Rock cracked',
+  'Missile inbound', 'Entering hostile territory', 'Escort hull', 'Objective health', 'below 50 percent', 'below 25 percent',
+  'Quantum Wake system online', 'New objective', 'Objective complete', 'Objective failed', 'Contract complete', 'Contract failed',
   // How many rocks a ping is: PingReadout.Sentence, up to its twenty.
   'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
   'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen', 'Twenty',

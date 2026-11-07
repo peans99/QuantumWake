@@ -289,6 +289,11 @@ public sealed partial class LiveSessionService : BackgroundService
     /// <summary>Ship classes streamed in lately, for naming an UNKNOWN target; memory only.</summary>
     private readonly NearbyHulls? _nearby;
 
+    /// <summary>The voice and its switches, for the mission toasts said aloud; both null on a server with no voice.</summary>
+    private readonly LiveScreenStore? _liveScreen;
+    private readonly ICalloutVoice? _voice;
+    private readonly MissionWatch _missions = new();
+
     private SessionBuilder _builder;
     private LogTailer? _tailer;
     private string? _currentShip;
@@ -389,8 +394,12 @@ public sealed partial class LiveSessionService : BackgroundService
         ScreenReadingStore? screen = null,
         ScreenSettingsStore? screenSettings = null,
         ShardNoteStore? shards = null,
-        NearbyHulls? nearby = null)
+        NearbyHulls? nearby = null,
+        LiveScreenStore? liveScreen = null,
+        ICalloutVoice? voice = null)
     {
+        _liveScreen = liveScreen;
+        _voice = voice;
         _hub = hub;
         _library = library;
         _install = install;
@@ -471,6 +480,17 @@ public sealed partial class LiveSessionService : BackgroundService
         lock (_gate)
         {
             _builder.Add(ev);
+
+            // A mission toast said aloud, under the same switches as the
+            // screen's callouts - the voice sits under reading the game, so
+            // it speaks only while that is on. MissionWatch drops the toasts
+            // the start-up read of the whole log replays.
+            if (_voice is not null && _liveScreen is { } live && _missions.See(ev, DateTimeOffset.UtcNow) is { } said)
+            {
+                _logger.LogInformation("Mission callout: {Text}", said.Text);
+                var now = live.Current;
+                if (now.Enabled && now.Speaks(said.Kind)) _voice.Say(said.Text);
+            }
 
             // Leaving a ship clears it; retrieval is tracked by the builder,
             // which is the only signal a ship swap produces on SC 4.9 and 4.10.

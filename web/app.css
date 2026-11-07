@@ -8794,3 +8794,12 @@ tr.landed { outline-offset: -2px; }
 #now-target-card.target-hostile #now-target { color: var(--red); }
 #now-target-card.target-combat { border-color: var(--red); }
 .now-target-calls { margin-top: 8px; }
+
+/* Settings → Callouts (1.1.14): a switch and a "Hear it" for every sound,
+   under its group's switch. */
+.callout-list { display: grid; gap: 14px; margin-top: 10px; }
+.callout-group { display: grid; gap: 6px; }
+.callout-group-head { font-weight: 600; }
+.callout-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-left: 28px; }
+.callout-row .toggle { flex: 1 1 auto; min-width: 0; }
+.callout-group-off .callout-row { opacity: .55; }

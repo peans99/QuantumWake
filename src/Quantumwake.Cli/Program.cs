@@ -70,6 +70,53 @@ if (GetOption(args, "--charge") is { } chargeFrames)
     return 0;
 }
 
+// --hud <frames> [--lines <dumps>]: the missile band read up close on every
+// frame, and - from the whole-frame dumps the Windows engine wrote, one .txt
+// a frame as "[ left top hN]  text" - the territory banner and the mission's
+// health figures, with what the HUD watch would have said.
+if (GetOption(args, "--hud") is { } hudFrames)
+{
+    using var engine = new Quantumwake.Ocr.Onnx.OnnxScreenReader();
+    var hud = new HudWatch();
+    var dumps = GetOption(args, "--lines");
+    var at = DateTimeOffset.UnixEpoch;
+    long ms = 0;
+    int frames = 0, missiles = 0;
+    foreach (var file in Directory.GetFiles(hudFrames, "*.png").Concat(Directory.GetFiles(hudFrames, "*.jpg")).Order())
+    {
+        at = at.AddSeconds(1);
+        var (w, h) = ImageSize(file);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var band = await engine.ReadAsync(file, HudText.MissileBand(w, h), new ScreenTreatment(Scale: 1, Shear: 0));
+        clock.Stop();
+        ms += clock.ElapsedMilliseconds;
+        frames++;
+        var missile = HudText.Missile(band, w, h);
+        if (missile) missiles++;
+        var said = hud.SeeMissile(missile, at).ToList();
+
+        string extra = "";
+        var dump = dumps is null ? null : Path.Combine(dumps, Path.GetFileNameWithoutExtension(file) + ".txt");
+        if (dump is not null && File.Exists(dump))
+        {
+            var lines = File.ReadLines(dump)
+                .Select(l => System.Text.RegularExpressions.Regex.Match(l, @"^\[\s*(\d+)\s+(\d+)\s+h(\d+)\]\s+(.*)$"))
+                .Where(m => m.Success)
+                .Select(m => new ScreenTextLine(m.Groups[4].Value, double.Parse(m.Groups[1].Value), double.Parse(m.Groups[2].Value), double.Parse(m.Groups[3].Value)))
+                .ToList();
+            var territory = HudText.HostileTerritory(lines, w, h);
+            var health = HudText.Health(lines, w, h);
+            said.AddRange(hud.SeeWhole(territory, health, at));
+            extra = $"  territory {(territory ? "yes" : "-  ")}  health {string.Join(" ", health.Select(p => $"{p.Key} {p.Value}%"))}";
+        }
+
+        Console.WriteLine($"{Path.GetFileName(file),-12} {clock.ElapsedMilliseconds,4} ms  missile {(missile ? "YES" : "-  ")}  [{string.Join(" | ", band.Select(l => l.Text))}]{extra}");
+        foreach (var callout in said) Console.WriteLine($"    >> {callout.Text}");
+    }
+    Console.WriteLine($"Frames {frames}, missile on {missiles}, band read {ms / Math.Max(1, frames)} ms a frame on average");
+    return 0;
+}
+
 if (GetOption(args, "--target") is { } targetFrames)
     return await TargetCheck(targetFrames, GetOption(args, "--log"), GetOption(args, "--start"), GetOption(args, "--step"), args.Contains("--no-npc"));
 

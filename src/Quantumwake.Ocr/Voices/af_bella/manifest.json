@@ -36,7 +36,19 @@
     "Eighteen": "p_eighteen.m4a",
     "Nineteen": "p_nineteen.m4a",
     "Twenty": "p_twenty.m4a",
-    "Target critical": "p_target_critical.m4a"
+    "Target critical": "p_target_critical.m4a",
+    "Missile inbound": "p_missile_inbound.m4a",
+    "Entering hostile territory": "p_entering_hostile_territory.m4a",
+    "Escort hull": "p_escort_hull.m4a",
+    "Objective health": "p_objective_health.m4a",
+    "below 50 percent": "p_below_50_percent.m4a",
+    "below 25 percent": "p_below_25_percent.m4a",
+    "New objective": "p_new_objective.m4a",
+    "Objective complete": "p_objective_complete.m4a",
+    "Objective failed": "p_objective_failed.m4a",
+    "Contract complete": "p_contract_complete.m4a",
+    "Contract failed": "p_contract_failed.m4a",
+    "Quantum Wake system online": "p_quantum_wake_system_online.m4a"
   },
   "names": {
     "Aegis Avenger Stalker": "n_aegis_avenger_stalker.m4a",

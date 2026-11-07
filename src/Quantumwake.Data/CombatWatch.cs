@@ -380,6 +380,17 @@ public sealed class CombatWatch(ShipSignatureBook book)
         // decimal without swallowing the next hull.
         && Math.Abs(read - cs) > Math.Max(250, cs * 0.05);
 
+    /// <summary>
+    /// A callout another watch made - the HUD's missile warning, a mission's
+    /// health - kept with these so the page lists everything said in a fight
+    /// in the order it was said.
+    /// </summary>
+    public void Note(CombatCallout callout)
+    {
+        _said.Add(callout);
+        if (_said.Count > 50) _said.RemoveAt(0);
+    }
+
     private CombatCallout Say(DateTimeOffset at, string kind, string text)
     {
         var callout = new CombatCallout(at, kind, text);

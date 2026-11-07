@@ -458,6 +458,52 @@ page moved only at the first lock (RSI Scorpius 75% / Ares Ion 20% / Aurora
 5% became Scorpius 75% / Ares Ion 25%), because the ATC list already held the
 same classes and a Vanduul faction settles a Blade on its own.
 
+### Missile, territory, objective health and the flight HUD (1.1.14)
+
+None of these is in the log. The 2026-11-06 session has one line naming a
+missile at all (`Controller_Missile_…` detached from a wreck's debris), no
+seat or vehicle-control line in its 33,215 lines - `Vehicle Control Flow`,
+which the parser still knows, appears nowhere in it - and no
+territory line. So all four come from the screen, measured on the same 137
+frames as the target panel (a_000-a_069, b_000-b_066, 1 fps, 3440×1440), read
+whole by the Windows engine as the live loop reads them. `--hud <frames>
+--lines <dumps>` in the CLI replays them.
+
+- **INBOUND MISSILE** is red (about 144,80,64 - orange by the hologram's
+  rule, so that rule is not reused), ~30 px tall, and drawn on the canopy: it
+  sat at 1487,413 on b_024 and 1617,311 on b_051. It showed on b_023-024 and
+  b_051-052, two seconds each time, with a flare icon and a 2 beside it whose
+  meaning is not known. The band from 0.17h to 0.37h down, ±0.32h across the
+  centre, read with ONNX at scale 1, took 77 ms a frame on average and read it
+  on all 4 frames (`INBOUND MISILE`, `INBLNDISILE`, `INBOUND MISSILE 3 2`) and
+  on none of the other 133. Global chat about missiles (b_042-046, "getting a
+  missle lock warning") is outside the band. The band is read on every tick
+  that does not read the whole frame - with a panel held, or with the
+  territory banner seen in the last 90 s - and the whole frame's own lines
+  count too.
+- **HOSTILE TERRITORY** sits at about 1600,120 and was read on 107 of the 137
+  frames; gaps of a few frames are the engine, so it is said again only after
+  90 s unseen.
+- **Mission health**: the right-hand panel under the contract title.
+  `Ship Health: 24%` (Defend Tranquility, a_000), `Power Relay Health 100%`
+  on one line (a_036), `Ship Hull Integrity` with `100%` a row above the
+  label's middle (b_014, Escort Gabe). Taken only with its %: a_002 read 24%
+  as `248`. The relay went 100, 83, 66, 50, 16 across a_047-a_053, which two
+  agreeing reads would never have called in time, so a figure is taken on
+  its own when the bar was already below 90 and this is a step of 40 or less
+  further down; otherwise the milder of two reads in a row.
+- **Flight HUD**: two or more of H-FUEL, Q-FUEL, SCM, NAV, GUN(S), MSL, ESP,
+  CPLD on one frame. 125 of the 137 cockpit frames; 5 of the 154 screenshots
+  in this install, and all five are cockpit shots (a MOLE three times, a
+  hauling ship twice).
+
+The mission toasts are the log's own and need none of this:
+`SHUDEvent_OnNotification` across the backups has 1,288 New Objective, 383
+Objective Complete, 100 Objective Withdrawn, 7 Objective Failed, 515 Contract
+Complete and 40 Contract Failed. Each is logged several times under one
+notification number; a number and text seen in the last minute is the same
+toast, and one more than 30 s old is the start-up read of the log.
+
 ---
 
 ## What other people already built

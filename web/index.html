@@ -1353,7 +1353,7 @@
               <input type="checkbox" id="live-voice">
               <span>
                 Speak callouts
-                <em class="muted">&ldquo;Target identified&rdquo;, &ldquo;Hostile&rdquo;, &ldquo;Target disabled&rdquo;, the charge window and the radar ping, said by a voice carried in the app. Nothing is sent anywhere.</em>
+                <em class="muted">&ldquo;Target identified&rdquo;, &ldquo;Hostile&rdquo;, &ldquo;Missile inbound&rdquo;, mission objectives, the charge window and the radar ping, said by a voice carried in the app. Each sound has its own switch in Settings &rarr; Callouts. Nothing is sent anywhere.</em>
               </span>
             </label>
             <button type="button" class="ghost tiny" id="live-voice-test">Hear it</button>
@@ -1362,6 +1362,7 @@
                that started at a rock are noise. -->
           <div class="live-voice-kinds" id="live-voice-kinds" hidden>
             <label class="toggle"><input type="checkbox" id="live-voice-combat"><span>Combat</span></label>
+            <label class="toggle"><input type="checkbox" id="live-voice-missions"><span>Missions</span></label>
             <label class="toggle"><input type="checkbox" id="live-voice-mining"><span>Mining</span></label>
           </div>
           <p class="muted" id="live-voice-trouble" hidden></p>
@@ -4611,9 +4612,27 @@
       </div>
     </details>
 
-    <details class="settings-group">
+    <!-- Every sound the voice can make, each with a switch: the Log page's
+         three switches quiet an activity, these quiet one sentence. -->
+    <details class="settings-group" id="settings-callouts-group">
       <summary>
         <span class="settings-group-index">03</span>
+        <span class="settings-group-copy"><strong>Callouts</strong><span>Every sound the voice can make, each with its own switch.</span></span>
+      </summary>
+      <div class="settings-group-content">
+    <div class="option-block">
+      <div class="option-head">
+        <h3>Spoken callouts</h3>
+      </div>
+      <p class="muted" id="settings-callouts-state">Asking the app what it can say…</p>
+      <div class="callout-list" id="settings-callouts"></div>
+    </div>
+      </div>
+    </details>
+
+    <details class="settings-group">
+      <summary>
+        <span class="settings-group-index">04</span>
         <span class="settings-group-copy"><strong>Log maintenance</strong><span>Re-read history, and see what was read from where.</span></span>
       </summary>
       <div class="settings-group-content">

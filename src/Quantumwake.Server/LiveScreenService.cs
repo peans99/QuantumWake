@@ -34,6 +34,8 @@ public sealed record LiveScreenStatus(
 /// <param name="VoiceMining">Whether mining callouts are, under it.</param>
 /// <param name="CanSpeak">Whether this copy has a voice at all - the Windows app does, the server alone does not.</param>
 /// <param name="VoiceTrouble">Why the last callout was not heard, when it was not.</param>
+/// <param name="VoiceMissions">Whether mission callouts are, under it.</param>
+/// <param name="Callouts">Every sound the voice can make and whether it is on, for Settings → Callouts.</param>
 public sealed record LiveScreenState(
     bool Available,
     string? Unavailable,
@@ -46,7 +48,14 @@ public sealed record LiveScreenState(
     bool CanSpeak = false,
     string? VoiceTrouble = null,
     bool VoiceCombat = true,
-    bool VoiceMining = true);
+    bool VoiceMining = true,
+    bool VoiceMissions = true,
+    IReadOnlyList<CalloutSwitch>? Callouts = null);
+
+/// <summary>One row of Settings → Callouts.</summary>
+/// <param name="On">Its own switch; the voice and the group's switch still have to be on too.</param>
+/// <param name="Voice">Which voice says its sample: the recorded pack's name, or "windows" for a sentence the pack lacks a word of.</param>
+public sealed record CalloutSwitch(string Kind, string Group, string Name, string Sample, bool On, string? Voice);
 
 /// <summary>The pilot's answer, posted to <c>/api/live</c>.</summary>
 public sealed record LiveAnswer(bool Enabled);
@@ -54,7 +63,11 @@ public sealed record LiveAnswer(bool Enabled);
 /// <summary>The voice switch, posted to <c>/api/live/voice</c>.</summary>
 /// <param name="Combat">The combat callouts' own switch; left as it was when not sent.</param>
 /// <param name="Mining">The mining callouts' own switch; left as it was when not sent.</param>
-public sealed record LiveVoice(bool Enabled, bool? Combat = null, bool? Mining = null);
+/// <param name="Missions">The mission callouts' own switch; left as it was when not sent.</param>
+public sealed record LiveVoice(bool Enabled, bool? Combat = null, bool? Mining = null, bool? Missions = null);
+
+/// <summary>One callout switched on or off, posted to <c>/api/live/callout</c>.</summary>
+public sealed record LiveCallout(string Kind, bool On);
 
 /// <summary>
 /// Reads the game's screen while the pilot has said yes to it.
@@ -110,6 +123,7 @@ public sealed class LiveScreenService(
     private ScreenPatch? _panel;
     private ScreenPatch? _bar;
     private readonly MiningWatch _mining = new();
+    private readonly HudWatch _hud = new();
     private int _frameHeight;
     private long _tick;
 
@@ -143,15 +157,64 @@ public sealed class LiveScreenService(
 
         return new LiveScreenState(Available, Unavailable, answer.Asked, answer.Enabled, answer.AnsweredAt,
             Available && !answer.Asked, status, answer.Voice, voice is not null, voice?.Trouble,
-            answer.VoiceCombat, answer.VoiceMining);
+            answer.VoiceCombat, answer.VoiceMining, answer.VoiceMissions,
+            [.. Callouts.All.Select(k => new CalloutSwitch(k.Kind, k.Group, k.Name, k.Sample, !answer.IsMuted(k.Kind), voice?.VoiceFor(k.Sample)))]);
     }
 
-    /// <summary>Says a sentence through the voice now, so the pilot can hear what it sounds like before a fight.</summary>
-    public bool TestVoice()
+    /// <summary>
+    /// Says a sentence through the voice now, so the pilot can hear what it
+    /// sounds like before a fight: the sample of <paramref name="kind"/>, or a
+    /// target identified. Said whatever the switches are, because asking to
+    /// hear one is the point.
+    /// </summary>
+    public bool TestVoice(string? kind = null)
     {
         if (voice is null) return false;
-        voice.Say("Target identified: Vanduul Blade");
+        voice.Say(Callouts.Find(kind)?.Sample ?? "Target identified: Vanduul Blade");
         return true;
+    }
+
+    /// <summary>
+    /// Says what a watch said, when its sound is on, and keeps a fight's with
+    /// the combat watch's so the page lists them together.
+    /// </summary>
+    private void Speak(IEnumerable<CombatCallout> said, string what, bool keep = false)
+    {
+        foreach (var callout in said)
+        {
+            logger.LogInformation("{What} callout: {Text}", what, callout.Text);
+            if (keep) lock (_gate) _combat?.Note(callout);
+            if (settings.Current.Speaks(callout.Kind)) voice?.Say(callout.Text);
+        }
+    }
+
+    /// <summary>Whether a fight is on: the territory banner lately, or a hostile lock.</summary>
+    private bool InAFight(DateTimeOffset at)
+    {
+        if (_hud.Hostile(at)) return true;
+        lock (_gate) return _combat?.Picture(at).Combat == true;
+    }
+
+    /// <summary>The missile band read up close, and anything it says.</summary>
+    private async Task Missile(string frame, int width, int height, DateTimeOffset at, CancellationToken token)
+    {
+        var showing = await insight.ReadMissileAsync(frame, width, height, token);
+        IReadOnlyList<CombatCallout> said;
+        lock (_gate) said = _hud.SeeMissile(showing, at);
+        Speak(said, "HUD", keep: true);
+    }
+
+    /// <summary>A whole frame's HUD text: the missile warning, the territory banner, a mission's health.</summary>
+    private void Hud(IReadOnlyList<ScreenTextLine> lines, int width, int height, DateTimeOffset at)
+    {
+        IReadOnlyList<CombatCallout> missile, whole;
+        lock (_gate)
+        {
+            missile = _hud.SeeMissile(HudText.Missile(lines, width, height), at);
+            whole = _hud.SeeWhole(HudText.HostileTerritory(lines, width, height), HudText.Health(lines, width, height), at,
+                HudText.FlightHud(lines));
+        }
+        Speak(missile.Concat(whole), "HUD", keep: true);
     }
 
     private void Set(Func<LiveScreenStatus, LiveScreenStatus> change)
@@ -187,9 +250,16 @@ public sealed class LiveScreenService(
                     continue;
                 }
 
-                // Out of a fight or a fracture, the pace it always had: a frame every two seconds.
+                // Out of a fight or a fracture, the pace it always had: a frame
+                // every two seconds. In a fight with nothing locked, the
+                // missile band on the seconds between - the warning was up
+                // about two seconds at a time on the recording, and a
+                // whole-frame read every other second misses half of those.
                 if (_panel is null && _bar is null && _tick % 2 != 0)
+                {
+                    if (InAFight(DateTimeOffset.UtcNow)) await Tick(frame, stoppingToken, bandOnly: true);
                     continue;
+                }
 
                 await Tick(frame, stoppingToken);
             }
@@ -204,7 +274,7 @@ public sealed class LiveScreenService(
         }
     }
 
-    private async Task Tick(string frame, CancellationToken token)
+    private async Task Tick(string frame, CancellationToken token, bool bandOnly = false)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(frame)!);
 
@@ -245,6 +315,14 @@ public sealed class LiveScreenService(
             }
         }
 
+        if (bandOnly)
+        {
+            var band = System.Diagnostics.Stopwatch.StartNew();
+            await Missile(frame, taken.Width, taken.Height, at, token);
+            _log.Read("Missile", copying.ElapsedMilliseconds, band.ElapsedMilliseconds, taken.Width, taken.Height, null);
+            return;
+        }
+
         // ---- the fracture HUD: pixels only, so every tick while a bar is held ----
         var charging = System.Diagnostics.Stopwatch.StartNew();
         var charge = _bar is { } bar
@@ -255,6 +333,12 @@ public sealed class LiveScreenService(
         charging.Stop();
         _bar = charge?.Bar;
         Fracture(charge, at);
+
+        // ---- the missile band, on the ticks that do not read the whole frame ----
+        // A whole-frame read sees the warning in its own lines; the ticks
+        // between read only a patch, so the band is read up close beside it.
+        if (_tick % WholeEvery != 0 && (_panel is not null || (charge is not null && InAFight(at))))
+            await Missile(frame, taken.Width, taken.Height, at, token);
 
         if (charge is not null && _panel is null && _tick % WholeEvery != 0)
         {
@@ -304,6 +388,8 @@ public sealed class LiveScreenService(
             return;
         }
 
+        Hud(lines, taken.Width, taken.Height, at);
+
         var kept = 0;
         string? keptAs = null;
         if (sighting.Mining is { } scan && _rocks.Keep(scan, at) is { } shot)
@@ -337,11 +423,7 @@ public sealed class LiveScreenService(
             var ping = await insight.ReadPingAsync(frame, taken.Width, taken.Height, token);
             IReadOnlyList<CombatCallout> pinged;
             lock (_gate) pinged = _mining.SeePing(ping, insight.RadarRows(), at);
-            foreach (var callout in pinged)
-            {
-                logger.LogInformation("Ping callout: {Text}", callout.Text);
-                if (settings.Current.SpeaksMining) voice?.Say(callout.Text);
-            }
+            Speak(pinged, "Ping");
         }
 
         var kind = target is not null && sighting.Kind == ScreenKind.Unknown ? "Target" : sighting.Kind.ToString();
@@ -418,12 +500,7 @@ public sealed class LiveScreenService(
     {
         IReadOnlyList<CombatCallout> said;
         lock (_gate) said = _mining.See(charge, at);
-
-        foreach (var callout in said)
-        {
-            logger.LogInformation("Mining callout: {Text}", callout.Text);
-            if (settings.Current.SpeaksMining) voice?.Say(callout.Text);
-        }
+        Speak(said, "Mining");
     }
 
     /// <summary>
@@ -452,12 +529,7 @@ public sealed class LiveScreenService(
 
         IReadOnlyList<CombatCallout> said;
         lock (_gate) said = _combat!.See(panel, stance, at, hologram);
-
-        foreach (var callout in said)
-        {
-            logger.LogInformation("Combat callout: {Text}", callout.Text);
-            if (settings.Current.SpeaksCombat) voice?.Say(callout.Text);
-        }
+        Speak(said, "Combat");
     }
 
     private static string Describe(TargetReading panel) =>
