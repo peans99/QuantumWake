@@ -37752,7 +37752,12 @@ function renderDeckPreview() {
   }
 }
 $('#settings-streamdeck')?.addEventListener('click', () => showView('streamdeck'));
-$('#deck-back')?.addEventListener('click', () => showView('settings'));
+// Back lands on the Stream Deck group, open, rather than the top of Settings.
+$('#deck-back')?.addEventListener('click', () => {
+  showView('settings');
+  const group = $('#settings-streamdeck-group');
+  if (group) { group.open = true; group.scrollIntoView?.({ block: 'start' }); }
+});
 $('#deck-search')?.addEventListener('input', renderStreamDeck);
 $('#deck-scope')?.addEventListener('change', renderStreamDeck);
 $('#deck-model')?.addEventListener('change', renderDeckPreview);

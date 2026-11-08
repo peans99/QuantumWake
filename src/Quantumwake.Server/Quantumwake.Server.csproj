@@ -62,5 +62,7 @@
     <EmbeddedResource Include="../../integrations/streamdeck/com.nlebel.starcitizen.streamDeckPlugin" LogicalName="streamdeck.plugin" />
     <EmbeddedResource Include="../../integrations/streamdeck/presets.json" LogicalName="streamdeck.presets" />
     <EmbeddedResource Include="../../integrations/streamdeck/folder.png" LogicalName="streamdeck.folder" />
+    <EmbeddedResource Include="../../integrations/streamdeck/back.png" LogicalName="streamdeck.back" />
+    <EmbeddedResource Include="../../integrations/streamdeck/next.png" LogicalName="streamdeck.next" />
   </ItemGroup>
 </Project>

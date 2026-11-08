@@ -44,4 +44,21 @@ public class StreamDeckPageTests
         var french = new Page("fr");
         Assert.Contains("Maintenez", french.Text("deckTiming({holdFor:0.5})"));
     }
+    [Fact] public void Stream_deck_has_its_own_settings_group_and_back_returns_to_it()
+    {
+        // The stub seeds attributes, not nesting, so the placement is read from the markup.
+        var markup = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "index.html"));
+        var start = markup.IndexOf("id=\"settings-streamdeck-group\"", StringComparison.Ordinal);
+        Assert.True(start > 0);
+        var group = markup[start..markup.IndexOf("</details>", start, StringComparison.Ordinal)];
+        Assert.Contains("<strong>Stream Deck</strong>", group);
+        Assert.Contains("id=\"settings-streamdeck\"", group);
+        // One way in: the loose card it started as is gone.
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(markup, "id=\"settings-streamdeck\""));
+        Assert.Contains("settings-group-index\">05</span>\n        <span class=\"settings-group-copy\"><strong>Log maintenance", markup.Replace("\r\n", "\n"));
+
+        var page = new Page();
+        page.Do("__dom.node('#settings-streamdeck-group').open = false; __dom.node('#deck-back').click();");
+        Assert.True(page.Truth("__dom.node('#settings-streamdeck-group').open === true"));
+    }
 }

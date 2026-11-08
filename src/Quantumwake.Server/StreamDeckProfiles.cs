@@ -196,10 +196,19 @@ public static class StreamDeckProfiles
                 if (line.Length > 0) lines.Add(line);
                 return string.Join('\n', lines.Take(3));
             }
-            object Folder(string child, string title, bool back = false) => new { ActionID = Id(), LinkedTitle = true, Name = title,
-                Settings = back ? (object)new { } : new { ProfileUUID = child }, State = 0,
-                States = new[] { new { Image = "Images/folder.png", ShowTitle = true, Title = FolderTitle(title), TitleColor = "#ffffff", FontSize = 10, TitleAlignment = "middle" } },
-                UUID = back ? "com.elgato.streamdeck.profile.backtoparent" : "com.elgato.streamdeck.profile.openchild" };
+            // The art carries no words: the first folder.png had "Ship & Utilities"
+            // drawn into it, and every folder's own title landed on top of that,
+            // two labels over each other on every folder key (1.2.10). The emblem
+            // fills the top half, so the title sits below it.
+            object Folder(string child, string title, bool back = false, bool more = false)
+            {
+                var shown = FolderTitle(title);
+                return new { ActionID = Id(), LinkedTitle = true, Name = title,
+                    Settings = back ? (object)new { } : new { ProfileUUID = child }, State = 0,
+                    States = new[] { new { Image = back ? "Images/back.png" : more ? "Images/next.png" : "Images/folder.png", ShowTitle = true, Title = shown,
+                        TitleColor = "#ffffff", FontSize = shown.Count(ch => ch == '\n') >= 2 ? 10 : 12, TitleAlignment = "bottom" } },
+                    UUID = back ? "com.elgato.streamdeck.profile.backtoparent" : "com.elgato.streamdeck.profile.openchild" };
+            }
             void Page(string id, string title, List<object> items, bool back)
             {
                 var actions = new Dictionary<string, object>(); var at = 0;
@@ -208,9 +217,10 @@ public static class StreamDeckProfiles
                 var take = capacity - at;
                 if (items.Count > take) take--;
                 foreach (var item in items.Take(take)) actions[Slot(at++)] = item;
-                if (items.Count > take) { var next = Id(); actions[Slot(capacity - 1)] = Folder(next, "More"); Page(next, title, items.Skip(take).ToList(), true); }
+                if (items.Count > take) { var next = Id(); actions[Slot(capacity - 1)] = Folder(next, "More", more: true); Page(next, title, items.Skip(take).ToList(), true); }
                 Json($"Profiles/{id}/manifest.json", new { Controllers = new[] { new { Actions = actions, Type = "Keypad" } }, Icon = "", Name = title });
-                Bytes($"Profiles/{id}/Images/folder.png", Resource("folder"));
+                foreach (var image in new[] { "folder", "back", "next" })
+                    Bytes($"Profiles/{id}/Images/{image}.png", Resource(image));
             }
             var home = Id(); var template = Id(); var folders = new List<object>();
             foreach (var group in commands.GroupBy(c => c.Group)) { var page = Id(); Page(page, group.Key, group.Select(Command).ToList(), true); folders.Add(Folder(page, group.Key)); }

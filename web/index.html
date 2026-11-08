@@ -4252,8 +4252,6 @@
       </div>
       <p class="muted">Choose what stays current, protect the history your totals use, and make a recap when you want to share one.</p>
     </div>
-
-    <div class="option-block"><div class="option-head"><h3>Star Citizen · Stream Deck</h3><button class="ghost" id="settings-streamdeck">Build a profile</button></div><p class="muted">Generate a 15-key or XL profile from your Star Citizen control mappings.</p></div>
     <div class="settings-start-grid">
     <div class="option-block settings-quick-card settings-share-card">
       <div class="option-head">
@@ -4711,9 +4709,28 @@
       </div>
     </details>
 
-    <details class="settings-group">
+    <!-- Its own group (1.2.10): it began as a loose card above the quick
+         settings, where it read as part of whichever card sat next to it. -->
+    <details class="settings-group" id="settings-streamdeck-group">
       <summary>
         <span class="settings-group-index">04</span>
+        <span class="settings-group-copy"><strong>Stream Deck</strong><span>A Star Citizen profile built from your keybindings, and the plugin that presses them.</span></span>
+      </summary>
+      <div class="settings-group-content">
+    <div class="option-block">
+      <div class="option-head">
+        <h3>Star Citizen profile</h3>
+        <button class="ghost" id="settings-streamdeck">Build a profile</button>
+      </div>
+      <p class="muted">Pick commands and get a 15-key or XL profile laid out in folders, each button on the key your keybindings give it. Rebuild it after changing your bindings in game.</p>
+      <p class="muted">The buttons need the Star Citizen Commands plugin on this PC: <a href="/api/streamdeck/plugin" download>download the plugin</a> and open it once, or let Open in Stream Deck install it for you. Windows only.</p>
+    </div>
+      </div>
+    </details>
+
+    <details class="settings-group">
+      <summary>
+        <span class="settings-group-index">05</span>
         <span class="settings-group-copy"><strong>Log maintenance</strong><span>Re-read history, and see what was read from where.</span></span>
       </summary>
       <div class="settings-group-content">

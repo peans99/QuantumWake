@@ -36,6 +36,29 @@ public class StreamDeckTests
         Assert.Equal(80,sent.Distinct().Count());
         foreach(var folder in folders) Assert.Contains(zip.Entries,e => e.FullName.EndsWith("/Profiles/"+folder+"/manifest.json"));
     }
+
+    [Fact] public void Folder_back_and_more_keys_each_have_their_own_picture_inside_their_page()
+    {
+        var commands = Enumerable.Range(0, 40).Select(n => new DeckCommand("ship/" + n, "Ship", "Action " + n, "n", "", null)).ToList();
+        using var zip = new ZipArchive(new MemoryStream(StreamDeckProfiles.Build("15", commands, null)));
+        var used = new Dictionary<string, string>();
+        foreach (var entry in zip.Entries.Where(e => e.FullName.Contains("/Profiles/") && e.FullName.EndsWith("/manifest.json")))
+        {
+            var page = entry.FullName[..^"manifest.json".Length];
+            using var doc = JsonDocument.Parse(entry.Open());
+            foreach (var action in doc.RootElement.GetProperty("Controllers")[0].GetProperty("Actions").EnumerateObject())
+            {
+                var state = action.Value.GetProperty("States")[0];
+                if (!state.TryGetProperty("Image", out var image)) continue;
+                Assert.Contains(zip.Entries, e => e.FullName == page + image.GetString());
+                used[action.Value.GetProperty("Name").GetString() == "Back" ? "back" : action.Value.GetProperty("Name").GetString() == "More" ? "more" : "folder"] = image.GetString()!;
+                Assert.Equal("bottom", state.GetProperty("TitleAlignment").GetString());
+            }
+        }
+        Assert.Equal("Images/folder.png", used["folder"]);
+        Assert.Equal("Images/back.png", used["back"]);
+        Assert.Equal("Images/next.png", used["more"]);
+    }
     [Fact] public void Mining_wheel_presets_use_the_games_keyboard_field_but_respect_removal()
     {
         var action = new ActionInfo("spaceship_mining", "v_increase_mining_throttle", "Mining power", "", "maxis_z", "", "", "", "press", "");
