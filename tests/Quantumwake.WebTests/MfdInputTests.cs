@@ -312,4 +312,35 @@ public class MfdInputTests
 
         Assert.Equal("undefined", panel.Text("String(__dom.node('#mfd').style['--inset-left'])"));
     }
+
+    /// <summary>
+    /// Home's five tiles did not fit Nicolas's right frame (631 x 601): the
+    /// fifth sat half off the bottom, and Up and Down were dimmed, because
+    /// only a page's readings were ever measured for overflow. On a menu it
+    /// is the tiles that scroll (1.2.7, from a screenshot of the frame).
+    /// </summary>
+    [Fact]
+    public void UpAndDownScrollAMenuTooTallForTheFrame()
+    {
+        var panel = new Panel();
+        panel.Do("""
+            var __menu = __dom.node('#menu');
+            __menu.scrollHeight = 600; __menu.clientHeight = 400; __menu.scrolled = 0;
+            __menu.scrollBy = function (o) { this.scrolled += o.top; };
+            var __content = __dom.node('#content');
+            __content.scrollHeight = 0; __content.clientHeight = 0;
+            __content.scrollBy = function () { throw new Error('the hidden readings scrolled'); };
+            navigate('home');
+            """);
+
+        Assert.False((bool)panel.Eval("isIdle('down')")!);
+        panel.Press(12);
+        Assert.True((double)panel.Eval("__menu.scrolled")! > 0);
+        panel.Press(14);
+        Assert.Equal(0d, (double)panel.Eval("__menu.scrolled")!);
+
+        // A menu that fits keeps them dimmed, as before.
+        panel.Do("__menu.scrollHeight = 400; render();");
+        Assert.True((bool)panel.Eval("isIdle('down')")!);
+    }
 }

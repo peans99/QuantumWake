@@ -194,11 +194,17 @@ function savePreferences() {
   try { localStorage.setItem(mfdKey, JSON.stringify({ screen })); } catch { }
 }
 const isMenu = () => !QwMfd.pageIds.includes(screen);
+/* What Up and Down scroll: the tiles on a menu, the readings on a page. Only
+   the readings used to count, so on a frame too short for Home's five tiles
+   the fifth sat half off the bottom behind a dimmed Up and Down - seen on
+   Nicolas's 631 x 601 right frame, 2026-11-07 (1.2.7). */
+const scroller = () => byId(isMenu() ? 'menu' : 'content');
+const overflows = element => element.scrollHeight > element.clientHeight + 1;
 function navigate(target, auto = false) {
   if (!QwMfd.validScreen(target)) return;
   standDown(); notice = ''; saved = ''; details = false; selected = 0; radarFocus = 0; offset = 0;
   screen = target; page = Math.max(0, QwMfd.pageIds.indexOf(screen));
-  byId('content').scrollTop = 0;
+  byId('content').scrollTop = 0; byId('menu').scrollTop = 0;
   // A page the fight chose is not the pilot's choice to come back to.
   if (!auto) savePreferences();
   render();
@@ -251,6 +257,8 @@ function drawMenu(plan) {
   });
   const key = JSON.stringify([screen, items, bindings]);
   if (key === lastMenu) return;
+  // A summary that changed is no reason to throw the pilot back to the top.
+  const scrolled = menu.scrollTop;
   lastMenu = key; menu.replaceChildren();
   for (const item of items) {
     const tile = document.createElement('button'); tile.type = 'button'; tile.className = 'menu-tile';
@@ -265,6 +273,7 @@ function drawMenu(plan) {
     tile.title = item.title + ' · ' + item.summary; tile.setAttribute('aria-label', tile.title);
     tile.append(icon, keycap, name, hint, summary); menu.append(tile);
   }
+  menu.scrollTop = scrolled;
 }
 function render() {
   // Recomputed here so the frame can never be left showing a dimming that
@@ -336,7 +345,7 @@ function render() {
      needs its face marked after a page change. */
   drawAction(QwMfd.actionLine(showing, { briefing, selected, armed, saved }));
   updateScrollHint();
-  const idle = idleNow(content.scrollHeight > content.clientHeight + 1);
+  const idle = idleNow(overflows(scroller()));
   for (const number of osbs)
     face[number].button.classList.toggle('dormant', idle.includes(QwMfd.resolveCommand(bindings[number], screen)));
 }
@@ -577,14 +586,13 @@ function note(text) { notice = text; drawAction(QwMfd.actionLine(screen, { brief
 /* One rule for what is idle, asked by the face when it dims a button and by the
    input before it acts on one. */
 function idleNow(scrollable) {
-  return [...QwMfd.dormant(screen, { tasks: QwMfd.tasks(briefing).length, scrollable: !isMenu() && scrollable,
+  return [...QwMfd.dormant(screen, { tasks: QwMfd.tasks(briefing).length, scrollable,
       paged: QwMfd.pageStep(screen, { extra, offset }, 1) !== null && QwMfd.pageLabel(screen, { extra, offset }) !== null }),
     ...(!hasDetails ? ['details'] : []), ...(screen === 'home' ? ['back'] : []),
     ...(briefingUnavailable || confirming ? ['confirm'] : [])];
 }
 function isIdle(commandId) {
-  const readings = byId('content');
-  return idleNow(readings.scrollHeight > readings.clientHeight + 1).includes(commandId);
+  return idleNow(overflows(scroller())).includes(commandId);
 }
 function standDown() { armed = false; armedTask = null; lastRows = ''; }
 function press(number) {
@@ -646,7 +654,8 @@ function step(direction) {
     return;
   }
   if (screen !== 'act') {
-    byId('content').scrollBy({ top: direction * byId('content').clientHeight * .7, behavior: 'smooth' });
+    const panel = scroller();
+    panel.scrollBy({ top: direction * panel.clientHeight * .7, behavior: 'smooth' });
     return;
   }
   const count = QwMfd.tasks(briefing).length;
