@@ -795,6 +795,7 @@ public static partial class ServerHost
         app.MapGet("/api/scan/history", (LogLibrary lib) => ScanHistory.Build(install, lib.Store));
 
         ControlsEndpoints.Map(app, install);
+        StreamDeckProfiles.Map(app, install);
         MapDataRead(app, install);
         MapModels(app, install);
         MapChannels(app, install, installPinned);

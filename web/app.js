@@ -415,7 +415,7 @@ function showView(name) {
   // parent stays lit, but each has its own fragment so a saved HTML report is
   // not confused with the app's live dashboard.
   const target = buttons.find(
-    (b) => b.dataset.view === (name === 'commodity' ? 'market' : name === 'help' ? 'about' : name === 'share' ? 'settings' : name));
+    (b) => b.dataset.view === (name === 'commodity' ? 'market' : name === 'help' ? 'about' : name === 'share' || name === 'streamdeck' ? 'settings' : name));
 
   if (!target) return;
 
@@ -476,6 +476,7 @@ function showView(name) {
   // The keybinding profile is the game's file and changes under the app;
   // read on entry so the page is never a stale copy of it.
   if (name === 'controls') loadControls().catch(() => {});
+  if (name === 'streamdeck') loadStreamDeck();
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
   if (name === 'checklists') loadChecklists().catch(() => {});
   if (name === 'imports') loadImports().catch(() => {});
@@ -563,6 +564,7 @@ function viewFromHash() {
   // A recap is built on demand and lives only in this page, so a bookmarked
   // or refreshed #share has nothing to show; it lands where the button is.
   if (name === 'share') return shareReportData ? 'share' : 'settings';
+  if (name === 'streamdeck') return name;
   return name === 'help' || $$('#tabs button').some((b) => b.dataset.view === name) ? name : null;
 }
 
@@ -37211,3 +37213,103 @@ async function boot() {
 }
 
 boot();
+
+/* Stream Deck profiles are snapshots: export resolves the selected action ids
+   again on the server so a changed or cleared binding cannot send a stale key. */
+let deckCommands = [], deckSelection = new Set(), deckPreviewGroup = null, deckPreviewOffset = 0, deckInitialised = false;
+function deckShown() {
+  const query = ($('#deck-search')?.value || '').trim().toLowerCase();
+  return deckCommands.filter(c => ($('#deck-scope')?.value !== 'presets' || c.preset) && (!query || (c.label + ' ' + c.group + ' ' + c.key).toLowerCase().replace(/\s+/g, ' ').includes(query)));
+}
+function deckSelected() { return deckCommands.filter(c => deckSelection.has(c.id) && !c.problem); }
+async function loadStreamDeck() {
+  const status = $('#deck-status');
+  status.textContent = tx('Reading control mappings…');
+  $('#deck-download').disabled = true;
+  try {
+    const data = await getJson('/api/streamdeck?defaults=' + ($('#deck-source').value === 'defaults'));
+    deckCommands = data.commands || [];
+    if (!deckInitialised && data.ready) { deckSelection = new Set(deckCommands.filter(c => c.preset && c.group !== 'Extended' && !c.problem).map(c => c.id)); deckInitialised = true; }
+    deckSelection = new Set([...deckSelection].filter(id => deckCommands.some(c => c.id === id && !c.problem)));
+    status.textContent = !data.ready ? tx('Game controls are not available yet. Wait for the game files to finish reading, then refresh.')
+      : $('#deck-source').value === 'defaults' ? tx('Using the selected game installation’s default bindings.')
+      : data.profileFound ? tx('Using current bindings, with game defaults for actions you have not changed.')
+      : tx('No saved keybinding profile was found. Showing game defaults.');
+    renderStreamDeck();
+  } catch (error) { deckCommands = []; renderStreamDeck(); status.textContent = error.message; }
+}
+function renderStreamDeck() {
+  const categories = $('#deck-categories'); categories.textContent = '';
+  for (const group of [...new Set(deckCommands.filter(c => c.preset).map(c => c.group))]) {
+    const commands = deckCommands.filter(c => c.preset && c.group === group && !c.problem);
+    const row = el('label', 'deck-category'), check = document.createElement('input'); check.type = 'checkbox';
+    const chosen = commands.filter(c => deckSelection.has(c.id)).length;
+    check.checked = commands.length > 0 && chosen === commands.length; check.indeterminate = chosen > 0 && chosen < commands.length; check.disabled = !commands.length;
+    check.addEventListener('change', () => { for (const c of commands) if (check.checked) deckSelection.add(c.id); else deckSelection.delete(c.id); renderStreamDeck(); });
+    row.append(check, el('span', '', tx(group))); categories.append(row);
+  }
+  const list = $('#deck-commands'); list.textContent = '';
+  let group = '';
+  for (const command of deckShown()) {
+    if (group !== command.group) { group = command.group; list.append(el('h4', '', group)); }
+    const row = el('label', 'deck-command');
+    const check = document.createElement('input'); check.type = 'checkbox'; check.checked = deckSelection.has(command.id); check.disabled = !!command.problem;
+    check.addEventListener('change', () => { if (check.checked) deckSelection.add(command.id); else deckSelection.delete(command.id); renderStreamDeck(); });
+    const copy = el('span'); copy.append(el('strong', '', command.label));
+    copy.append(el('small', 'muted', command.problem ? tx(command.problem) : command.key + (command.activation === 'hold' ? ' · ' + tx('Hold the button') : '')));
+    row.append(check, copy); list.append(row);
+  }
+  renderDeckPreview();
+}
+function renderDeckPreview() {
+  const chosen = deckSelected(), columns = $('#deck-model').value === 'xl' ? 8 : 5, capacity = columns * (columns === 8 ? 4 : 3);
+  const groups = [...new Set(chosen.map(c => c.group))];
+  $('#deck-count').textContent = tx('{count} commands selected · {groups} folders', { count: chosen.length, groups: groups.length });
+  $('#deck-download').disabled = !chosen.length;
+  $('#deck-open').disabled = !chosen.length;
+  const preview = $('#deck-preview'); preview.textContent = ''; preview.style.setProperty('--deck-columns', columns);
+  if (deckPreviewGroup && !groups.includes(deckPreviewGroup)) { deckPreviewGroup = null; deckPreviewOffset = 0; }
+  const items = deckPreviewGroup ? chosen.filter(c => c.group === deckPreviewGroup).map(c => ({ text: c.label, key: c.key })) : groups.map(group => ({ text: group, group }));
+  if (deckPreviewOffset >= items.length) deckPreviewOffset = 0;
+  const back = deckPreviewGroup !== null || deckPreviewOffset > 0;
+  const room = capacity - (back ? 1 : 0), more = items.length - deckPreviewOffset > room;
+  const count = room - (more ? 1 : 0), cells = [];
+  if (back) cells.push({ text: tx('Back'), click: () => { deckPreviewGroup = null; deckPreviewOffset = 0; renderDeckPreview(); } });
+  for (const item of items.slice(deckPreviewOffset, deckPreviewOffset + count)) cells.push({ text: item.text, key: item.key, click: item.group ? () => { deckPreviewGroup = item.group; deckPreviewOffset = 0; renderDeckPreview(); } : null });
+  if (more) { while (cells.length < capacity - 1) cells.push({ text: '' }); cells.push({ text: tx('More'), click: () => { deckPreviewOffset += count; renderDeckPreview(); } }); }
+  for (let i = 0; i < capacity; i++) {
+    const cell = cells[i] || { text: '' }, key = el(cell.click ? 'button' : 'div', 'deck-key' + (cell.click ? ' deck-key-folder' : ''), cell.text);
+    if (cell.key) key.title = cell.key;
+    if (cell.click) { key.type = 'button'; key.addEventListener('click', cell.click); }
+    preview.append(key);
+  }
+}
+$('#settings-streamdeck')?.addEventListener('click', () => showView('streamdeck'));
+$('#deck-back')?.addEventListener('click', () => showView('settings'));
+$('#deck-search')?.addEventListener('input', renderStreamDeck);
+$('#deck-scope')?.addEventListener('change', renderStreamDeck);
+$('#deck-model')?.addEventListener('change', renderDeckPreview);
+$('#deck-source')?.addEventListener('change', loadStreamDeck);
+$('#deck-refresh')?.addEventListener('click', loadStreamDeck);
+$('#deck-select')?.addEventListener('click', () => { for (const c of deckShown()) if (!c.problem) deckSelection.add(c.id); renderStreamDeck(); });
+$('#deck-clear')?.addEventListener('click', () => { deckSelection.clear(); renderStreamDeck(); });
+$('#deck-download')?.addEventListener('click', async event => {
+  const button = event.currentTarget; button.disabled = true;
+  try {
+    const response = await fetch('/api/streamdeck/profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: $('#deck-model').value, defaults: $('#deck-source').value === 'defaults', actions: deckSelected().map(c => c.id) }) });
+    if (!response.ok) { const problem = await response.json(); throw new Error(problem.message || tx('Could not generate the profile.')); }
+    const url = URL.createObjectURL(await response.blob()), link = document.createElement('a');
+    link.href = url; link.download = 'QuantumWake-StarCitizen-' + $('#deck-model').value + '.streamDeckProfile'; document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000);
+    $('#deck-status').textContent = tx('Profile downloaded. Open it in Stream Deck after installing the plugin.');
+  } catch (error) { $('#deck-status').textContent = error.message; }
+  finally { button.disabled = !deckSelected().length; }
+});
+
+$('#deck-open')?.addEventListener('click', async event => {
+  const button = event.currentTarget; button.disabled = true;
+  try {
+    const response = await fetch('/api/streamdeck/open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: $('#deck-model').value, defaults: $('#deck-source').value === 'defaults', actions: deckSelected().map(c => c.id) }) });
+    const result = await response.json(); $('#deck-status').textContent = tx(result.message);
+  } catch (error) { $('#deck-status').textContent = error.message; }
+  finally { button.disabled = !deckSelected().length; }
+});

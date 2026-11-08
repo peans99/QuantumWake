@@ -1,0 +1,193 @@
+using System.IO.Compression;
+using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Quantumwake.Core.Controls;
+using Quantumwake.Core.Logging;
+using Quantumwake.Data;
+
+namespace Quantumwake.Server;
+
+public sealed record DeckCommand(string Id, string Group, string Label, string Key, string Activation, string? Problem, bool Preset = false, int Hold = 0, bool? Tap = null);
+public sealed record DeckExport(string Model, string[] Actions, bool Defaults = false);
+
+public static class StreamDeckProfiles
+{
+    // Keep this list aligned with the scan-code sender in integrations/streamdeck/bin/keys.js.
+    private static readonly HashSet<string> Keys = new(("escape minus equals backspace tab lbracket rbracket enter lctrl semicolon apostrophe grave lshift backslash comma period slash rshift np_multiply lalt space capslock numlock scrolllock np_subtract np_add np_period np_enter rctrl np_divide ralt home up pgup left right end down pgdn insert delete mouse1 mouse2 mouse3 mwheel_up mwheel_down " + string.Join(' ', "abcdefghijklmnopqrstuvwxyz0123456789".ToCharArray()) + " " + string.Join(' ', Enumerable.Range(1, 24).Select(n => $"f{n}")) + " " + string.Join(' ', Enumerable.Range(0, 10).Select(n => $"np_{n}"))).Split(' '), StringComparer.OrdinalIgnoreCase);
+
+    public static string? Key(ControlInput input)
+    {
+        if (input.Kind == InputKind.None || input.Device is not ("" or "kb" or "mo")) return null;
+        var parts = input.Modifiers.Select(Key).Append(Keys.Contains(input.Name) ? input.Name.ToLowerInvariant() : null).ToArray();
+        return parts.Any(p => p is null) ? null : string.Join('+', parts);
+    }
+
+    public static List<DeckCommand> Commands(ControlCatalogue catalogue, ControlProfile? profile)
+    {
+        var commands = catalogue.Actions.Select(action =>
+        {
+            var overrides = profile?.Bindings.Where(b => b.ActionMap == action.ActionMap && b.Action == action.Name).ToList() ?? [];
+            string? Resolve(string device, string fallback)
+            {
+                var replacements = overrides.Where(b => (b.Input.Device.Length > 0 ? b.Input.Device : b.Input.Modifiers.FirstOrDefault(m => m.Device.Length > 0)?.Device) == device).ToList();
+                return replacements.Count > 0 ? replacements.Select(b => Key(b.Input)).FirstOrDefault(k => k is not null)
+                    : Key(ControlInput.Parse(fallback));
+            }
+            var key = Resolve("kb", action.Keyboard) ?? Resolve("mo", action.Mouse);
+            var activation = overrides.FirstOrDefault(b => Key(b.Input) == key)?.ActivationMode ?? action.ActivationMode;
+            var problem = overrides.Any(b => Key(b.Input) == key && b.MultiTap > 1) ? "Multi-tap bindings are not supported by the Stream Deck sender." : key is null ? "No supported keyboard or mouse binding. Bind this action in Star Citizen, then refresh."
+                : activation is not ("" or "press" or "hold" or "tap" or "all" or "smart_toggle" or "hold_toggle" or "delayed_press" or "delayed_press_medium" or "delayed_hold" or "delayed_hold_long" or "hold_no_retrigger" or "delayed_hold_no_retrigger") ? "This activation mode is not supported by the Stream Deck sender." : null;
+            return new DeckCommand(action.ActionMap + "/" + action.Name,
+                catalogue.ActionMaps.FirstOrDefault(m => m.Name == action.ActionMap)?.Label ?? action.ActionMap,
+                action.Label, key ?? "", activation, problem);
+        }).ToList();
+        var presets = JsonSerializer.Deserialize<List<PresetCommand>>(Resource("presets"), new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+        foreach (var preset in presets)
+        {
+            var action = commands.FirstOrDefault(c => c.Id == preset.Action);
+            if (preset.WheelDirection != 0 && action is not null)
+            {
+                var parts = preset.Action.Split('/');
+                var original = catalogue.Find(parts[0], parts[1]);
+                var replacement = profile?.Bindings.FirstOrDefault(b => b.ActionMap == parts[0] && b.Action == parts[1] && (b.Input.Raw.StartsWith("mo", StringComparison.OrdinalIgnoreCase) || b.Input.Raw.StartsWith("kb", StringComparison.OrdinalIgnoreCase)));
+                var axis = replacement?.Input ?? ControlInput.Parse(string.IsNullOrWhiteSpace(original?.Mouse) ? original?.Keyboard ?? "" : original.Mouse);
+                if (axis.Name == "maxis_z" && axis.Modifiers.All(m => Key(m) is not null))
+                    action = action with { Key = string.Join('+', axis.Modifiers.Select(m => Key(m)).Append(preset.WheelDirection > 0 ? "mwheel_up" : "mwheel_down")), Problem = null, Activation = "press" };
+            }
+            commands.Add(action is null ? new DeckCommand("preset/" + preset.Id, preset.Group, preset.Label, "", "", "This command could not be matched to a supported game action.", true)
+                : action with { Id = "preset/" + preset.Id, Group = preset.Group, Label = preset.Label, Preset = true, Hold = preset.Hold, Tap = preset.Tap });
+        }
+        return commands;
+    }
+    private sealed record PresetCommand(string Id, string Action, string Group, string Label, int Hold, bool Tap, int WheelDirection = 0);
+
+    private static ControlProfile? Profile(GameInstall? install)
+    {
+        var path = install is null ? null : ControlsWatchService.ProfilePath(install);
+        if (path is null || !File.Exists(path)) return null;
+        // A partially written profile must fail the request rather than silently export defaults.
+        return ControlProfile.Parse(File.ReadAllBytes(path));
+    }
+
+    public static void Map(WebApplication app, GameInstall? install)
+    {
+        app.MapGet("/api/streamdeck", (LogLibrary lib, bool? defaults) =>
+        {
+            try
+            {
+                var profile = defaults == true ? null : Profile(install);
+                return Results.Ok(new { ready = !lib.GameCommodities.Controls.Catalogue.IsEmpty, profileFound = profile is not null,
+                    commands = Commands(lib.GameCommodities.Controls.Catalogue, profile) });
+            }
+            catch (Exception e) when (e is UnauthorizedAccessException or IOException or InvalidDataException or System.Xml.XmlException)
+            { return Results.BadRequest(new { message = "The current keybindings could not be read. Try again after the game finishes saving them." }); }
+        });
+        app.MapPost("/api/streamdeck/profile", (DeckExport request, LogLibrary lib) =>
+        {
+            try
+            {
+                var commands = Commands(lib.GameCommodities.Controls.Catalogue, request.Defaults ? null : Profile(install));
+                var ids = request.Actions?.ToHashSet(StringComparer.Ordinal) ?? [];
+                var selected = commands.Where(c => ids.Contains(c.Id)).ToList();
+                if (ids.Count == 0 || selected.Count != ids.Count || selected.Any(c => c.Problem is not null))
+                    return Results.BadRequest(new { message = "Select commands with supported bindings. Refresh if your bindings have changed." });
+                return Results.File(Build(request.Model, selected, install is null ? null : Path.Combine(install.RootPath, "Bin64", "StarCitizen.exe")),
+                    "application/octet-stream", $"QuantumWake-StarCitizen-{request.Model}.streamDeckProfile");
+            }
+            catch (ArgumentException) { return Results.BadRequest(new { message = "Choose a 15-key or XL Stream Deck." }); }
+            catch (Exception e) when (e is UnauthorizedAccessException or IOException or InvalidDataException or System.Xml.XmlException)
+            { return Results.BadRequest(new { message = "The current keybindings could not be read. Refresh and try again." }); }
+        });
+        app.MapPost("/api/streamdeck/open", (DeckExport request, LogLibrary lib) =>
+        {
+            if (!OperatingSystem.IsWindows()) return Results.BadRequest(new { message = "Opening Stream Deck is available on Windows only. Download the profile instead." });
+            try
+            {
+                var commands = Commands(lib.GameCommodities.Controls.Catalogue, request.Defaults ? null : Profile(install));
+                var ids = request.Actions?.ToHashSet(StringComparer.Ordinal) ?? [];
+                var selected = commands.Where(c => ids.Contains(c.Id)).ToList();
+                if (ids.Count == 0 || selected.Count != ids.Count || selected.Any(c => c.Problem is not null))
+                    return Results.BadRequest(new { message = "Select commands with supported bindings. Refresh if your bindings have changed." });
+                var bytes = Build(request.Model, selected, install is null ? null : Path.Combine(install.RootPath, "Bin64", "StarCitizen.exe"));
+                var manifest = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Elgato", "StreamDeck", "Plugins", "com.nlebel.starcitizen.sdPlugin", "manifest.json");
+                var pluginReady = false;
+                if (File.Exists(manifest))
+                {
+                    try { using var doc = JsonDocument.Parse(File.ReadAllBytes(manifest)); pluginReady = Version.TryParse(doc.RootElement.GetProperty("Version").GetString(), out var version) && version >= new Version(1,1,1,0); }
+                    catch (Exception e) when (e is JsonException or KeyNotFoundException) { }
+                }
+                var folder = Path.Combine(Path.GetTempPath(), "QuantumWake-StreamDeck"); Directory.CreateDirectory(folder);
+                if (!pluginReady)
+                {
+                    var installer = Path.Combine(folder, "com.nlebel.starcitizen.streamDeckPlugin"); File.WriteAllBytes(installer, Resource("plugin"));
+                    Process.Start(new ProcessStartInfo(installer) { UseShellExecute = true });
+                    return Results.Ok(new { message = "Plugin installer opened in Stream Deck. Finish installing it, then click Open in Stream Deck again to import your profile." });
+                }
+                var file = Path.Combine(folder, "QuantumWake-" + Guid.NewGuid().ToString("N") + ".streamDeckProfile");
+                File.WriteAllBytes(file, bytes);
+                Process.Start(new ProcessStartInfo(file) { UseShellExecute = true });
+                return Results.Ok(new { message = "Profile sent to Stream Deck. Complete its import prompt to choose your device." });
+            }
+            catch (ArgumentException) { return Results.BadRequest(new { message = "Choose a 15-key or XL Stream Deck." }); }
+            catch (Exception e) when (e is UnauthorizedAccessException or IOException or InvalidDataException or System.Xml.XmlException or System.ComponentModel.Win32Exception)
+            { return Results.BadRequest(new { message = "Stream Deck could not open the profile. Install Stream Deck and its companion plugin, or use Download profile." }); }
+        });
+        app.MapGet("/api/streamdeck/plugin", () => Results.File(Resource("plugin"), "application/octet-stream", "com.nlebel.starcitizen.streamDeckPlugin"));
+    }
+
+    private static byte[] Resource(string name)
+    {
+        using var stream = typeof(StreamDeckProfiles).Assembly.GetManifestResourceStream("streamdeck." + name)!;
+        using var memory = new MemoryStream(); stream.CopyTo(memory); return memory.ToArray();
+    }
+
+    public static byte[] Build(string model, IReadOnlyList<DeckCommand> commands, string? executable)
+    {
+        var (columns, rows, device) = model switch { "15" => (5, 3, "20GAA9902"), "xl" => (8, 4, "20GAT9901"), _ => throw new ArgumentException("model") };
+        var capacity = columns * rows;
+        using var memory = new MemoryStream();
+        using (var zip = new ZipArchive(memory, ZipArchiveMode.Create, true))
+        {
+            var identity = SHA256.HashData(Encoding.UTF8.GetBytes("QuantumWake-StarCitizen-" + model));
+            var root = new Guid(identity.AsSpan(0, 16)).ToString("D").ToUpperInvariant() + ".sdProfile/";
+            string Id() => Guid.NewGuid().ToString("D").ToUpperInvariant();
+            void Bytes(string path, byte[] bytes) { using var s = zip.CreateEntry(root + path).Open(); s.Write(bytes); }
+            void Json(string path, object value) => Bytes(path, JsonSerializer.SerializeToUtf8Bytes(value));
+            object Command(DeckCommand c) => new { ActionID = Id(), LinkedTitle = true, Name = "SC Command",
+                Plugin = new { Name = "Star Citizen Commands", UUID = "com.nlebel.starcitizen", Version = "1.1.1.0" },
+                Settings = new { command = "flight_ready", keyOverride = c.Key, label = c.Label, holdMs = c.Hold, tap = c.Tap ?? (c.Activation == "tap"), color = c.Id.Contains("mining") ? "#eab308" : c.Id.Contains("salvage") ? "#14b8a6" : c.Id.Contains("target") ? "#f97316" : c.Id.Contains("weapon") ? "#ef4444" : "#22d3ee" },
+                State = 0, States = new[] { new { ShowTitle = false } }, UUID = "com.nlebel.starcitizen.command" };
+            string FolderTitle(string text)
+            {
+                var words = text.Replace("Vehicles - ", "").Replace("Flight - ", "").Split(' ');
+                var lines = new List<string>(); var line = "";
+                foreach (var word in words) { if (line.Length > 0 && line.Length + word.Length > 12) { lines.Add(line); line = word; } else line += (line.Length > 0 ? " " : "") + word; }
+                if (line.Length > 0) lines.Add(line);
+                return string.Join('\n', lines.Take(3));
+            }
+            object Folder(string child, string title, bool back = false) => new { ActionID = Id(), LinkedTitle = true, Name = title,
+                Settings = back ? (object)new { } : new { ProfileUUID = child }, State = 0,
+                States = new[] { new { Image = "Images/folder.png", ShowTitle = true, Title = FolderTitle(title), TitleColor = "#ffffff", FontSize = 10, TitleAlignment = "middle" } },
+                UUID = back ? "com.elgato.streamdeck.profile.backtoparent" : "com.elgato.streamdeck.profile.openchild" };
+            void Page(string id, string title, List<object> items, bool back)
+            {
+                var actions = new Dictionary<string, object>(); var at = 0;
+                string Slot(int n) => $"{n % columns},{n / columns}";
+                if (back) actions[Slot(at++)] = Folder("", "Back", true);
+                var take = capacity - at;
+                if (items.Count > take) take--;
+                foreach (var item in items.Take(take)) actions[Slot(at++)] = item;
+                if (items.Count > take) { var next = Id(); actions[Slot(capacity - 1)] = Folder(next, "More"); Page(next, title, items.Skip(take).ToList(), true); }
+                Json($"Profiles/{id}/manifest.json", new { Controllers = new[] { new { Actions = actions, Type = "Keypad" } }, Icon = "", Name = title });
+                Bytes($"Profiles/{id}/Images/folder.png", Resource("folder"));
+            }
+            var home = Id(); var template = Id(); var folders = new List<object>();
+            foreach (var group in commands.GroupBy(c => c.Group)) { var page = Id(); Page(page, group.Key, group.Select(Command).ToList(), true); folders.Add(Folder(page, group.Key)); }
+            Page(home, "Star Citizen", folders, false); Page(template, "", [], false);
+            Json("manifest.json", new { AppIdentifier = executable ?? "", Device = new { Model = device, UUID = "" }, Name = "Quantum Wake · Star Citizen", Pages = new { Current = home, Default = template, Pages = new[] { home } }, Version = "3.0" });
+        }
+        return memory.ToArray();
+    }
+}

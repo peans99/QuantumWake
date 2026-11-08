@@ -83,3 +83,7 @@ desktop.ini
 # The voice-pack recorder's dependencies; the recordings it makes are committed.
 tools/voice-pack/node_modules/
 tools/voice-pack/names.txt
+
+# Stream Deck build dependencies and local checks
+integrations/streamdeck/**/node_modules/
+scratch/

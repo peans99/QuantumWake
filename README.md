@@ -352,7 +352,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.1.25
+### 1.1.26
+
+**Star Citizen profiles for Stream Deck.** Settings has a Stream Deck page for choosing commands and generating a 15-key or XL profile from the selected game installation’s keyboard and mouse bindings. Your existing Stream Deck categories are selected by default, with an optional Extended preset and category checkboxes. Open in Stream Deck hands the profile to the app’s import prompt. The page explains actions it cannot send and offers the companion Windows plugin as a download.
 
 **No more Print Screen with live reading on.** With "Read the game's screen live" switched on, the screens you used to screenshot for the app are now picked up as you look at them: the Fleet Manager, the map, a ship's loadout, a commodity kiosk, a refinery, and the Contracts and Rep apps. Each screen becomes one reading in the Log while it stays up, updated when a later look reads more of it or the screen really changes, such as a kiosk after you buy. A screen has to be up for a couple of seconds before it counts, so a tab flicked past is not kept. Item tooltips are not kept this way, so browsing an inventory does not fill the Log. Contracts cards read this way feed the hauling plan just as screenshots of them did, each tied to the haul it was opened for. Screenshots you take are still read as before. Readings taken live are marked "read live from the screen" in the Log, with no "Read again" button, because there is no file to read again.
 
