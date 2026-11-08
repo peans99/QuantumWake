@@ -1145,9 +1145,8 @@ window.QwMfd = (() => {
      because the row that asked "confirm this?" used to scroll away behind the
      list it was asking about. Null anywhere it would say nothing. */
   /* What the Target page draws for a lock: the Garage's picture of the hull
-     when it is named, or the likeliest at 60% (marked as a guess) - its
-     silhouette, or for a hull with no icon (the Paladin, the Perseus) the
-     render the Garage falls back to, looked up from `paints`. A target
+     when it is named, or the likeliest at 60% (marked as a guess). Which
+     picture, and in what order to try them, is targetSteps below. A target
      nothing can name gets a plain ship mark. Every one of those is fixed for
      the hull, so the picture changes when the lock does and not otherwise:
      the live hologram it used to show was re-cut from every read and
@@ -1159,11 +1158,28 @@ window.QwMfd = (() => {
     const tone = target.stance === 'hostile' ? 'hostile' : 'neutral';
     if (target.class) {
       const cls = encodeURIComponent(target.class);
-      return { kind: 'silhouette', src: `/api/fleet/icons/${cls}`, paints: `/api/fleet/paints/${cls}`,
+      return { kind: 'silhouette', cls: target.class, src: `/api/fleet/icons/${cls}`, paints: `/api/fleet/paints/${cls}`,
         tone, likely: Boolean(target.likely),
         note: target.likely ? say('Likely hull · not confirmed') : say('Hull as the panel names it') };
     }
     return { kind: 'mark', src: '', tone, likely: false, note: say('Hull not identified yet') };
+  }
+
+  /* The order the Target page tries pictures in, the Garage's own (1.2.6).
+     The Garage leads with the game's render of the hull - the paint the
+     pilot picked for it there, else the first paint the game lists - and
+     the silhouette is its fallback; 1.2.3 had it the other way round, so the
+     MFD showed a different ship picture from the Garage, and none for the 66
+     of 318 hulls in the signature book whose class has no icon (the Golem,
+     the Guardian, the Vanduul Scythe and Stinger). A pilot who set the
+     Garage to tinted silhouettes, or chose the silhouette for this hull,
+     gets the silhouette first here too. `garage` is what the Garage keeps:
+     { style: 'paint' | 'tint', paints: { class: item | 'silhouette' } }. */
+  function targetSteps(picture, garage) {
+    if (picture?.kind !== 'silhouette') return ['mark'];
+    const chosen = garage?.paints?.[picture.cls];
+    if (chosen === 'silhouette' || garage?.style === 'tint') return ['silhouette', 'stock', 'mark'];
+    return [...(chosen ? [{ paint: chosen }] : []), 'stock', 'silhouette', 'mark'];
   }
 
   function actionLine(pageId, view) {
@@ -1220,7 +1236,7 @@ window.QwMfd = (() => {
         ? sayn(bed.times, 'A medical bed used {count} time · the game never states a regen point', 'A medical bed used {count} times · the game never states a regen point')
         : sayn(respawn.of, '{agreeing} of {count} death woke there · the game never states a regen point', '{agreeing} of {count} deaths woke there · the game never states a regen point', { agreeing: respawn.agreeing }) };
   }
-  return { followWant, followStep, followIdle, FOLLOW_RETURN, FOLLOW_HANDS_OFF, say, sayn, fit, inset, defaultInset, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, radarFocus, radarHere, routeLine, panelRole, missionCard, makerOf, makers, dormant, actionLine, targetPicture, sameTask, taskId, rowIcon,
+  return { targetSteps, followWant, followStep, followIdle, FOLLOW_RETURN, FOLLOW_HANDS_OFF, say, sayn, fit, inset, defaultInset, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, radarFocus, radarHere, routeLine, panelRole, missionCard, makerOf, makers, dormant, actionLine, targetPicture, sameTask, taskId, rowIcon,
     groups, menuNodes, menuNode, parent, title, validScreen, menuItems, previewPage, trail, resolveCommand, restoreScreen, readingView,
     pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, dozed, DOZE, prettyItem, pageOf, pageStep, pageLabel, LEDGER_PAGE, BRIGHTNESS, brightnessLevel, brightnessAt,
     cycleBrightness, stepBrightness, OSBS, BUTTONS };

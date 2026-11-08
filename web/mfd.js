@@ -446,12 +446,13 @@ function drawSweep(group) {
   });
 }
 
-/* The Target page's picture; see QwMfd.targetPicture for which one. A mask
-   cannot say its image failed to load, so a silhouette is probed first; a
-   hull without an icon takes its first Garage render, and one without that
-   either takes the plain mark. Worked out once per hull: the page redraws on
-   every live read, and a picture that reloaded with it is what this replaced.
-   The mark is a drawing rather than a file, so it can never fail to load. */
+/* The Target page's picture; see QwMfd.targetPicture and targetSteps for
+   which one. Each step is loaded off-screen first and only shown once it has
+   arrived, so a missing render or icon never puts a broken image on the
+   glass: it passes to the next step. Worked out once per hull: the page
+   redraws on every live read, and a picture that reloaded with it is what
+   this replaced. The mark is a drawing rather than a file, so it can never
+   fail to load. */
 const TARGET_MARK = `url("data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100"><path d="M80 6 90 38 150 64v10l-58-8-4 20 16 8H56l16-8-4-20-58 8V64l60-26z"/></svg>')}")`;
 let targetShape = null, targetDrawn = null;
@@ -479,16 +480,39 @@ function drawTarget(visible) {
     if (render.getAttribute('src') !== src) render.src = src;
     shape.hidden = true; render.hidden = false;
   };
-  if (picture.kind !== 'silhouette') { mask(TARGET_MARK); return; }
-  const probe = new Image();
-  probe.onload = () => mask(`url("${picture.src}")`);
-  probe.onerror = () => fetch(picture.paints)
-    .then(r => r.ok ? r.json() : [])
-    .then(paints => paints?.[0]?.item
-      ? photo(`/api/fleet/paints/${encodeURIComponent(paints[0].item)}/render`)
-      : mask(TARGET_MARK))
-    .catch(() => mask(TARGET_MARK));
-  probe.src = picture.src;
+  const steps = QwMfd.targetSteps(picture, garagePictures());
+  const loads = (src, shown, next) => {
+    const probe = new Image();
+    probe.onload = () => shown(src);
+    probe.onerror = next;
+    probe.src = src;
+  };
+  const renderOf = item => `/api/fleet/paints/${encodeURIComponent(item)}/render`;
+  const attempt = index => {
+    if (!still()) return;
+    const step = steps[index] ?? 'mark', next = () => attempt(index + 1);
+    if (step === 'mark') mask(TARGET_MARK);
+    else if (step === 'silhouette') loads(picture.src, src => mask(`url("${src}")`), next);
+    else if (step === 'stock') fetch(picture.paints)
+      .then(r => r.ok ? r.json() : [])
+      .then(paints => paints?.[0]?.item ? loads(renderOf(paints[0].item), photo, next) : next())
+      .catch(next);
+    else if (step.paint) loads(renderOf(step.paint), photo, next);
+    else next();
+  };
+  attempt(0);
+}
+/* The Garage's picture choices, which it keeps in this same browser profile:
+   the MFD frames and the overlay share one WebView2 folder and one origin.
+   Read per lock rather than once, so a paint picked mid-session is used on
+   the next lock. Empty in a browser that never opened the Garage. */
+function garagePictures() {
+  const garage = { style: 'paint', paints: {} };
+  try {
+    garage.style = localStorage.getItem('qw-ship-picture-style') === 'tint' ? 'tint' : 'paint';
+    garage.paints = JSON.parse(localStorage.getItem('qw-ship-paints') || '{}') || {};
+  } catch { }
+  return garage;
 }
 function drawMap(visible, view, big) {
   const figure = byId('map');
