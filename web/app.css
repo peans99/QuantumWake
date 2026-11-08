@@ -134,7 +134,7 @@ body.overlay .context-rail { display: none; }
    stats on one line instead of stacked, and no captions or explanatory copy.
    Everything still renders - it is the same markup - just condensed. */
 body.overlay { background: transparent; font-size: 11.5px; }
-body.overlay::before { background: repeating-linear-gradient(0deg, rgba(53,200,240,.03) 0 1px, transparent 1px 3px); }
+body.overlay::before { display: none; }
 body.overlay main { padding: 4px 7px 7px; max-width: none; }
 
 /* Prose and filter controls are page-only. */
@@ -8839,3 +8839,62 @@ button.deck-key { width:100%; height:auto; min-width:0; font-size:10px; letter-s
 
 .deck-categories { display:flex; gap:10px 18px; flex-wrap:wrap; margin:12px 0 24px; }
 .deck-category { display:flex; align-items:center; gap:7px; }
+
+/* The overlay shares the dashboard's markup, but decorative framing and a
+   full-size focus banner compete with the game even on the smallest widget. */
+body.overlay:not(.expanded) main { border: 0; mask-image: none; }
+body.overlay:not(.high-contrast) .card {
+  background: rgba(8, 15, 23, .86);
+  border-color: rgba(121, 155, 179, .2);
+  backdrop-filter: none;
+}
+body.overlay .card::before,
+body.overlay .now-focus::after { display: none; }
+body.overlay .card-label { color: var(--muted); letter-spacing: .09em; }
+body.overlay .now-focus:not([hidden]),
+body.overlay.glance .now-focus:not([hidden]) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 7px;
+  min-height: 0;
+  margin-bottom: 5px;
+  padding: 6px 8px;
+  border: 0;
+  border-left: 2px solid var(--cyan-deep);
+  background: rgba(8, 15, 23, .86);
+}
+body.overlay .now-focus-mark { grid-column: auto; font-size: 8px; color: var(--muted); }
+body.overlay.glance .now-focus-mark { color: var(--muted); }
+body.overlay .now-focus-title { font: 600 11.5px/1.3 var(--display); letter-spacing: 0; }
+body.overlay #now-focus-detail { margin-top: 1px; font-size: 10px; line-height: 1.3; }
+body.overlay .now-focus .tiny { min-width: 0; padding: 3px 5px; font-size: 9px; }
+body.overlay .now-focus[data-urgency="attention"],
+body.overlay.glance .now-focus[data-urgency="attention"] { border-left-color: var(--amber); background: rgba(8, 15, 23, .86); }
+body.overlay.glance .now-focus[data-urgency="live"] .now-focus-mark { animation: none; }
+body.overlay.glance .now-focus-copy .muted { white-space: normal; overflow-wrap: anywhere; }
+body.overlay.glance #now-event-card.event-tracked {
+  border-width: 0 0 0 2px;
+  border-left-color: #9278b9;
+  background: rgba(8, 15, 23, .86);
+}
+body.overlay.glance .now-status-card { padding: 6px 8px; }
+body.overlay.glance .now-status-card > .card-label,
+body.overlay.glance .now-status-field .card-source,
+body.overlay.glance .now-ship-logo,
+body.overlay.glance #now-version { display: none; }
+body.overlay.glance .now-status-readings { display: block; }
+body.overlay.glance .now-status-label { font-size: 8px; letter-spacing: .08em; color: var(--muted); }
+body.overlay.glance .now-status-field .value { font-size: 11.5px; line-height: 1.3; overflow-wrap: anywhere; }
+body.overlay.glance .now-status-location .hero-value { font-size: 16px; line-height: 1.2; overflow-wrap: anywhere; }
+body.overlay.glance .confidence { margin-top: 3px; }
+body.overlay.glance .travel { margin-top: 4px; padding-top: 4px; }
+body.overlay.glance .now-status-health .statline { display: inline-flex; flex-direction: row; align-items: baseline; gap: 4px; padding-right: 7px; font-size: 8px; letter-spacing: 0; }
+body.overlay.glance .now-status-health .statline b { font-size: 11.5px; }
+body.overlay.glance .now-status-field { border-top-color: rgba(121, 155, 179, .18); }
+body.overlay:not(.high-contrast) .now-status-location .hero-value { color: var(--text); text-shadow: none; }
+body.overlay.glance .now-status-field:not(.now-status-location):not([hidden]) { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
+body.overlay.glance .now-status-field:not(.now-status-location) .now-status-label { flex: 0 0 60px; }
+body.overlay.glance .now-ship-summary { flex: 1; min-width: 0; }
+body.overlay.glance .now-status-respawn .sub { flex-basis: calc(100% - 66px); margin-left: 66px; }
+body.overlay.glance .now-status-field .sub:empty,
+body.overlay.glance #now-mode { display: none; }

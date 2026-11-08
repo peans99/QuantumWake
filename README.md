@@ -352,7 +352,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.1.26
+### 1.1.27
+
+**A quieter in-game overlay.** Flatter cards, softer borders and a compact focus strip leave more attention on the game. Glance mode fits its window to the visible content and condenses status readings while keeping location confidence and missing-data explanations. New widgets start smaller; saved window sizes and layout choices stay in place. Pinning the widget makes it more translucent.
 
 **Star Citizen profiles for Stream Deck.** Settings has a Stream Deck page for choosing commands and generating a 15-key or XL profile from the selected game installation’s keyboard and mouse bindings. Your existing Stream Deck categories are selected by default, with an optional Extended preset and category checkboxes. Open in Stream Deck hands the profile to the app’s import prompt. The page explains actions it cannot send and offers the companion Windows plugin as a download.
 

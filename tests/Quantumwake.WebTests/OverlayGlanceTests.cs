@@ -4,6 +4,46 @@ namespace Quantumwake.WebTests;
 public class OverlayGlanceTests
 {
     [Fact]
+    public void Glance_reports_its_content_height_to_the_native_shell()
+    {
+        var page = new Page();
+        page.Do("""
+            document.body.classList.add('overlay', 'glance');
+            __dom.node('main').getBoundingClientRect = () => ({ height: 183.5 });
+            window.chrome = { webview: { postMessage: message => { globalThis.sizeMessage = message; } } };
+            reportOverlaySize();
+            """);
+
+        Assert.Equal("overlay-content-size", page.Text("sizeMessage.type"));
+        Assert.Equal("184", page.Text("String(sizeMessage.height)"));
+    }
+
+    [Theory]
+    [InlineData("'overlay'")]
+    [InlineData("'overlay', 'glance', 'expanded'")]
+    [InlineData("'glance'")]
+    public void Other_views_do_not_ask_to_resize_the_window(string classes)
+    {
+        var page = new Page();
+        page.Do($$"""
+            document.body.classList.add({{classes}});
+            __dom.node('main').getBoundingClientRect = () => ({ height: 183.5 });
+            globalThis.sentSize = false;
+            window.chrome = { webview: { postMessage: () => { sentSize = true; } } };
+            reportOverlaySize();
+            """);
+
+        Assert.False(page.Truth("sentSize"));
+    }
+
+    [Fact]
+    public void A_browser_without_the_native_bridge_can_still_use_glance()
+    {
+        var page = new Page();
+        page.Do("document.body.classList.add('overlay', 'glance'); reportOverlaySize();");
+    }
+
+    [Fact]
     public void Glance_view_reduces_the_overlay_to_current_status_and_can_be_left()
     {
         var page = new Page();

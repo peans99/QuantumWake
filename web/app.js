@@ -692,7 +692,21 @@ window.scOverlayGlance = (on) => {
   else url.searchParams.delete('glance');
   window.history.replaceState(null, '', url);
   if (glance) showView('now');
+  reportOverlaySize();
 };
+
+// A fixed Glance height either covers empty game space or clips the tracked
+// event and long locations. Only the native host can resize the actual window.
+function reportOverlaySize() {
+  if (!document.body.classList.contains('overlay')
+      || !document.body.classList.contains('glance')
+      || document.body.classList.contains('expanded')) return;
+  const host = window.chrome?.webview;
+  if (!host?.postMessage) return;
+  const height = Math.ceil($('main')?.getBoundingClientRect().height || 0);
+  if (Number.isFinite(height) && height > 0)
+    host.postMessage({ type: 'overlay-content-size', height });
+}
 
 /* The native shell has no room for a permanent status line. Its commands still
    need an answer in pinned mode, where the header disappears and clicks reach
@@ -37080,6 +37094,8 @@ async function boot() {
   if (isOverlay) {
     document.body.classList.add('overlay');
     window.scOverlayGlance(isOverlayGlance);
+    if (window.ResizeObserver)
+      new ResizeObserver(reportOverlaySize).observe($('main'));
 
     // The widget's layout is chosen in the dashboard, a different browser, so
     // it is polled rather than pushed.

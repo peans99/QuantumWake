@@ -62,8 +62,9 @@ public partial class MainWindow : Window
     private Rect _glanceRestoreBounds;
     private bool _isGlance;
 
-    /// <summary>Height that holds the focus strip, campaign rail and live status without scrolling.</summary>
-    private const double GlanceHeight = 304;
+    /// <summary>Fallback until the page reports its measured content height.</summary>
+    private const double GlanceHeight = 268;
+    private double? _glanceContentHeight;
 
     /// <summary>
     /// Width of the transparent gutter around the WebView2 that acts as the
@@ -221,6 +222,29 @@ public partial class MainWindow : Window
         settings.AreDefaultContextMenusEnabled = false;
         settings.IsStatusBarEnabled = false;
         settings.AreBrowserAcceleratorKeysEnabled = false;
+        Browser.CoreWebView2.WebMessageReceived += (_, message) =>
+        {
+            try
+            {
+                using var json = System.Text.Json.JsonDocument.Parse(message.WebMessageAsJson);
+                var root = json.RootElement;
+                if (root.ValueKind != System.Text.Json.JsonValueKind.Object
+                    || !root.TryGetProperty("type", out var type)
+                    || type.ValueKind != System.Text.Json.JsonValueKind.String
+                    || type.GetString() != "overlay-content-size"
+                    || !root.TryGetProperty("height", out var height)
+                    || height.ValueKind != System.Text.Json.JsonValueKind.Number
+                    || !height.TryGetDouble(out var value)
+                    || !double.IsFinite(value) || value <= 0) return;
+
+                _glanceContentHeight = value;
+                FitGlanceContent();
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // Other web content does not participate in window sizing.
+            }
+        };
 
         Browser.Source = new Uri(ServerRoot, _isGlance ? "?overlay=1&glance=1" : "?overlay=1");
         Browser.NavigationCompleted += (_, _) => Splash.Visibility = Visibility.Collapsed;
@@ -596,12 +620,13 @@ public partial class MainWindow : Window
         Grip.Visibility = interactive ? Visibility.Visible : Visibility.Collapsed;
 
         Frame.BorderBrush = interactive
-            ? new SolidColorBrush(Color.FromRgb(0x35, 0xC8, 0xF0))
+            ? new SolidColorBrush(Color.FromRgb(0x44, 0x62, 0x74))
             : Brushes.Transparent;
 
         // Translucency is applied at the HWND level. WPF's Window.Opacity needs
         // AllowsTransparency, which cannot be used with WebView2.
-        NativeWindowStyles.SetWindowAlpha(this, interactive ? (byte)255 : (byte)235);
+        NativeWindowStyles.SetWindowAlpha(this, interactive ? (byte)255 : (byte)215);
+        FitGlanceContent();
 
         // WebView2 only routes mouse input once the window holds focus, so the
         // switch to interactive has to actually claim it.
@@ -610,6 +635,16 @@ public partial class MainWindow : Window
             Activate();
             Browser.Focus();
         }
+    }
+
+    private void FitGlanceContent()
+    {
+        if (!_isGlance || _isFullscreen || _glanceContentHeight is not { } content) return;
+        // The border and resize gutter surround the browser; the drag header
+        // disappears when pinned. Neither belongs in the page's measurement.
+        var chrome = 14 + (HeaderBar.Visibility == Visibility.Visible ? HeaderBar.Height : 0);
+        var wanted = Math.Clamp(Math.Ceiling(content + chrome), MinHeight, 600);
+        if (Math.Abs(Height - wanted) > 1) Height = wanted;
     }
 
     /// <summary>Dragging is offered from the header strip only.</summary>
