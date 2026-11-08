@@ -808,6 +808,7 @@ public static partial class ServerHost
 
         ControlsEndpoints.Map(app, install);
         VoiceCommandEndpoints.Map(app);
+        StreamDeckProfiles.Map(app, install);
         MapDataRead(app, install);
         MapModels(app, install);
         MapChannels(app, install, installPinned);

@@ -1,0 +1,780 @@
+[
+  {
+    "id": "Flight/flight_ready",
+    "action": "spaceship_general/v_flightready",
+    "group": "Flight",
+    "label": "Flight\nReady",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Flight/power",
+    "action": "spaceship_power/v_power_toggle",
+    "group": "Flight",
+    "label": "Power\nAll",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Flight/gear",
+    "action": "spaceship_movement/v_toggle_landing_system",
+    "group": "Flight",
+    "label": "Landing\nGear",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Flight/master_mode",
+    "action": "spaceship_movement/v_master_mode_cycle_long",
+    "group": "Flight",
+    "label": "NAV /\nSCM",
+    "hold": 450,
+    "tap": false
+  },
+  {
+    "id": "Flight/atc",
+    "action": "spaceship_movement/v_atc_request",
+    "group": "Flight",
+    "label": "Request\nLanding",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Flight/power_engines",
+    "action": "spaceship_power/v_power_toggle_thrusters",
+    "group": "Flight",
+    "label": "Engines",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Flight/power_shields",
+    "action": "spaceship_power/v_power_toggle_shields",
+    "group": "Flight",
+    "label": "Shield\nPower",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Flight/power_weapons",
+    "action": "spaceship_power/v_power_toggle_weapons",
+    "group": "Flight",
+    "label": "Weapon\nPower",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Flight/exit_seat",
+    "action": "default/pl_exit",
+    "group": "Flight",
+    "label": "Exit\nSeat",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Combat/gimbal",
+    "action": "spaceship_weapons/v_weapon_gimbals_state_toggle",
+    "group": "Combat",
+    "label": "Gimbal",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Combat/target_view",
+    "action": "spaceship_targeting_advanced/v_target_cycle_in_view_fwd",
+    "group": "Combat",
+    "label": "In View",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Combat/target_hostile",
+    "action": "spaceship_targeting_advanced/v_target_cycle_hostile_fwd",
+    "group": "Combat",
+    "label": "Hostile",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Combat/operator_cycle",
+    "action": "seat_general/v_operator_mode_cycle_forward",
+    "group": "Combat",
+    "label": "Guns /\nMissile",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Combat/target_subitem",
+    "action": "spaceship_targeting_advanced/v_target_cycle_subitem_fwd",
+    "group": "Combat",
+    "label": "Sub-\nComp",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Combat/target_attacker",
+    "action": "spaceship_targeting_advanced/v_target_cycle_attacker_fwd",
+    "group": "Combat",
+    "label": "Attacker",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Combat/decoy",
+    "action": "spaceship_defensive/v_weapon_countermeasure_decoy_launch",
+    "group": "Combat",
+    "label": "Decoy",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Combat/noise",
+    "action": "spaceship_defensive/v_weapon_countermeasure_noise_launch",
+    "group": "Combat",
+    "label": "Noise",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Combat/decoupled",
+    "action": "spaceship_movement/v_ifcs_vector_decoupling_toggle",
+    "group": "Combat",
+    "label": "Decouple",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Combat/target_unlock",
+    "action": "spaceship_targeting/v_target_unlock",
+    "group": "Combat",
+    "label": "Unlock",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Combat/target_all",
+    "action": "spaceship_targeting_advanced/v_target_cycle_all_fwd",
+    "group": "Combat",
+    "label": "Next\nTarget",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Power/pip_wpn_max",
+    "action": "spaceship_power/v_engineering_assignment_weapons_max",
+    "group": "Power",
+    "label": "WPN\nMAX",
+    "hold": 450,
+    "tap": false
+  },
+  {
+    "id": "Power/pip_eng_max",
+    "action": "spaceship_power/v_engineering_assignment_engine_max",
+    "group": "Power",
+    "label": "ENG\nMAX",
+    "hold": 450,
+    "tap": false
+  },
+  {
+    "id": "Power/pip_shd_max",
+    "action": "spaceship_power/v_engineering_assignment_shields_max",
+    "group": "Power",
+    "label": "SHD\nMAX",
+    "hold": 450,
+    "tap": false
+  },
+  {
+    "id": "Power/pip_reset",
+    "action": "spaceship_power/v_engineering_assignment_reset",
+    "group": "Power",
+    "label": "Reset\nPips",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Power/pip_wpn_up",
+    "action": "spaceship_power/v_engineering_assignment_weapons_increase",
+    "group": "Power",
+    "label": "WPN\n+",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Power/pip_eng_up",
+    "action": "spaceship_power/v_engineering_assignment_engine_increase",
+    "group": "Power",
+    "label": "ENG\n+",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Power/pip_shd_up",
+    "action": "spaceship_power/v_engineering_assignment_shields_increase",
+    "group": "Power",
+    "label": "SHD\n+",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Power/power_up",
+    "action": "spaceship_power/v_power_throttle_up",
+    "group": "Power",
+    "label": "Power\n+",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Power/pip_wpn_down",
+    "action": "spaceship_power/v_engineering_assignment_weapons_decrease",
+    "group": "Power",
+    "label": "WPN\n−",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Power/pip_eng_down",
+    "action": "spaceship_power/v_engineering_assignment_engine_decrease",
+    "group": "Power",
+    "label": "ENG\n−",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Power/pip_shd_down",
+    "action": "spaceship_power/v_engineering_assignment_shields_decrease",
+    "group": "Power",
+    "label": "SHD\n−",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Power/power_down",
+    "action": "spaceship_power/v_power_throttle_down",
+    "group": "Power",
+    "label": "Power\n−",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Mining/mining_mode",
+    "action": "seat_general/v_toggle_mining_mode",
+    "group": "Mining",
+    "label": "Mining\nMode",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Mining/mining_fire",
+    "action": "spaceship_mining/v_toggle_mining_laser_fire",
+    "group": "Mining",
+    "label": "Laser\nOn/Off",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Mining/mining_switch",
+    "action": "spaceship_mining/v_toggle_mining_laser_type",
+    "group": "Mining",
+    "label": "Laser\nType",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Mining/scan_mode",
+    "action": "seat_general/v_toggle_scan_mode",
+    "group": "Mining",
+    "label": "Scan\nMode",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Mining/mining_power_down",
+    "action": "spaceship_mining/v_increase_mining_throttle",
+    "group": "Mining",
+    "label": "Laser\nPower −",
+    "hold": 0,
+    "tap": false,
+    "wheelDirection": -1
+  },
+  {
+    "id": "Mining/mining_power_up",
+    "action": "spaceship_mining/v_increase_mining_throttle",
+    "group": "Mining",
+    "label": "Laser\nPower +",
+    "hold": 0,
+    "tap": false,
+    "wheelDirection": 1
+  },
+  {
+    "id": "Mining/mining_mod1",
+    "action": "spaceship_mining/v_mining_use_consumable1",
+    "group": "Mining",
+    "label": "Module\n1",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Mining/mining_mod2",
+    "action": "spaceship_mining/v_mining_use_consumable2",
+    "group": "Mining",
+    "label": "Module\n2",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Mining/mining_mod3",
+    "action": "spaceship_mining/v_mining_use_consumable3",
+    "group": "Mining",
+    "label": "Module\n3",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Mining/ping",
+    "action": "spaceship_radar/v_invoke_ping",
+    "group": "Mining",
+    "label": "Ping",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Mining/lights",
+    "action": "lights_controller/v_lights",
+    "group": "Mining",
+    "label": "Lights",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Mining/mining_perm",
+    "action": "spaceship_mining/v_mining_use_permanent_modifier",
+    "group": "Mining",
+    "label": "Perm.\nModule",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Mining/jettison",
+    "action": "spaceship_mining/v_jettison_volatile_cargo",
+    "group": "Mining",
+    "label": "Jettison\nCargo",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Mining/exit_seat",
+    "action": "default/pl_exit",
+    "group": "Mining",
+    "label": "Exit\nSeat",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Salvage/salvage_mode",
+    "action": "seat_general/v_toggle_salvage_mode",
+    "group": "Salvage",
+    "label": "Salvage\nMode",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Salvage/salvage_fire_left",
+    "action": "spaceship_salvage/v_salvage_toggle_fire_left",
+    "group": "Salvage",
+    "label": "Fire\nLeft",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Salvage/salvage_fire_right",
+    "action": "spaceship_salvage/v_salvage_toggle_fire_right",
+    "group": "Salvage",
+    "label": "Fire\nRight",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Salvage/salvage_fire_fracture",
+    "action": "spaceship_salvage/v_salvage_toggle_fire_fracture",
+    "group": "Salvage",
+    "label": "Fire\nFracture",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Salvage/salvage_focus_all",
+    "action": "spaceship_salvage/v_salvage_focus_all_heads",
+    "group": "Salvage",
+    "label": "Focus\nAll",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Salvage/salvage_focus_left",
+    "action": "spaceship_salvage/v_salvage_focus_left",
+    "group": "Salvage",
+    "label": "Focus\nLeft",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Salvage/salvage_focus_right",
+    "action": "spaceship_salvage/v_salvage_focus_right",
+    "group": "Salvage",
+    "label": "Focus\nRight",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Salvage/salvage_focus_fracture",
+    "action": "spaceship_salvage/v_salvage_focus_fracture",
+    "group": "Salvage",
+    "label": "Focus\nFracture",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Salvage/salvage_fire_disint",
+    "action": "spaceship_salvage/v_salvage_toggle_fire_disintegrate",
+    "group": "Salvage",
+    "label": "Fire\nDisinteg.",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Salvage/salvage_gimbal",
+    "action": "spaceship_salvage/v_salvage_toggle_gimbal_mode",
+    "group": "Salvage",
+    "label": "Gimbal\nMode",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Salvage/salvage_gimbal_reset",
+    "action": "spaceship_salvage/v_salvage_reset_gimbal",
+    "group": "Salvage",
+    "label": "Reset\nGimbal",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Salvage/salvage_beam_axis",
+    "action": "spaceship_salvage/v_salvage_toggle_beam_spacing_axis",
+    "group": "Salvage",
+    "label": "Beam\nAxis",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Salvage/scan_mode",
+    "action": "seat_general/v_toggle_scan_mode",
+    "group": "Salvage",
+    "label": "Scan\nMode",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Salvage/ping",
+    "action": "spaceship_radar/v_invoke_ping",
+    "group": "Salvage",
+    "label": "Ping",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ground Vehicle/gv_start",
+    "action": "vehicle_general/v_flightready",
+    "group": "Ground Vehicle",
+    "label": "Start\nVehicle",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ground Vehicle/gv_power",
+    "action": "spaceship_power/v_power_toggle",
+    "group": "Ground Vehicle",
+    "label": "Power",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ground Vehicle/gv_lights",
+    "action": "lights_controller/v_lights",
+    "group": "Ground Vehicle",
+    "label": "Head-\nlights",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ground Vehicle/gv_horn",
+    "action": "vehicle_general/v_horn",
+    "group": "Ground Vehicle",
+    "label": "Horn",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ground Vehicle/gv_boost",
+    "action": "vehicle_driver/v_boost",
+    "group": "Ground Vehicle",
+    "label": "Boost",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ground Vehicle/gv_brake",
+    "action": "vehicle_driver/v_brake",
+    "group": "Ground Vehicle",
+    "label": "Brake",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ground Vehicle/gv_autobrake",
+    "action": "vehicle_driver/v_mgv_switch_brake_on_idle",
+    "group": "Ground Vehicle",
+    "label": "Brake on\nIdle",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ground Vehicle/freelook",
+    "action": "vehicle_general/v_view_freelook_mode",
+    "group": "Ground Vehicle",
+    "label": "Free\nLook",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ground Vehicle/camera",
+    "action": "vehicle_general/v_view_cycle_fwd",
+    "group": "Ground Vehicle",
+    "label": "Camera\nView",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ground Vehicle/gv_lock_rot",
+    "action": "vehicle_driver/v_lock_rotation",
+    "group": "Ground Vehicle",
+    "label": "Lock\nRotation",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ground Vehicle/gv_weapons",
+    "action": "spaceship_power/v_power_toggle_weapons",
+    "group": "Ground Vehicle",
+    "label": "Weapon\nPower",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ground Vehicle/night_vision",
+    "action": "seat_general/v_light_amplification_toggle",
+    "group": "Ground Vehicle",
+    "label": "Night\nVision",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ground Vehicle/mobiglas",
+    "action": "vehicle_general/mobiglas",
+    "group": "Ground Vehicle",
+    "label": "mobiGlas",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ground Vehicle/gv_exit",
+    "action": "default/pl_exit",
+    "group": "Ground Vehicle",
+    "label": "Exit\nVehicle",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ship & Utilities/mobiglas",
+    "action": "spaceship_hud/mobiglas",
+    "group": "Ship & Utilities",
+    "label": "mobiGlas",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ship & Utilities/starmap",
+    "action": "spaceship_hud/v_starmap",
+    "group": "Ship & Utilities",
+    "label": "Star\nMap",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ship & Utilities/quantum",
+    "action": "spaceship_quantum/v_toggle_qdrive_engagement",
+    "group": "Ship & Utilities",
+    "label": "Quantum\nJump",
+    "hold": 450,
+    "tap": false
+  },
+  {
+    "id": "Ship & Utilities/vtol",
+    "action": "spaceship_movement/v_vtol_toggle",
+    "group": "Ship & Utilities",
+    "label": "VTOL",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ship & Utilities/autoland",
+    "action": "spaceship_movement/v_autoland",
+    "group": "Ship & Utilities",
+    "label": "Auto\nLand",
+    "hold": 450,
+    "tap": false
+  },
+  {
+    "id": "Ship & Utilities/loading_area",
+    "action": "spaceship_movement/v_atc_loading_area_request",
+    "group": "Ship & Utilities",
+    "label": "Loading\nArea",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ship & Utilities/lights",
+    "action": "lights_controller/v_lights",
+    "group": "Ship & Utilities",
+    "label": "Lights",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ship & Utilities/night_vision",
+    "action": "seat_general/v_light_amplification_toggle",
+    "group": "Ship & Utilities",
+    "label": "Night\nVision",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ship & Utilities/transform",
+    "action": "spaceship_movement/v_transform_cycle",
+    "group": "Ship & Utilities",
+    "label": "Wings /\nConfig",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Ship & Utilities/speed_down",
+    "action": "spaceship_movement/v_ifcs_speed_limiter_decrement",
+    "group": "Ship & Utilities",
+    "label": "Speed\nLimit −",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ship & Utilities/speed_up",
+    "action": "spaceship_movement/v_ifcs_speed_limiter_increment",
+    "group": "Ship & Utilities",
+    "label": "Speed\nLimit +",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ship & Utilities/emergency_exit",
+    "action": "seat_general/v_emergency_exit",
+    "group": "Ship & Utilities",
+    "label": "Emerg.\nExit",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ship & Utilities/eject",
+    "action": "seat_general/v_eject",
+    "group": "Ship & Utilities",
+    "label": "EJECT",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Ship & Utilities/self_destruct",
+    "action": "spaceship_general/v_self_destruct",
+    "group": "Ship & Utilities",
+    "label": "Self\nDestruct",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Extended/v_target_cycle_friendly_fwd",
+    "action": "spaceship_targeting_advanced/v_target_cycle_friendly_fwd",
+    "group": "Extended",
+    "label": "Cycle Lock - Friendlies - Forward",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Extended/v_target_remove_all_pins",
+    "action": "spaceship_targeting/v_target_remove_all_pins",
+    "group": "Extended",
+    "label": "Remove All Pinned Targets",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Extended/v_target_hail",
+    "action": "spaceship_target_hailing/v_target_hail",
+    "group": "Extended",
+    "label": "Hail Target",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Extended/v_weapon_increase_max_missiles",
+    "action": "spaceship_missiles/v_weapon_increase_max_missiles",
+    "group": "Extended",
+    "label": "Increase Number of Armed Missiles",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Extended/v_weapon_reset_max_missiles",
+    "action": "spaceship_missiles/v_weapon_reset_max_missiles",
+    "group": "Extended",
+    "label": "Reset Number of Armed Missiles",
+    "hold": 0,
+    "tap": true
+  },
+  {
+    "id": "Extended/v_space_brake",
+    "action": "spaceship_movement/v_space_brake",
+    "group": "Extended",
+    "label": "Spacebrake",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Extended/v_accel_range_increment",
+    "action": "spaceship_movement/v_accel_range_increment",
+    "group": "Extended",
+    "label": "Acceleration Limiter - Step Up (tap)",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Extended/v_accel_range_decrement",
+    "action": "spaceship_movement/v_accel_range_decrement",
+    "group": "Extended",
+    "label": "Acceleration Limiter - Step Down (tap)",
+    "hold": 0,
+    "tap": false
+  },
+  {
+    "id": "Extended/visor_wipe",
+    "action": "spaceship_hud/visor_wipe",
+    "group": "Extended",
+    "label": "Wipe Helmet Visor",
+    "hold": 0,
+    "tap": false
+  }
+]

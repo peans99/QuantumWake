@@ -1,0 +1,9 @@
+{
+  "name": "com.nlebel.starcitizen",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@elgato/streamdeck": "^3.0.4",
+    "koffi": "^3.3.7"
+  }
+}

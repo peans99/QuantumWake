@@ -4225,6 +4225,25 @@
     <article class="share-report" id="share-report" aria-live="polite"></article>
   </section>
 
+  <section id="view-streamdeck" class="view">
+    <div class="section-bar"><div><span class="page-kicker">Settings</span><h2>Star Citizen · Stream Deck</h2></div><button class="ghost" id="deck-back">Back to Settings</button></div>
+    <p class="muted">Build a profile from the keyboard and mouse bindings in your selected Star Citizen installation. Regenerate after changing your bindings.</p>
+    <div class="option-block"><div class="controls">
+      <label>Stream Deck model <select id="deck-model"><option value="15">15 keys · 5 × 3</option><option value="xl">XL · 32 keys · 8 × 4</option></select></label>
+      <label>Bindings <select id="deck-source"><option value="current">My current bindings</option><option value="defaults">Game defaults</option></select></label>
+      <button class="ghost" id="deck-refresh">Refresh bindings</button>
+    </div><p class="muted" id="deck-status" role="status"></p></div>
+    <div class="deck-workspace"><div class="option-block">
+      <h3>Choose categories</h3><p class="muted">Your existing Star Citizen profile categories are selected by default. Extended adds optional targeting, flight and utility commands.</p><div id="deck-categories" class="deck-categories"></div><h3>Choose commands</h3><div class="controls"><label>Command list <select id="deck-scope"><option value="presets">My Stream Deck categories</option><option value="all">All game commands</option></select></label><input type="search" id="deck-search" placeholder="Find a command or category" aria-label="Find a command or category"><button class="ghost tiny" id="deck-select">Select shown</button><button class="ghost tiny" id="deck-clear">Clear selection</button></div>
+      <div id="deck-commands" class="deck-commands"></div>
+    </div><div class="option-block deck-summary"><h3>Profile preview</h3><p id="deck-count" class="muted"></p><div id="deck-preview" class="deck-preview"></div>
+      <p class="muted">Commands are grouped into folders. Back stays at the top left; More opens additional commands. Hold actions follow your finger: keep the button pressed.</p>
+      <div class="controls"><button id="deck-open" disabled>Open in Stream Deck</button><button class="ghost" id="deck-download" disabled>Download profile</button></div><p class="muted">Open in Stream Deck sends the profile to the app on this PC. On first use it opens the plugin installer; finish installing, then click again to import your profile.</p>
+      <h3>Install in Stream Deck</h3><ol><li><a href="/api/streamdeck/plugin" download>Download Star Citizen Commands plugin</a> and open it once.</li><li>Open the downloaded profile and select the matching device in Stream Deck.</li><li>Focus Star Citizen to use the buttons. Start with Landing Gear to check your setup.</li></ol>
+      <p class="muted">The plugin requires Stream Deck 7.1 or later on Windows x64. It sends physical keyboard positions and mouse input. Star Citizen and Stream Deck need the same privilege level.</p>
+    </div></div>
+  </section>
+
   <section id="view-settings" class="view">
     <div class="section-bar settings-workspace-head">
       <div>
@@ -4234,6 +4253,7 @@
       <p class="muted">Choose what stays current, protect the history your totals use, and make a recap when you want to share one.</p>
     </div>
 
+    <div class="option-block"><div class="option-head"><h3>Star Citizen · Stream Deck</h3><button class="ghost" id="settings-streamdeck">Build a profile</button></div><p class="muted">Generate a 15-key or XL profile from your Star Citizen control mappings.</p></div>
     <div class="settings-start-grid">
     <div class="option-block settings-quick-card settings-share-card">
       <div class="option-head">

@@ -352,7 +352,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.2.7
+### 1.2.8
 
 **Voice commands: say it instead of finding the key.** For the things you do once a session and would rather not give a button to. Settings → Voice & callouts has a new Voice commands switch, off until you turn it on. Say "Quantum Wake copilot on", or hold a push-to-talk button or key you pick, and the app listens for a short list of commands:
 
@@ -395,6 +395,8 @@ Settings → Voice commands shows a few example wordings for each command, and e
 - "Abort self destruct" presses the self destruct key again, which starts a countdown when none is running. It now presses at once only within five minutes of a self destruct the copilot itself confirmed. Otherwise it asks "Confirm abort self destruct?" first.
 - "Shields off" waits for "confirm", because "on" and "off" sound alike.
 - A fix: commands the game binds as "F7 + LAlt", such as less power to shields, pressed F7 before LAlt. That could raise the shields instead of lowering them. The modifier now goes down first.
+
+**Star Citizen profiles for Stream Deck.** Settings has a Stream Deck page for choosing commands and generating a 15-key or XL profile from the selected game installation’s keyboard and mouse bindings. Your existing Stream Deck categories are selected by default, with an optional Extended preset and category checkboxes. Open in Stream Deck hands the profile to the app’s import prompt. The page explains actions it cannot send and offers the companion Windows plugin as a download.
 
 ### 1.1.25
 
