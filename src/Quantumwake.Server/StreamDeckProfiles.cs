@@ -9,11 +9,22 @@ using Quantumwake.Data;
 
 namespace Quantumwake.Server;
 
-public sealed record DeckCommand(string Id, string Group, string Label, string Key, string Activation, string? Problem, bool Preset = false, int Hold = 0, bool? Tap = null);
+/// <param name="Hold">Milliseconds the plugin keeps the key down at least, whatever the finger does.</param>
+/// <param name="HoldFor">Seconds the game wants the key held before the action fires; 0 when a touch does it.</param>
+/// <param name="TapOrHold">A tap fires the action and holding for <paramref name="HoldFor"/> fires its hold version.</param>
+public sealed record DeckCommand(string Id, string Group, string Label, string Key, string Activation, string? Problem, bool Preset = false, int Hold = 0, bool? Tap = null,
+    double HoldFor = 0, bool TapOrHold = false);
 public sealed record DeckExport(string Model, string[] Actions, bool Defaults = false);
 
 public static class StreamDeckProfiles
 {
+    /// <summary>
+    /// The bundled plugin's manifest version: profiles name it, and Open in
+    /// Stream Deck installs the bundled copy when an older one is in place.
+    /// A test holds it to the packed manifest.
+    /// </summary>
+    public const string PluginVersion = "1.1.1.0";
+
     // Keep this list aligned with the scan-code sender in integrations/streamdeck/bin/keys.js.
     private static readonly HashSet<string> Keys = new(("escape minus equals backspace tab lbracket rbracket enter lctrl semicolon apostrophe grave lshift backslash comma period slash rshift np_multiply lalt space capslock numlock scrolllock np_subtract np_add np_period np_enter rctrl np_divide ralt home up pgup left right end down pgdn insert delete mouse1 mouse2 mouse3 mwheel_up mwheel_down " + string.Join(' ', "abcdefghijklmnopqrstuvwxyz0123456789".ToCharArray()) + " " + string.Join(' ', Enumerable.Range(1, 24).Select(n => $"f{n}")) + " " + string.Join(' ', Enumerable.Range(0, 10).Select(n => $"np_{n}"))).Split(' '), StringComparer.OrdinalIgnoreCase);
 
@@ -36,12 +47,26 @@ public static class StreamDeckProfiles
                     : Key(ControlInput.Parse(fallback));
             }
             var key = Resolve("kb", action.Keyboard) ?? Resolve("mo", action.Mouse);
-            var activation = overrides.FirstOrDefault(b => Key(b.Input) == key)?.ActivationMode ?? action.ActivationMode;
-            var problem = overrides.Any(b => Key(b.Input) == key && b.MultiTap > 1) ? "Multi-tap bindings are not supported by the Stream Deck sender." : key is null ? "No supported keyboard or mouse binding. Bind this action in Star Citizen, then refresh."
-                : activation is not ("" or "press" or "hold" or "tap" or "all" or "smart_toggle" or "hold_toggle" or "delayed_press" or "delayed_press_medium" or "delayed_hold" or "delayed_hold_long" or "hold_no_retrigger" or "delayed_hold_no_retrigger") ? "This activation mode is not supported by the Stream Deck sender." : null;
+            var binding = overrides.FirstOrDefault(b => Key(b.Input) == key);
+            var activation = binding?.ActivationMode ?? action.ActivationMode;
+            // The game's own rule for the mode, as voice commands read it, rather
+            // than a list of mode names: the game defines 18, and 260 actions name
+            // none and spell their rule out inline.
+            var rule = catalogue.RuleFor(action, binding?.ActivationMode);
+            // The plugin mirrors the finger, as the keyboard does, so a mode that
+            // waits for a held key keeps waiting. That is deliberate: self destruct's
+            // half second is its safety catch, and Decoy fires one thing on a tap and
+            // another after 0.25 s. Stretching every touch to the threshold would make
+            // a brushed button fire the first and take the tap away from the second,
+            // so the page says how long to hold instead (1.2.9).
+            var holdFor = rule.PressTriggerThreshold > 0 ? rule.PressTriggerThreshold
+                : rule.OnHold && rule.HoldTriggerDelay > 0 ? rule.HoldTriggerDelay : 0;
+            var tapOrHold = rule.PressTriggerThreshold <= 0 && holdFor > 0 && (rule.OnPress || rule.OnRelease);
+            var problem = key is null ? "No supported keyboard or mouse binding. Bind this action in Star Citizen, then refresh."
+                : binding?.MultiTap > 1 || rule.MultiTap > 1 ? "Multi-tap bindings are not supported by the Stream Deck sender." : null;
             return new DeckCommand(action.ActionMap + "/" + action.Name,
                 catalogue.ActionMaps.FirstOrDefault(m => m.Name == action.ActionMap)?.Label ?? action.ActionMap,
-                action.Label, key ?? "", activation, problem);
+                action.Label, key ?? "", activation, problem, HoldFor: holdFor, TapOrHold: tapOrHold);
         }).ToList();
         var presets = JsonSerializer.Deserialize<List<PresetCommand>>(Resource("presets"), new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
         foreach (var preset in presets)
@@ -54,10 +79,14 @@ public static class StreamDeckProfiles
                 var replacement = profile?.Bindings.FirstOrDefault(b => b.ActionMap == parts[0] && b.Action == parts[1] && (b.Input.Raw.StartsWith("mo", StringComparison.OrdinalIgnoreCase) || b.Input.Raw.StartsWith("kb", StringComparison.OrdinalIgnoreCase)));
                 var axis = replacement?.Input ?? ControlInput.Parse(string.IsNullOrWhiteSpace(original?.Mouse) ? original?.Keyboard ?? "" : original.Mouse);
                 if (axis.Name == "maxis_z" && axis.Modifiers.All(m => Key(m) is not null))
-                    action = action with { Key = string.Join('+', axis.Modifiers.Select(m => Key(m)).Append(preset.WheelDirection > 0 ? "mwheel_up" : "mwheel_down")), Problem = null, Activation = "press" };
+                    action = action with { Key = string.Join('+', axis.Modifiers.Select(m => Key(m)).Append(preset.WheelDirection > 0 ? "mwheel_up" : "mwheel_down")), Problem = null, Activation = "press", HoldFor = 0, TapOrHold = false };
             }
+            // A preset that taps, or already holds past the threshold, fires the same
+            // way whatever the finger does, so there is nothing left to tell.
+            var settled = action is not null && (preset.Tap || preset.Hold >= action.HoldFor * 1000);
             commands.Add(action is null ? new DeckCommand("preset/" + preset.Id, preset.Group, preset.Label, "", "", "This command could not be matched to a supported game action.", true)
-                : action with { Id = "preset/" + preset.Id, Group = preset.Group, Label = preset.Label, Preset = true, Hold = preset.Hold, Tap = preset.Tap });
+                : action with { Id = "preset/" + preset.Id, Group = preset.Group, Label = preset.Label, Preset = true, Hold = preset.Hold, Tap = preset.Tap,
+                    HoldFor = settled ? 0 : action.HoldFor, TapOrHold = !settled && action.TapOrHold });
         }
         return commands;
     }
@@ -115,7 +144,7 @@ public static class StreamDeckProfiles
                 var pluginReady = false;
                 if (File.Exists(manifest))
                 {
-                    try { using var doc = JsonDocument.Parse(File.ReadAllBytes(manifest)); pluginReady = Version.TryParse(doc.RootElement.GetProperty("Version").GetString(), out var version) && version >= new Version(1,1,1,0); }
+                    try { using var doc = JsonDocument.Parse(File.ReadAllBytes(manifest)); pluginReady = Version.TryParse(doc.RootElement.GetProperty("Version").GetString(), out var version) && version >= new Version(PluginVersion); }
                     catch (Exception e) when (e is JsonException or KeyNotFoundException) { }
                 }
                 var folder = Path.Combine(Path.GetTempPath(), "QuantumWake-StreamDeck"); Directory.CreateDirectory(folder);
@@ -156,7 +185,7 @@ public static class StreamDeckProfiles
             void Bytes(string path, byte[] bytes) { using var s = zip.CreateEntry(root + path).Open(); s.Write(bytes); }
             void Json(string path, object value) => Bytes(path, JsonSerializer.SerializeToUtf8Bytes(value));
             object Command(DeckCommand c) => new { ActionID = Id(), LinkedTitle = true, Name = "SC Command",
-                Plugin = new { Name = "Star Citizen Commands", UUID = "com.nlebel.starcitizen", Version = "1.1.1.0" },
+                Plugin = new { Name = "Star Citizen Commands", UUID = "com.nlebel.starcitizen", Version = PluginVersion },
                 Settings = new { command = "flight_ready", keyOverride = c.Key, label = c.Label, holdMs = c.Hold, tap = c.Tap ?? (c.Activation == "tap"), color = c.Id.Contains("mining") ? "#eab308" : c.Id.Contains("salvage") ? "#14b8a6" : c.Id.Contains("target") ? "#f97316" : c.Id.Contains("weapon") ? "#ef4444" : "#22d3ee" },
                 State = 0, States = new[] { new { ShowTitle = false } }, UUID = "com.nlebel.starcitizen.command" };
             string FolderTitle(string text)

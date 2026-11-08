@@ -49,7 +49,81 @@ public class StreamDeckTests
     {
         Assert.Null(StreamDeckProfiles.Key(ControlInput.Parse("js1_button2")));
         Assert.Null(StreamDeckProfiles.Key(ControlInput.Parse("kb1_unknown")));
-        var catalogue = Catalogue with { Actions = [Catalogue.Actions[0] with { ActivationMode = "double_tap" }] };
+        var catalogue = Catalogue with { Actions = [Catalogue.Actions[0] with { ActivationMode = "double_tap" }], Modes = Modes };
         Assert.NotNull(StreamDeckProfiles.Commands(catalogue,null)[0].Problem);
+    }
+
+    // The rules as defaultProfile.xml defines them on this install (Alpha 4.10).
+    private static readonly Dictionary<string, ActivationRule> Modes = new()
+    {
+        ["double_tap"] = new(true, false, false, MultiTap: 2),
+        ["delayed_press_medium"] = new(true, false, false, PressTriggerThreshold: 0.5),
+        ["tap"] = new(false, false, true, ReleaseTriggerThreshold: 0.25),
+        ["hold"] = new(true, false, true),
+    };
+
+    [Fact] public void Delayed_actions_say_how_long_to_hold_rather_than_firing_on_a_touch()
+    {
+        ActionInfo Act(string name, string mode, ActivationRule? inline = null) =>
+            new("ship", name, name, "", "n", "", "", "", mode, "", inline);
+        var catalogue = new ControlCatalogue([new("ship", "Ship", "FLIGHT")], [
+            Act("destruct", "delayed_press_medium"),
+            // Decoy: launches on a press, sets and launches the burst after 0.25 s.
+            Act("decoy", "", new ActivationRule(true, true, true, HoldTriggerDelay: 0.25)),
+            // Shields - Set to Max (Hold): nothing until 0.25 s.
+            Act("shields", "", new ActivationRule(false, true, false, HoldTriggerDelay: 0.25)),
+            Act("pip", "tap"),
+            Act("boost", "hold"),
+        ], Modes);
+        var commands = StreamDeckProfiles.Commands(catalogue, null).Where(c => !c.Preset).ToDictionary(c => c.Id.Split('/')[1]);
+
+        Assert.Equal((0.5, false), (commands["destruct"].HoldFor, commands["destruct"].TapOrHold));
+        Assert.Equal((0.25, true), (commands["decoy"].HoldFor, commands["decoy"].TapOrHold));
+        Assert.Equal((0.25, false), (commands["shields"].HoldFor, commands["shields"].TapOrHold));
+        Assert.Equal(0, commands["pip"].HoldFor);
+        Assert.Equal(0, commands["boost"].HoldFor);
+        // Nothing is stretched: the finger still decides, as on the keyboard.
+        Assert.All(commands.Values, c => Assert.Equal(0, c.Hold));
+        Assert.All(commands.Values, c => Assert.Null(c.Problem));
+    }
+
+    [Fact] public void A_preset_keeps_the_hold_note_unless_it_already_holds_or_taps()
+    {
+        var destruct = new ActionInfo("spaceship_general", "v_self_destruct", "Self Destruct", "", "backspace", "", "", "", "delayed_press_medium", "");
+        var catalogue = new ControlCatalogue([new("spaceship_general", "General", "FLIGHT")], [destruct], Modes);
+        var preset = StreamDeckProfiles.Commands(catalogue, null).Single(c => c.Id == "preset/Ship & Utilities/self_destruct");
+        Assert.Equal(0.5, preset.HoldFor);
+    }
+
+    /// <summary>
+    /// The server ships the packed .streamDeckPlugin, not the source beside it,
+    /// so an edit to keys.js that was never repacked would ship the old sender
+    /// without a word. Line endings are compared loosely: git checks text out
+    /// as CRLF here and the pack was made from LF.
+    /// </summary>
+    [Fact] public void The_packed_plugin_is_built_from_the_source_beside_it()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Directory.Build.props"))) dir = dir.Parent;
+        var deck = Path.Combine(dir!.FullName, "integrations", "streamdeck");
+        var source = Path.Combine(deck, "com.nlebel.starcitizen.sdPlugin");
+        using var zip = ZipFile.OpenRead(Path.Combine(deck, "com.nlebel.starcitizen.streamDeckPlugin"));
+        static byte[] Text(byte[] bytes) => System.Text.Encoding.UTF8.GetBytes(System.Text.Encoding.UTF8.GetString(bytes).Replace("\r\n", "\n"));
+
+        var packed = zip.Entries.Where(e => e.Length > 0 && !e.FullName.Contains("node_modules")).ToDictionary(e => e.FullName.Replace('\\', '/'));
+        var files = Directory.GetFiles(source, "*", SearchOption.AllDirectories)
+            .Where(f => !f.Contains(Path.DirectorySeparatorChar + "node_modules" + Path.DirectorySeparatorChar)).ToList();
+        Assert.Equal(packed.Keys.Order(), files.Select(f => "com.nlebel.starcitizen.sdPlugin/" + Path.GetRelativePath(source, f).Replace('\\', '/')).Order());
+        foreach (var file in files)
+        {
+            var entry = packed["com.nlebel.starcitizen.sdPlugin/" + Path.GetRelativePath(source, file).Replace('\\', '/')];
+            using var stream = entry.Open(); using var copy = new MemoryStream(); stream.CopyTo(copy);
+            var binary = file.EndsWith(".png", StringComparison.OrdinalIgnoreCase);
+            Assert.True((binary ? File.ReadAllBytes(file) : Text(File.ReadAllBytes(file))).AsSpan().SequenceEqual(binary ? copy.ToArray() : Text(copy.ToArray())),
+                $"{entry.FullName} differs from the source: repack the plugin (integrations/streamdeck/README.md).");
+        }
+
+        using var manifest = JsonDocument.Parse(packed["com.nlebel.starcitizen.sdPlugin/manifest.json"].Open());
+        Assert.Equal(StreamDeckProfiles.PluginVersion, manifest.RootElement.GetProperty("Version").GetString());
     }
 }

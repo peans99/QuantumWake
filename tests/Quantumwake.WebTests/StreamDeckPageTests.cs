@@ -26,4 +26,22 @@ public class StreamDeckPageTests
         page.Do("__dom.node('#deck-search').value = 'landing';");
         Assert.True(page.Truth("deckShown().length === 1 && deckShown()[0].id === 'gear'"));
     }
+    [Fact] public void Commands_the_game_fires_late_say_how_long_to_hold()
+    {
+        var page = new Page();
+        page.Serve("/api/streamdeck?defaults=false", "{\"ready\":true,\"profileFound\":true,\"commands\":["
+            + "{\"id\":\"destruct\",\"group\":\"Ship\",\"label\":\"Self Destruct\",\"key\":\"backspace\",\"activation\":\"delayed_press_medium\",\"holdFor\":0.5,\"tapOrHold\":false},"
+            + "{\"id\":\"decoy\",\"group\":\"Ship\",\"label\":\"Decoy\",\"key\":\"h\",\"activation\":\"\",\"holdFor\":0.25,\"tapOrHold\":true},"
+            + "{\"id\":\"boost\",\"group\":\"Ship\",\"label\":\"Boost\",\"key\":\"lshift\",\"activation\":\"hold\",\"holdFor\":0},"
+            + "{\"id\":\"gear\",\"group\":\"Ship\",\"label\":\"Gear\",\"key\":\"n\",\"activation\":\"\"}]}");
+        page.Do("__dom.node('#deck-scope').value = 'all'; await loadStreamDeck();");
+        var list = page.NodeText("#deck-commands");
+        Assert.Contains("backspace · Hold 0.5 s before it fires", list);
+        Assert.Contains("h · Tap, or hold 0.25 s for its hold action", list);
+        Assert.Contains("lshift · Hold the button", list);
+        Assert.DoesNotContain("n ·", list);
+
+        var french = new Page("fr");
+        Assert.Contains("Maintenez", french.Text("deckTiming({holdFor:0.5})"));
+    }
 }

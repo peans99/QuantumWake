@@ -37678,6 +37678,16 @@ function deckShown() {
   return deckCommands.filter(c => ($('#deck-scope')?.value !== 'presets' || c.preset) && (!query || (c.label + ' ' + c.group + ' ' + c.key).toLowerCase().replace(/\s+/g, ' ').includes(query)));
 }
 function deckSelected() { return deckCommands.filter(c => deckSelection.has(c.id) && !c.problem); }
+/* How the button has to be pressed, from the game's rule for the action. The
+   deck mirrors the finger like a keyboard, so a delayed action that is only
+   touched never fires; without the number that reads as a broken button. */
+function deckTiming(command) {
+  const seconds = Number(command.holdFor) || 0;
+  const shown = seconds.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  if (seconds > 0 && command.tapOrHold) return tx('Tap, or hold {seconds} s for its hold action', { seconds: shown });
+  if (seconds > 0) return tx('Hold {seconds} s before it fires', { seconds: shown });
+  return command.activation === 'hold' ? tx('Hold the button') : '';
+}
 async function loadStreamDeck() {
   const status = $('#deck-status');
   status.textContent = tx('Reading control mappings…');
@@ -37712,7 +37722,8 @@ function renderStreamDeck() {
     const check = document.createElement('input'); check.type = 'checkbox'; check.checked = deckSelection.has(command.id); check.disabled = !!command.problem;
     check.addEventListener('change', () => { if (check.checked) deckSelection.add(command.id); else deckSelection.delete(command.id); renderStreamDeck(); });
     const copy = el('span'); copy.append(el('strong', '', command.label));
-    copy.append(el('small', 'muted', command.problem ? tx(command.problem) : command.key + (command.activation === 'hold' ? ' · ' + tx('Hold the button') : '')));
+    const timing = deckTiming(command);
+    copy.append(el('small', 'muted', command.problem ? tx(command.problem) : command.key + (timing ? ' · ' + timing : '')));
     row.append(check, copy); list.append(row);
   }
   renderDeckPreview();
@@ -37725,7 +37736,7 @@ function renderDeckPreview() {
   $('#deck-open').disabled = !chosen.length;
   const preview = $('#deck-preview'); preview.textContent = ''; preview.style.setProperty('--deck-columns', columns);
   if (deckPreviewGroup && !groups.includes(deckPreviewGroup)) { deckPreviewGroup = null; deckPreviewOffset = 0; }
-  const items = deckPreviewGroup ? chosen.filter(c => c.group === deckPreviewGroup).map(c => ({ text: c.label, key: c.key })) : groups.map(group => ({ text: group, group }));
+  const items = deckPreviewGroup ? chosen.filter(c => c.group === deckPreviewGroup).map(c => ({ text: c.label, key: [c.key, deckTiming(c)].filter(Boolean).join(' · ') })) : groups.map(group => ({ text: group, group }));
   if (deckPreviewOffset >= items.length) deckPreviewOffset = 0;
   const back = deckPreviewGroup !== null || deckPreviewOffset > 0;
   const room = capacity - (back ? 1 : 0), more = items.length - deckPreviewOffset > room;
