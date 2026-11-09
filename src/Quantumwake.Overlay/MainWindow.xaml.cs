@@ -153,7 +153,7 @@ public partial class MainWindow : Window
                 Left,
                 Top,
                 Math.Max(MinWidth, saved.ExpandedWidth ?? Width),
-                Math.Max(WidgetMinHeight, saved.ExpandedHeight ?? 460));
+                Math.Max(WidgetMinHeight, saved.ExpandedHeight ?? 400));
         }
         else
         {
@@ -645,13 +645,17 @@ public partial class MainWindow : Window
         HeaderBar.Visibility = interactive ? Visibility.Visible : Visibility.Collapsed;
         Grip.Visibility = interactive ? Visibility.Visible : Visibility.Collapsed;
 
+        // A slate frame rather than the dashboard's cyan (1.2.11): the header
+        // bar already says the widget is taking clicks, and a bright ring round
+        // it was the loudest thing on screen.
         Frame.BorderBrush = interactive
-            ? new SolidColorBrush(Color.FromRgb(0x35, 0xC8, 0xF0))
+            ? new SolidColorBrush(Color.FromRgb(0x44, 0x62, 0x74))
             : Brushes.Transparent;
 
         // Translucency is applied at the HWND level. WPF's Window.Opacity needs
-        // AllowsTransparency, which cannot be used with WebView2.
-        NativeWindowStyles.SetWindowAlpha(this, interactive ? (byte)255 : (byte)235);
+        // AllowsTransparency, which cannot be used with WebView2. Pinned, it
+        // lets a little more of the game through (235 before 1.2.11).
+        NativeWindowStyles.SetWindowAlpha(this, interactive ? (byte)255 : (byte)215);
 
         // WebView2 only routes mouse input once the window holds focus, so the
         // switch to interactive has to actually claim it.

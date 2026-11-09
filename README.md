@@ -352,7 +352,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.2.10
+### 1.2.11
 
 **Voice commands: say it instead of finding the key.** For the things you do once a session and would rather not give a button to. Settings → Voice & callouts has a new Voice commands switch, off until you turn it on. Say "Quantum Wake copilot on", or hold a push-to-talk button or key you pick, and the app listens for a short list of commands:
 
@@ -380,6 +380,8 @@ Each command presses the key the game has for that action, either yours from you
 - The feed shows the last five events instead of twelve.
 
 Fullscreen (Ctrl+Alt+F) and the dashboard still show everything.
+
+**A quieter overlay over the game.** The overlay drops the dashboard’s decoration: no scanlines, flat cards with soft borders, and white rather than glowing place names. The focus line is marked amber only when something needs your attention. Pinned, it lets a little more of the game show through, the frame around it while you move it is slate rather than bright cyan, and a new overlay opens slightly smaller. Fullscreen is unchanged.
 
 **Voice commands understand the way you actually say things.** Each command used to listen for one or two exact sentences, so "power to shields" worked and "full power to the shields" did not. It now listens for patterns, so all of these work: "full power to shields", "max shields", "shields to the right", "full shield back", "boost the rear shields", "gear down", "switch to mining", "request takeoff". Any command can start with "copilot" and end with "please". There are new commands too:
 - The six shield faces: front, rear, left, right, top and bottom. Left also answers to port and right to starboard.

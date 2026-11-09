@@ -4751,6 +4751,29 @@ body.overlay:not(.expanded) #now-confidence,
 body.overlay:not(.expanded) #now-version,
 body.overlay:not(.expanded) .now-status-respawn .sub,
 body.overlay:not(.expanded) .now-status-respawn .note { display: none !important; }
+
+/* Quieter over the game (1.2.11, from Codex's overlay pass): the dashboard's
+   framing - scanlines, glowing card ticks, cyan rules, a blurred glass panel -
+   reads as decoration on a 340-pixel widget and competes with the scene behind
+   it. Same cards, flatter. The layout above is untouched, and so is
+   fullscreen, which is the dashboard again. High contrast keeps its own. */
+body.overlay:not(.expanded)::before { display: none; }
+body.overlay:not(.expanded) main { border: 0; mask-image: none; }
+body.overlay:not(.expanded):not(.high-contrast) .card {
+  background: rgba(8, 15, 23, .86);
+  border-color: rgba(121, 155, 179, .2);
+  backdrop-filter: none;
+}
+body.overlay:not(.expanded) .card::before,
+body.overlay:not(.expanded) .now-focus::after { display: none; }
+body.overlay:not(.expanded) .card-label { color: var(--muted); letter-spacing: .09em; }
+body.overlay:not(.expanded):not(.high-contrast) .now-focus:not([hidden]) {
+  border: 0; border-left: 2px solid var(--cyan-deep); background: rgba(8, 15, 23, .86);
+}
+body.overlay:not(.expanded):not(.high-contrast) .now-focus[data-urgency="attention"] { border-left-color: var(--amber); }
+body.overlay:not(.expanded):not(.high-contrast) .now-status-location .hero-value { color: var(--text); text-shadow: none; }
+body.overlay:not(.expanded) .now-status-field { border-top-color: rgba(121, 155, 179, .18); }
+
 body.overlay .now-status-location { grid-column: 1 / -1; grid-row: auto; padding: 0 0 4px; border-right: 0; }
 body.overlay .now-status-field { padding: 4px 0; }
 body.overlay .now-status-label { font-size: 7px; }
