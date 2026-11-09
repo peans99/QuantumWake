@@ -352,9 +352,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.2.13
+### 1.2.14
 
-**Clearer Stream Deck buttons and a matching preview.** Commands have function icons, bright labels on dark key faces, and spaced keyboard hints. Categories have their own colours and symbols. The builder shows the plugin's button artwork, with a readable full label and binding when a key is selected. XL previews keep the keys readable on narrow screens by scrolling. Back returns to the previous preview page after More. The bundled plugin is updated too; regenerate and import a profile to use the new command and folder icons.
+**Clearer Stream Deck buttons and a matching preview.** Commands have function icons, bright labels on dark key faces, and spaced keyboard hints. Long names wrap between words instead of being cut mid-word, and the game's untranslated command names (like character_customizer_yaw_left) break at their underscores. Categories have their own colours and symbols. The builder shows the plugin's button artwork, with a readable full label and binding when a key is selected. XL previews keep the keys readable on narrow screens by scrolling. Back returns to the previous preview page after More. The bundled plugin is updated too; regenerate and import a profile to use the new command and folder icons.
 
 **Voice commands: say it instead of finding the key.** For the things you do once a session and would rather not give a button to. Settings → Voice & callouts has a new Voice commands switch, off until you turn it on. Say "Quantum Wake copilot on", or hold a push-to-talk button or key you pick, and the app listens for a short list of commands:
 

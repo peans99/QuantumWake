@@ -112,6 +112,43 @@ public class StreamDeckPageTests
         System.Xml.Linq.XNamespace svg = "http://www.w3.org/2000/svg";
         Assert.Equal(new[] { "Decouple", "C" }, xml.Descendants(svg + "text").Select(text => text.Value));
     }
+
+    // Each label is drawn without a key hint, so every text line is the label.
+    private static string[] Lines(Page page, string label)
+    {
+        var xml = System.Xml.Linq.XDocument.Parse(page.Text("QWDeckArt.renderKey({label:" + System.Text.Json.JsonSerializer.Serialize(label) + ",icon:'flight'})"));
+        System.Xml.Linq.XNamespace svg = "http://www.w3.org/2000/svg";
+        return xml.Descendants(svg + "text").Select(text => text.Value).ToArray();
+    }
+
+    [Theory]
+    // Words that do not fit even at the smallest size: a size smaller, not cut.
+    [InlineData("IFCS - Gravity Compensation - Toggle", "Compensation")]
+    [InlineData("Focus Disintegration tool", "Disintegration")]
+    [InlineData("Countermeasure Launch Decoy", "Countermeasure")]
+    [InlineData("[Experimental] VR - Recenter Device", "[Experimental]")]
+    public void A_word_too_long_for_the_key_is_kept_whole(string label, string word)
+    {
+        Assert.Contains(Lines(new Page(), label), line => line.Split(' ').Contains(word));
+    }
+
+    [Theory]
+    // Untranslated game ids have no spaces: they break where the id itself does.
+    [InlineData("character_customizer_yaw_left", new[] { "character_", "customizer_", "yaw_left" })]
+    [InlineData("remote_moveForward", new[] { "remote_move", "Forward" })]
+    public void Identifiers_break_at_underscores_and_capitals(string label, string[] expected)
+    {
+        Assert.Equal(expected, Lines(new Page(), label));
+    }
+
+    [Fact]
+    public void A_word_with_nowhere_to_break_is_hyphenated_and_loses_no_letters()
+    {
+        var lines = Lines(new Page(), "togglepdrawhelpers");
+        Assert.True(lines.Length > 1);
+        Assert.All(lines[..^1], line => Assert.EndsWith("-", line));
+        Assert.Equal("togglepdrawhelpers", string.Concat(lines.Select(line => line.TrimEnd('-'))));
+    }
     [Fact] public void Stream_deck_has_its_own_settings_group_and_back_returns_to_it()
     {
         // The stub seeds attributes, not nesting, so the placement is read from the markup.

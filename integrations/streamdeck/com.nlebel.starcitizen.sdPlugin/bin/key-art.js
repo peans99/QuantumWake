@@ -65,18 +65,33 @@
       return sum + size * (code >= 0 && code < advances.length ? advances[code] * 1.02 : 1);
     }, 0);
   }
-  function wrap(text, size, available, breakWords = true) {
+  // Where a word too wide for the key can be broken without cutting a word in
+  // two: after _ / or -, and where a lower-case letter meets a capital. 256 of
+  // the game's 1,093 action labels are untranslated ids with no spaces at all,
+  // like character_customizer_yaw_left, and were cut at whichever letter ran
+  // out of room.
+  const pieces = word => word.split(/(?<=[_\/-])(?=.)|(?<=[a-z])(?=[A-Z])/);
+  function wrap(text, size, available, hyphenate = false) {
     const result = [];
     for (const paragraph of String(text || '').replace(/\\n/g, '\n').split('\n')) {
       let line = '';
-      for (let word of paragraph.trim().split(/\s+/).filter(Boolean)) {
-        if (line && width(line + ' ' + word, size) > available) { result.push(line); line = ''; }
-        while (breakWords && width(word, size) > available) {
-          let chunk = '';
-          for (const ch of word) { if (chunk && width(chunk + ch, size) > available) break; chunk += ch; }
-          result.push(chunk); word = word.slice(chunk.length);
-        }
-        line += (line && word ? ' ' : '') + word;
+      const put = (part, space) => {
+        const joined = line + (line && space ? ' ' : '') + part;
+        if (line && width(joined, size) > available) { result.push(line); line = part; }
+        else line = joined;
+      };
+      for (const word of paragraph.trim().split(/\s+/).filter(Boolean)) {
+        if (width(word, size) <= available) { put(word, true); continue; }
+        pieces(word).forEach((piece, index) => {
+          // Last resort, and said so with a hyphen rather than silently.
+          while (hyphenate && width(piece, size) > available && [...piece].length > 3) {
+            const chars = [...piece]; let cut = 2;
+            while (cut < chars.length - 2 && width(chars.slice(0, cut + 1).join('') + '-', size) <= available) cut++;
+            if (line) result.push(line);
+            result.push(chars.slice(0, cut).join('') + '-'); line = ''; piece = chars.slice(cut).join('');
+          }
+          put(piece, index === 0);
+        });
       }
       if (line) result.push(line);
     }
@@ -84,15 +99,25 @@
   }
   function textBlock(label, center, available = 122, maxSize = 36, twoLineSize = 28) {
     let size = maxSize, lines = [];
+    const fits = (candidate, at, room = available) => candidate.every(line => width(line, at) <= room);
     // Shrink intact words first. Breaking a short word at a large size can
     // make it look worse than the same word fitting cleanly one size down.
     for (; size >= 18; size -= 2) {
-      lines = wrap(label, size, available, false);
-      if (lines.every(line => width(line, size) <= available)
+      lines = wrap(label, size, available);
+      if (fits(lines, size)
           && (lines.length <= 1 || (size <= twoLineSize && lines.length <= 2) || (size <= 18 && lines.length <= 3))) break;
     }
     size = Math.max(18, size);
-    if (lines.some(line => width(line, size) > available)) lines = wrap(label, size, available);
+    if (!fits(lines, size)) {
+      // One word wider than the key even at the floor (Compensation,
+      // Disintegration, [Experimental]): a size smaller reads better than the
+      // word in two pieces. Only for those, so long labels keep the floor.
+      // It may also take 6 px of the side margin, still 8 px clear of the
+      // frame: Countermeasure is 127 px at 16 and the usual room is 122.
+      const room = available + 6, smaller = wrap(label, 16, room);
+      if (fits(smaller, 16, room)) { size = 16; lines = smaller; }
+      else lines = wrap(label, size, available, true);
+    }
     if (lines.length > 3) {
       lines = lines.slice(0, 3); let last = lines[2];
       while (last && width(last + '…', size) > available) last = last.slice(0, -1);

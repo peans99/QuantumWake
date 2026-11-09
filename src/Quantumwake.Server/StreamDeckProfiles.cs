@@ -27,7 +27,7 @@ public static class StreamDeckProfiles
     /// Stream Deck installs the bundled copy when an older one is in place.
     /// A test holds it to the packed manifest.
     /// </summary>
-    public const string PluginVersion = "1.1.2.0";
+    public const string PluginVersion = "1.1.3.0";
 
     private sealed record AppearanceRule(string Icon, string? Color, string[] Match);
     private sealed record DeckPalette(DeckAppearance Fallback, AppearanceRule[] Groups, AppearanceRule[] Actions);
