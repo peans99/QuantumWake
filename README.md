@@ -352,7 +352,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.2.12
+### 1.2.13
 
 **Clearer Stream Deck buttons and a matching preview.** Commands have function icons, bright labels on dark key faces, and spaced keyboard hints. Categories have their own colours and symbols. The builder shows the plugin's button artwork, with a readable full label and binding when a key is selected. XL previews keep the keys readable on narrow screens by scrolling. Back returns to the previous preview page after More. The bundled plugin is updated too; regenerate and import a profile to use the new command and folder icons.
 

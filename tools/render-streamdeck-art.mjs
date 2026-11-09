@@ -42,7 +42,9 @@ try {
   images.push({ icon: 'back', color: '#a6bad0', file: 'back.png' }, { icon: 'next', color: '#a6bad0', file: 'next.png' });
   for (const image of images) {
     const art = QWDeckArt.renderFolder({ ...image, label: '' });
-    await send('Page.navigate', { url: 'data:text/html;charset=utf-8,' + encodeURIComponent('<body style="margin:0;overflow:hidden">' + art) });
+    // Black behind the art: the key's rounded corners are cut out of the PNG,
+    // and on the page's default white they came out as four bright specks per key.
+    await send('Page.navigate', { url: 'data:text/html;charset=utf-8,' + encodeURIComponent('<body style="margin:0;overflow:hidden;background:#000">' + art) });
     await delay(80);
     const shot = await send('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: 144, height: 144, scale: 1 } });
     await fs.writeFile(path.join(deck, image.file), Buffer.from(shot.data, 'base64'));
