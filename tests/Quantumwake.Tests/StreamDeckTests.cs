@@ -5,6 +5,22 @@ using Quantumwake.Server;
 namespace Quantumwake.Tests;
 public class StreamDeckTests
 {
+    [Theory]
+    [InlineData("preset/Flight/flight_ready", "Flight", "Flight Ready", "flight")]
+    [InlineData("preset/Flight/exit_seat", "Flight", "Exit Seat", "seat")]
+    [InlineData("preset/Mining/lights", "Mining", "Lights", "lights")]
+    [InlineData("preset/Mining/ping", "Mining", "Ping", "scan")]
+    [InlineData("preset/Mining/scan_mode", "Mining", "Scan Mode", "scan")]
+    [InlineData("preset/Power/pip_shd_max", "Power", "SHD MAX", "shield")]
+    [InlineData("preset/Power/pip_eng_max", "Power", "ENG MAX", "engine")]
+    [InlineData("preset/Power/pip_wpn_max", "Power", "WPN MAX", "weapons")]
+    [InlineData("preset/Salvage/salvage_fire_fracture", "Salvage", "Fire Fracture", "salvage")]
+    [InlineData("spaceship_power/v_engineering_assignment_weapons_max", "Power", "Weapons MAX", "weapons")]
+    [InlineData("spaceship_power/v_engineering_assignment_shields_max", "Power", "Shields MAX", "shield")]
+    public void Function_icons_are_not_confused_by_category_names(string id, string group, string label, string icon)
+    {
+        Assert.Equal(icon, StreamDeckProfiles.Appearance(id, group, label).Icon);
+    }
     private static ControlCatalogue Catalogue => new([new("ship", "Ship", "FLIGHT")], [new("ship", "gear", "Landing Gear", "", "n", "", "", "", "", "")]);
     [Fact] public void Rebound_keys_replace_defaults_and_explicitly_cleared_keys_stay_unbound()
     {
@@ -55,9 +71,39 @@ public class StreamDeckTests
                 Assert.Equal("bottom", state.GetProperty("TitleAlignment").GetString());
             }
         }
-        Assert.Equal("Images/folder.png", used["folder"]);
+        Assert.Equal("Images/flight.png", used["folder"]);
         Assert.Equal("Images/back.png", used["back"]);
         Assert.Equal("Images/next.png", used["more"]);
+    }
+
+    [Fact] public void Exported_commands_keep_their_bindings_and_receive_distinct_function_icons()
+    {
+        var commands = new[] {
+            new DeckCommand("ship/gear", "Flight", "Landing Gear", "rctrl+n", "", null),
+            new DeckCommand("ship/v_self_destruct", "Ship & Utilities", "Self Destruct", "backspace", "delayed_press_medium", null, HoldFor: 0.5),
+            new DeckCommand("mining/mining_power_up", "Mining", "Laser Power", "mwheel_up", "", null),
+        };
+        Assert.Equal("gear", commands[0].Appearance.Icon);
+        Assert.Equal("warning", commands[1].Appearance.Icon);
+        Assert.Equal("mining", commands[2].Appearance.Icon);
+        Assert.NotEqual(commands[0].Appearance.Color, commands[2].Appearance.Color);
+        using var zip = new ZipArchive(new MemoryStream(StreamDeckProfiles.Build("15", commands, null)));
+        var keys = new Dictionary<string, JsonElement>();
+        foreach (var entry in zip.Entries.Where(e => e.FullName.Contains("/Profiles/") && e.FullName.EndsWith("manifest.json")))
+        {
+            using var doc = JsonDocument.Parse(entry.Open());
+            foreach (var action in doc.RootElement.GetProperty("Controllers")[0].GetProperty("Actions").EnumerateObject())
+            {
+                if (action.Value.GetProperty("UUID").GetString() != "com.nlebel.starcitizen.command") continue;
+                var settings = action.Value.GetProperty("Settings");
+                keys[settings.GetProperty("label").GetString()!] = settings.Clone();
+            }
+        }
+        Assert.Equal("gear", keys["Landing Gear"].GetProperty("icon").GetString());
+        Assert.Equal("rctrl+n", keys["Landing Gear"].GetProperty("keyOverride").GetString());
+        Assert.Equal("warning", keys["Self Destruct"].GetProperty("icon").GetString());
+        Assert.Equal(0, keys["Self Destruct"].GetProperty("holdMs").GetInt32());
+        Assert.Equal("backspace", keys["Self Destruct"].GetProperty("keyOverride").GetString());
     }
     [Fact] public void Mining_wheel_presets_use_the_games_keyboard_field_but_respect_removal()
     {
@@ -148,5 +194,14 @@ public class StreamDeckTests
 
         using var manifest = JsonDocument.Parse(packed["com.nlebel.starcitizen.sdPlugin/manifest.json"].Open());
         Assert.Equal(StreamDeckProfiles.PluginVersion, manifest.RootElement.GetProperty("Version").GetString());
+        // Single-file builds serve the embedded renderer. Keeping only the
+        // loose browser file current would make the two hosts show different keys.
+        foreach (var (resource, file) in new[] { ("art", "bin/key-art.js"), ("appearance", "data/appearance.json") })
+        {
+            using var embedded = typeof(StreamDeckProfiles).Assembly.GetManifestResourceStream("streamdeck." + resource);
+            Assert.NotNull(embedded);
+            using var copy = new MemoryStream(); embedded.CopyTo(copy);
+            Assert.Equal(Text(File.ReadAllBytes(Path.Combine(source, file))), Text(copy.ToArray()));
+        }
     }
 }

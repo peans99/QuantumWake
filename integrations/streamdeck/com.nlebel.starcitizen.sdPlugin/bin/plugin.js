@@ -1,11 +1,13 @@
 import streamDeck, { SingletonAction } from "@elgato/streamdeck";
 import "../data/commands.js"; // defines globalThis.SC_COMMANDS / SC_GROUPS
-import { parseCombo, press, release, foregroundProcessName, prettyCombo } from "./keys.js";
-import { renderKey, svgDataUrl } from "./icons.js";
+import { readFileSync } from "node:fs";
+import { parseCombo, press, release, foregroundProcessName } from "./keys.js";
+import { renderKey, svgDataUrl, prettyKey, classify } from "./icons.js";
 
 const log = streamDeck.logger.createScope("sc");
 const COMMANDS = new Map(globalThis.SC_COMMANDS.map((c) => [c.id, c]));
 const GROUPS = globalThis.SC_GROUPS;
+const PALETTE = JSON.parse(readFileSync(new URL('../data/appearance.json', import.meta.url), 'utf8'));
 
 /** Global settings (shared by all keys), edited from any key's Property Inspector. */
 let globals = { onlyWhenFocused: true, layout: "physical" };
@@ -19,15 +21,16 @@ function resolve(settings) {
   const holdRaw = settings.holdMs;
   const hold = holdRaw === undefined || holdRaw === "" ? cmd.hold : Math.max(0, Number(holdRaw) || 0);
   const label = (settings.label || "").replace(/\\n/g, "\n") || cmd.label;
-  const color = /^#[0-9a-f]{6}$/i.test(settings.color || "") ? settings.color : cmd.color ?? GROUPS[cmd.group]?.color ?? "#94a3b8";
-  return { cmd, key, hold, label, color, tap: settings.tap === undefined ? !!cmd.tap : !!settings.tap };
+  const appearance = classify({ id: cmd.id, group: GROUPS[cmd.group]?.name || cmd.group, label }, PALETTE);
+  const color = /^#[0-9a-f]{6}$/i.test(settings.color || "") ? settings.color : appearance.color;
+  return { cmd, key, hold, label, color, icon: settings.icon || appearance.icon, tap: settings.tap === undefined ? !!cmd.tap : !!settings.tap };
 }
 
 function face(settings, pressed = false, warn = false) {
   const r = resolve(settings);
   return svgDataUrl(renderKey({
-    label: r.label, color: r.color,
-    keyText: settings.hideKey ? "" : prettyCombo(r.key), pressed, warn,
+    label: r.label, color: r.color, icon: r.icon,
+    keyText: settings.hideKey ? "" : prettyKey(r.key), pressed, warn,
   }));
 }
 

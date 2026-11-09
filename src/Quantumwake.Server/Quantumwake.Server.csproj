@@ -64,5 +64,8 @@
     <EmbeddedResource Include="../../integrations/streamdeck/folder.png" LogicalName="streamdeck.folder" />
     <EmbeddedResource Include="../../integrations/streamdeck/back.png" LogicalName="streamdeck.back" />
     <EmbeddedResource Include="../../integrations/streamdeck/next.png" LogicalName="streamdeck.next" />
+    <EmbeddedResource Include="../../integrations/streamdeck/com.nlebel.starcitizen.sdPlugin/bin/key-art.js" LogicalName="streamdeck.art" />
+    <EmbeddedResource Include="../../integrations/streamdeck/com.nlebel.starcitizen.sdPlugin/data/appearance.json" LogicalName="streamdeck.appearance" />
+    <EmbeddedResource Include="../../integrations/streamdeck/folders/*.png" LogicalName="streamdeck.icon.%(Filename)" />
   </ItemGroup>
 </Project>

@@ -37672,6 +37672,7 @@ boot();
 
 /* Stream Deck profiles are snapshots: export resolves the selected action ids
    again on the server so a changed or cleared binding cannot send a stale key. */
+let deckGroups = new Map(), deckPreviewTrail = [];
 let deckCommands = [], deckSelection = new Set(), deckPreviewGroup = null, deckPreviewOffset = 0, deckInitialised = false;
 function deckShown() {
   const query = ($('#deck-search')?.value || '').trim().toLowerCase();
@@ -37695,6 +37696,7 @@ async function loadStreamDeck() {
   try {
     const data = await getJson('/api/streamdeck?defaults=' + ($('#deck-source').value === 'defaults'));
     deckCommands = data.commands || [];
+    deckGroups = new Map((data.groups || []).map(group => [group.name, group]));
     if (!deckInitialised && data.ready) { deckSelection = new Set(deckCommands.filter(c => c.preset && c.group !== 'Extended' && !c.problem).map(c => c.id)); deckInitialised = true; }
     deckSelection = new Set([...deckSelection].filter(id => deckCommands.some(c => c.id === id && !c.problem)));
     status.textContent = !data.ready ? tx('Game controls are not available yet. Wait for the game files to finish reading, then refresh.')
@@ -37704,6 +37706,19 @@ async function loadStreamDeck() {
     renderStreamDeck();
   } catch (error) { deckCommands = []; renderStreamDeck(); status.textContent = error.message; }
 }
+function deckArt(command, folder = false) {
+  const meta = folder ? deckGroups.get(command.group) : null;
+  const look = (folder ? meta?.appearance : command.appearance) || { icon: 'command', color: '#a6bad0' };
+  return { ...look, label: folder ? meta?.title || command.group : command.label,
+    keyText: folder ? '' : QWDeckArt.prettyKey(command.key) };
+}
+function deckIcon(appearance) {
+  const icon = el('span', 'deck-command-icon');
+  icon.style.color = appearance.color;
+  icon.setAttribute('aria-hidden', 'true');
+  icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (QWDeckArt.icons[appearance.icon] || QWDeckArt.icons.command) + '</svg>';
+  return icon;
+}
 function renderStreamDeck() {
   const categories = $('#deck-categories'); categories.textContent = '';
   for (const group of [...new Set(deckCommands.filter(c => c.preset).map(c => c.group))]) {
@@ -37711,22 +37726,43 @@ function renderStreamDeck() {
     const row = el('label', 'deck-category'), check = document.createElement('input'); check.type = 'checkbox';
     const chosen = commands.filter(c => deckSelection.has(c.id)).length;
     check.checked = commands.length > 0 && chosen === commands.length; check.indeterminate = chosen > 0 && chosen < commands.length; check.disabled = !commands.length;
+    row.classList.toggle('deck-category-selected', chosen > 0);
     check.addEventListener('change', () => { for (const c of commands) if (check.checked) deckSelection.add(c.id); else deckSelection.delete(c.id); renderStreamDeck(); });
-    row.append(check, el('span', '', tx(group))); categories.append(row);
+    row.append(check, deckIcon(deckArt({ group }, true)), el('span', '', tx(group)), el('small', 'muted', chosen + '/' + commands.length)); categories.append(row);
   }
   const list = $('#deck-commands'); list.textContent = '';
   let group = '';
   for (const command of deckShown()) {
     if (group !== command.group) { group = command.group; list.append(el('h4', '', group)); }
     const row = el('label', 'deck-command');
+    row.classList.toggle('deck-command-unavailable', Boolean(command.problem));
     const check = document.createElement('input'); check.type = 'checkbox'; check.checked = deckSelection.has(command.id); check.disabled = !!command.problem;
     check.addEventListener('change', () => { if (check.checked) deckSelection.add(command.id); else deckSelection.delete(command.id); renderStreamDeck(); });
-    const copy = el('span'); copy.append(el('strong', '', command.label));
+    const copy = el('span', 'deck-command-copy'); copy.append(el('strong', '', command.label.replace(/\s+/g, ' ')));
     const timing = deckTiming(command);
-    copy.append(el('small', 'muted', command.problem ? tx(command.problem) : command.key + (timing ? ' · ' + timing : '')));
-    row.append(check, copy); list.append(row);
+    if (command.problem) copy.append(el('small', 'deck-command-problem', tx(command.problem)));
+    else {
+      const binding = el('span', 'deck-command-binding'); binding.append(el('kbd', '', QWDeckArt.prettyKey(command.key)));
+      if (timing) binding.append(el('small', 'deck-command-timing', timing));
+      copy.append(binding);
+    }
+    row.append(check, deckIcon(deckArt(command)), copy); list.append(row);
   }
   renderDeckPreview();
+}
+function deckPreviewGo(group, offset) {
+  deckPreviewTrail.push({ group: deckPreviewGroup, offset: deckPreviewOffset });
+  deckPreviewGroup = group; deckPreviewOffset = offset; renderDeckPreview();
+}
+function deckPreviewBack() {
+  const previous = deckPreviewTrail.pop();
+  deckPreviewGroup = previous?.group ?? null; deckPreviewOffset = previous?.offset ?? 0; renderDeckPreview();
+}
+function deckPreviewDetail(command) {
+  const detail = $('#deck-key-detail'); detail.textContent = '';
+  detail.append(deckIcon(deckArt(command)), el('strong', '', command.label.replace(/\s+/g, ' ')), el('kbd', '', QWDeckArt.prettyKey(command.key)));
+  const timing = deckTiming(command);
+  if (timing) detail.append(el('small', 'deck-command-timing', timing));
 }
 function renderDeckPreview() {
   const chosen = deckSelected(), columns = $('#deck-model').value === 'xl' ? 8 : 5, capacity = columns * (columns === 8 ? 4 : 3);
@@ -37735,22 +37771,38 @@ function renderDeckPreview() {
   $('#deck-download').disabled = !chosen.length;
   $('#deck-open').disabled = !chosen.length;
   const preview = $('#deck-preview'); preview.textContent = ''; preview.style.setProperty('--deck-columns', columns);
-  if (deckPreviewGroup && !groups.includes(deckPreviewGroup)) { deckPreviewGroup = null; deckPreviewOffset = 0; }
-  const items = deckPreviewGroup ? chosen.filter(c => c.group === deckPreviewGroup).map(c => ({ text: c.label, key: [c.key, deckTiming(c)].filter(Boolean).join(' · ') })) : groups.map(group => ({ text: group, group }));
+  if (deckPreviewGroup && !groups.includes(deckPreviewGroup)) { deckPreviewGroup = null; deckPreviewOffset = 0; deckPreviewTrail = []; }
+  const items = deckPreviewGroup ? chosen.filter(c => c.group === deckPreviewGroup).map(command => ({ command, text: command.label })) : groups.map(group => ({ text: group, group }));
   if (deckPreviewOffset >= items.length) deckPreviewOffset = 0;
+  $('#deck-preview-location').textContent = deckPreviewGroup || 'Star Citizen';
+  $('#deck-preview-page').textContent = tx('Page {page}', { page: deckPreviewTrail.filter(step => step.group === deckPreviewGroup).length + 1 });
+  $('#deck-preview-home').disabled = !deckPreviewGroup && !deckPreviewOffset;
+  const detail = $('#deck-key-detail'); detail.textContent = tx('Select a key to read its full label and binding.');
   const back = deckPreviewGroup !== null || deckPreviewOffset > 0;
   const room = capacity - (back ? 1 : 0), more = items.length - deckPreviewOffset > room;
   const count = room - (more ? 1 : 0), cells = [];
-  if (back) cells.push({ text: tx('Back'), click: () => { deckPreviewGroup = null; deckPreviewOffset = 0; renderDeckPreview(); } });
-  for (const item of items.slice(deckPreviewOffset, deckPreviewOffset + count)) cells.push({ text: item.text, key: item.key, click: item.group ? () => { deckPreviewGroup = item.group; deckPreviewOffset = 0; renderDeckPreview(); } : null });
-  if (more) { while (cells.length < capacity - 1) cells.push({ text: '' }); cells.push({ text: tx('More'), click: () => { deckPreviewOffset += count; renderDeckPreview(); } }); }
+  if (back) cells.push({ text: tx('Back'), art: { icon: 'back', color: '#a6bad0', label: tx('Back') }, click: deckPreviewBack });
+  for (const item of items.slice(deckPreviewOffset, deckPreviewOffset + count)) {
+    cells.push({ text: item.text, command: item.command, art: deckArt(item.command || item, !item.command),
+      click: item.command ? () => deckPreviewDetail(item.command) : () => deckPreviewGo(item.group, 0) });
+  }
+  if (more) { while (cells.length < capacity - 1) cells.push(null); cells.push({ text: tx('More'), art: { icon: 'next', color: '#a6bad0', label: tx('More') }, click: () => deckPreviewGo(deckPreviewGroup, deckPreviewOffset + count) }); }
   for (let i = 0; i < capacity; i++) {
-    const cell = cells[i] || { text: '' }, key = el(cell.click ? 'button' : 'div', 'deck-key' + (cell.click ? ' deck-key-folder' : ''), cell.text);
-    if (cell.key) key.title = cell.key;
-    if (cell.click) { key.type = 'button'; key.addEventListener('click', cell.click); }
+    const cell = cells[i], key = el(cell ? 'button' : 'div', cell ? 'deck-key' : 'deck-key deck-key-empty');
+    if (cell) {
+      key.type = 'button';
+      key.title = cell.command ? cell.text.replace(/\s+/g, ' ') + ' · ' + QWDeckArt.prettyKey(cell.command.key) + (deckTiming(cell.command) ? ' · ' + deckTiming(cell.command) : '') : cell.text;
+      key.setAttribute('aria-label', key.title);
+      const picture = document.createElement('img'); picture.alt = ''; picture.setAttribute('aria-hidden', 'true'); picture.draggable = false;
+      picture.src = QWDeckArt.svgDataUrl(cell.command ? QWDeckArt.renderKey(cell.art) : QWDeckArt.renderFolder(cell.art));
+      key.append(picture);
+      key.addEventListener('click', cell.click);
+      if (cell.command) key.addEventListener('focus', () => deckPreviewDetail(cell.command));
+    } else key.setAttribute('aria-hidden', 'true');
     preview.append(key);
   }
 }
+$('#deck-preview-home')?.addEventListener('click', () => { deckPreviewGroup = null; deckPreviewOffset = 0; deckPreviewTrail = []; renderDeckPreview(); });
 $('#settings-streamdeck')?.addEventListener('click', () => showView('streamdeck'));
 // Back lands on the Stream Deck group, open, rather than the top of Settings.
 $('#deck-back')?.addEventListener('click', () => {
@@ -37760,7 +37812,11 @@ $('#deck-back')?.addEventListener('click', () => {
 });
 $('#deck-search')?.addEventListener('input', renderStreamDeck);
 $('#deck-scope')?.addEventListener('change', renderStreamDeck);
-$('#deck-model')?.addEventListener('change', renderDeckPreview);
+$('#deck-model')?.addEventListener('change', () => {
+  deckPreviewOffset = 0;
+  deckPreviewTrail = deckPreviewGroup ? [{ group: null, offset: 0 }] : [];
+  renderDeckPreview();
+});
 $('#deck-source')?.addEventListener('change', loadStreamDeck);
 $('#deck-refresh')?.addEventListener('click', loadStreamDeck);
 $('#deck-select')?.addEventListener('click', () => { for (const c of deckShown()) if (!c.problem) deckSelection.add(c.id); renderStreamDeck(); });

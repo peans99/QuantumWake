@@ -1,6 +1,15 @@
 namespace Quantumwake.WebTests;
 public class StreamDeckPageTests
 {
+    [Theory]
+    [InlineData("f5+lalt", "Alt + F5")]
+    [InlineData("rctrl+np_8", "R Ctrl + Num 8")]
+    [InlineData("lalt+mwheel_up", "Alt + Wheel ↑")]
+    public void Key_hints_put_modifiers_first_and_distinguish_right_hand_and_mouse_inputs(string binding, string expected)
+    {
+        var page = new Page();
+        Assert.Equal(expected, page.Text("QWDeckArt.prettyKey(" + System.Text.Json.JsonSerializer.Serialize(binding) + ")"));
+    }
     [Fact] public void Page_explains_missing_profiles_and_refuses_empty_exports()
     {
         var page = new Page();
@@ -36,13 +45,72 @@ public class StreamDeckPageTests
             + "{\"id\":\"gear\",\"group\":\"Ship\",\"label\":\"Gear\",\"key\":\"n\",\"activation\":\"\"}]}");
         page.Do("__dom.node('#deck-scope').value = 'all'; await loadStreamDeck();");
         var list = page.NodeText("#deck-commands");
-        Assert.Contains("backspace · Hold 0.5 s before it fires", list);
-        Assert.Contains("h · Tap, or hold 0.25 s for its hold action", list);
-        Assert.Contains("lshift · Hold the button", list);
-        Assert.DoesNotContain("n ·", list);
+        Assert.Contains("Bksp", list);
+        Assert.Contains("Hold 0.5 s before it fires", list);
+        Assert.Contains("Tap, or hold 0.25 s for its hold action", list);
+        Assert.Contains("Shift", list);
+        Assert.Contains("Hold the button", list);
 
         var french = new Page("fr");
         Assert.Contains("Maintenez", french.Text("deckTiming({holdFor:0.5})"));
+    }
+
+    [Theory]
+    [InlineData("15", 15)]
+    [InlineData("xl", 32)]
+    public void Preview_keys_use_the_plugin_art_and_expose_the_full_label_and_binding(string model, int count)
+    {
+        var page = new Page();
+        page.Do($$$"""
+            deckCommands = [{id:'gear',group:'Flight',label:'Landing\nGear',key:'rctrl+n',appearance:{icon:'gear',color:'#77d8f0'}}];
+            deckSelection = new Set(['gear']); deckPreviewGroup = 'Flight';
+            __dom.node('#deck-model').value = '{{{model}}}'; renderDeckPreview();
+            """);
+
+        Assert.Equal(count.ToString(), page.Text("String(__dom.node('#deck-preview').children.length)"));
+        Assert.Equal("Landing Gear · R Ctrl + N", page.Text("__dom.node('#deck-preview').children[1].getAttribute('aria-label')"));
+        Assert.True(page.Truth("__dom.node('#deck-preview').children[1].children[0].src === QWDeckArt.svgDataUrl(QWDeckArt.renderKey(deckArt(deckCommands[0])))"));
+        page.Do("__dom.node('#deck-preview').children[1].click();");
+        Assert.Contains("Landing Gear", page.NodeText("#deck-key-detail"));
+        Assert.Contains("R Ctrl + N", page.NodeText("#deck-key-detail"));
+    }
+
+    [Fact]
+    public void More_and_back_return_to_the_previous_page_of_the_same_folder()
+    {
+        var page = new Page();
+        page.Do("""
+            deckCommands = Array.from({length:30}, (_,i) => ({id:'action'+i,group:'Flight',label:'Action '+i,key:'n'}));
+            deckSelection = new Set(deckCommands.map(c => c.id));
+            __dom.node('#deck-model').value = '15'; deckPreviewGroup = 'Flight'; renderDeckPreview();
+            __dom.node('#deck-preview').children[14].click();
+            """);
+        Assert.Equal("13", page.Text("String(deckPreviewOffset)"));
+        page.Do("__dom.node('#deck-preview').children[0].click();");
+        Assert.Equal("Flight", page.Text("deckPreviewGroup"));
+        Assert.Equal("0", page.Text("String(deckPreviewOffset)"));
+    }
+
+    [Fact]
+    public void Key_art_escapes_labels_and_preserves_the_original_text_for_long_labels()
+    {
+        var page = new Page();
+        var art = page.Text("QWDeckArt.renderKey({label:'<Shield> & Supercalifragilisticexpialidocious',keyText:'R Ctrl + R Alt + Num 8',icon:'shield',color:'red\" onload=\"bad'})");
+        var xml = System.Xml.Linq.XDocument.Parse(art);
+        System.Xml.Linq.XNamespace svg = "http://www.w3.org/2000/svg";
+        Assert.Contains("<Shield> & Supercalifragilisticexpialidocious", xml.Root!.Element(svg + "title")!.Value);
+        Assert.DoesNotContain("onload=", art);
+        Assert.DoesNotContain("<Shield>", art);
+        Assert.All(xml.Descendants(svg + "text"), text => Assert.NotEmpty(text.Value));
+    }
+
+    [Fact]
+    public void Short_words_shrink_to_fit_before_being_broken_into_fragments()
+    {
+        var page = new Page();
+        var xml = System.Xml.Linq.XDocument.Parse(page.Text("QWDeckArt.renderKey({label:'Decouple',keyText:'C',icon:'flight'})"));
+        System.Xml.Linq.XNamespace svg = "http://www.w3.org/2000/svg";
+        Assert.Equal(new[] { "Decouple", "C" }, xml.Descendants(svg + "text").Select(text => text.Value));
     }
     [Fact] public void Stream_deck_has_its_own_settings_group_and_back_returns_to_it()
     {

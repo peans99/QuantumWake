@@ -51,6 +51,7 @@ public sealed class Page
         }
 
         Run(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "i18n.js")), "i18n.js");
+        Run(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "key-art.js")), "key-art.js");
         Run(WithoutAutoStart(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "app.js"))), "app.js");
     }
 

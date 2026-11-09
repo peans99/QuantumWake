@@ -1,0 +1,39 @@
+{
+  "fallback": {"icon":"command","color":"#a6bad0"},
+  "groups": [
+    {"icon":"mining","color":"#f4cd65","match":["mining"]},
+    {"icon":"salvage","color":"#71d5b5","match":["salvage"]},
+    {"icon":"combat","color":"#ffa08b","match":["combat","weapon","target","missile","countermeasure"]},
+    {"icon":"power","color":"#e6bcff","match":["power","shield"]},
+    {"icon":"ground","color":"#c4d98b","match":["ground","vehicle","on foot"]},
+    {"icon":"utilities","color":"#b2c5e5","match":["ship & utilities","utility","utilities","interaction","social","camera"]},
+    {"icon":"extended","color":"#d4b2f5","match":["extended"]},
+    {"icon":"flight","color":"#77d8f0","match":["flight","spaceship","ship","navigation","quantum"]}
+  ],
+  "actions": [
+    {"icon":"warning","color":"#ffa08b","match":["self_destruct","self destruct","eject"]},
+    {"icon":"gear","match":["landing_system","landing gear","/gear"]},
+    {"icon":"flight","match":["flight_ready","flightready","master_mode","decouple","vtol","autoland","transform"]},
+    {"icon":"engine","match":["pip_eng","_engine_","_engines","thruster"]},
+    {"icon":"navigation","match":["starmap","star map"]},
+    {"icon":"radio","match":["atc","request landing","landing request"]},
+    {"icon":"shield","match":["shield","pip_shd"]},
+    {"icon":"countermeasures","match":["countermeasure","decoy","noise","flare","chaff"]},
+    {"icon":"missile","match":["missile","bomb"]},
+    {"icon":"target","match":["target","pin_","_pin","pinned","hostile","gimbal"]},
+    {"icon":"weapons","match":["weapon","fire mode","firemode","reload","pip_wpn"]},
+    {"icon":"mining","match":["mining"]},
+    {"icon":"salvage","match":["salvage","scrape","tractor"]},
+    {"icon":"quantum","match":["quantum","qdrive"]},
+    {"icon":"scan","match":["scan","radar","v_ping","_ping"," ping"]},
+    {"icon":"lights","match":["v_lights","_lights","headlight","headlamp"," light","night_vision"]},
+    {"icon":"door","match":["door","canopy","ramp"]},
+    {"icon":"lock","match":["lock","unlock"]},
+    {"icon":"seat","match":["seat","pl_exit","exit vehicle"]},
+    {"icon":"camera","match":["camera","view"]},
+    {"icon":"inventory","match":["inventory","mobiglas","stow","holster","cargo","jettison"]},
+    {"icon":"brake","match":["brake"]},
+    {"icon":"cruise","match":["cruise","speed","throttle","boost","afterburner","accel_range"]},
+    {"icon":"power","match":["power","engine","thruster","flightready","flight_ready"]}
+  ]
+}

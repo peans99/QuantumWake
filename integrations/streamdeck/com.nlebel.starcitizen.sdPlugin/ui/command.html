@@ -106,6 +106,8 @@
   $("command").addEventListener("change", () => {
     // Switching command resets per-command overrides so the new defaults apply.
     settings.keyOverride = ""; settings.holdMs = ""; settings.label = "";
+    // Generated keys carry a symbol and colour; a new command chooses its own.
+    delete settings.icon; delete settings.color;
     $("keyOverride").value = ""; $("holdMs").value = ""; $("label").value = "";
     save();
   });

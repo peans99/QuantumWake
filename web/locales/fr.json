@@ -6455,5 +6455,8 @@
   "Extended": "Étendu",
   "This command could not be matched to a supported game action.": "Cette commande ne correspond à aucune action de jeu prise en charge.",
   "Open in Stream Deck sends the profile to the app on this PC. On first use it opens the plugin installer; finish installing, then click again to import your profile.": "Ouvrir dans Stream Deck envoie le profil à l’application sur ce PC. La première utilisation ouvre l’installation du plugin ; terminez-la, puis cliquez à nouveau pour importer le profil.",
-  "Plugin installer opened in Stream Deck. Finish installing it, then click Open in Stream Deck again to import your profile.": "Installation du plugin ouverte dans Stream Deck. Terminez-la, puis cliquez à nouveau sur Ouvrir dans Stream Deck pour importer votre profil."
+  "Plugin installer opened in Stream Deck. Finish installing it, then click Open in Stream Deck again to import your profile.": "Installation du plugin ouverte dans Stream Deck. Terminez-la, puis cliquez à nouveau sur Ouvrir dans Stream Deck pour importer votre profil.",
+  "Profile home": "Accueil du profil",
+  "Page {page}": "Page {page}",
+  "Select a key to read its full label and binding.": "Sélectionnez une touche pour lire son libellé complet et son raccourci."
 }

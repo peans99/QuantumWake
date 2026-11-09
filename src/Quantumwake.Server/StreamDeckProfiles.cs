@@ -13,7 +13,11 @@ namespace Quantumwake.Server;
 /// <param name="HoldFor">Seconds the game wants the key held before the action fires; 0 when a touch does it.</param>
 /// <param name="TapOrHold">A tap fires the action and holding for <paramref name="HoldFor"/> fires its hold version.</param>
 public sealed record DeckCommand(string Id, string Group, string Label, string Key, string Activation, string? Problem, bool Preset = false, int Hold = 0, bool? Tap = null,
-    double HoldFor = 0, bool TapOrHold = false);
+    double HoldFor = 0, bool TapOrHold = false)
+{
+    public DeckAppearance Appearance => StreamDeckProfiles.Appearance(Id, Group, Label);
+}
+public sealed record DeckAppearance(string Icon, string Color);
 public sealed record DeckExport(string Model, string[] Actions, bool Defaults = false);
 
 public static class StreamDeckProfiles
@@ -23,7 +27,37 @@ public static class StreamDeckProfiles
     /// Stream Deck installs the bundled copy when an older one is in place.
     /// A test holds it to the packed manifest.
     /// </summary>
-    public const string PluginVersion = "1.1.1.0";
+    public const string PluginVersion = "1.1.2.0";
+
+    private sealed record AppearanceRule(string Icon, string? Color, string[] Match);
+    private sealed record DeckPalette(DeckAppearance Fallback, AppearanceRule[] Groups, AppearanceRule[] Actions);
+    private static readonly DeckPalette Palette = JsonSerializer.Deserialize<DeckPalette>(Resource("appearance"),
+        new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+
+    private static bool Matches(string text, AppearanceRule rule) => rule.Match.Any(word => text.Contains(word, StringComparison.OrdinalIgnoreCase));
+    public static DeckAppearance GroupAppearance(string group)
+    {
+        var rule = Palette.Groups.FirstOrDefault(rule => Matches(group, rule));
+        return rule is null ? Palette.Fallback : new DeckAppearance(rule.Icon, rule.Color!);
+    }
+    public static DeckAppearance Appearance(string id, string group, string label)
+    {
+        var baseLook = GroupAppearance(group);
+        // A preset id contains its category. Matching that would give Flight
+        // commands a lamp ("light" inside "flight"), and every Mining key a pick.
+        var text = id.Split('/')[^1] + " " + label.Replace('\n', ' ');
+        var action = Palette.Actions.FirstOrDefault(rule => Matches(text, rule));
+        return action is null ? baseLook : new DeckAppearance(action.Icon, action.Color ?? baseLook.Color);
+    }
+
+    public static string FolderTitle(string text)
+    {
+        var words = text.Replace("Vehicles - ", "").Replace("Flight - ", "").Split(' ');
+        var lines = new List<string>(); var line = "";
+        foreach (var word in words) { if (line.Length > 0 && line.Length + word.Length + 1 > 12) { lines.Add(line); line = word; } else line += (line.Length > 0 ? " " : "") + word; }
+        if (line.Length > 0) lines.Add(line);
+        return string.Join('\n', lines.Take(3));
+    }
 
     // Keep this list aligned with the scan-code sender in integrations/streamdeck/bin/keys.js.
     private static readonly HashSet<string> Keys = new(("escape minus equals backspace tab lbracket rbracket enter lctrl semicolon apostrophe grave lshift backslash comma period slash rshift np_multiply lalt space capslock numlock scrolllock np_subtract np_add np_period np_enter rctrl np_divide ralt home up pgup left right end down pgdn insert delete mouse1 mouse2 mouse3 mwheel_up mwheel_down " + string.Join(' ', "abcdefghijklmnopqrstuvwxyz0123456789".ToCharArray()) + " " + string.Join(' ', Enumerable.Range(1, 24).Select(n => $"f{n}")) + " " + string.Join(' ', Enumerable.Range(0, 10).Select(n => $"np_{n}"))).Split(' '), StringComparer.OrdinalIgnoreCase);
@@ -102,13 +136,15 @@ public static class StreamDeckProfiles
 
     public static void Map(WebApplication app, GameInstall? install)
     {
+        app.MapGet("/api/streamdeck/art.js", () => Results.Bytes(Resource("art"), "text/javascript; charset=utf-8"));
         app.MapGet("/api/streamdeck", (LogLibrary lib, bool? defaults) =>
         {
             try
             {
                 var profile = defaults == true ? null : Profile(install);
+                var commands = Commands(lib.GameCommodities.Controls.Catalogue, profile);
                 return Results.Ok(new { ready = !lib.GameCommodities.Controls.Catalogue.IsEmpty, profileFound = profile is not null,
-                    commands = Commands(lib.GameCommodities.Controls.Catalogue, profile) });
+                    commands, groups = commands.Select(c => c.Group).Distinct().Select(name => new { name, title = FolderTitle(name), appearance = GroupAppearance(name) }) });
             }
             catch (Exception e) when (e is UnauthorizedAccessException or IOException or InvalidDataException or System.Xml.XmlException)
             { return Results.BadRequest(new { message = "The current keybindings could not be read. Try again after the game finishes saving them." }); }
@@ -186,16 +222,8 @@ public static class StreamDeckProfiles
             void Json(string path, object value) => Bytes(path, JsonSerializer.SerializeToUtf8Bytes(value));
             object Command(DeckCommand c) => new { ActionID = Id(), LinkedTitle = true, Name = "SC Command",
                 Plugin = new { Name = "Star Citizen Commands", UUID = "com.nlebel.starcitizen", Version = PluginVersion },
-                Settings = new { command = "flight_ready", keyOverride = c.Key, label = c.Label, holdMs = c.Hold, tap = c.Tap ?? (c.Activation == "tap"), color = c.Id.Contains("mining") ? "#eab308" : c.Id.Contains("salvage") ? "#14b8a6" : c.Id.Contains("target") ? "#f97316" : c.Id.Contains("weapon") ? "#ef4444" : "#22d3ee" },
+                Settings = new { command = "flight_ready", keyOverride = c.Key, label = c.Label, holdMs = c.Hold, tap = c.Tap ?? (c.Activation == "tap"), color = c.Appearance.Color, icon = c.Appearance.Icon },
                 State = 0, States = new[] { new { ShowTitle = false } }, UUID = "com.nlebel.starcitizen.command" };
-            string FolderTitle(string text)
-            {
-                var words = text.Replace("Vehicles - ", "").Replace("Flight - ", "").Split(' ');
-                var lines = new List<string>(); var line = "";
-                foreach (var word in words) { if (line.Length > 0 && line.Length + word.Length > 12) { lines.Add(line); line = word; } else line += (line.Length > 0 ? " " : "") + word; }
-                if (line.Length > 0) lines.Add(line);
-                return string.Join('\n', lines.Take(3));
-            }
             // The art carries no words: the first folder.png had "Ship & Utilities"
             // drawn into it, and every folder's own title landed on top of that,
             // two labels over each other on every folder key (1.2.10). The emblem
@@ -203,10 +231,11 @@ public static class StreamDeckProfiles
             object Folder(string child, string title, bool back = false, bool more = false)
             {
                 var shown = FolderTitle(title);
+                var appearance = GroupAppearance(title);
                 return new { ActionID = Id(), LinkedTitle = true, Name = title,
                     Settings = back ? (object)new { } : new { ProfileUUID = child }, State = 0,
-                    States = new[] { new { Image = back ? "Images/back.png" : more ? "Images/next.png" : "Images/folder.png", ShowTitle = true, Title = shown,
-                        TitleColor = "#ffffff", FontSize = shown.Count(ch => ch == '\n') >= 2 ? 10 : 12, TitleAlignment = "bottom" } },
+                    States = new[] { new { Image = back ? "Images/back.png" : more ? "Images/next.png" : $"Images/{appearance.Icon}.png", ShowTitle = true, Title = shown,
+                        TitleColor = "#ffffff", FontSize = shown.Count(ch => ch == '\n') >= 2 ? 10 : shown.Contains('\n') ? 12 : 14, FontStyle = "Bold", TitleAlignment = "bottom" } },
                     UUID = back ? "com.elgato.streamdeck.profile.backtoparent" : "com.elgato.streamdeck.profile.openchild" };
             }
             void Page(string id, string title, List<object> items, bool back)
@@ -221,6 +250,8 @@ public static class StreamDeckProfiles
                 Json($"Profiles/{id}/manifest.json", new { Controllers = new[] { new { Actions = actions, Type = "Keypad" } }, Icon = "", Name = title });
                 foreach (var image in new[] { "folder", "back", "next" })
                     Bytes($"Profiles/{id}/Images/{image}.png", Resource(image));
+                foreach (var icon in Palette.Groups.Select(g => g.Icon).Append(Palette.Fallback.Icon).Distinct())
+                    Bytes($"Profiles/{id}/Images/{icon}.png", Resource("icon." + icon));
             }
             var home = Id(); var template = Id(); var folders = new List<object>();
             foreach (var group in commands.GroupBy(c => c.Group)) { var page = Id(); Page(page, group.Key, group.Select(Command).ToList(), true); folders.Add(Folder(page, group.Key)); }

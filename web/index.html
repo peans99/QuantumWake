@@ -4236,11 +4236,11 @@
     <div class="deck-workspace"><div class="option-block">
       <h3>Choose categories</h3><p class="muted">Your existing Star Citizen profile categories are selected by default. Extended adds optional targeting, flight and utility commands.</p><div id="deck-categories" class="deck-categories"></div><h3>Choose commands</h3><div class="controls"><label>Command list <select id="deck-scope"><option value="presets">My Stream Deck categories</option><option value="all">All game commands</option></select></label><input type="search" id="deck-search" placeholder="Find a command or category" aria-label="Find a command or category"><button class="ghost tiny" id="deck-select">Select shown</button><button class="ghost tiny" id="deck-clear">Clear selection</button></div>
       <div id="deck-commands" class="deck-commands"></div>
-    </div><div class="option-block deck-summary"><h3>Profile preview</h3><p id="deck-count" class="muted"></p><div id="deck-preview" class="deck-preview"></div>
+    </div><div class="option-block deck-summary"><div class="deck-preview-head"><h3>Profile preview</h3><button class="ghost tiny" id="deck-preview-home">Profile home</button></div><p id="deck-count" class="muted"></p><div class="deck-preview-path"><strong id="deck-preview-location">Star Citizen</strong><span class="muted" id="deck-preview-page"></span></div><div class="deck-preview-scroll"><div id="deck-preview" class="deck-preview"></div></div><div id="deck-key-detail" class="deck-key-detail" aria-live="polite"></div>
       <p class="muted">Commands are grouped into folders. Back stays at the top left; More opens additional commands. Hold actions follow your finger: keep the button pressed.</p>
       <div class="controls"><button id="deck-open" disabled>Open in Stream Deck</button><button class="ghost" id="deck-download" disabled>Download profile</button></div><p class="muted">Open in Stream Deck sends the profile to the app on this PC. On first use it opens the plugin installer; finish installing, then click again to import your profile.</p>
-      <h3>Install in Stream Deck</h3><ol><li><a href="/api/streamdeck/plugin" download>Download Star Citizen Commands plugin</a> and open it once.</li><li>Open the downloaded profile and select the matching device in Stream Deck.</li><li>Focus Star Citizen to use the buttons. Start with Landing Gear to check your setup.</li></ol>
-      <p class="muted">The plugin requires Stream Deck 7.1 or later on Windows x64. It sends physical keyboard positions and mouse input. Star Citizen and Stream Deck need the same privilege level.</p>
+      <details class="deck-install"><summary>Install in Stream Deck</summary><ol><li><a href="/api/streamdeck/plugin" download>Download Star Citizen Commands plugin</a> and open it once.</li><li>Open the downloaded profile and select the matching device in Stream Deck.</li><li>Focus Star Citizen to use the buttons. Start with Landing Gear to check your setup.</li></ol>
+      <p class="muted">The plugin requires Stream Deck 7.1 or later on Windows x64. It sends physical keyboard positions and mouse input. Star Citizen and Stream Deck need the same privilege level.</p></details>
     </div></div>
   </section>
 
@@ -5247,6 +5247,7 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
+<script src="/api/streamdeck/art.js"></script>
 <script src="app.js?v=0.21.9"></script>
 </body>
 </html>
