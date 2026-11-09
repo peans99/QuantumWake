@@ -143,6 +143,11 @@ pilot when asked.
   first flight on a new install, on the next start on an existing one - and
   "Not now" is an answer that is kept.
 
+Voice commands (1.2.0) are the exception to "no input": a separate switch,
+off until turned on, that presses one game key per spoken command. That is
+not this feature, and turning one on never turns on the other; their own
+reading of the macro clause is in [voice-commands.md](voice-commands.md).
+
 ### Why GDI, and what that settles for the Store
 
 Windows.Graphics.Capture was the obvious API and the wrong one here. With a

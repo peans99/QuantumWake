@@ -36,7 +36,7 @@ const PAGE_GLYPHS = Object.freeze({
   spending: '¤', ledger: '▥', commodities: '▰', market: '◫',
   ships: '◁', components: '⊛', parts: '⊞', mining: '⬡', crafting: '⌬', encounters: '⊗', missions: '❖', models: '⬗',
   fleet: '◍', hangar: '⌂', loadout: '⊠', stash: '▣', loot: '✪', garage: '⌁', armoury: '✛',
-  settings: '✥', overlay: '◱', controls: '⊹', labels: '▦', imports: '↥', data: '⊟', about: 'ⓘ',
+  settings: '✥', overlay: '◱', controls: '⊹', streamdeck: '⊡', labels: '▦', imports: '↥', data: '⊟', about: 'ⓘ',
   // Reached from another page rather than the menu, but titled like the rest.
   commodity: '◩', share: '⇱', help: '◔',
 });
@@ -463,6 +463,7 @@ function showView(name) {
   if (name === 'settings') {
     renderSettings().catch(() => {});
     loadGameData().catch(() => {});
+    loadVoice().catch(() => {});
   }
 
   // A log is a live reference, not an Overlay setting. Read it when the pilot
@@ -476,6 +477,7 @@ function showView(name) {
   // The keybinding profile is the game's file and changes under the app;
   // read on entry so the page is never a stale copy of it.
   if (name === 'controls') loadControls().catch(() => {});
+  if (name === 'streamdeck') loadStreamDeck();
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
   if (name === 'checklists') loadChecklists().catch(() => {});
   if (name === 'imports') loadImports().catch(() => {});
@@ -690,6 +692,8 @@ window.scOverlayGlance = (on) => {
   else url.searchParams.delete('glance');
   window.history.replaceState(null, '', url);
   if (glance) showView('now');
+  overlayStripHeight = 0;
+  renderOverlayStrip();
 };
 
 /* The native shell has no room for a permanent status line. Its commands still
@@ -1210,13 +1214,7 @@ function contractFocus(contracts) {
 }
 
 /** The one decision worth leading the hub with, before the configurable cards. */
-function renderNowFocus(state, briefing = pilotBriefing) {
-  const strip = $('#now-focus');
-  const title = $('#now-focus-title');
-  const detail = $('#now-focus-detail');
-  const open = $('#now-focus-open');
-  if (!strip || !title || !detail || !open) return;
-
+function nowFocus(state, briefing = pilotBriefing) {
   const differing = recentScreenDisagreement(state);
   const nextStop = (briefing?.stops || []).find(stop => !stop.done);
   let focus = null;
@@ -1228,7 +1226,18 @@ function renderNowFocus(state, briefing = pilotBriefing) {
   else if (nextStop) focus = { title: tx('Next stop'), detail: nextStop.place || briefing.tripTitle || tx('Tracked flight plan'), view: 'map', action: tx('Map'), urgency: 'ready', placeId: nextStop.placeId, place: nextStop.place };
   else if (state?.contracts?.length) focus = { ...contractFocus(state.contracts), urgency: 'ready' };
   else if (state?.location) focus = { title: tx('At location'), detail: state.location, view: 'map', action: tx('Map'), urgency: 'quiet', placeId: state.locationId, place: state.location };
+  return focus;
+}
 
+function renderNowFocus(state, briefing = pilotBriefing) {
+  renderOverlayStrip(state, briefing);
+  const strip = $('#now-focus');
+  const title = $('#now-focus-title');
+  const detail = $('#now-focus-detail');
+  const open = $('#now-focus-open');
+  if (!strip || !title || !detail || !open) return;
+
+  const focus = nowFocus(state, briefing);
   strip.hidden = !focus;
   if (!focus) return;
   strip.dataset.urgency = focus.urgency || 'quiet';
@@ -1242,6 +1251,83 @@ function renderNowFocus(state, briefing = pilotBriefing) {
     else showView(focus.view);
   };
 }
+
+/*
+ * The overlay's strip: the compact view (Ctrl+Alt+C) as two or three lines
+ * instead of the status card, which at 360 px was mostly source tags, labels
+ * and dashes (1.2.4). Where you are and in what; the next thing to do; and a
+ * third line only while something needs the eyes - a lock, a fracture under
+ * way, a tracked event - with cash on hand in its place otherwise. A line with
+ * nothing to say is left out, and the shell sizes the window to what is left.
+ */
+function overlayStripLines(state, briefing, live, event, cash) {
+  const closed = gameClosed(state);
+  const where = !state ? tx('Waiting for the game')
+    : closed ? tx('Game closed')
+      : state.travelling ? `${tx('In quantum')} → ${state.travellingTo || tx('Destination not identified')}`
+        : state.location || (state.inGame ? tx('Location unknown') : tx('In menus'));
+  const ship = !closed && state?.inGame && state.ship ? state.ship : '';
+
+  // Travelling and "At location" are line one already; the strip does not say them twice.
+  const focus = state && !closed ? nowFocus(state, briefing) : null;
+  const next = focus && focus.urgency !== 'live' && focus.urgency !== 'quiet' ? `${focus.title} · ${focus.detail}` : '';
+
+  let alert = null;
+  const target = live?.enabled ? live?.status?.combat?.target : null;
+  const fracture = live?.enabled ? live?.status?.fracture : null;
+  if (target) {
+    alert = { tone: target.stance === 'hostile' ? 'hostile' : 'target', text: `${targetTitle(target)} · ${targetDetail(target)}` };
+  } else if (fracture?.active) {
+    const fill = Math.round((fracture.fill || 0) * 100);
+    const said = fracture.state === 'in' ? tx('In the window')
+      : fracture.state === 'above' ? tx('Overcharge - back off') : tx('Charging');
+    alert = { tone: fracture.state === 'above' ? 'hostile' : 'fracture', text: `${tx('Fracture')} · ${said} · ${fill}%` };
+  } else if (event?.text) {
+    alert = { tone: 'event', text: event.text };
+  } else if (cash) {
+    alert = { tone: 'cash', text: Number(cash.movementsSince) ? tx('about {money}', { money: money(cash.estimate) }) : money(cash.balance) };
+  }
+  return { where, ship, next, alert };
+}
+
+let nowCashRead = null;
+let overlayStripHeight = 0;
+
+/** The tracked event as one line, or null when none is being followed. */
+function overlayStripEvent() {
+  const event = currentEvent();
+  if (!event || eventsData?.tracked !== event.id) return null;
+  const overall = event.tracks.find((t) => t.overall) || event.tracks[0];
+  return overall ? { text: `${event.title} · ${eventPoints(overall.points)} · ${eventNextText(overall)}` } : null;
+}
+
+function renderOverlayStrip(state = nowState, briefing = pilotBriefing) {
+  const strip = $('#overlay-strip');
+  if (!strip) return;
+  const lines = overlayStripLines(state, briefing, liveState, overlayStripEvent(), nowCashRead);
+  $('#strip-where').textContent = lines.where;
+  $('#strip-ship').textContent = lines.ship ? ` · ${lines.ship}` : '';
+  $('#strip-next').textContent = lines.next;
+  $('#strip-next-line').hidden = !lines.next;
+  $('#strip-alert').textContent = lines.alert?.text || '';
+  $('#strip-alert-line').hidden = !lines.alert;
+  $('#strip-alert-line').dataset.tone = lines.alert?.tone || '';
+  postOverlayStripHeight();
+}
+
+/* The shell sizes the window to the strip, so the page says how tall it is
+   whenever a line comes or goes. Posted from the render rather than watched:
+   an observer left connected keeps a headless page from ever settling. */
+function postOverlayStripHeight() {
+  const strip = $('#overlay-strip');
+  if (!strip || !document.body.classList.contains('glance')) return;
+  const height = Math.ceil(strip.getBoundingClientRect?.().height || 0);
+  if (!height || height === overlayStripHeight) return;
+  overlayStripHeight = height;
+  window.chrome?.webview?.postMessage?.({ kind: 'strip', height });
+}
+
+$('#overlay-strip')?.addEventListener('click', () => window.chrome?.webview?.postMessage?.({ kind: 'expand' }));
 
 /* The shared flight line is deliberately a summary, not a second copy of the
  * Now card. It keeps orientation while the pilot works in a deep table, and
@@ -1288,6 +1374,20 @@ function applyFlightAtmosphere(state) {
           : 'ship';
 }
 
+/* Which status fields have nothing to show, for the overlay to leave out.
+   The dashboard ignores the mark and keeps its dashes, which say "not read". */
+function markEmptyStatusFields(state) {
+  const empty = {
+    ship: !state?.ship,
+    handle: !state?.handle,
+    health: !(state?.deaths || state?.incapacitations),
+  };
+  for (const [field, none] of Object.entries(empty)) {
+    const node = document.querySelector?.(`[data-status-field="${field}"]`);
+    if (node) node.toggleAttribute?.('data-empty', none);
+  }
+}
+
 let newestLiveFeedKey = '';
 let liveFeedPrimed = false;
 
@@ -1329,6 +1429,7 @@ function renderNow(state) {
     : state.inGame ? (state.gameRules || tx('in game')) : tx('frontend / menus');
   $('#now-clock').textContent = nowClock(state);
   renderNowClosed(state);
+  markEmptyStatusFields(state);
   $('#now-deaths').textContent = state.deaths ?? 0;
   $('#now-incaps').textContent = state.incapacitations ?? 0;
 
@@ -1371,7 +1472,9 @@ function renderNow(state) {
     feed.append(el('li', 'empty', state.connected ? tx('Nothing yet this session.') : tx('Waiting for the game…')));
   } else {
     // The widget shows a short tail; the full feed belongs on the page.
-    const entries = isOverlay ? state.recentEvents.slice(0, 12) : state.recentEvents;
+    // Five in the widget: the feed is "what just happened", and twelve rows were
+    // most of its height (1.2.4).
+    const entries = isOverlay ? state.recentEvents.slice(0, 5) : state.recentEvents;
 
     for (const [index, entry] of entries.entries()) {
       const li = el('li');
@@ -1665,6 +1768,8 @@ async function loadEarnings() {
  * card in the overlay has no room to.
  */
 function renderNowCash(read) {
+  nowCashRead = read || null;
+  renderOverlayStrip();
   const line = $('#now-cash');
   const note = $('#now-cash-note');
   if (!line || !note) return;
@@ -15198,6 +15303,7 @@ $('#event-preferences')?.addEventListener('click', event => {
  * next tiers, and what finishing each contract in the journal would add.
  */
 function renderNowEvent() {
+  renderOverlayStrip();
   const card = $('#now-event-card');
   const status = $('#operations-event-status');
   const event = currentEvent();
@@ -36727,6 +36833,7 @@ function targetDetail(target) {
  * would be one more thing in the overlay that is never news.
  */
 function renderNowTarget() {
+  renderOverlayStrip();
   const card = $('#now-target-card');
   if (!card) return;
   const combat = liveState?.enabled ? liveState?.status?.combat : null;
@@ -36803,6 +36910,7 @@ function popTargetCard() {
  * charge window - a card that said "not cracking" all evening is not news.
  */
 function renderNowFracture() {
+  renderOverlayStrip();
   const card = $('#now-fracture-card');
   if (!card) return;
   const fracture = liveState?.enabled ? liveState?.status?.fracture : null;
@@ -37069,6 +37177,355 @@ $('#live-enabled')?.addEventListener('change', (event) => {
   });
 });
 
+/* ---------- Voice commands (1.2.0) ---------- */
+
+/**
+ * Settings → Voice & callouts → Voice commands: the copilot's switch, how it
+ * is woken, and every command with the key it would press on this install.
+ * Built here rather than in the markup so each sentence goes through tx() and
+ * the WebTests can drive it.
+ */
+let voiceState = null;
+let voiceDrawn = '';
+let voicePollTimer = null;
+let voiceKeyWaiting = false;
+let voiceParts = null;
+/** What the last "give them keys" did, shown under the list until the page is left. */
+let voiceSpareNote = '';
+
+/**
+ * Sends the proposed keys to the same endpoint the Controls page applies
+ * bindings through, so the profile is backed up first and a running game
+ * gets an import file instead of a rewritten profile under it.
+ */
+async function giveVoiceSpareKeys(button) {
+  const spare = voiceState?.spare || [];
+  if (!spare.length) return;
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/controls/bindings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'quantumwake-voice',
+        changes: spare.map((k) => ({ actionMap: k.actionMap, action: k.action, input: k.input })),
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    voiceSpareNote = !response.ok
+      ? (serverText(result.message) || result.title || tx('Could not apply ({status}).', { status: response.status }))
+      : result.how === 'live'
+        ? tx('Keys written; the profile as it was is kept under Controls → Backups. Star Citizen reads them at its next start.')
+        : tx('Written as {file}. In the game: Options → Keybindings → import "{name}", or at the console: {command}.', { file: result.mappings, name: result.name, command: result.command });
+  } catch (err) {
+    voiceSpareNote = tx('Could not apply: {problem}', { problem: err.message });
+  } finally {
+    button.disabled = false;
+    voiceDrawn = '';
+    await loadVoice().catch(() => {});
+  }
+}
+
+/** Puts a sentence on the state line until the next answer from the app replaces it. */
+function voiceSay(text) {
+  if (voiceParts?.line) voiceParts.line.textContent = text;
+}
+
+/**
+ * The game's name for a key the browser saw. event.code is the key's place
+ * on the board, not the letter printed on it, which is what the game binds
+ * and what the app presses - so on an AZERTY board the key printed A comes
+ * back as q, the game's name for that place.
+ */
+function voiceGameKey(code) {
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3).toLowerCase();
+  if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+  if (/^F([1-9]|1[0-2])$/.test(code)) return code.toLowerCase();
+  if (/^Numpad[0-9]$/.test(code)) return `np_${code.slice(6)}`;
+  return ({
+    NumpadAdd: 'np_add', NumpadSubtract: 'np_subtract', NumpadMultiply: 'np_multiply', NumpadDivide: 'np_divide',
+    NumpadDecimal: 'np_period', NumpadEnter: 'np_enter', AltLeft: 'lalt', AltRight: 'ralt', ControlLeft: 'lctrl',
+    ControlRight: 'rctrl', ShiftLeft: 'lshift', ShiftRight: 'rshift', Space: 'space', Tab: 'tab', Enter: 'enter',
+    Backspace: 'backspace', Insert: 'insert', Delete: 'delete', Home: 'home', End: 'end', PageUp: 'pgup', PageDown: 'pgdn',
+    ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', BracketLeft: 'lbracket',
+    BracketRight: 'rbracket', Minus: 'minus', Equal: 'equals', Comma: 'comma', Period: 'period', Slash: 'slash',
+    Semicolon: 'semicolon', Quote: 'apostrophe', Backquote: 'grave', Backslash: 'backslash', CapsLock: 'capslock',
+    ScrollLock: 'scrolllock',
+  })[code] ?? null;
+}
+
+async function loadVoice() {
+  try {
+    const response = await fetch('/api/voice');
+    if (!response.ok) throw new Error(`voice ${response.status}`);
+    voiceState = await response.json();
+  } catch {
+    voiceState = { failed: true };
+  }
+  renderVoiceCommands();
+  scheduleVoicePoll();
+}
+
+/** Asked again every two seconds while the page is open and the copilot on, so its state and what it heard keep up. */
+function scheduleVoicePoll() {
+  clearTimeout(voicePollTimer);
+  if (!voiceState?.enabled && !voiceState?.learning) return;
+  if (!$('#view-settings')?.classList?.contains('active')) return;
+  voicePollTimer = setTimeout(() => loadVoice().catch(() => {}), 2000);
+}
+
+async function postVoice(change) {
+  const response = await fetch('/api/voice', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(change),
+  });
+  if (!response.ok) throw new Error(`voice ${response.status}`);
+  voiceState = await response.json();
+  renderVoiceCommands();
+  scheduleVoicePoll();
+}
+
+/** The copilot's state in a sentence. */
+function voiceStateLine(s) {
+  if (!s) return tx('Asking the app whether it can listen…');
+  if (s.failed) return tx('The app did not answer about voice commands.');
+  if (!s.canPress) return tx('Only the Windows app listens for voice commands; this copy cannot press keys.');
+  if (!s.recogniser) return tx('Windows has no English speech recogniser on this PC, so nothing can listen. Adding English speech in Windows Settings → Time & language → Speech puts one there.');
+  if (!s.enabled) return tx('Off. Turn it on to say a command instead of finding its key.');
+  if (s.trouble) return tx('Not listening: {why}.', { why: s.trouble });
+  if (s.state === 'confirming') return tx('Waiting for “confirm”.');
+  if (s.state === 'listening') return tx('Listening while push-to-talk is held.');
+  if (s.state === 'awake') return tx('Awake: listening for commands until “copilot off”.');
+  if (s.trigger === 'button') return tx('Ready: hold push-to-talk and say a command.');
+  if (s.trigger === 'both') return tx('Asleep: say “Quantum Wake copilot on”, or hold push-to-talk.');
+  return tx('Asleep: say “Quantum Wake copilot on” to wake it.');
+}
+
+function voicePushToTalkLine(s) {
+  if (voiceKeyWaiting) return tx('Press the key now…');
+  if (s.learning) return tx('Press the stick button now…');
+  if (s.key) return tx('Push-to-talk: {key} on the keyboard.', { key: s.keyShown || s.key });
+  if (s.button) {
+    return s.buttonDevicePresent
+      ? tx('Push-to-talk: button {button} on {stick}.', { button: s.button, stick: s.buttonDeviceName })
+      : tx('Push-to-talk: button {button} on a stick that is not plugged in.', { button: s.button });
+  }
+  return tx('No push-to-talk chosen yet.');
+}
+
+function renderVoiceCommands() {
+  const root = $('#voice-commands');
+  if (!root) return;
+  const s = voiceState;
+
+  // Kept rather than looked up again: the three parts are made once, and the
+  // controls are rebuilt inside them only when what they show changed.
+  if (voiceParts?.root !== root) {
+    voiceParts = { root, line: el('p', 'muted voice-commands-state'), controls: el('div', 'voice-commands-controls'), heard: el('ol', 'voice-heard') };
+    root.replaceChildren(voiceParts.line, voiceParts.controls, voiceParts.heard);
+    voiceDrawn = '';
+  }
+  const { line, controls, heard } = voiceParts;
+  line.textContent = voiceStateLine(s);
+
+  const usable = Boolean(s && !s.failed && s.canPress && s.recogniser);
+  controls.hidden = !usable;
+  heard.hidden = !usable || !s.enabled || !(s.heard || []).length;
+  if (!usable) return;
+
+  heard.replaceChildren(...(s.heard || []).slice(0, 10).map((h) => {
+    const item = el('li', h.command ? 'voice-heard-command' : '');
+    const time = new Date(h.at);
+    item.append(
+      el('span', 'muted', Number.isNaN(time.getTime()) ? '' : time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })),
+      ' ',
+      el('strong', '', `“${h.text}”`),
+      ' ',
+      el('span', 'muted', `${Math.round((h.confidence || 0) * 100)}%`),
+      ' ',
+      el('span', '', h.outcome),
+    );
+    return item;
+  }));
+
+  const drawn = JSON.stringify([s.enabled, s.trigger, s.key, s.button, s.buttonDevicePresent, s.learning, voiceKeyWaiting,
+    s.replies, (s.commands || []).map((c) => [c.id, c.on, c.key, c.canPress, c.why]), s.spare, s.gameRunning, voiceSpareNote]);
+  if (drawn === voiceDrawn) return;
+  voiceDrawn = drawn;
+
+  const toggle = (data, checked, text, note) => {
+    const label = el('label', 'toggle');
+    const input = el('input');
+    input.type = 'checkbox';
+    input.dataset.voice = data;
+    input.checked = Boolean(checked);
+    const span = el('span', '', text);
+    if (note) {
+      span.append(' ');
+      span.append(el('em', 'muted', note));
+    }
+    label.append(input, span);
+    return label;
+  };
+
+  const parts = [toggle('enabled', s.enabled, tx('Listen for voice commands'),
+    tx('The microphone is heard by the speech recogniser Windows carries, on this PC: nothing is recorded or sent. A command presses the game’s own key for it, only while Star Citizen is the window in front.'))];
+
+  const trigger = el('div', 'voice-trigger');
+  for (const [value, text] of [['phrase', tx('Wake phrase')], ['button', tx('Push-to-talk')], ['both', tx('Either')]]) {
+    const label = el('label', 'voice-trigger-option');
+    const input = el('input');
+    input.type = 'radio';
+    input.name = 'voice-trigger';
+    input.value = value;
+    input.dataset.voiceTrigger = value;
+    input.checked = s.trigger === value;
+    label.append(input, ' ', text);
+    trigger.append(label);
+  }
+  parts.push(trigger);
+  parts.push(el('p', 'muted', s.trigger === 'button'
+    ? tx('Commands count only while the button or key is held, and a moment after letting go.')
+    : s.trigger === 'both'
+      ? tx('Say “Quantum Wake copilot on” and it acts on commands until “copilot off”, or hold push-to-talk for one command while it is asleep.')
+      : tx('Say “Quantum Wake copilot on” and it acts on commands until “copilot off”.')));
+
+  if (s.trigger !== 'phrase') {
+    const ptt = el('div', 'voice-ptt');
+    const act = (name, text) => {
+      const button = el('button', 'ghost tiny', text);
+      button.type = 'button';
+      button.dataset.voiceAct = name;
+      return button;
+    };
+    ptt.append(el('span', '', voicePushToTalkLine(s)), ' ', act('learn', tx('Use a stick button')), ' ', act('key', tx('Use a key')));
+    if (s.key || s.button) ptt.append(' ', act('clear', tx('Clear')));
+    parts.push(ptt);
+  }
+
+  parts.push(toggle('replies', s.replies, tx('Answer out loud'), tx('“Mining mode”, “Confirm self destruct?”, said by the callout voice.')));
+
+  parts.push(el('p', 'muted', tx('Each command presses the key the game has for it: yours from your keybindings, or the game’s default. One with no keyboard key says so, because voice cannot press a stick button.')));
+  const spare = s.spare || [];
+  if (spare.length || voiceSpareNote) {
+    // Commands with no keyboard key can be given one the game leaves free,
+    // written the way the Controls page writes bindings (1.2.5).
+    const box = el('div', 'voice-spare');
+    if (spare.length) {
+      box.append(el('p', '', txn(spare.length,
+        '{count} command has no key voice can press. It can be given a free one:',
+        '{count} commands have no key voice can press. They can be given free ones:')));
+      const keys = el('ul', 'voice-spare-list');
+      for (const k of spare) keys.append(el('li', '', `“${k.phrase}” → ${k.shown}`));
+      box.append(keys);
+      const give = el('button', 'ghost small', s.gameRunning ? tx('Give them keys as an import file') : tx('Give them keys in your profile'));
+      give.type = 'button';
+      give.dataset.voiceAct = 'spare';
+      box.append(give, ' ', el('span', 'muted', s.gameRunning
+        ? tx('Star Citizen is running, so they are written as a file its keybinding screen imports.')
+        : tx('Written into the game\'s profile, after keeping it as it is; the game reads it at its next start.')));
+    }
+    if (voiceSpareNote) box.append(el('p', 'muted', voiceSpareNote));
+    parts.push(box);
+  }
+
+  const list = el('div', 'voice-command-list');
+  for (const c of s.commands || []) {
+    const row = el('div', `voice-command${c.canPress ? '' : ' voice-command-unbound'}`);
+    row.dataset.voiceRow = c.id;
+    const input = el('input');
+    input.type = 'checkbox';
+    input.dataset.voiceCommand = c.id;
+    input.checked = Boolean(c.on);
+    const label = el('label', 'toggle');
+    const words = el('span', '', `“${c.phrase}”`);
+    if ((c.also || []).length) {
+      words.append(' ');
+      words.append(el('em', 'muted', tx('or {phrases}', { phrases: c.also.map((p) => `“${p}”`).join(', ') })));
+    }
+    label.append(input, words);
+    const key = c.canPress
+      ? el('span', 'voice-command-key', c.fromProfile ? tx('{key} (your binding)', { key: c.key }) : c.key)
+      : el('span', 'voice-command-why muted', c.why);
+    const extra = el('span', 'voice-command-extra');
+    if (c.confirm) extra.append(el('span', 'voice-command-confirm', tx('asks to confirm')));
+    if (s.canSpeak) {
+      const hear = el('button', 'ghost tiny', tx('Hear it'));
+      hear.type = 'button';
+      hear.dataset.voiceHear = c.id;
+      hear.title = c.voice === 'windows' ? `“${c.says}” · ${tx('Windows voice')}` : `“${c.says}”`;
+      extra.append(hear);
+    }
+    row.append(label, el('span', 'muted voice-command-action', c.action), key, extra);
+    list.append(row);
+  }
+  parts.push(list);
+  parts.push(el('h4', '', tx('Heard')));
+
+  controls.replaceChildren(...parts);
+}
+
+$('#voice-commands')?.addEventListener('change', (event) => {
+  const target = event.target;
+  const failed = () => {
+    voiceDrawn = '';
+    renderVoiceCommands();
+    voiceSay(tx('The change did not save.'));
+  };
+  if (target?.dataset?.voice === 'enabled') postVoice({ enabled: target.checked }).catch(failed);
+  else if (target?.dataset?.voice === 'replies') postVoice({ replies: target.checked }).catch(failed);
+  else if (target?.dataset?.voiceTrigger) postVoice({ trigger: target.dataset.voiceTrigger }).catch(failed);
+  else if (target?.dataset?.voiceCommand) postVoice({ command: target.dataset.voiceCommand, on: target.checked }).catch(failed);
+});
+
+$('#voice-commands')?.addEventListener('click', (event) => {
+  const hear = event.target?.dataset?.voiceHear;
+  if (hear) {
+    fetch(`/api/voice/hear?id=${encodeURIComponent(hear)}`, { method: 'POST' }).catch(() => { /* only a sample */ });
+    return;
+  }
+  const act = event.target?.dataset?.voiceAct;
+  if (!act) return;
+  if (act === 'spare') {
+    giveVoiceSpareKeys(event.target).catch(() => {});
+    return;
+  }
+  if (act === 'key') {
+    voiceKeyWaiting = true;
+    renderVoiceCommands();
+    return;
+  }
+  voiceKeyWaiting = false;
+  const call = act === 'learn'
+    ? fetch('/api/voice/learn', { method: 'POST' }).then((r) => r.json()).then((state) => {
+      voiceState = state;
+      renderVoiceCommands();
+      scheduleVoicePoll();
+    })
+    : postVoice({ clearButton: true, key: '' });
+  call.catch(() => { /* the line keeps saying what was last known */ });
+});
+
+// "Use a key": the next key pressed on this page is push-to-talk. Taken
+// before anything else sees it, so pressing Tab does not also move focus.
+document.addEventListener('keydown', (event) => {
+  if (!voiceKeyWaiting) return;
+  event.preventDefault();
+  voiceKeyWaiting = false;
+  const key = voiceGameKey(event.code);
+  if (!key) {
+    voiceDrawn = '';
+    renderVoiceCommands();
+    voiceSay(tx('That key cannot be used for push-to-talk.'));
+    return;
+  }
+  postVoice({ key }).catch(() => {
+    voiceDrawn = '';
+    renderVoiceCommands();
+  });
+}, true);
+
 async function boot() {
   decorateNavigationGlyphs();
   initNowCardCollapsers();
@@ -37211,3 +37668,168 @@ async function boot() {
 }
 
 boot();
+
+/* Stream Deck profiles are snapshots: export resolves the selected action ids
+   again on the server so a changed or cleared binding cannot send a stale key. */
+let deckGroups = new Map(), deckPreviewTrail = [];
+let deckCommands = [], deckSelection = new Set(), deckPreviewGroup = null, deckPreviewOffset = 0, deckInitialised = false;
+function deckShown() {
+  const query = ($('#deck-search')?.value || '').trim().toLowerCase();
+  return deckCommands.filter(c => ($('#deck-scope')?.value !== 'presets' || c.preset) && (!query || (c.label + ' ' + c.group + ' ' + c.key).toLowerCase().replace(/\s+/g, ' ').includes(query)));
+}
+function deckSelected() { return deckCommands.filter(c => deckSelection.has(c.id) && !c.problem); }
+/* How the button has to be pressed, from the game's rule for the action. The
+   deck mirrors the finger like a keyboard, so a delayed action that is only
+   touched never fires; without the number that reads as a broken button. */
+function deckTiming(command) {
+  const seconds = Number(command.holdFor) || 0;
+  const shown = seconds.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  if (seconds > 0 && command.tapOrHold) return tx('Tap, or hold {seconds} s for its hold action', { seconds: shown });
+  if (seconds > 0) return tx('Hold {seconds} s before it fires', { seconds: shown });
+  return command.activation === 'hold' ? tx('Hold the button') : '';
+}
+async function loadStreamDeck() {
+  const status = $('#deck-status');
+  status.textContent = tx('Reading control mappings…');
+  $('#deck-download').disabled = true;
+  try {
+    const data = await getJson('/api/streamdeck?defaults=' + ($('#deck-source').value === 'defaults'));
+    deckCommands = data.commands || [];
+    deckGroups = new Map((data.groups || []).map(group => [group.name, group]));
+    if (!deckInitialised && data.ready) { deckSelection = new Set(deckCommands.filter(c => c.preset && c.group !== 'Extended' && !c.problem).map(c => c.id)); deckInitialised = true; }
+    deckSelection = new Set([...deckSelection].filter(id => deckCommands.some(c => c.id === id && !c.problem)));
+    status.textContent = !data.ready ? tx('Game controls are not available yet. Wait for the game files to finish reading, then refresh.')
+      : $('#deck-source').value === 'defaults' ? tx('Using the selected game installation’s default bindings.')
+      : data.profileFound ? tx('Using current bindings, with game defaults for actions you have not changed.')
+      : tx('No saved keybinding profile was found. Showing game defaults.');
+    renderStreamDeck();
+  } catch (error) { deckCommands = []; renderStreamDeck(); status.textContent = error.message; }
+}
+function deckArt(command, folder = false) {
+  const meta = folder ? deckGroups.get(command.group) : null;
+  const look = (folder ? meta?.appearance : command.appearance) || { icon: 'command', color: '#a6bad0' };
+  return { ...look, label: folder ? meta?.title || command.group : command.label,
+    keyText: folder ? '' : QWDeckArt.prettyKey(command.key) };
+}
+function deckIcon(appearance) {
+  const icon = el('span', 'deck-command-icon');
+  icon.style.color = appearance.color;
+  icon.setAttribute('aria-hidden', 'true');
+  icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (QWDeckArt.icons[appearance.icon] || QWDeckArt.icons.command) + '</svg>';
+  return icon;
+}
+function renderStreamDeck() {
+  const categories = $('#deck-categories'); categories.textContent = '';
+  for (const group of [...new Set(deckCommands.filter(c => c.preset).map(c => c.group))]) {
+    const commands = deckCommands.filter(c => c.preset && c.group === group && !c.problem);
+    const row = el('label', 'deck-category'), check = document.createElement('input'); check.type = 'checkbox';
+    const chosen = commands.filter(c => deckSelection.has(c.id)).length;
+    check.checked = commands.length > 0 && chosen === commands.length; check.indeterminate = chosen > 0 && chosen < commands.length; check.disabled = !commands.length;
+    row.classList.toggle('deck-category-selected', chosen > 0);
+    check.addEventListener('change', () => { for (const c of commands) if (check.checked) deckSelection.add(c.id); else deckSelection.delete(c.id); renderStreamDeck(); });
+    row.append(check, deckIcon(deckArt({ group }, true)), el('span', '', tx(group)), el('small', 'muted', chosen + '/' + commands.length)); categories.append(row);
+  }
+  const list = $('#deck-commands'); list.textContent = '';
+  let group = '';
+  for (const command of deckShown()) {
+    if (group !== command.group) { group = command.group; list.append(el('h4', '', group)); }
+    const row = el('label', 'deck-command');
+    row.classList.toggle('deck-command-unavailable', Boolean(command.problem));
+    const check = document.createElement('input'); check.type = 'checkbox'; check.checked = deckSelection.has(command.id); check.disabled = !!command.problem;
+    check.addEventListener('change', () => { if (check.checked) deckSelection.add(command.id); else deckSelection.delete(command.id); renderStreamDeck(); });
+    const copy = el('span', 'deck-command-copy'); copy.append(el('strong', '', command.label.replace(/\s+/g, ' ')));
+    const timing = deckTiming(command);
+    if (command.problem) copy.append(el('small', 'deck-command-problem', tx(command.problem)));
+    else {
+      const binding = el('span', 'deck-command-binding'); binding.append(el('kbd', '', QWDeckArt.prettyKey(command.key)));
+      if (timing) binding.append(el('small', 'deck-command-timing', timing));
+      copy.append(binding);
+    }
+    row.append(check, deckIcon(deckArt(command)), copy); list.append(row);
+  }
+  renderDeckPreview();
+}
+function deckPreviewGo(group, offset) {
+  deckPreviewTrail.push({ group: deckPreviewGroup, offset: deckPreviewOffset });
+  deckPreviewGroup = group; deckPreviewOffset = offset; renderDeckPreview();
+}
+function deckPreviewBack() {
+  const previous = deckPreviewTrail.pop();
+  deckPreviewGroup = previous?.group ?? null; deckPreviewOffset = previous?.offset ?? 0; renderDeckPreview();
+}
+function deckPreviewDetail(command) {
+  const detail = $('#deck-key-detail'); detail.textContent = '';
+  detail.append(deckIcon(deckArt(command)), el('strong', '', command.label.replace(/\s+/g, ' ')), el('kbd', '', QWDeckArt.prettyKey(command.key)));
+  const timing = deckTiming(command);
+  if (timing) detail.append(el('small', 'deck-command-timing', timing));
+}
+function renderDeckPreview() {
+  const chosen = deckSelected(), columns = $('#deck-model').value === 'xl' ? 8 : 5, capacity = columns * (columns === 8 ? 4 : 3);
+  const groups = [...new Set(chosen.map(c => c.group))];
+  $('#deck-count').textContent = tx('{count} commands selected · {groups} folders', { count: chosen.length, groups: groups.length });
+  $('#deck-download').disabled = !chosen.length;
+  $('#deck-open').disabled = !chosen.length;
+  const preview = $('#deck-preview'); preview.textContent = ''; preview.style.setProperty('--deck-columns', columns);
+  if (deckPreviewGroup && !groups.includes(deckPreviewGroup)) { deckPreviewGroup = null; deckPreviewOffset = 0; deckPreviewTrail = []; }
+  const items = deckPreviewGroup ? chosen.filter(c => c.group === deckPreviewGroup).map(command => ({ command, text: command.label })) : groups.map(group => ({ text: group, group }));
+  if (deckPreviewOffset >= items.length) deckPreviewOffset = 0;
+  $('#deck-preview-location').textContent = deckPreviewGroup || 'Star Citizen';
+  $('#deck-preview-page').textContent = tx('Page {page}', { page: deckPreviewTrail.filter(step => step.group === deckPreviewGroup).length + 1 });
+  $('#deck-preview-home').disabled = !deckPreviewGroup && !deckPreviewOffset;
+  const detail = $('#deck-key-detail'); detail.textContent = tx('Select a key to read its full label and binding.');
+  const back = deckPreviewGroup !== null || deckPreviewOffset > 0;
+  const room = capacity - (back ? 1 : 0), more = items.length - deckPreviewOffset > room;
+  const count = room - (more ? 1 : 0), cells = [];
+  if (back) cells.push({ text: tx('Back'), art: { icon: 'back', color: '#a6bad0', label: tx('Back') }, click: deckPreviewBack });
+  for (const item of items.slice(deckPreviewOffset, deckPreviewOffset + count)) {
+    cells.push({ text: item.text, command: item.command, art: deckArt(item.command || item, !item.command),
+      click: item.command ? () => deckPreviewDetail(item.command) : () => deckPreviewGo(item.group, 0) });
+  }
+  if (more) { while (cells.length < capacity - 1) cells.push(null); cells.push({ text: tx('More'), art: { icon: 'next', color: '#a6bad0', label: tx('More') }, click: () => deckPreviewGo(deckPreviewGroup, deckPreviewOffset + count) }); }
+  for (let i = 0; i < capacity; i++) {
+    const cell = cells[i], key = el(cell ? 'button' : 'div', cell ? 'deck-key' : 'deck-key deck-key-empty');
+    if (cell) {
+      key.type = 'button';
+      key.title = cell.command ? cell.text.replace(/\s+/g, ' ') + ' · ' + QWDeckArt.prettyKey(cell.command.key) + (deckTiming(cell.command) ? ' · ' + deckTiming(cell.command) : '') : cell.text;
+      key.setAttribute('aria-label', key.title);
+      const picture = document.createElement('img'); picture.alt = ''; picture.setAttribute('aria-hidden', 'true'); picture.draggable = false;
+      picture.src = QWDeckArt.svgDataUrl(cell.command ? QWDeckArt.renderKey(cell.art) : QWDeckArt.renderFolder(cell.art));
+      key.append(picture);
+      key.addEventListener('click', cell.click);
+      if (cell.command) key.addEventListener('focus', () => deckPreviewDetail(cell.command));
+    } else key.setAttribute('aria-hidden', 'true');
+    preview.append(key);
+  }
+}
+$('#deck-preview-home')?.addEventListener('click', () => { deckPreviewGroup = null; deckPreviewOffset = 0; deckPreviewTrail = []; renderDeckPreview(); });
+$('#deck-search')?.addEventListener('input', renderStreamDeck);
+$('#deck-scope')?.addEventListener('change', renderStreamDeck);
+$('#deck-model')?.addEventListener('change', () => {
+  deckPreviewOffset = 0;
+  deckPreviewTrail = deckPreviewGroup ? [{ group: null, offset: 0 }] : [];
+  renderDeckPreview();
+});
+$('#deck-source')?.addEventListener('change', loadStreamDeck);
+$('#deck-refresh')?.addEventListener('click', loadStreamDeck);
+$('#deck-select')?.addEventListener('click', () => { for (const c of deckShown()) if (!c.problem) deckSelection.add(c.id); renderStreamDeck(); });
+$('#deck-clear')?.addEventListener('click', () => { deckSelection.clear(); renderStreamDeck(); });
+$('#deck-download')?.addEventListener('click', async event => {
+  const button = event.currentTarget; button.disabled = true;
+  try {
+    const response = await fetch('/api/streamdeck/profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: $('#deck-model').value, defaults: $('#deck-source').value === 'defaults', actions: deckSelected().map(c => c.id) }) });
+    if (!response.ok) { const problem = await response.json(); throw new Error(problem.message || tx('Could not generate the profile.')); }
+    const url = URL.createObjectURL(await response.blob()), link = document.createElement('a');
+    link.href = url; link.download = 'QuantumWake-StarCitizen-' + $('#deck-model').value + '.streamDeckProfile'; document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000);
+    $('#deck-status').textContent = tx('Profile downloaded. Open it in Stream Deck after installing the plugin.');
+  } catch (error) { $('#deck-status').textContent = error.message; }
+  finally { button.disabled = !deckSelected().length; }
+});
+
+$('#deck-open')?.addEventListener('click', async event => {
+  const button = event.currentTarget; button.disabled = true;
+  try {
+    const response = await fetch('/api/streamdeck/open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: $('#deck-model').value, defaults: $('#deck-source').value === 'defaults', actions: deckSelected().map(c => c.id) }) });
+    const result = await response.json(); $('#deck-status').textContent = tx(result.message);
+  } catch (error) { $('#deck-status').textContent = error.message; }
+  finally { button.disabled = !deckSelected().length; }
+});

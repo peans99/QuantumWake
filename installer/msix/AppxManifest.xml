@@ -63,5 +63,9 @@
     <Capability Name="privateNetworkClientServer" />
     <rescap:Capability Name="runFullTrust" />
     <rescap:Capability Name="unvirtualizedResources" />
+    <!-- Voice commands (1.2.0). A device capability is the one kind Windows
+         does hold a packaged app to: undeclared, the microphone privacy page
+         has no switch for the app and the recogniser hears silence. -->
+    <DeviceCapability Name="microphone" />
   </Capabilities>
 </Package>

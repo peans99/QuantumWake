@@ -99,6 +99,7 @@
         <button data-view="settings">General</button>
         <button data-view="overlay">Overlay</button>
         <button data-view="controls">Controls</button>
+        <button data-view="streamdeck">Stream Deck</button>
         <button data-view="labels">Item labels</button>
         <button data-view="imports">Shared files</button>
         <button data-view="data">What was read</button>
@@ -190,6 +191,14 @@
 </aside>
 
 <main>
+
+  <!-- The overlay's compact view (Ctrl+Alt+C): two or three lines, sized to
+       fit by the shell. Hidden everywhere else. A click opens the full widget. -->
+  <div class="overlay-strip" id="overlay-strip" title="Open the full widget">
+    <div class="strip-line strip-where"><span class="strip-mark" aria-hidden="true">◆</span><b id="strip-where">—</b><span class="strip-ship" id="strip-ship"></span></div>
+    <div class="strip-line strip-next" id="strip-next-line" hidden><span class="strip-mark" aria-hidden="true">▸</span><span id="strip-next"></span></div>
+    <div class="strip-line strip-alert" id="strip-alert-line" hidden><span class="strip-mark" aria-hidden="true">●</span><span id="strip-alert"></span></div>
+  </div>
 
   <!-- Shown only when no Star Citizen install could be found: without one
        there is nothing to read, so this asks rather than sitting empty. -->
@@ -4217,6 +4226,33 @@
     <article class="share-report" id="share-report" aria-live="polite"></article>
   </section>
 
+  <section id="view-streamdeck" class="view">
+    <!-- A Settings tab of its own, beside Controls (1.2.15). It was reached
+         through a button in General's Stream Deck group, with a Back button
+         to return there: a page two clicks deep that the menu never named. -->
+    <div class="section-bar">
+      <div>
+        <span class="page-kicker">Settings</span>
+        <h2>Stream Deck</h2>
+        <p class="muted caption">Pick commands and get a 15-key or XL profile laid out in folders, each button on the key your keybindings give it. Rebuild it after changing your bindings in game.</p>
+      </div>
+    </div>
+    <div class="option-block"><div class="controls">
+      <label>Stream Deck model <select id="deck-model"><option value="15">15 keys · 5 × 3</option><option value="xl">XL · 32 keys · 8 × 4</option></select></label>
+      <label>Bindings <select id="deck-source"><option value="current">My current bindings</option><option value="defaults">Game defaults</option></select></label>
+      <button class="ghost" id="deck-refresh">Refresh bindings</button>
+    </div><p class="muted" id="deck-status" role="status"></p></div>
+    <div class="deck-workspace"><div class="option-block">
+      <h3>Choose categories</h3><p class="muted">Your existing Star Citizen profile categories are selected by default. Extended adds optional targeting, flight and utility commands.</p><div id="deck-categories" class="deck-categories"></div><h3>Choose commands</h3><div class="controls"><label>Command list <select id="deck-scope"><option value="presets">My Stream Deck categories</option><option value="all">All game commands</option></select></label><input type="search" id="deck-search" placeholder="Find a command or category" aria-label="Find a command or category"><button class="ghost tiny" id="deck-select">Select shown</button><button class="ghost tiny" id="deck-clear">Clear selection</button></div>
+      <div id="deck-commands" class="deck-commands"></div>
+    </div><div class="option-block deck-summary"><div class="deck-preview-head"><h3>Profile preview</h3><button class="ghost tiny" id="deck-preview-home">Profile home</button></div><p id="deck-count" class="muted"></p><div class="deck-preview-path"><strong id="deck-preview-location">Star Citizen</strong><span class="muted" id="deck-preview-page"></span></div><div class="deck-preview-scroll"><div id="deck-preview" class="deck-preview"></div></div><div id="deck-key-detail" class="deck-key-detail" aria-live="polite"></div>
+      <p class="muted">Commands are grouped into folders. Back stays at the top left; More opens additional commands. Hold actions follow your finger: keep the button pressed.</p>
+      <div class="controls"><button id="deck-open" disabled>Open in Stream Deck</button><button class="ghost" id="deck-download" disabled>Download profile</button></div><p class="muted">Open in Stream Deck sends the profile to the app on this PC. On first use it opens the plugin installer; finish installing, then click again to import your profile.</p>
+      <details class="deck-install"><summary>Install in Stream Deck</summary><ol><li><a href="/api/streamdeck/plugin" download>Download Star Citizen Commands plugin</a> and open it once.</li><li>Open the downloaded profile and select the matching device in Stream Deck.</li><li>Focus Star Citizen to use the buttons. Start with Landing Gear to check your setup.</li></ol>
+      <p class="muted">The plugin requires Stream Deck 7.1 or later on Windows x64. It sends physical keyboard positions and mouse input. Star Citizen and Stream Deck need the same privilege level.</p></details>
+    </div></div>
+  </section>
+
   <section id="view-settings" class="view">
     <div class="section-bar settings-workspace-head">
       <div>
@@ -4225,7 +4261,6 @@
       </div>
       <p class="muted">Choose what stays current, protect the history your totals use, and make a recap when you want to share one.</p>
     </div>
-
     <div class="settings-start-grid">
     <div class="option-block settings-quick-card settings-share-card">
       <div class="option-head">
@@ -4639,7 +4674,7 @@
     <details class="settings-group" id="settings-callouts-group">
       <summary>
         <span class="settings-group-index">03</span>
-        <span class="settings-group-copy"><strong>Voice &amp; callouts</strong><span>Switch the voice on, then each sound it can make on its own.</span></span>
+        <span class="settings-group-copy"><strong>Voice &amp; callouts</strong><span>Switch the voice on, each sound it can make, and the commands it listens for.</span></span>
       </summary>
       <div class="settings-group-content">
     <div class="option-block" id="settings-voice-block" hidden>
@@ -4671,6 +4706,14 @@
       </div>
       <p class="muted" id="settings-callouts-state">Asking the app what it can say…</p>
       <div class="callout-list" id="settings-callouts"></div>
+    </div>
+    <!-- Voice commands (1.2.0): drawn by renderVoiceCommands, so every
+         sentence in it goes through tx() and the WebTests. -->
+    <div class="option-block" id="settings-voice-commands">
+      <div class="option-head">
+        <h3>Voice commands</h3>
+      </div>
+      <div class="voice-commands" id="voice-commands"></div>
     </div>
       </div>
     </details>
@@ -5194,6 +5237,7 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
+<script src="/api/streamdeck/art.js"></script>
 <script src="app.js?v=0.21.9"></script>
 </body>
 </html>

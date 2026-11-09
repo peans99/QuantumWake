@@ -194,11 +194,17 @@ function savePreferences() {
   try { localStorage.setItem(mfdKey, JSON.stringify({ screen })); } catch { }
 }
 const isMenu = () => !QwMfd.pageIds.includes(screen);
+/* What Up and Down scroll: the tiles on a menu, the readings on a page. Only
+   the readings used to count, so on a frame too short for Home's five tiles
+   the fifth sat half off the bottom behind a dimmed Up and Down - seen on
+   Nicolas's 631 x 601 right frame, 2026-11-07 (1.2.7). */
+const scroller = () => byId(isMenu() ? 'menu' : 'content');
+const overflows = element => element.scrollHeight > element.clientHeight + 1;
 function navigate(target, auto = false) {
   if (!QwMfd.validScreen(target)) return;
   standDown(); notice = ''; saved = ''; details = false; selected = 0; radarFocus = 0; offset = 0;
   screen = target; page = Math.max(0, QwMfd.pageIds.indexOf(screen));
-  byId('content').scrollTop = 0;
+  byId('content').scrollTop = 0; byId('menu').scrollTop = 0;
   // A page the fight chose is not the pilot's choice to come back to.
   if (!auto) savePreferences();
   render();
@@ -251,6 +257,8 @@ function drawMenu(plan) {
   });
   const key = JSON.stringify([screen, items, bindings]);
   if (key === lastMenu) return;
+  // A summary that changed is no reason to throw the pilot back to the top.
+  const scrolled = menu.scrollTop;
   lastMenu = key; menu.replaceChildren();
   for (const item of items) {
     const tile = document.createElement('button'); tile.type = 'button'; tile.className = 'menu-tile';
@@ -265,6 +273,7 @@ function drawMenu(plan) {
     tile.title = item.title + ' · ' + item.summary; tile.setAttribute('aria-label', tile.title);
     tile.append(icon, keycap, name, hint, summary); menu.append(tile);
   }
+  menu.scrollTop = scrolled;
 }
 function render() {
   // Recomputed here so the frame can never be left showing a dimming that
@@ -336,7 +345,7 @@ function render() {
      needs its face marked after a page change. */
   drawAction(QwMfd.actionLine(showing, { briefing, selected, armed, saved }));
   updateScrollHint();
-  const idle = idleNow(content.scrollHeight > content.clientHeight + 1);
+  const idle = idleNow(overflows(scroller()));
   for (const number of osbs)
     face[number].button.classList.toggle('dormant', idle.includes(QwMfd.resolveCommand(bindings[number], screen)));
 }
@@ -446,36 +455,73 @@ function drawSweep(group) {
   });
 }
 
-/* The Target page's picture; see QwMfd.targetPicture for which one. A mask
-   cannot say its image failed to load, so a silhouette is probed first, and
-   a hull without an icon falls back to the hologram for as long as it is
-   locked. The hologram's address carries the read's time, so it follows the
-   lock frame by frame without being cached. */
-let targetShape = '', targetFellBack = false;
+/* The Target page's picture; see QwMfd.targetPicture and targetSteps for
+   which one. Each step is loaded off-screen first and only shown once it has
+   arrived, so a missing render or icon never puts a broken image on the
+   glass: it passes to the next step. Worked out once per hull: the page
+   redraws on every live read, and a picture that reloaded with it is what
+   this replaced. The mark is a drawing rather than a file, so it can never
+   fail to load. */
+const TARGET_MARK = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100"><path d="M80 6 90 38 150 64v10l-58-8-4 20 16 8H56l16-8-4-20-58 8V64l60-26z"/></svg>')}")`;
+let targetShape = null, targetDrawn = null;
 function drawTarget(visible) {
   const figure = byId('target-view');
   const picture = visible ? QwMfd.targetPicture(extra.live) : null;
   figure.hidden = !picture;
-  if (!picture) { targetShape = ''; targetFellBack = false; return; }
+  if (!picture) { targetShape = null; return; }
   figure.classList.toggle('hostile', picture.tone === 'hostile');
   figure.classList.toggle('likely', picture.likely);
   byId('target-note').textContent = picture.note;
-  const shape = byId('target-shape'), hologram = byId('target-hologram');
-  const showHologram = src => { shape.hidden = true; hologram.hidden = false; if (hologram.getAttribute('src') !== src) hologram.src = src; };
-  if (picture.kind !== 'silhouette') { targetShape = ''; targetFellBack = false; showHologram(picture.src); return; }
-  if (picture.src === targetShape) { if (targetFellBack) showHologram(picture.fallback); return; }
-  targetShape = picture.src; targetFellBack = false;
-  const probe = new Image();
-  probe.onload = () => {
-    if (targetShape !== picture.src) return;
-    shape.style.setProperty('--shape', `url("${picture.src}")`);
-    shape.hidden = false; hologram.hidden = true;
+  if (picture.src === targetShape) return;
+  targetShape = picture.src;
+  const shape = byId('target-shape'), render = byId('target-render');
+  const still = () => targetShape === picture.src;
+  const mask = url => {
+    if (!still() || targetDrawn === url) return;
+    targetDrawn = url;
+    shape.style.setProperty('--shape', url);
+    shape.hidden = false; render.hidden = true;
   };
-  probe.onerror = () => {
-    if (targetShape !== picture.src) return;
-    targetFellBack = true; showHologram(picture.fallback);
+  const photo = src => {
+    if (!still()) return;
+    targetDrawn = src;
+    if (render.getAttribute('src') !== src) render.src = src;
+    shape.hidden = true; render.hidden = false;
   };
-  probe.src = picture.src;
+  const steps = QwMfd.targetSteps(picture, garagePictures());
+  const loads = (src, shown, next) => {
+    const probe = new Image();
+    probe.onload = () => shown(src);
+    probe.onerror = next;
+    probe.src = src;
+  };
+  const renderOf = item => `/api/fleet/paints/${encodeURIComponent(item)}/render`;
+  const attempt = index => {
+    if (!still()) return;
+    const step = steps[index] ?? 'mark', next = () => attempt(index + 1);
+    if (step === 'mark') mask(TARGET_MARK);
+    else if (step === 'silhouette') loads(picture.src, src => mask(`url("${src}")`), next);
+    else if (step === 'stock') fetch(picture.paints)
+      .then(r => r.ok ? r.json() : [])
+      .then(paints => paints?.[0]?.item ? loads(renderOf(paints[0].item), photo, next) : next())
+      .catch(next);
+    else if (step.paint) loads(renderOf(step.paint), photo, next);
+    else next();
+  };
+  attempt(0);
+}
+/* The Garage's picture choices, which it keeps in this same browser profile:
+   the MFD frames and the overlay share one WebView2 folder and one origin.
+   Read per lock rather than once, so a paint picked mid-session is used on
+   the next lock. Empty in a browser that never opened the Garage. */
+function garagePictures() {
+  const garage = { style: 'paint', paints: {} };
+  try {
+    garage.style = localStorage.getItem('qw-ship-picture-style') === 'tint' ? 'tint' : 'paint';
+    garage.paints = JSON.parse(localStorage.getItem('qw-ship-paints') || '{}') || {};
+  } catch { }
+  return garage;
 }
 function drawMap(visible, view, big) {
   const figure = byId('map');
@@ -540,14 +586,13 @@ function note(text) { notice = text; drawAction(QwMfd.actionLine(screen, { brief
 /* One rule for what is idle, asked by the face when it dims a button and by the
    input before it acts on one. */
 function idleNow(scrollable) {
-  return [...QwMfd.dormant(screen, { tasks: QwMfd.tasks(briefing).length, scrollable: !isMenu() && scrollable,
+  return [...QwMfd.dormant(screen, { tasks: QwMfd.tasks(briefing).length, scrollable,
       paged: QwMfd.pageStep(screen, { extra, offset }, 1) !== null && QwMfd.pageLabel(screen, { extra, offset }) !== null }),
     ...(!hasDetails ? ['details'] : []), ...(screen === 'home' ? ['back'] : []),
     ...(briefingUnavailable || confirming ? ['confirm'] : [])];
 }
 function isIdle(commandId) {
-  const readings = byId('content');
-  return idleNow(readings.scrollHeight > readings.clientHeight + 1).includes(commandId);
+  return idleNow(overflows(scroller())).includes(commandId);
 }
 function standDown() { armed = false; armedTask = null; lastRows = ''; }
 function press(number) {
@@ -609,7 +654,8 @@ function step(direction) {
     return;
   }
   if (screen !== 'act') {
-    byId('content').scrollBy({ top: direction * byId('content').clientHeight * .7, behavior: 'smooth' });
+    const panel = scroller();
+    panel.scrollBy({ top: direction * panel.clientHeight * .7, behavior: 'smooth' });
     return;
   }
   const count = QwMfd.tasks(briefing).length;

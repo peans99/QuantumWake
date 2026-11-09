@@ -124,6 +124,18 @@ public sealed class WindowsGameCapture : IGameScreenCapture
         }
     }
 
+    /// <summary>
+    /// Why the game cannot be handed keys now, or null when it is the window in
+    /// front and not minimised: the check the voice keyboard makes before every
+    /// press, so a key never lands in another program.
+    /// </summary>
+    internal static string? WhyNotInFront()
+    {
+        var front = GetForegroundWindow();
+        if (!IsGame(front)) return AnyGameWindow() ? "Star Citizen is not the window in front" : "Star Citizen is not running";
+        return IsIconic(front) ? "Star Citizen is minimised" : null;
+    }
+
     private static bool IsGame(IntPtr window)
     {
         if (window == IntPtr.Zero || !IsWindowVisible(window)) return false;

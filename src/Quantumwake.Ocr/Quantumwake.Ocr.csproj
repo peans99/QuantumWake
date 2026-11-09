@@ -27,4 +27,10 @@
     <ProjectReference Include="..\Quantumwake.Data\Quantumwake.Data.csproj" />
   </ItemGroup>
 
+  <!-- The desktop speech recogniser (SAPI) for voice commands: the engine is
+       on the machine already, this is only its managed wrapper. -->
+  <ItemGroup>
+    <PackageReference Include="System.Speech" Version="10.0.0" />
+  </ItemGroup>
+
 </Project>

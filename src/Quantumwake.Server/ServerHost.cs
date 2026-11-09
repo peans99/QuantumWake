@@ -37,13 +37,17 @@ public static partial class ServerHost
     /// Windows; null otherwise, and the live switch then says it is unavailable.
     /// </param>
     /// <param name="voice">Speaks combat callouts; supplied by the overlay on Windows, null otherwise.</param>
+    /// <param name="listener">Hears voice commands; supplied by the overlay on Windows, null otherwise.</param>
+    /// <param name="keyboard">Presses a voice command's key in the game; supplied by the overlay on Windows, null otherwise.</param>
     public static WebApplication Build(
         string[] args,
         IScreenReader? screen = null,
         IClipboardReader? clipboard = null,
         IJoystickReader? joysticks = null,
         IGameScreenCapture? capture = null,
-        ICalloutVoice? voice = null)
+        ICalloutVoice? voice = null,
+        ISpeechListener? listener = null,
+        IGameKeyboard? keyboard = null)
     {
 
         // Quantumwake server.
@@ -198,6 +202,14 @@ public static partial class ServerHost
         if (voice is not null) builder.Services.AddSingleton(voice);
         builder.Services.AddSingleton<LiveScreenService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<LiveScreenService>());
+
+        // Voice commands: its own switch, off until turned on, and the only
+        // part of the app that presses keys in the game.
+        builder.Services.AddSingleton<VoiceCommandStore>();
+        if (listener is not null) builder.Services.AddSingleton(listener);
+        if (keyboard is not null) builder.Services.AddSingleton(keyboard);
+        builder.Services.AddSingleton<VoiceCommandService>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<VoiceCommandService>());
 
         // The keybinding profile, kept whenever the game rewrites it, and the
         // stick pictures the Controls page draws bindings on.
@@ -795,6 +807,8 @@ public static partial class ServerHost
         app.MapGet("/api/scan/history", (LogLibrary lib) => ScanHistory.Build(install, lib.Store));
 
         ControlsEndpoints.Map(app, install);
+        VoiceCommandEndpoints.Map(app);
+        StreamDeckProfiles.Map(app, install);
         MapDataRead(app, install);
         MapModels(app, install);
         MapChannels(app, install, installPinned);

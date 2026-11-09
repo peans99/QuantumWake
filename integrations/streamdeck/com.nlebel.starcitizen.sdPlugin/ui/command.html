@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>SC Command</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 8px 12px 16px 0; background: #2d2d2d; color: #d8d8d8;
+         font: 9pt "Segoe UI", Arial, sans-serif; }
+  .row { display: flex; align-items: center; margin: 0 0 6px; min-height: 26px; }
+  .row > label { flex: 0 0 96px; text-align: right; padding-right: 10px; color: #9a9a9a; }
+  .row > .v { flex: 1; min-width: 0; }
+  select, input[type=text], input[type=number] { width: 100%; box-sizing: border-box; background: #3d3d3d;
+         color: #d8d8d8; border: 0; border-radius: 3px; height: 26px; padding: 0 6px; font: inherit; }
+  input::placeholder { color: #8a8a8a; }
+  .hint { margin: -2px 0 8px 96px; color: #8a8a8a; font-size: 8pt; line-height: 1.35; }
+  .warn { color: #fbbf24; }
+  hr { border: 0; border-top: 1px solid #444; margin: 10px 0 10px 96px; }
+  h4 { margin: 0 0 6px 96px; font-weight: 600; color: #bdbdbd; font-size: 9pt; }
+  .chk { display: flex; align-items: center; gap: 6px; }
+</style>
+</head>
+<body>
+  <div class="row"><label for="command">Command</label><div class="v"><select id="command"></select></div></div>
+  <div class="hint" id="info"></div>
+
+  <div class="row"><label for="keyOverride">Key override</label>
+    <div class="v"><input id="keyOverride" type="text" spellcheck="false" /></div></div>
+  <div class="hint">Use game names joined by +, e.g. <code>lalt+n</code>, <code>rctrl+np_8</code>, <code>f1</code>, <code>mouse3</code>.</div>
+
+  <div class="row"><label for="holdMs">Min hold (ms)</label>
+    <div class="v"><input id="holdMs" type="number" min="0" step="50" /></div></div>
+  <div class="hint">Key stays down at least this long, even on a quick tap (for long-press binds).</div>
+
+  <div class="row"><label for="label">Label</label>
+    <div class="v"><input id="label" type="text" placeholder="(command name)" /></div></div>
+  <div class="hint">Use \n for a line break.</div>
+
+  <div class="row"><label></label><div class="v chk"><input id="hideKey" type="checkbox" /><label for="hideKey">Hide key hint on the button</label></div></div>
+
+  <hr />
+  <h4>All buttons</h4>
+  <div class="row"><label></label><div class="v chk"><input id="onlyWhenFocused" type="checkbox" /><label for="onlyWhenFocused">Only send when Star Citizen is focused</label></div></div>
+  <div class="row"><label for="layout">Key positions</label>
+    <div class="v"><select id="layout">
+      <option value="physical">Physical (QWERTY position — game default)</option>
+      <option value="typed">Typed letter on my layout (AZERTY…)</option>
+    </select></div></div>
+  <div class="hint">Leave on <b>Physical</b> unless letter keys hit the wrong action in game.</div>
+
+<script src="../data/commands.js"></script>
+<script>
+  let ws, ctx, settings = {}, globals = { onlyWhenFocused: true, layout: "physical" };
+  const $ = (id) => document.getElementById(id);
+  const byId = Object.fromEntries(SC_COMMANDS.map((c) => [c.id, c]));
+
+  // Build grouped dropdown
+  for (const [gid, g] of Object.entries(SC_GROUPS)) {
+    const og = document.createElement("optgroup");
+    og.label = g.name;
+    for (const c of SC_COMMANDS.filter((c) => c.group === gid)) {
+      const o = document.createElement("option");
+      o.value = c.id;
+      o.textContent = c.label.replace(/\n/g, " ") + (c.key ? `  —  ${c.key}` : "");
+      og.appendChild(o);
+    }
+    $("command").appendChild(og);
+  }
+
+  function render() {
+    const c = byId[settings.command] || byId.flight_ready;
+    $("command").value = c.id;
+    $("keyOverride").value = settings.keyOverride || "";
+    $("keyOverride").placeholder = c.key ? `default: ${c.key}` : "type a key, e.g. lalt+k";
+    $("holdMs").value = settings.holdMs ?? "";
+    $("holdMs").placeholder = String(c.hold || 0);
+    $("label").value = settings.label || "";
+    $("label").placeholder = c.label.replace(/\n/g, "\\n");
+    $("hideKey").checked = !!settings.hideKey;
+    const bits = [];
+    if (c.note) bits.push(c.note);
+    $("info").innerHTML = bits.join("<br>");
+    $("info").style.display = bits.length ? "" : "none";
+  }
+  function renderGlobals() {
+    $("onlyWhenFocused").checked = globals.onlyWhenFocused !== false;
+    $("layout").value = globals.layout || "physical";
+  }
+
+  const send = (event, payload) => ws && ws.readyState === 1 && ws.send(JSON.stringify({ event, context: ctx, payload }));
+  function save() {
+    settings.command = $("command").value;
+    settings.keyOverride = $("keyOverride").value.trim();
+    settings.holdMs = $("holdMs").value === "" ? "" : Number($("holdMs").value);
+    settings.label = $("label").value;
+    settings.hideKey = $("hideKey").checked;
+    send("setSettings", settings);
+    render();
+  }
+  function saveGlobals() {
+    globals.onlyWhenFocused = $("onlyWhenFocused").checked;
+    globals.layout = $("layout").value;
+    send("setGlobalSettings", globals);
+  }
+
+  $("command").addEventListener("change", () => {
+    // Switching command resets per-command overrides so the new defaults apply.
+    settings.keyOverride = ""; settings.holdMs = ""; settings.label = "";
+    // Generated keys carry a symbol and colour; a new command chooses its own.
+    delete settings.icon; delete settings.color;
+    $("keyOverride").value = ""; $("holdMs").value = ""; $("label").value = "";
+    save();
+  });
+  for (const id of ["keyOverride", "holdMs", "label"]) $(id).addEventListener("change", save);
+  $("hideKey").addEventListener("change", save);
+  $("onlyWhenFocused").addEventListener("change", saveGlobals);
+  $("layout").addEventListener("change", saveGlobals);
+
+  window.connectElgatoStreamDeckSocket = (port, uuid, registerEvent, info, actionInfo) => {
+    ctx = uuid;
+    try { settings = JSON.parse(actionInfo).payload.settings || {}; } catch { settings = {}; }
+    render(); renderGlobals();
+    ws = new WebSocket("ws://127.0.0.1:" + port);
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ event: registerEvent, uuid }));
+      send("getGlobalSettings");
+    };
+    ws.onmessage = (m) => {
+      const msg = JSON.parse(m.data);
+      if (msg.event === "didReceiveGlobalSettings") {
+        globals = { onlyWhenFocused: true, layout: "physical", ...(msg.payload.settings || {}) };
+        renderGlobals();
+      } else if (msg.event === "didReceiveSettings") {
+        settings = msg.payload.settings || {};
+        render();
+      }
+    };
+  };
+</script>
+</body>
+</html>

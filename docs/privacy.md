@@ -53,16 +53,32 @@ send nothing about you.
   since 1.1.22 your balance from the bar of any other mobiGlas screen. Item
   tooltips and screens the app cannot read are not kept. The ship you have targeted - its name, signatures, speed and whether
   it is marked hostile - is held in memory for the combat page and never
-  written down. The MFD's Target page can show the game's hologram of that
-  ship, cut from the frame being read when the page asks and sent only to
-  the page on your own machine. A frame can show anything the game does, other players' names
+  written down. The MFD's Target page draws that ship from the game files, the
+  same pictures as the Garage, not from your screen. A frame can show anything the game does, other players' names
   included, and none of it leaves your computer. The app never opens the
-  game's process, reads its memory or sends it input.
+  game's process, reads its memory or sends it input; voice commands and the
+  Stream Deck plugin, below, are each a choice of their own and the only parts
+  that press keys.
 - **Spoken callouts**, only if you turn on the voice on the Log page: the
   app says things like "Target identified" with the speech voice Windows
   already has, on your PC. The sentence is not sent anywhere.
+- **Your microphone**, only if you turn on Voice commands in Settings →
+  Voice & callouts. It is heard by the speech recogniser Windows carries, on
+  your PC, told only the copilot's few dozen phrases. The app never gets the
+  audio: it sees the phrase matched and how sure the recogniser was, keeps the
+  last 40 in memory for the page, and writes none of them down. A command
+  presses the game's key for it, and only while Star Citizen is the window in
+  front. See [voice-commands.md](voice-commands.md).
 - **Joysticks and the game's key bindings**, on the Controls page, to show and
-  back up your bindings.
+  back up your bindings, and on the Stream Deck page to build a profile.
+- **A Stream Deck profile**, only when you build one in Settings → Stream Deck.
+  It is made on your PC from your key bindings and either downloaded or, with
+  Open in Stream Deck, written to a temporary file and handed to the Stream
+  Deck app on this PC. The Star Citizen Commands plugin that comes with the app
+  runs inside Stream Deck, not inside Quantum Wake; it presses a key only when
+  you press its button, and by default only while Star Citizen is the window in
+  front. Nothing about either is sent anywhere. See
+  [stream-deck.md](stream-deck.md).
 
 ## What it writes, and where
 

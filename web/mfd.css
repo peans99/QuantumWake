@@ -221,7 +221,8 @@ h1 { font-size: clamp(15px, 4cqw, 34px); letter-spacing: .06em; margin: 0 0 4%; 
 
 /* The Target page's picture. A silhouette is the game's vehicle icon used as
    a mask, so one shape takes any colour: red hostile, the display's cyan
-   otherwise. The hologram is the game's own pixels and keeps its colours. */
+   otherwise; the plain mark is the same mask. A render is the game's own
+   picture of the hull and keeps its colours. */
 #target-view { margin: 2% 0 0; flex: 0 0 auto; text-align: center; }
 #target-view[hidden] { display: none; }
 #target-shape { width: 100%; max-width: 30cqh; aspect-ratio: 1.6; margin: 0 auto; background: var(--glow);
@@ -230,8 +231,12 @@ h1 { font-size: clamp(15px, 4cqw, 34px); letter-spacing: .06em; margin: 0 0 4%; 
 #target-shape[hidden] { display: none; }
 #target-view.hostile #target-shape { background: #ff5a4d; filter: drop-shadow(0 0 8px #ff5a4d); }
 #target-view.likely #target-shape { opacity: .7; }
-#target-hologram { display: block; width: 100%; max-width: 34cqh; margin: 0 auto; image-rendering: auto; }
-#target-hologram[hidden] { display: none; }
+#target-render { display: block; width: 100%; max-width: 34cqh; margin: 0 auto; image-rendering: auto; }
+#target-render[hidden] { display: none; }
+#target-view.likely #target-render { opacity: .7; }
+/* A render keeps the game's colours, so a hostile one is ringed in red rather
+   than tinted. */
+#target-view.hostile #target-render { filter: drop-shadow(0 0 6px #ff5a4d); }
 #target-note { font-size: clamp(7px, 1.7cqw, 13px); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); margin-top: 2%; }
 /* On the Target page the picture leads: it is the reason to look at the
    page, and the rows under it scroll. Every other page keeps readings first. */

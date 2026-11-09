@@ -438,7 +438,7 @@ assignments without changing the firmware.
 | 15 | Back: details → overview → every parent menu → Home |
 | 13 | Home: cockpit category tiles |
 | 10 | More / Less: secondary readings where available |
-| 14 / 12 | Up / Down: select on Checklist, scroll elsewhere |
+| 14 / 12 | Up / Down: select on Checklist, scroll elsewhere, including a menu too tall for its frame (1.2.7) |
 | 8 | Done: arm, then confirm the selected checklist task |
 | Other OSBs and rockers | Unassigned |
 
@@ -446,10 +446,11 @@ The category layout is stable as data arrives:
 
 | Category | Screens |
 | --- | --- |
-| Flight | Navigation, System map, Ship, Local intel |
+| Flight | Navigation, System map, Nearest services, Ship, Local intel |
 | Operations | Flight plan, Checklist, Contract, Event progress, Shopping |
-| Resources | Cargo & trade, Ledger, Mining, Earnings |
+| Resources | Cargo & trade, Ledger, Mining, Fracture charge, Earnings |
 | Pilot | Session, Server, Activity, Crew, Log |
+| Combat | Target, Callouts |
 
 Server (0.12.4) names the shard the matchmaker placed you on - by its id,
 since the game writes no friendlier name to the log - with how long you have
@@ -464,6 +465,19 @@ most recently played campaign. It shows the overall bar as a logbook floor,
 the next tier, the fewest recorded runs to it, and the current contract's point
 award. Category bars are available under **More**. Campaign selection, reward
 browsing and route planning stay on the dashboard, where they have room.
+
+**Combat** says something only with live reading on: the target panel is read
+off the screen, and the logs know nothing of a lock. **Target** (1.2.3, 1.2.6)
+draws the locked ship the way the dashboard's Garage pictures it, tried in the
+Garage's order: the paint picked for that hull in the Garage, else the game's
+own render of its first paint, else its silhouette, else a plain ship mark. A
+Garage set to tinted silhouettes, or a hull set to its silhouette, puts the
+silhouette first here too. It used to show the hologram cut from the screen,
+reloaded on every read even when nothing had changed; the hologram is now read
+only for the hull's damage, still shown as sound, damaged or critical under the
+picture, and the picture changes only when the lock does. The silhouette step
+matters more than it looks: 66 of the 318 classes in the signature book have no
+game icon. A hostile lock is ringed or tinted red.
 
 DONE and MORE disappear where they have no action; Up/Down dim when there is
 nothing to move. Home and Back retain their positions across menus. Direct page

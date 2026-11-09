@@ -177,7 +177,9 @@ public partial class App : System.Windows.Application
                 new WindowsClipboardReader(OnUiThread),
                 joysticks.Available ? joysticks : null,
                 new WindowsGameCapture(),
-                new WindowsCalloutVoice());
+                new WindowsCalloutVoice(),
+                new WindowsSpeechListener(),
+                new WindowsGameKeyboard());
             DiagnosticTrace.Mark("desktop", "Server built; starting listener.");
             await _server.StartAsync();
             DiagnosticTrace.Mark("desktop", "Server listener started.");
