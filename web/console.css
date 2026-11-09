@@ -1,0 +1,283 @@
+/* Quantum Wake's spacecraft console. Scoped to the dashboard: the transparent
+   in-game readout and its native window have a separate, compact type scale. */
+body:not(.overlay) {
+  --void: #10171c;
+  --deep: #131c22;
+  --panel: #192229;
+  --panel-2: #202b32;
+  --rule: #334047;
+  --rule-hot: #53636a;
+  --text: #e9e8df;
+  --muted: #aab5b7;
+  --dim: #8a999e;
+  --cyan: #efa66f;
+  --cyan-hot: #ffd0a9;
+  --cyan-deep: #8c6045;
+  --amber: #eac66f;
+  --green: #8dcca4;
+  --red: #f3988c;
+  --violet: #b7b0dc;
+  --own: #ddc8a3;
+  --src-files: #8dbed2;
+  --src-community: #8dcca4;
+  --src-uex: #b7b0dc;
+  --display: "Bahnschrift", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --console-header: 96px;
+  --console-telemetry: 34px;
+  --gap: 18px;
+  background: var(--void);
+  min-height: 100%;
+  height: auto;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.45;
+  letter-spacing: 0;
+}
+
+body:not(.overlay)::before,
+body:not(.overlay) .margin-mark,
+body:not(.overlay) .railmark,
+body:not(.overlay) .sector-scan,
+body:not(.overlay) .wake-chase { display: none; }
+
+/* A ship nameplate above a continuous navigation index, rather than a row of
+   glowing buttons competing with the data underneath. Menus retain overflow. */
+body:not(.overlay) .topbar {
+  display: grid;
+  grid-template-columns: minmax(235px, 1fr) auto;
+  grid-template-rows: 55px auto;
+  height: auto;
+  gap: 0 24px;
+  padding-inline: max(24px, calc((100vw - var(--page)) / 2));
+  overflow: visible;
+  background: #151f26;
+  border-bottom: 1px solid var(--rule-hot);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+body:not(.overlay) .brand { grid-area: 1 / 1; gap: 12px; }
+body:not(.overlay) .brand .mark { width: 27px; height: 27px; filter: grayscale(1) brightness(1.85); }
+body:not(.overlay) .brand .name { color: var(--text); font: 650 29px/1 var(--title-face); letter-spacing: .055em; text-transform: uppercase; }
+body:not(.overlay) .brand .name b { color: var(--text); font-weight: inherit; }
+body:not(.overlay) .brand .by { display: inline; color: var(--muted); border-color: var(--rule-hot); font: 10px var(--mono); letter-spacing: .03em; }
+body:not(.overlay) .status { grid-area: 1 / 2; color: var(--muted); font-size: 11px; letter-spacing: 0; }
+body:not(.overlay) .status .dot { box-shadow: none; }
+body:not(.overlay) .search-box .search { width: 225px; background: #10181e; border-color: var(--rule-hot); border-radius: 2px; color: var(--text); font-size: 12px; }
+body:not(.overlay) .tabs { grid-area: 2 / 1 / 3 / -1; align-self: stretch; gap: 9px; border-top: 1px solid var(--rule); }
+body:not(.overlay) .tabs button { border-radius: 0; padding: 10px 12px; color: var(--muted); font: 12px/1.5 var(--display); letter-spacing: .025em; text-transform: none; transition: color .15s ease; }
+body:not(.overlay) .tabs > button:first-child { padding-left: 0; }
+body:not(.overlay) .tabs button[data-glyph]::before { display: none; }
+body:not(.overlay) .tabs button:hover { color: var(--text); background: #202c34; box-shadow: none; }
+body:not(.overlay) .tabs button.active { color: var(--text); background: none; box-shadow: none; }
+body:not(.overlay) .tabs button::after { left: 12px; right: 12px; height: 3px; bottom: -1px; border-radius: 0; background: var(--cyan); box-shadow: none; }
+body:not(.overlay) .tabs button.active::after { box-shadow: none; }
+body:not(.overlay) .tabs > button:first-child::after { left: 0; }
+body:not(.overlay) .group-menu { left: var(--nav-menu-left, 0px); right: auto; max-width: calc(100vw - 24px); padding: 5px; min-width: 180px; border: 1px solid var(--rule-hot); border-top: 2px solid var(--cyan); border-radius: 0 0 3px 3px; background: #19252d; box-shadow: 0 12px 24px #0005; backdrop-filter: none; }
+body:not(.overlay) .group-menu button { padding: 8px 12px; font-size: 13px; }
+
+body:not(.overlay) .flight-telemetry { top: var(--console-header); min-height: var(--console-telemetry); background: #10191f; border-color: var(--rule); box-shadow: none; backdrop-filter: none; }
+body:not(.overlay) .telemetry-field { border-color: var(--rule); padding-inline: 18px; }
+body:not(.overlay) .telemetry-field:first-child { padding-left: 0; }
+body:not(.overlay) .telemetry-label { font-size: 9px; letter-spacing: .1em; color: var(--dim); }
+body:not(.overlay) .telemetry-field b { font-family: var(--mono); font-size: 10px; font-weight: 500; color: var(--text); }
+body:not(.overlay) #telemetry-system { color: var(--text); text-shadow: none; }
+body:not(.overlay) .telemetry-field:first-child::after { display: none; }
+body:not(.overlay) .context-rail { top: calc(var(--console-header) + var(--console-telemetry)); background: #202b32; border-color: var(--rule-hot); box-shadow: none; }
+body:not(.overlay) main { padding-top: 26px; padding-bottom: 48px; border: 0; mask-image: none; }
+
+/* The wake is the brand's course-line motif, not a decorative flight readout.
+   Its nodes deliberately have no made-up coordinates or telemetry labels. */
+body:not(.overlay) .console-heading,
+body:not(.overlay) .view > .section-bar:not(.mining-title),
+body:not(.overlay) .view[data-voice="own"] > .section-bar:not(.mining-title),
+body:not(.overlay) .mining-view > .section-bar {
+  position: relative;
+  min-height: 110px;
+  margin: 0 0 24px;
+  padding: 17px 0 20px;
+  border: 0;
+  border-bottom: 1px solid var(--rule-hot);
+  border-radius: 0;
+  clip-path: none;
+  background: none;
+  box-shadow: none;
+}
+body:not(.overlay) .view > .section-bar:has(> .wake-chase),
+body:not(.overlay) #now-closed:has(> .wake-chase) { --flight-lane: 0px; padding-bottom: 20px; }
+body:not(.overlay) .console-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; background: url(assets/wake-chart.svg) right 24px top / 360px 120px no-repeat; }
+body:not(.overlay) .console-overline,
+body:not(.overlay) .page-kicker { margin: 0 0 8px; color: var(--cyan); font: 10px/1.4 var(--mono); letter-spacing: .13em; text-transform: uppercase; }
+body:not(.overlay) .console-heading h1,
+body:not(.overlay) .view > .section-bar h2,
+body:not(.overlay) .mining-title h2 { margin: 0; padding: 0; color: var(--text); font: 450 44px/1.05 var(--display); letter-spacing: -.025em; text-transform: none; }
+body:not(.overlay) .console-heading .console-description { color: var(--muted); font: 12px var(--mono); margin: 0 0 3px; padding-right: 42px; }
+body:not(.overlay) .view > .section-bar .page-glyph { display: none; }
+body:not(.overlay) .view:where(:not(#view-share)) h2 { color: var(--text); font: 550 21px/1.2 var(--display); letter-spacing: -.015em; text-transform: none; }
+body:not(.overlay) .view > .section-bar h2 { font-size: 44px; font-weight: 450; line-height: 1.05; }
+body:not(.overlay) .map-head h2 { color: var(--text); font: 450 36px/1.1 var(--display); letter-spacing: -.025em; text-transform: none; }
+body:not(.overlay) .section-bar h2::before { display: none; }
+body:not(.overlay) .reference-toolbar-bar.section-bar { padding: 0; min-height: 110px; overflow: visible; }
+body:not(.overlay) .reference-title { padding: 17px 0 20px; }
+body:not(.overlay) .reference-toolbar { background: #182229; border-color: var(--rule); }
+
+/* Flat instrument surfaces and readable labels carry the hierarchy. The
+   orange rule is reserved for selection, actions and the current focus. */
+body:not(.overlay) :is(.card, .option-block, .table-wrap, .ship-card, .data-card, .settings-group, .ref-modal-panel, .entity-panel, .command-panel, .search-results) {
+  border-color: var(--rule);
+  border-radius: 3px;
+  clip-path: none;
+  background: var(--panel);
+  background-image: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+body:not(.overlay) .card:hover { border-color: var(--rule-hot); }
+body:not(.overlay) .card::before,
+body:not(.overlay) .summary-strip .tile::before,
+body:not(.overlay) #view-now .now-status-card::after { display: none; }
+body:not(.overlay) .card-label { margin-bottom: 13px; color: var(--muted); font: 11px/1.4 var(--mono); letter-spacing: .04em; text-transform: none; }
+body:not(.overlay) .card-source { color: var(--dim); }
+body:not(.overlay) .data-source { font-size: 10px; letter-spacing: 0; }
+body:not(.overlay) .view .option-block > h3,
+body:not(.overlay) .option-head h3 { font: 550 18px/1.2 var(--display); letter-spacing: -.015em; text-transform: none; }
+body:not(.overlay) :is(.option-head, .settings-group-head) { border-color: var(--rule); }
+body:not(.overlay) :is(.settings-group-index, .settings-card-index) { color: var(--dim); }
+body:not(.overlay) .settings-group[open] { border-color: var(--rule-hot); }
+body:not(.overlay) .settings-group[open] > summary { background: var(--panel-2); }
+body:not(.overlay) :is(.context-rail-inner, .notice-strip .notice, .map-info, .entity-drawer, .reference-toolbar) { background-image: none; box-shadow: none; border-color: var(--rule); }
+body:not(.overlay) .notice-strip { margin-bottom: 18px; }
+body:not(.overlay) .notice-strip .notice { border-radius: 2px; border-left: 2px solid var(--amber); background: #1d262a; }
+body:not(.overlay) .notice-strip .notice-summary { padding: 8px 12px; }
+body:not(.overlay) .notice-strip .notice-body b { font-size: 12px; color: var(--amber); }
+body:not(.overlay) .notice-strip .notice-toggle { font-size: 10px; color: var(--muted); }
+
+body:not(.overlay) #view-now .now-grid { gap: 18px; }
+body:not(.overlay) #view-now .card { background: var(--panel); border-color: var(--rule); border-radius: 3px; padding: 18px 20px; }
+body:not(.overlay) #view-now .now-status-card { border-top: 2px solid var(--rule-hot); background: #1b262e; }
+body:not(.overlay) #view-now.game-closed #now-focus { display: none; }
+body:not(.overlay) #view-now .now-status-card > .card-label { color: var(--text); font-weight: 600; }
+body:not(.overlay) #view-now .now-status-card .page-glyph-label .page-glyph { display: none; }
+body:not(.overlay) .now-status-label { color: var(--muted); font-size: 10px; letter-spacing: .06em; }
+body:not(.overlay) .now-status-field { border-color: var(--rule); padding-top: 12px; padding-bottom: 12px; }
+body:not(.overlay) .now-status-field .value { color: var(--text); font-size: 18px; font-weight: 500; }
+body:not(.overlay) .now-status-location { border-right-color: var(--rule); }
+body:not(.overlay) .now-status-location .hero-value { color: var(--text); font: 450 clamp(25px, 2.8vw, 39px)/1.15 var(--display); letter-spacing: -.025em; text-shadow: none; }
+body:not(.overlay) .now-status-location .hero-sub { color: var(--muted); font-size: 13px; }
+body:not(.overlay) .now-focus:not([hidden]),
+body:not(.overlay) .now-focus.now-closed:not([hidden]) { min-height: 72px; border: 0; border-left: 3px solid var(--cyan); border-radius: 0 3px 3px 0; padding: 13px 17px; background: #202d34; box-shadow: none; }
+body:not(.overlay) .now-focus::after { display: none; }
+body:not(.overlay) .now-focus .now-focus-mark { font: 10px var(--mono); color: var(--cyan); letter-spacing: .06em; }
+body:not(.overlay) .now-focus-title { color: var(--text); font: 500 20px/1.25 var(--display); letter-spacing: -.01em; }
+body:not(.overlay) #now-closed-detail,
+body:not(.overlay) #now-focus-detail { font-size: 12px; color: var(--muted); }
+body:not(.overlay) #view-now .card.now-briefing { border-color: var(--rule); border-top-color: var(--cyan-deep); background: var(--panel); }
+body:not(.overlay) #view-now .card.now-briefing .card-label { color: var(--cyan); }
+body:not(.overlay) .briefing-section { background: none; border: 0; border-top: 1px solid var(--rule); padding: 10px 0; }
+body:not(.overlay) .briefing-title { color: var(--text); font-size: 22px; font-weight: 500; }
+body:not(.overlay) #now-feed { max-height: 440px; background-image: none; padding-left: 0; }
+body:not(.overlay) #now-feed li { padding: 10px 0 10px 16px; border-left: 1px solid var(--rule-hot); border-bottom-color: var(--rule); gap: 12px; font-size: 13px; }
+body:not(.overlay) #now-feed li::before { left: -3px; border: 0; border-radius: 0; width: 5px; height: 5px; background: var(--cyan); box-shadow: none; }
+body:not(.overlay) #now-feed .t { font: 11px var(--mono); color: var(--muted); }
+body:not(.overlay) #now-feed .k { border: 0; padding: 0; background: none; font-size: 10px; }
+
+body:not(.overlay) .summary-strip { border-block: 1px solid var(--rule); gap: 0; background: transparent; }
+body:not(.overlay) .summary-strip .tile { padding: 14px 18px; border: 0; border-left: 1px solid var(--rule); border-radius: 0; background: transparent; box-shadow: none; }
+body:not(.overlay) .summary-strip .tile:first-child { border-left: 0; }
+body:not(.overlay) .summary-strip .tile .n { color: var(--text); font-family: var(--mono); font-weight: 450; letter-spacing: -.045em; }
+body:not(.overlay) .summary-strip .tile .l { color: var(--muted); letter-spacing: .04em; }
+body:not(.overlay) .table-wrap { background: var(--deep); }
+body:not(.overlay) thead th { padding: 12px 13px; background: #202b32; border-color: var(--rule); color: var(--muted); font: 10px/1.4 var(--mono); letter-spacing: .04em; }
+body:not(.overlay) tbody td { padding: 11px 13px; border-color: #2b373e; font-size: 13px; }
+body:not(.overlay) tbody tr:hover td { background: #202c33; }
+body:not(.overlay) tbody td :is(button.ghost, a.ghost) { font-size: 11px; letter-spacing: 0; }
+
+body:not(.overlay) :where(button, .ghost, .tiny) { border-radius: 2px; clip-path: none; background-image: none; box-shadow: none; text-shadow: none; letter-spacing: .025em; }
+body:not(.overlay) :is(button.ghost, button.tiny) { border-color: var(--rule-hot); background: transparent; color: var(--text); box-shadow: none; font-size: 11px; text-transform: none; }
+body:not(.overlay) :is(button.ghost, button.tiny)::after { display: none; }
+body:not(.overlay) :is(button.ghost, button.tiny):hover:not(:disabled) { border-color: var(--cyan); background: #273139; color: var(--cyan-hot); box-shadow: none; }
+body:not(.overlay) button.primary { background: var(--cyan); color: #161d20; border-color: var(--cyan); border-radius: 2px; box-shadow: none; text-transform: none; font-weight: 600; }
+body:not(.overlay) button.primary:hover:not(:disabled) { background: var(--cyan-hot); border-color: var(--cyan-hot); }
+body:not(.overlay) :is(button, a, input, select, textarea):focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; box-shadow: none; }
+body:not(.overlay) :is(input[type="text"], input[type="search"], input[type="number"], input[type="date"], select, textarea) { background-color: var(--deep); border-color: var(--rule-hot); color: var(--text); border-radius: 2px; }
+body:not(.overlay) :is(button.place-link, button.ref-link, button.commodity-open, button.link) { color: var(--cyan); text-decoration-color: var(--cyan-deep); }
+body:not(.overlay) .ref-modal-panel { background: var(--panel); }
+body:not(.overlay) .entity-drawer { background: var(--panel); border-color: var(--rule-hot); }
+body:not(.overlay) .entity-drawer :is(.entity-head, .entity-section) { border-color: var(--rule); }
+body:not(.overlay) .deck-summary { top: calc(var(--console-header) + var(--console-telemetry) + 18px); }
+body:not(.overlay) .foot { border-color: var(--rule); color: var(--dim); }
+body:not(.overlay) #view-fleet .fleet-roster-card { border-color: var(--rule); border-radius: 3px; background: var(--panel); box-shadow: none; }
+body:not(.overlay) #view-fleet .fleet-roster-card .ship-render-wrap { background: var(--deep); }
+body:not(.overlay) #view-settings :is(.option-block, .settings-group) { border-radius: 3px; background: var(--panel); box-shadow: none; }
+body:not(.overlay) #view-settings .settings-group-copy strong { font-weight: 550; letter-spacing: .04em; }
+
+/* Keep the location and ship together; session health is a full-width footer
+   so its explanation does not stretch an otherwise empty location column. */
+@media (min-width: 1100px) {
+  body:not(.overlay) .now-status-readings:has(> .now-status-location:not([hidden])) > .now-status-location { grid-row: span 2; }
+  body:not(.overlay) .now-status-readings:has(> .now-status-location:not([hidden])) > .now-status-respawn { grid-column: 3; grid-row: 2; }
+  body:not(.overlay) .now-status-readings > .now-status-health:not([hidden]) { grid-column: 1 / -1; display: grid; grid-template-columns: 145px 100px 145px minmax(0, 1fr); column-gap: 18px; align-items: center; padding-top: 12px; }
+  body:not(.overlay) .now-status-health > .now-status-label { grid-area: 1 / 1; }
+  body:not(.overlay) .now-status-health > .card-source { grid-area: 2 / 1; margin: 0; }
+  body:not(.overlay) .now-status-health > .statline { grid-row: 1 / 3; display: flex; align-items: baseline; justify-content: flex-start; gap: 10px; border: 0; font-size: 11px; }
+  body:not(.overlay) .now-status-health > .statline:nth-of-type(3) { grid-column: 2; }
+  body:not(.overlay) .now-status-health > .statline:nth-of-type(4) { grid-column: 3; }
+  body:not(.overlay) .now-status-health > .statline b { color: var(--text); font-size: 20px; }
+  body:not(.overlay) .now-status-health > .note { grid-area: 1 / 4 / 3 / 5; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+}
+
+/* A navigation row can wrap without clipping its dropdowns. Keeping it out
+   of an overflow scroller also leaves keyboard-focused menu items reachable. */
+@media (max-width: 1100px) {
+  body:not(.overlay) .topbar { column-gap: 12px; }
+  body:not(.overlay) .tabs { gap: 2px; }
+  body:not(.overlay) .tabs button { padding-inline: 9px; font-size: 11px; }
+  body:not(.overlay) .status #install { display: none; }
+  body:not(.overlay) .deck-summary { position: static; }
+}
+@media (max-width: 900px) {
+  body:not(.overlay) { --console-header: 132px; --console-telemetry: 0px; }
+  body:not(.overlay) .topbar { grid-template-rows: 51px auto; padding-inline: 18px; }
+  body:not(.overlay) .topbar .status { display: flex; }
+  body:not(.overlay) .topbar .search-box { display: none; }
+  body:not(.overlay) .tabs { flex-wrap: wrap; justify-content: flex-start; align-content: start; column-gap: 4px; row-gap: 0; }
+  body:not(.overlay) .tabs button { padding: 9px 10px; font-size: 12px; }
+  body:not(.overlay) .tabs > button:first-child { padding-left: 10px; }
+  body:not(.overlay) .tabs > button:first-child::after { left: 10px; }
+  body:not(.overlay) .group-menu { min-width: 165px; }
+  body:not(.overlay) main { padding-inline: 18px; padding-top: 20px; }
+  body:not(.overlay) .brand .by { display: none; }
+  body:not(.overlay) .console-heading .console-description { display: none; }
+  body:not(.overlay) .console-heading,
+  body:not(.overlay) .view > .section-bar:not(.mining-title),
+  body:not(.overlay) .view[data-voice="own"] > .section-bar:not(.mining-title) { background-size: 250px 100px; background-position: right center; }
+}
+@media (max-width: 520px) {
+  body:not(.overlay) { --console-header: 160px; }
+  body:not(.overlay) .topbar { grid-template-rows: 47px auto; padding-inline: 12px; }
+  body:not(.overlay) .brand .name { font-size: 25px; }
+  body:not(.overlay) .brand .mark { width: 22px; height: 22px; }
+  body:not(.overlay) .status { font-size: 10px; }
+  body:not(.overlay) .tabs { gap: 0; }
+  body:not(.overlay) .tabs button { padding: 8px 9px; font-size: 11px; }
+  body:not(.overlay) .console-heading h1,
+  body:not(.overlay) .view > .section-bar h2 { font-size: 36px; }
+  body:not(.overlay) .console-heading,
+  body:not(.overlay) .view > .section-bar:not(.mining-title),
+  body:not(.overlay) .view[data-voice="own"] > .section-bar:not(.mining-title) { min-height: 100px; background-image: none; }
+  body:not(.overlay) main { padding-inline: 12px; }
+  body:not(.overlay) #view-now .card { padding: 14px; }
+  body:not(.overlay) .now-focus:not([hidden]) { grid-template-columns: 1fr; }
+  body:not(.overlay) .now-focus .tiny { justify-self: start; }
+  body:not(.overlay) .briefing-head { flex-direction: column; align-items: stretch; }
+  body:not(.overlay) .briefing-actions { justify-content: flex-start; padding-right: 0; }
+  body:not(.overlay) #now-feed li { flex-wrap: wrap; gap: 4px 10px; }
+  body:not(.overlay) #now-feed :is(.x, .d) { flex-basis: 100%; }
+  body:not(.overlay) .foot { display: grid; grid-template-columns: 70px 1fr; gap: 14px; padding: 20px 12px 28px; }
+  body:not(.overlay) .foot .emblem { grid-area: 1 / 1; width: 60px; box-shadow: none; }
+  body:not(.overlay) .foot .mbc { grid-area: 1 / 2; width: 65px; }
+  body:not(.overlay) .foot > span:not(.foot-version) { grid-column: 1 / -1; }
+  body:not(.overlay) .foot-version { grid-column: 1 / -1; justify-self: end; margin-left: 0; }
+}
+
+/* These new heading elements belong only to the dashboard's record view. */
+body.overlay .console-heading { display: none; }

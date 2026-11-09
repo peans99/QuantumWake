@@ -370,7 +370,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.15
+### 1.2.16
+
+**A spacecraft console for Quantum Wake.** The dashboard has a charcoal and warm-white palette, restrained orange controls, a clearer navigation index, and a course-chart motif built around the wake mark. Flatter instrument panels and larger page titles give the flight record and reference views their own character. The in-game overlay keeps its compact presentation.
 
 Two new ways to press the game's keys, both built from your own keybindings: voice commands, and Star Citizen profiles for Stream Deck. The overlay gets a much smaller compact view and a quieter look over the game, and the Cockpit HUD's Target page draws the ship the way the Garage does.
 

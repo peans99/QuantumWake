@@ -13,12 +13,14 @@ namespace Quantumwake.WebTests;
 /// </remarks>
 public class StylesheetTests
 {
-    private static string Css() => File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "app.css"));
+    private static string Css(string name = "app.css") => File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", name));
 
-    [Fact]
-    public void Braces_balance_and_never_go_negative()
+    [Theory]
+    [InlineData("app.css")]
+    [InlineData("console.css")]
+    public void Braces_balance_and_never_go_negative(string name)
     {
-        var css = Css();
+        var css = Css(name);
         var depth = 0;
         var line = 1;
 
@@ -81,18 +83,22 @@ public class StylesheetTests
         Assert.Matches(@"\.section-bar h2\s*\{\s*padding-left:\s*1[6-9]px", Css());
     }
 
-    [Fact]
-    public void Comments_open_and_close_in_pairs()
+    [Theory]
+    [InlineData("app.css")]
+    [InlineData("console.css")]
+    public void Comments_open_and_close_in_pairs(string name)
     {
-        var css = Css();
+        var css = Css(name);
         Assert.Equal(CountOf(css, "/*"), CountOf(css, "*/"));
     }
 
     /// <summary>A selector list that ends in a comma has lost the rule it was leading to.</summary>
-    [Fact]
-    public void No_selector_list_dangles()
+    [Theory]
+    [InlineData("app.css")]
+    [InlineData("console.css")]
+    public void No_selector_list_dangles(string name)
     {
-        var lines = Css().Split('\n');
+        var lines = Css(name).Split('\n');
         for (var i = 0; i < lines.Length - 1; i++)
         {
             if (!lines[i].TrimEnd().EndsWith(',')) continue;

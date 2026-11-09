@@ -6452,5 +6452,7 @@
   "Plugin installer opened in Stream Deck. Finish installing it, then click Open in Stream Deck again to import your profile.": "Installation du plugin ouverte dans Stream Deck. Terminez-la, puis cliquez à nouveau sur Ouvrir dans Stream Deck pour importer votre profil.",
   "Profile home": "Accueil du profil",
   "Page {page}": "Page {page}",
-  "Select a key to read its full label and binding.": "Sélectionnez une touche pour lire son libellé complet et son raccourci."
+  "Select a key to read its full label and binding.": "Sélectionnez une touche pour lire son libellé complet et son raccourci.",
+  "Flight recorder": "Enregistreur de vol",
+  "A pilot's logbook": "Le journal de bord du pilote"
 }

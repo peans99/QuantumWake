@@ -46,6 +46,36 @@ const PAGE_GLYPHS = Object.freeze({
    prepended here was wiped by the first rewrite. */
 const OWN_TITLE_MARK = new Set(['mining']);
 
+// A wrapped navigation index must keep its menus inside the viewport without
+// putting the index in an overflow scroller, which would cut the menus off.
+function navigationMenuOffset(left, width, viewport) {
+  return Math.max(12, Math.min(left, viewport - width - 12)) - left;
+}
+function syncNavigationHeader() {
+  if (isOverlay) return;
+  const height = Math.ceil($('.topbar')?.getBoundingClientRect?.().height || 0);
+  if (height > 0) document.body.style.setProperty('--console-header', height + 'px');
+}
+function initNavigationMenuBounds() {
+  if (isOverlay) return;
+  for (const group of $$('#tabs .tab-group')) {
+    const fit = () => {
+      const menu = group.querySelector('.group-menu');
+      if (!menu) return;
+      const left = group.getBoundingClientRect().left;
+      const width = menu.getBoundingClientRect().width || 180;
+      const viewport = document.documentElement?.clientWidth || window.innerWidth;
+      menu.style.setProperty('--nav-menu-left', navigationMenuOffset(left, width, viewport) + 'px');
+    };
+    group.addEventListener('mouseenter', fit);
+    group.addEventListener('focusin', fit);
+    window.addEventListener('resize', fit);
+  }
+  const header = $('.topbar');
+  if (window.ResizeObserver && header) new ResizeObserver(syncNavigationHeader).observe(header);
+  syncNavigationHeader();
+}
+
 function decorateNavigationGlyphs() {
   for (const button of $$('#tabs button[data-view]')) {
     const glyph = PAGE_GLYPHS[button.dataset.view];
@@ -37528,6 +37558,7 @@ document.addEventListener('keydown', (event) => {
 
 async function boot() {
   decorateNavigationGlyphs();
+  initNavigationMenuBounds();
   initNowCardCollapsers();
   initCurrentStatusConfiguration();
   initPageStatsCollapsers();
