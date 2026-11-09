@@ -23,7 +23,7 @@ public class NavigationTests
         AssertViews(navigation, "Hangar", "fleet", "hangar", "loadout", "stash", "garage", "armoury");
         AssertViews(navigation, "Economy", "spending", "ledger", "commodities", "market");
         AssertViews(navigation, "Reference", "ships", "components", "parts", "loot", "mining", "crafting");
-        AssertViews(navigation, "Settings", "settings", "overlay", "controls", "labels", "imports", "about");
+        AssertViews(navigation, "Settings", "settings", "overlay", "controls", "streamdeck", "labels", "imports", "about");
     }
 
     [Fact]

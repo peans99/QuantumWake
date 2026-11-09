@@ -99,6 +99,7 @@
         <button data-view="settings">General</button>
         <button data-view="overlay">Overlay</button>
         <button data-view="controls">Controls</button>
+        <button data-view="streamdeck">Stream Deck</button>
         <button data-view="labels">Item labels</button>
         <button data-view="imports">Shared files</button>
         <button data-view="data">What was read</button>
@@ -4226,8 +4227,16 @@
   </section>
 
   <section id="view-streamdeck" class="view">
-    <div class="section-bar"><div><span class="page-kicker">Settings</span><h2>Star Citizen · Stream Deck</h2></div><button class="ghost" id="deck-back">Back to Settings</button></div>
-    <p class="muted">Build a profile from the keyboard and mouse bindings in your selected Star Citizen installation. Regenerate after changing your bindings.</p>
+    <!-- A Settings tab of its own, beside Controls (1.2.15). It was reached
+         through a button in General's Stream Deck group, with a Back button
+         to return there: a page two clicks deep that the menu never named. -->
+    <div class="section-bar">
+      <div>
+        <span class="page-kicker">Settings</span>
+        <h2>Stream Deck</h2>
+        <p class="muted caption">Pick commands and get a 15-key or XL profile laid out in folders, each button on the key your keybindings give it. Rebuild it after changing your bindings in game.</p>
+      </div>
+    </div>
     <div class="option-block"><div class="controls">
       <label>Stream Deck model <select id="deck-model"><option value="15">15 keys · 5 × 3</option><option value="xl">XL · 32 keys · 8 × 4</option></select></label>
       <label>Bindings <select id="deck-source"><option value="current">My current bindings</option><option value="defaults">Game defaults</option></select></label>
@@ -4709,28 +4718,9 @@
       </div>
     </details>
 
-    <!-- Its own group (1.2.10): it began as a loose card above the quick
-         settings, where it read as part of whichever card sat next to it. -->
-    <details class="settings-group" id="settings-streamdeck-group">
-      <summary>
-        <span class="settings-group-index">04</span>
-        <span class="settings-group-copy"><strong>Stream Deck</strong><span>A Star Citizen profile built from your keybindings, and the plugin that presses them.</span></span>
-      </summary>
-      <div class="settings-group-content">
-    <div class="option-block">
-      <div class="option-head">
-        <h3>Star Citizen profile</h3>
-        <button class="ghost" id="settings-streamdeck">Build a profile</button>
-      </div>
-      <p class="muted">Pick commands and get a 15-key or XL profile laid out in folders, each button on the key your keybindings give it. Rebuild it after changing your bindings in game.</p>
-      <p class="muted">The buttons need the Star Citizen Commands plugin on this PC: <a href="/api/streamdeck/plugin" download>download the plugin</a> and open it once, or let Open in Stream Deck install it for you. Windows only.</p>
-    </div>
-      </div>
-    </details>
-
     <details class="settings-group">
       <summary>
-        <span class="settings-group-index">05</span>
+        <span class="settings-group-index">04</span>
         <span class="settings-group-copy"><strong>Log maintenance</strong><span>Re-read history, and see what was read from where.</span></span>
       </summary>
       <div class="settings-group-content">

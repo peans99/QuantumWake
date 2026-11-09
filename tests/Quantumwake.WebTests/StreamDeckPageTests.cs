@@ -149,21 +149,21 @@ public class StreamDeckPageTests
         Assert.All(lines[..^1], line => Assert.EndsWith("-", line));
         Assert.Equal("togglepdrawhelpers", string.Concat(lines.Select(line => line.TrimEnd('-'))));
     }
-    [Fact] public void Stream_deck_has_its_own_settings_group_and_back_returns_to_it()
+    [Fact] public void Stream_deck_is_a_settings_tab_beside_controls()
     {
         // The stub seeds attributes, not nesting, so the placement is read from the markup.
-        var markup = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "index.html"));
-        var start = markup.IndexOf("id=\"settings-streamdeck-group\"", StringComparison.Ordinal);
-        Assert.True(start > 0);
-        var group = markup[start..markup.IndexOf("</details>", start, StringComparison.Ordinal)];
-        Assert.Contains("<strong>Stream Deck</strong>", group);
-        Assert.Contains("id=\"settings-streamdeck\"", group);
-        // One way in: the loose card it started as is gone.
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(markup, "id=\"settings-streamdeck\""));
-        Assert.Contains("settings-group-index\">05</span>\n        <span class=\"settings-group-copy\"><strong>Log maintenance", markup.Replace("\r\n", "\n"));
-
-        var page = new Page();
-        page.Do("__dom.node('#settings-streamdeck-group').open = false; __dom.node('#deck-back').click();");
-        Assert.True(page.Truth("__dom.node('#settings-streamdeck-group').open === true"));
+        var markup = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "index.html")).Replace("\r\n", "\n");
+        var menu = markup[markup.IndexOf("data-glyph=\"✥\">Settings", StringComparison.Ordinal)..markup.IndexOf("</nav>", StringComparison.Ordinal)];
+        Assert.Contains("<button data-view=\"controls\">Controls</button>\n        <button data-view=\"streamdeck\">Stream Deck</button>", menu);
+        // One way in: the General group that led here, and its Back button, are gone.
+        Assert.DoesNotContain("settings-streamdeck", markup);
+        Assert.DoesNotContain("deck-back", markup);
+        Assert.Contains("settings-group-index\">04</span>\n        <span class=\"settings-group-copy\"><strong>Log maintenance", markup);
+        // No special case left in the router: as a menu tab it routes and
+        // lights like Controls. The stub has no menu to walk, so this is read
+        // from the source; NavigationTests holds every tab to its section.
+        var script = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "app.js"));
+        Assert.DoesNotContain("name === 'streamdeck' ? 'settings'", script);
+        Assert.DoesNotContain("name === 'streamdeck') return name", script);
     }
 }

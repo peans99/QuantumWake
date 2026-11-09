@@ -36,7 +36,7 @@ const PAGE_GLYPHS = Object.freeze({
   spending: '¤', ledger: '▥', commodities: '▰', market: '◫',
   ships: '◁', components: '⊛', parts: '⊞', mining: '⬡', crafting: '⌬', encounters: '⊗', missions: '❖', models: '⬗',
   fleet: '◍', hangar: '⌂', loadout: '⊠', stash: '▣', loot: '✪', garage: '⌁', armoury: '✛',
-  settings: '✥', overlay: '◱', controls: '⊹', labels: '▦', imports: '↥', data: '⊟', about: 'ⓘ',
+  settings: '✥', overlay: '◱', controls: '⊹', streamdeck: '⊡', labels: '▦', imports: '↥', data: '⊟', about: 'ⓘ',
   // Reached from another page rather than the menu, but titled like the rest.
   commodity: '◩', share: '⇱', help: '◔',
 });
@@ -415,7 +415,7 @@ function showView(name) {
   // parent stays lit, but each has its own fragment so a saved HTML report is
   // not confused with the app's live dashboard.
   const target = buttons.find(
-    (b) => b.dataset.view === (name === 'commodity' ? 'market' : name === 'help' ? 'about' : name === 'share' || name === 'streamdeck' ? 'settings' : name));
+    (b) => b.dataset.view === (name === 'commodity' ? 'market' : name === 'help' ? 'about' : name === 'share' ? 'settings' : name));
 
   if (!target) return;
 
@@ -565,7 +565,6 @@ function viewFromHash() {
   // A recap is built on demand and lives only in this page, so a bookmarked
   // or refreshed #share has nothing to show; it lands where the button is.
   if (name === 'share') return shareReportData ? 'share' : 'settings';
-  if (name === 'streamdeck') return name;
   return name === 'help' || $$('#tabs button').some((b) => b.dataset.view === name) ? name : null;
 }
 
@@ -37803,13 +37802,6 @@ function renderDeckPreview() {
   }
 }
 $('#deck-preview-home')?.addEventListener('click', () => { deckPreviewGroup = null; deckPreviewOffset = 0; deckPreviewTrail = []; renderDeckPreview(); });
-$('#settings-streamdeck')?.addEventListener('click', () => showView('streamdeck'));
-// Back lands on the Stream Deck group, open, rather than the top of Settings.
-$('#deck-back')?.addEventListener('click', () => {
-  showView('settings');
-  const group = $('#settings-streamdeck-group');
-  if (group) { group.open = true; group.scrollIntoView?.({ block: 'start' }); }
-});
 $('#deck-search')?.addEventListener('input', renderStreamDeck);
 $('#deck-scope')?.addEventListener('change', renderStreamDeck);
 $('#deck-model')?.addEventListener('change', () => {

@@ -352,7 +352,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 1.2.14
+### 1.2.15
 
 **Clearer Stream Deck buttons and a matching preview.** Commands have function icons, bright labels on dark key faces, and spaced keyboard hints. Long names wrap between words instead of being cut mid-word, and the game's untranslated command names (like character_customizer_yaw_left) break at their underscores. Categories have their own colours and symbols. The builder shows the plugin's button artwork, with a readable full label and binding when a key is selected. XL previews keep the keys readable on narrow screens by scrolling. Back returns to the previous preview page after More. The bundled plugin is updated too; regenerate and import a profile to use the new command and folder icons.
 
@@ -400,7 +400,7 @@ Settings → Voice commands shows a few example wordings for each command, and e
 - "Shields off" waits for "confirm", because "on" and "off" sound alike.
 - A fix: commands the game binds as "F7 + LAlt", such as less power to shields, pressed F7 before LAlt. That could raise the shields instead of lowering them. The modifier now goes down first.
 
-**Star Citizen profiles for Stream Deck.** Settings has its own Stream Deck section, with a page for choosing commands and generating a 15-key or XL profile from the selected game installation’s keyboard and mouse bindings. Your existing Stream Deck categories are selected by default, with an optional Extended preset and category checkboxes. Open in Stream Deck hands the profile to the app’s import prompt. The page explains actions it cannot send and offers the companion Windows plugin as a download. Buttons work like the keys they stand for: a command the game only fires after a hold, such as self destruct after half a second, still needs that hold on the Stream Deck, and the page now says how long next to each one, and which ones do one thing on a tap and another when held. Folder keys show only their own name, under the folder mark, and Back and More have arrows of their own.
+**Star Citizen profiles for Stream Deck.** Settings has a Stream Deck tab, beside Controls, for choosing commands and generating a 15-key or XL profile from the selected game installation’s keyboard and mouse bindings. Your existing Stream Deck categories are selected by default, with an optional Extended preset and category checkboxes. Open in Stream Deck hands the profile to the app’s import prompt. The page explains actions it cannot send and offers the companion Windows plugin as a download. Buttons work like the keys they stand for: a command the game only fires after a hold, such as self destruct after half a second, still needs that hold on the Stream Deck, and the page now says how long next to each one, and which ones do one thing on a tap and another when held. Folder keys show only their own name, under the folder mark, and Back and More have arrows of their own.
 
 ### 1.1.25
 
