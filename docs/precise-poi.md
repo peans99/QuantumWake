@@ -7,6 +7,12 @@ Written before any code. The coordinate below is a real `/showlocation` reading
 from this install's owner; everything measured from it was computed against the
 app's own position data and carries the number that came out.
 
+**Since built.** Copied locations got a lasting log in 0.10.28, pins a page of
+their own (Flight → Points, with a note for why anyone was there) in 0.10.37,
+the backup in 0.10.38, the system they belong to in 0.10.39, the distance from
+your last copied location in 0.10.40 and sharing in 0.10.45. The plan below is
+kept as it was written.
+
 ---
 
 ## What the app knows about "where" today
