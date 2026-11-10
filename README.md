@@ -170,7 +170,22 @@ You can ask Quantum Wake to read a saved Star Citizen screenshot or a copied
 `/showlocation` result. This can add facts the log does not carry, such as a
 kiosk balance, fitted ship parts, your rank with an organisation in the Rep
 app, or the pickups and SCU on a hauling contract in the Contracts app. It reads
-the saved file locally; it never captures your screen or reads game memory.
+the saved file on your computer, and nothing about this needs live reading,
+described next.
+
+### Reading the screen live
+
+On Windows the app can read the game's screen as you play instead of waiting
+for a screenshot. It asks once, at start, and the switch is on the **Log** page
+afterwards; Linux never offers it. While Star Citizen is the window in front, a
+frame is read about every two seconds, every second while a ship is targeted,
+and then thrown away. What is kept is what was read, never the picture: the
+Fleet Manager, the map, a loadout, a kiosk, a refinery, the hangar's freight
+terminal, the Contracts and Rep apps, your balance and each rock scanned. The
+Sessions debrief also gets the rocks you worked, and, only if you turn on **Keep
+a record of fights**, the ships you locked. The app never opens the game's
+process, reads its memory or presses a key for this. What is kept, and where,
+is in the [privacy policy](docs/privacy.md).
 
 ## Linux
 
@@ -290,6 +305,7 @@ Quantum Wake, delete the unpacked folder, `~/.local/share/Quantumwake` and
 | **Your logs** | Sessions, travel, ships, contracts, party activity, inventory sightings and confirmed transactions. |
 | **Your game install** | Names, items, commodities, recipes, mining deposits, place descriptions and facilities. |
 | **Saved screenshots or copied locations** | Optional dated readings when you explicitly ask for them. |
+| **The game's screen, live** | Optional, Windows only: the same readings as a screenshot without taking one, plus rocks worked and, if you ask, a record of fights. |
 | **Optional community services** | Current prices, shop listings, ship details and wider map/mining coverage. |
 
 The data database lives in `%LOCALAPPDATA%\Quantumwake`. Nothing is written
@@ -303,7 +319,9 @@ file.
   inventory and quantum-travel records, and say when they are inferred.
 - Current Star Citizen logs do not provide a complete killboard, automatic mining
   history or a complete wallet history. The app labels estimates and partial
-  totals instead of filling gaps with zeroes.
+  totals instead of filling gaps with zeroes. Reading the screen live fills
+  part of the first two, for the time it is on: the ships you locked and the
+  rocks you worked, not anything you were not looking at.
 - Crew and event totals are floors: players or contracts without the necessary
   log entries cannot be counted.
 
@@ -369,6 +387,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 ## Release notes
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
+
+### 1.2.26
+
+**The guide catches up with live reading.** This README said the app never captures your screen, which stopped being true when live reading arrived in 1.1. It now has its own section saying what live reading looks at, what it keeps and where the switch is, and the documentation index lists everything that has been built since it was last written.
+
+**"Next mode", ready for 4.10.3.** The 4.10.3 PTU moves M off mining mode and salvage mode and onto a new control that cycles through the operator modes. A new voice command, "next mode" (or "cycle industrial mode"), presses it. On today's 4.10.2 the game has no such control yet, so the command says so instead of pressing anything, and "mining mode" and "salvage mode" keep working on M; once 4.10.3 is out, those two will offer a spare key like any command with no key of its own.
 
 ### 1.2.24
 

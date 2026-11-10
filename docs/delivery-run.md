@@ -1,6 +1,7 @@
 # Delivery runs
 
-Plan, unbuilt. A hauling run treated the way a delivery driver's handheld
+Plan, partly built: the Freight Manager reader came in 1.1.24 (see "What the
+Freight Manager shows" below); the rest is not. A hauling run treated the way a delivery driver's handheld
 treats a shift: a manifest, one step at a time, a scan when the load goes on
 and another when it comes off, and an honest outcome for every stop — including
 the ones that went wrong.

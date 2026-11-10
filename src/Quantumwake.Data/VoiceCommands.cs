@@ -54,8 +54,12 @@ public sealed record VoiceCommand(
 /// </summary>
 /// <remarks>
 /// The actions are the ones named in <c>defaultProfile.xml</c> on this install
-/// (Alpha 4.10). Mining and salvage mode are both on <c>m</c> by default; the
-/// game picks by the ship you sit in, so both phrases press the same key there.
+/// (Alpha 4.10). Mining and salvage mode are both on <c>m</c> by default up to
+/// 4.10.2; the game picks by the ship you sit in, so both phrases press the
+/// same key there. The 4.10.3 PTU (4.10.200, 2026-11-10) takes <c>m</c> off
+/// both and gives it to <c>v_cycle_industrial_mode</c>, which steps through
+/// the operator modes: "next mode" presses that, and on a build without the
+/// action it says so rather than pressing anything.
 /// </remarks>
 public static class VoiceCommands
 {
@@ -96,6 +100,7 @@ public static class VoiceCommands
         new("guns", "gun mode", [$"{Switch} (gun|guns|gunnery|weapon|weapons) mode", "weapons hot"], "seat_general", "v_toggle_guns_mode", "Guns"),
         new("mining", "mining mode", [$"{Switch} mining mode", "switch to mining"], "seat_general", "v_toggle_mining_mode", "Mining mode"),
         new("salvage", "salvage mode", [$"{Switch} salvage mode", "switch to salvage"], "seat_general", "v_toggle_salvage_mode", "Salvage mode"),
+        new("industrial", "next mode", ["next [industrial|operator] mode", "(cycle|change|switch) [the] (industrial|operator) (mode|modes)", "cycle (mode|modes)", "industrial mode"], "seat_general", "v_cycle_industrial_mode", "Next mode"),
         new("scanmode", "scan mode", [$"{Switch} (scan|scanning) mode", "switch to scanning"], "seat_general", "v_toggle_scan_mode", "Scan mode"),
         new("quantum", "quantum mode", [$"{Switch} quantum [drive] mode", "switch to quantum"], "seat_general", "v_toggle_quantum_mode", "Quantum mode"),
         new("combat", "combat mode", [$"{Switch} (combat|S C M) mode", "switch to (combat|S C M)", "S C M"], "spaceship_movement", "v_master_mode_set_scm", "Combat mode"),

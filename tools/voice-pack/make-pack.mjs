@@ -46,6 +46,8 @@ const phrases = [
   'Weapons to max', 'Weapons up', 'Weapons down', 'Engines to max', 'Engines up', 'Engines down', 'Power balanced',
   'Front shields', 'Rear shields', 'Left shields', 'Right shields', 'Top shields', 'Bottom shields',
   'Shields balanced', 'Shields on', 'Shields off', 'Shields toggled', 'Confirm shields off?', 'Confirm abort self destruct?',
+  // 1.2.25: the industrial-mode cycle the 4.10.3 PTU puts on M.
+  'Next mode',
 ];
 
 // Spelled for the ear, not the eye: Mk II is "Mark Two", the C.O. hulls are

@@ -184,6 +184,22 @@ are all bound by default. More power is still on the mouse wheel. The other
   his sticks: js4's hat and buttons 11–13, and js6 buttons 16 and 18.
 - Gear down and gear up, which are on nothing.
 
+### Next mode, for 4.10.3 (1.2.25)
+
+The 4.10.3 PTU (4.10.200.38406, surveyed 2026-11-10 against LIVE 4.10.197)
+takes M off `v_toggle_mining_mode` and `v_toggle_salvage_mode` and gives
+it to a new action, `v_cycle_industrial_mode` - "Cycle Industrial Operator
+Modes" - which steps through the operator modes. "Next mode" ("cycle
+industrial mode", "next operator mode") presses it.
+
+- **On LIVE 4.10.2** the action does not exist; the command says "This
+  version of the game has no v_cycle_industrial_mode action" and presses
+  nothing, and mining and salvage mode go on pressing M.
+- **On 4.10.3** mining and salvage mode have no key, so they land in the
+  spare-key list below like any unbound command; next mode presses M.
+- Its reply, "Next mode", is one more clip in Bella's pack, recorded with
+  `tools/voice-pack/make-pack.mjs` - which keeps every clip already there.
+
 ### Spare keys (1.2.5)
 
 Settings → Voice commands lists the commands with no keyboard key and offers
