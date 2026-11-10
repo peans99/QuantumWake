@@ -107,6 +107,30 @@ public class StylesheetTests
         }
     }
 
+    /// <summary>
+    /// console.css restyles the header and nothing else. 1.2.18 used it to
+    /// restyle every page and was taken back in 1.2.19 because the old pages
+    /// were preferred; page styles belong in app.css.
+    /// </summary>
+    [Fact]
+    public void Console_stylesheet_only_touches_the_header()
+    {
+        var header = new[] { ".topbar", ".brand", ".status", ".search-box", ".tabs", "#tabs", ".group-menu" };
+        var underIt = new[] { ".flight-telemetry", ".context-rail", ".deck-summary" };
+        var css = System.Text.RegularExpressions.Regex.Replace(Css("console.css"), @"/\*.*?\*/", "", System.Text.RegularExpressions.RegexOptions.Singleline);
+
+        foreach (System.Text.RegularExpressions.Match rule in System.Text.RegularExpressions.Regex.Matches(css, @"([^{}]+)\{[^{}]*\}"))
+        {
+            foreach (var selector in rule.Groups[1].Value.Split(','))
+            {
+                var s = selector.Trim();
+                if (s == "body:not(.overlay)") continue;
+                Assert.StartsWith("body:not(.overlay) ", s);
+                Assert.True(header.Concat(underIt).Any(s.Contains), $"console.css styles something outside the header: {s}");
+            }
+        }
+    }
+
     private static int CountOf(string text, string token)
     {
         var count = 0;

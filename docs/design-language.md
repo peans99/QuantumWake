@@ -1,56 +1,36 @@
-# Quantum Wake: a ship's console
+# The top bar
 
-Quantum Wake is a pilot's record of a spacefaring life. Its dashboard should
-feel like equipment aboard an exploration vessel: useful over a long session,
-recognisable without a logo in every panel, and explicit about what it knows.
+The dashboard's pages are styled by `web/app.css`. The one exception is the
+header, which `web/console.css` restyles after it: a Quantum Wake nameplate
+above a single row of navigation menus.
 
-The dashboard treatment lives in `web/console.css`, after the functional
-component styles in `web/app.css`. It is scoped away from the in-game overlay;
-the overlay's footprint, transparency and type scale are a separate concern.
+1.2.18 restyled every page as a charcoal "spacecraft console". Nicolas
+preferred the previous pages and asked to keep only the top menu with its
+symbols, so 1.2.19 put the pages back and kept the header. Changes to the
+header go in `console.css`, and changes to the pages go in `app.css`.
 
-## Identity
+## What the header keeps
 
-- Charcoal instrument surfaces and warm-white readouts. Space comes from the
-  ships, places and course information, rather than cyan glow on every frame.
-- Orange marks actions, navigation selection and the current focus. Warning,
-  danger and success keep their own meanings; provenance retains its source
-  names and colours.
-- A nameplate and continuous navigation index form the console's top edge.
-  Menus remain attached to their controls and fit inside the viewport.
-  Navigation symbols and the animated ships along page headers are retained
-  as recognisable parts of Quantum Wake. The ships keep their own lane clear
-  of controls and respect reduced-motion preferences.
-- The wake mark extends into a restrained course-chart motif on the Now page.
-  It is decorative, with no invented coordinates, route claims or telemetry.
-  Working page headers leave room for filters rather than putting art behind
-  them.
-- Flat panels, fine structural rules and clear type establish hierarchy.
-  Avoid glowing outlines, ambient scan animations, rounded panels inside more
-  rounded panels, and a decorative icon beside every label.
+- A nameplate row (mark, name, live status, search) above the navigation row.
+- The navigation symbols from `PAGE_GLYPHS` beside each menu name.
+- An orange mark under the page you are on. The header has its own palette,
+  scoped to `.topbar`, so that orange and its warm-white type stay in the
+  header and the pages keep their cyan.
+- In a narrow window the navigation wraps onto more lines instead of
+  scrolling sideways, and `initNavigationMenuBounds` in `app.js` moves each
+  dropdown so it stays inside the window. A scroller would cut the dropdowns
+  off and hide keyboard-focused menu items.
+- The header is two rows, so the flight line, the context rail and the Stream
+  Deck summary stick under `--console-header` rather than app.css's fixed
+  offsets. `syncNavigationHeader` measures the real height when the navigation
+  wraps.
 
-## Information
-
-Page names match navigation. The spacecraft language belongs in the visual
-system, not in unfamiliar names for ordinary actions. The pilot still sees
-Now, Fleet, Map and Settings.
-
-Use the game's actual ship art and recorded course information as the main
-visual material. Do not add decorative statistics, fake status lights or an
-illustration that could be mistaken for a sensor reading.
-
-Missing data and inferred figures retain their explanations. Closed-game
-records do not present the last reported activity as a current focus. Session
-health has room for its caveat rather than forcing it into a narrow column.
-
-Keep actions visible before hover. Preserve keyboard focus and the existing
-choice of status fields. On narrow windows, wrap the navigation index and
-bound its menus instead of clipping them inside a horizontal scroller.
+Everything is scoped to `body:not(.overlay)`: the in-game overlay and the
+Cockpit HUD are not touched.
 
 ## Checking changes
 
 Render the actual application with isolated data, following
-`run-quantumwake`. Check Now, a ship-heavy view, a reference or map view,
-Settings and a dense tool such as the Stream Deck builder. Inspect narrow
-layouts and keyboard-opened menus. Compare the overlay with the console
-stylesheet enabled and disabled before claiming the dashboard work leaves it
-alone.
+`run-quantumwake`. Check a wide window and a narrow one (the navigation
+wraps), open a menu with the keyboard, and check that the flight line sits
+directly under the header rather than behind it.
