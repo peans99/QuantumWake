@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace Quantumwake.Data;
@@ -60,64 +59,22 @@ public sealed partial class CombatLog(string folder)
     /// <summary>Further apart than this, two locks are two fights.</summary>
     public static readonly TimeSpan Gap = TimeSpan.FromMinutes(2);
 
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    private readonly Lock _gate = new();
+    private readonly DailyJsonLines<CombatEntry> _days = new(folder, At);
 
     /// <summary>A lock that ended.</summary>
-    public void Add(LockRecord ended) => Append(new CombatEntry(Lock: ended), ended.Since);
+    public void Add(LockRecord ended) => _days.Add(new CombatEntry(Lock: ended));
 
     /// <summary>A callout made in a fight.</summary>
-    public void Add(CombatCallout said) => Append(new CombatEntry(Said: said), said.At);
+    public void Add(CombatCallout said) => _days.Add(new CombatEntry(Said: said));
 
     /// <summary>Every entry between two times, oldest first.</summary>
-    public IReadOnlyList<CombatEntry> Between(DateTimeOffset from, DateTimeOffset to)
-    {
-        var found = new List<CombatEntry>();
-        if (!Directory.Exists(folder) || to < from) return found;
-
-        // Files are local days; a session after midnight UTC can be the day
-        // before locally, so a day either side is read and filtered.
-        for (var day = from.ToLocalTime().Date.AddDays(-1); day <= to.ToLocalTime().Date.AddDays(1); day = day.AddDays(1))
-        {
-            var path = Path.Combine(folder, $"{day:yyyy-MM-dd}.jsonl");
-            if (!File.Exists(path)) continue;
-
-            string[] lines;
-            lock (_gate)
-            {
-                try { lines = File.ReadAllLines(path); }
-                catch (IOException) { continue; }
-            }
-
-            foreach (var line in lines)
-            {
-                if (string.IsNullOrWhiteSpace(line)) continue;
-                CombatEntry? entry;
-                try { entry = JsonSerializer.Deserialize<CombatEntry>(line, Json); }
-                catch (JsonException) { continue; } // the half line a crash left
-                if (entry is null) continue;
-                var at = At(entry);
-                if (at >= from && at <= to) found.Add(entry);
-            }
-        }
-
-        return [.. found.OrderBy(At)];
-    }
+    public IReadOnlyList<CombatEntry> Between(DateTimeOffset from, DateTimeOffset to) => _days.Between(from, to);
 
     /// <summary>Whether anything has been kept at all.</summary>
-    public bool Any() => Directory.Exists(folder) && Directory.EnumerateFiles(folder, "*.jsonl").Any();
+    public bool Any() => _days.Any();
 
     /// <summary>Deletes every fight kept; returns how many days of them went.</summary>
-    public int Forget()
-    {
-        lock (_gate)
-        {
-            if (!Directory.Exists(folder)) return 0;
-            var files = Directory.GetFiles(folder, "*.jsonl");
-            foreach (var file in files) File.Delete(file);
-            return files.Length;
-        }
-    }
+    public int Forget() => _days.Forget();
 
     /// <summary>
     /// Entries grouped into fights. A fight is anchored on what only a fight
@@ -187,22 +144,4 @@ public sealed partial class CombatLog(string folder)
 
     [GeneratedRegex(@"(\d+)\s*percent")]
     private static partial Regex Percent();
-
-    private void Append(CombatEntry entry, DateTimeOffset at)
-    {
-        lock (_gate)
-        {
-            try
-            {
-                Directory.CreateDirectory(folder);
-                var path = Path.Combine(folder, $"{at.ToLocalTime():yyyy-MM-dd}.jsonl");
-                File.AppendAllText(path, JsonSerializer.Serialize(entry, Json) + "\n");
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // A fight not written is a debrief with a gap, not a reason to
-                // stop reading the screen mid-fight.
-            }
-        }
-    }
 }

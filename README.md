@@ -370,7 +370,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.22
+### 1.2.23
+
+**The rocks you worked, in each session's debrief.** With live reading on, each mining charge window the app follows is now kept: how long you were on the laser, how long the charge sat in the window, how often it went over, and whether the rock cracked or was let go - with the scan of the rock beside it when one was read. Each session's debrief on the Sessions page lists them under Rocks worked. What each rock refined to is not shown: a refinery order never says which rocks went into it.
 
 **Kiosk prices you saw, beside UEX's.** Each commodity's page has a new table, Seen at the kiosk: every price read off a commodity kiosk on your screen, with the place, what UEX lists at that counter (or, when the place's name matches no UEX counter, which counters quote the same figure), both dates, and whether they agree. A price more than twice or under half what UEX lists is struck through and called a probable misread rather than offered as a price.
 

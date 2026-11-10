@@ -139,7 +139,8 @@ public sealed class LiveScreenService(
     ICalloutVoice? voice = null,
     NearbyHulls? nearby = null,
     LiveSessionService? session = null,
-    CombatLog? fights = null) : BackgroundService
+    CombatLog? fights = null,
+    RockLog? rocks = null) : BackgroundService
 {
     /// <summary>The tick, at a fight's pace. Out of a fight every other tick is skipped.</summary>
     private static readonly TimeSpan Every = TimeSpan.FromSeconds(1);
@@ -151,6 +152,7 @@ public sealed class LiveScreenService(
     private readonly LiveFrameLog _log = frames ?? new LiveFrameLog(Core.AppPaths.In("live"));
 
     private readonly CombatLog _fights = fights ?? new CombatLog(Core.AppPaths.In("combat"));
+    private readonly RockLog _worked = rocks ?? new RockLog(Core.AppPaths.In("rocks"));
     private readonly LiveRocks _rocks = new();
     private readonly LiveScreens _screens = new();
     private readonly Lock _gate = new();
@@ -304,7 +306,17 @@ public sealed class LiveScreenService(
     private void Record(bool flush = false)
     {
         IReadOnlyList<LockRecord> ended;
-        lock (_gate) ended = _combat is null ? [] : flush ? _combat.Flush() : _combat.TakeEnded(DateTimeOffset.UtcNow);
+        IReadOnlyList<FractureRecord> windows;
+        lock (_gate)
+        {
+            ended = _combat is null ? [] : flush ? _combat.Flush() : _combat.TakeEnded(DateTimeOffset.UtcNow);
+            windows = _mining.TakeEnded();
+        }
+
+        // Rocks need no switch of their own: nothing read off the screen is
+        // in a window's record, only the bar's colours turned into times.
+        foreach (var window in windows) _worked.Add(window);
+
         if (!settings.Current.KeepFights) return;
         foreach (var record in ended) _fights.Add(record);
     }

@@ -23,6 +23,21 @@ public sealed record MiningPicture(
     DateTimeOffset? PingAt = null,
     IReadOnlyList<PingReading>? Pings = null);
 
+/// <summary>One charge window from first sight to gone - what the rock record keeps (1.2.23).</summary>
+/// <param name="Since">When the bar was taken up.</param>
+/// <param name="Until">When it was last seen.</param>
+/// <param name="Cracked">It went away at least 85% filled - the rock broke - rather than being let go.</param>
+/// <param name="Filled">The fullest the crack bar got, 0 to 1.</param>
+/// <param name="InWindowSeconds">Time the charge sat in the window, from the frames read - a floor, since a frame is a second or two apart.</param>
+/// <param name="Overcharges">Times the charge went over the window.</param>
+public sealed record FractureRecord(
+    DateTimeOffset Since,
+    DateTimeOffset Until,
+    bool Cracked,
+    double Filled,
+    double InWindowSeconds,
+    int Overcharges);
+
 /// <summary>How a ping is to be read: against which place, and which rocks the pilot is after.</summary>
 /// <param name="Place">The place to read against, or null for every rock.</param>
 /// <param name="Chosen">The pilot picked it, rather than the log's location.</param>
@@ -62,6 +77,12 @@ public sealed class MiningWatch
     private int _cracked;
     private DateTimeOffset? _lastCrack;
     private bool _wasIn;
+
+    // For the record of each window once it goes.
+    private readonly List<FractureRecord> _ended = [];
+    private DateTimeOffset _since, _lastAt;
+    private double _inFor;
+    private int _overcharges;
 
     /// <summary>
     /// Frames a bar has to hold still in before it is taken for the fracture
@@ -116,6 +137,7 @@ public sealed class MiningWatch
                 _lastCrack = at;
                 now.Add(Say(at, "cracked", "Rock cracked"));
             }
+            _ended.Add(new FractureRecord(_since, _lastAt, _maxFill >= CrackedAt, _maxFill, _inFor, _overcharges));
             _active = false;
             _state = _pending = null;
             _agreed = 0;
@@ -156,10 +178,19 @@ public sealed class MiningWatch
             if (_present < StartFrames) return now;
             _active = true;
             _startBar = null;
+            _since = _lastAt = at;
+            _inFor = 0;
+            _overcharges = 0;
 
             // This frame's own vote is cast below, like every followed frame's.
             _agreed--;
         }
+
+        // Time in the window, counted between frames that both had the bar;
+        // a gap of more than three seconds is a missed read, not three
+        // seconds in the window.
+        if (_state == "in") _inFor += Math.Min(3, Math.Max(0, (at - _lastAt).TotalSeconds));
+        _lastAt = at;
 
         _fill = reading.Fill;
         _maxFill = Math.Max(_maxFill, reading.Fill);
@@ -178,6 +209,7 @@ public sealed class MiningWatch
                 now.Add(Say(at, "window", "In the window"));
                 break;
             case "above":
+                _overcharges++;
                 now.Add(Say(at, "overcharge", "Overcharge, back off"));
                 break;
             case "below" when was == "in" && _wasIn:
@@ -186,6 +218,15 @@ public sealed class MiningWatch
         }
 
         return now;
+    }
+
+    /// <summary>The windows that have closed since the last ask, oldest first.</summary>
+    public IReadOnlyList<FractureRecord> TakeEnded()
+    {
+        if (_ended.Count == 0) return [];
+        var taken = _ended.ToList();
+        _ended.Clear();
+        return taken;
     }
 
     public MiningPicture Picture() => new(

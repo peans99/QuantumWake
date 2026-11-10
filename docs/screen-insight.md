@@ -699,6 +699,31 @@ install, because the switch did not exist during the 6-9 November sessions.
 The grouping is tested on built entries, and the lock records on panels shaped
 like the 2026-11-05 recording's.
 
+### The rock record (1.2.23), and the join it does not make
+
+The same four days held 119 frames of the fracture bar
+(`live\frames-*.csv`, kind `Fracture`), and none of it outlived the
+callouts. `MiningWatch` now hands back a `FractureRecord` as each window
+closes: when it was taken up and last seen, the fullest the crack bar got,
+whether it went away at 85% or more (a crack) or before (let go), the seconds
+the charge sat in the window and the overcharges. Time in the window is a
+floor: it is counted between frames that both had the bar, from the frame
+"in" was agreed, and a gap over three seconds counts three. Kept whenever
+live reading is on, in `rocks\`, because nothing read off the screen is in
+it - only colours turned into times.
+
+A scan of the rock, when the reading log holds one, is joined at reading
+time: the scan read nearest the window's start, from three minutes before it
+to its close, each scan given to one window only.
+
+**What the rock refined to is not shown, on purpose.** The plan was scan
+beside yield. It does not hold: a refinery order names a station and its
+minerals, never the rocks that went in, and a run of several rocks has
+nothing to share the yield out by. On this install it is also moot for now -
+of the 239 readings kept between 8 Sep and 10 Nov 2026, none is a rock scan
+and none a refinery terminal - so the scan join is tested on built readings
+and the debrief's note says the yield is not there and why.
+
 ---
 
 ## What other people already built

@@ -3388,6 +3388,7 @@ async function toggleSessionDebrief(id) {
       // so a server without the record, or a failed read, costs the debrief
       // only its Fights section.
       detail.combat = await sessionCombat(detail);
+      detail.rocks = await sessionRocks(detail);
       sessionDetails.set(id, detail);
     } catch {
       sessionDetails.set(id, { error: true });
@@ -3402,6 +3403,71 @@ async function sessionCombat(detail) {
   if (!detail?.startedAt) return null;
   const to = detail.endedAt || new Date().toISOString();
   return getJson(`/api/combat?from=${encodeURIComponent(detail.startedAt)}&to=${encodeURIComponent(to)}`).catch(() => null);
+}
+
+/** The rocks the live reader followed in a session's span (1.2.23), or null when they could not be read. */
+async function sessionRocks(detail) {
+  if (!detail?.startedAt) return null;
+  const to = detail.endedAt || new Date().toISOString();
+  const answer = await getJson(`/api/rocks?from=${encodeURIComponent(detail.startedAt)}&to=${encodeURIComponent(to)}`).catch(() => null);
+  return answer?.rocks || null;
+}
+
+/** Seconds as "1m 20s" or "34s". */
+function shortSpan(seconds) {
+  const s = Math.max(0, Math.round(seconds));
+  return s >= 60 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s` : `${s}s`;
+}
+
+/**
+ * Each charge window the live reader followed in this session, with the scan
+ * of the rock when one was read. Nothing when there were none: most sessions
+ * mine nothing, and a section saying so on each would be noise.
+ */
+function renderSessionRocks(detail) {
+  const rocks = detail.rocks || [];
+  if (!rocks.length) return null;
+
+  const section = el('section', 'session-debrief-section session-rocks');
+  section.append(el('h3', null, tx('Rocks worked')));
+
+  const cracked = rocks.filter((r) => r.fracture.cracked).length;
+  const over = rocks.reduce((sum, r) => sum + (r.fracture.overcharges || 0), 0);
+  section.append(el('div', 'muted', [
+    txn(rocks.length, '{count} charge window', '{count} charge windows'),
+    txn(cracked, '{count} cracked', '{count} cracked'),
+    rocks.length - cracked ? txn(rocks.length - cracked, '{count} let go', '{count} let go') : null,
+    over ? txn(over, '{count} overcharge', '{count} overcharges') : null,
+  ].filter(Boolean).join(' · ')));
+
+  const list = el('ul', 'session-debrief-list session-rock-lines');
+  for (const rock of rocks) {
+    const f = rock.fracture;
+    const item = el('li');
+    item.append(el('span', 'muted', shortTimeOf(f.since)));
+    item.append(el('span', f.cracked ? 'inward' : 'muted', f.cracked ? tx('Cracked') : tx('Let go')));
+    const facts = [
+      tx('{span} on the laser', { span: shortSpan((new Date(f.until) - new Date(f.since)) / 1000) }),
+      tx('{span} in the window', { span: shortSpan(f.inWindowSeconds) }),
+      f.overcharges ? txn(f.overcharges, '{count} overcharge', '{count} overcharges') : null,
+      f.cracked ? null : tx('bar {percent}% full', { percent: Math.round((f.filled || 0) * 100) }),
+    ].filter(Boolean);
+    const scan = rock.scan;
+    if (scan) {
+      const top = (scan.parts || []).slice().sort((a, b) => b.percent - a.percent)[0];
+      facts.push([
+        top ? `${top.mineral || top.read} ${Math.round(top.percent)}%` : (scan.primary || scan.primaryRead),
+        scan.massKg != null ? `${Math.round(scan.massKg).toLocaleString(QW_DATE_LOCALES)} kg` : null,
+        scan.resistancePercent != null ? tx('resistance {percent}%', { percent: Math.round(scan.resistancePercent) }) : null,
+      ].filter(Boolean).join(', '));
+    }
+    item.append(el('span', 'muted', facts.join(' · ')));
+    list.append(item);
+  }
+  section.append(list);
+  section.append(el('p', 'session-debrief-note muted',
+    tx('Read off the fracture bar. Time in the window is a floor: frames are a second or two apart. What each rock refined to is not shown - a refinery order never says which rocks went into it.')));
+  return section;
 }
 
 /** What the game log wrote during a fight, a minute either side: the kills, deaths and pay it can vouch for. */
@@ -3739,6 +3805,8 @@ function renderSessionDebrief(summary) {
 
   const fightSection = renderSessionFights(detail);
   if (fightSection) content.append(fightSection);
+  const rockSection = renderSessionRocks(detail);
+  if (rockSection) content.append(rockSection);
 
   const highlightSection = el('section', 'session-debrief-section');
   highlightSection.append(el('h3', null, tx('Latest highlights')));

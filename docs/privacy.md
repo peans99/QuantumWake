@@ -8,7 +8,7 @@ one.
 
 In force from version 1.0 (November 2026); reading the screen live was added
 in 1.1 (November 2026), and the record of fights, off unless you turn it on,
-in 1.2.21 (November 2026). Changes to this page are dated in
+in 1.2.21 (November 2026); the record of rocks worked in 1.2.23. Changes to this page are dated in
 the project's history on GitHub. Questions go to the project's issue tracker,
 <https://github.com/peans99/QuantumWake/issues>.
 
@@ -104,6 +104,12 @@ send nothing about you.
   Beside it, `live\frames-<date>.csv` notes when each frame was taken, what
   kind of screen it was and how long reading it took - no text from the
   screen - one file a day, a week of them kept.
+- **The record of rocks worked**, while live reading is on (1.2.23):
+  `rocks\<date>.jsonl` in the data folder - for each mining charge window,
+  when it opened and closed, how long the charge sat in it, how often it
+  went over, and whether the rock broke. Worked out from the bar's colours;
+  no text from the screen is in it. One file a day, kept until you delete
+  the folder.
 - **The record of fights**, only while Keep a record of fights is on:
   `combat\<date>.jsonl` in the data folder, one file a day, kept until you
   delete the folder.

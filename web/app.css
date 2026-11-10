@@ -1510,6 +1510,10 @@ td.struck { text-decoration: line-through; opacity: .7; }
 .session-fight { padding: 8px 0; font-size: 11px; }
 .session-fight + .session-fight { border-top: 1px solid rgba(23, 41, 60, .8); }
 .session-fight-head { color: var(--text); font-weight: 600; margin-bottom: 2px; }
+.session-rocks { grid-column: 1 / -1; font-size: 11px; }
+.session-rock-lines { margin-top: 6px; max-width: 1100px; }
+.session-rock-lines li { grid-template-columns: 64px minmax(0, 120px) minmax(0, 1fr); }
+
 /* Facts beside the hull, not flung to the far edge of a full-width row. */
 .session-fight-lines { margin-top: 6px; max-width: 1100px; }
 .session-fight-lines li { grid-template-columns: 64px minmax(0, 240px) minmax(0, 1fr); }

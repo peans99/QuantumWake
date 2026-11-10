@@ -6515,5 +6515,29 @@
   "{count} frames": {
     "one": "{count} image",
     "other": "{count} images"
-  }
+  },
+  "Rocks worked": "Roches travaillées",
+  "{count} charge windows": {
+    "one": "{count} fenêtre de charge",
+    "other": "{count} fenêtres de charge"
+  },
+  "{count} cracked": {
+    "one": "{count} fracturée",
+    "other": "{count} fracturées"
+  },
+  "{count} let go": {
+    "one": "{count} relâchée",
+    "other": "{count} relâchées"
+  },
+  "{count} overcharges": {
+    "one": "{count} surcharge",
+    "other": "{count} surcharges"
+  },
+  "Cracked": "Fracturée",
+  "Let go": "Relâchée",
+  "{span} on the laser": "{span} sous le laser",
+  "{span} in the window": "{span} dans la fenêtre",
+  "bar {percent}% full": "barre remplie à {percent} %",
+  "resistance {percent}%": "résistance {percent} %",
+  "Read off the fracture bar. Time in the window is a floor: frames are a second or two apart. What each rock refined to is not shown - a refinery order never says which rocks went into it.": "Lu sur la barre de fracture. Le temps dans la fenêtre est un minimum : les images sont espacées d’une ou deux secondes. Le rendement de chaque roche au raffinage n’est pas montré - un ordre de raffinerie ne dit jamais quelles roches y sont entrées."
 }

@@ -201,6 +201,7 @@ public static partial class ServerHost
         if (capture is not null) builder.Services.AddSingleton(capture);
         if (voice is not null) builder.Services.AddSingleton(voice);
         builder.Services.AddSingleton(new CombatLog(Core.AppPaths.In("combat")));
+        builder.Services.AddSingleton(new RockLog(Core.AppPaths.In("rocks")));
         builder.Services.AddSingleton<LiveScreenService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<LiveScreenService>());
 
@@ -3879,6 +3880,11 @@ public static partial class ServerHost
             Results.Ok(new CombatRecord(live.Current.KeepFights, log.Any(), CombatLog.Fights(log.Between(from, to)))));
 
         app.MapDelete("/api/combat", (CombatLog log) => Results.Ok(new { forgotten = log.Forget() }));
+
+        // The rocks worked between two times, each with its scan when one was
+        // read (1.2.23), for a session's debrief.
+        app.MapGet("/api/rocks", (DateTimeOffset from, DateTimeOffset to, RockLog log, ScreenReadingStore readings) =>
+            Results.Ok(new { rocks = RockLog.WithScans(log.Between(from, to), readings.All()) }));
 
         // How pings are read, from Mining → Radar: the place, the wanted
         // rocks, and whether only those are said.
