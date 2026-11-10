@@ -6,6 +6,7 @@
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="app.css?v=0.21.9">
+<link rel="stylesheet" href="console.css">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -301,6 +302,10 @@
 
   <!-- NOW -->
   <section id="view-now" class="view active">
+    <div class="console-heading">
+      <div><p class="console-overline">Flight recorder</p><h1>Now</h1></div>
+      <p class="console-description">A pilot's logbook</p>
+    </div>
     <!-- When the game is closed. Game.log keeps the last session until the
          next launch, so without this the page reads days-old state as live. -->
     <section class="now-focus now-closed" id="now-closed" hidden>

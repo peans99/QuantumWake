@@ -30,6 +30,7 @@
     <None Include="..\..\web\locales\*.json" Link="web\locales\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\web\index.html" Link="web\index.html" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\web\app.css" Link="web\app.css" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\web\console.css" Link="web\console.css" CopyToOutputDirectory="PreserveNewest" />
     <None Include="dom.js" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../integrations/streamdeck/com.nlebel.starcitizen.sdPlugin/bin/key-art.js" Link="web/key-art.js" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\web\mfd-core.js" Link="web\mfd-core.js" CopyToOutputDirectory="PreserveNewest" />
