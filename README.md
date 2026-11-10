@@ -370,11 +370,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.17
+### 1.2.18
 
-**The menu symbols and animated ship wakes are back.** The spacecraft console keeps its new palette and panels, with the familiar navigation icons and ships flying along page headers restored.
+**A spacecraft console for Quantum Wake.** The dashboard has a charcoal and warm-white palette, restrained orange controls, a clearer navigation index, and a course-chart motif built around the wake mark. Flatter instrument panels and larger page titles give the flight record and reference views their own character, and the navigation symbols and the ships flying along page headers stay. On a narrow window the navigation wraps onto more lines and its menus stay on screen. The in-game overlay and the Cockpit HUD keep their own look. The screenshots in this README show the new console.
 
-**A spacecraft console for Quantum Wake.** The dashboard has a charcoal and warm-white palette, restrained orange controls, a clearer navigation index, and a course-chart motif built around the wake mark. Flatter instrument panels and larger page titles give the flight record and reference views their own character. The in-game overlay keeps its compact presentation.
+### 1.2.15
 
 Two new ways to press the game's keys, both built from your own keybindings: voice commands, and Star Citizen profiles for Stream Deck. The overlay gets a much smaller compact view and a quieter look over the game, and the Cockpit HUD's Target page draws the ship the way the Garage does.
 
