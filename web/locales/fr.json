@@ -6223,7 +6223,7 @@
   "Waiting: {why}.": "En attente : {why}.",
   "Starting…": "Démarrage…",
   "The change did not save.": "Le changement n’a pas été enregistré.",
-  "Read the game’s screen live <em class=\"muted\">While Star Citizen is the window in front, a frame every two seconds is read like a screenshot and thrown away, every second while a ship is targeted. What a screenshot would be taken of is kept without one, a reading per screen: the Fleet Manager, the map, a loadout, a kiosk, a refinery, the hangar’s freight terminal, the Contracts and Rep apps, the balance on any mobiGlas screen, and each rock scanned. The target is only shown. Nothing touches the game itself.</em>": "Lire l’écran du jeu en direct <em class=\"muted\">Tant que Star Citizen est la fenêtre au premier plan, une image toutes les deux secondes est lue comme une capture d’écran puis jetée, chaque seconde quand un vaisseau est ciblé. Ce qu’on aurait pris en capture est conservé sans elle, une lecture par écran : le gestionnaire de flotte, la carte, un équipement, un kiosque, une raffinerie, le terminal de fret du hangar, les applications Contrats et Réputation, le solde sur tout écran mobiGlas, et chaque roche scannée. La cible est seulement affichée. Rien ne touche au jeu lui-même.</em>",
+  "Read the game’s screen live <em class=\"muted\">While Star Citizen is the window in front, a frame every two seconds is read like a screenshot and thrown away, every second while a ship is targeted. What a screenshot would be taken of is kept without one, a reading per screen: the Fleet Manager, the map, a loadout, a kiosk, a refinery, the hangar’s freight terminal, the Contracts and Rep apps, the balance on any mobiGlas screen, and each rock scanned. The target is only shown, unless you keep a record of fights below. Nothing touches the game itself.</em>": "Lire l’écran du jeu en direct <em class=\"muted\">Tant que Star Citizen est la fenêtre au premier plan, une image toutes les deux secondes est lue comme une capture d’écran puis jetée, chaque seconde quand un vaisseau est ciblé. Ce qu’on aurait pris en capture est conservé sans elle, une lecture par écran : le gestionnaire de flotte, la carte, un équipement, un kiosque, une raffinerie, le terminal de fret du hangar, les applications Contrats et Réputation, le solde sur tout écran mobiGlas, et chaque roche scannée. La cible est seulement affichée, sauf si vous gardez une trace des combats ci-dessous. Rien ne touche au jeu lui-même.</em>",
   "Hear it": "Écouter",
   "Not heard: {why}.": "Pas entendu : {why}.",
   "No target": "Aucune cible",
@@ -6452,5 +6452,46 @@
   "Plugin installer opened in Stream Deck. Finish installing it, then click Open in Stream Deck again to import your profile.": "Installation du plugin ouverte dans Stream Deck. Terminez-la, puis cliquez à nouveau sur Ouvrir dans Stream Deck pour importer votre profil.",
   "Profile home": "Accueil du profil",
   "Page {page}": "Page {page}",
-  "Select a key to read its full label and binding.": "Sélectionnez une touche pour lire son libellé complet et son raccourci."
+  "Select a key to read its full label and binding.": "Sélectionnez une touche pour lire son libellé complet et son raccourci.",
+  "Keep a record of fights <em class=\"muted\">Each ship locked and each fight callout, written down for the debrief on the Sessions page: the hull when the panel printed one, the likely hull when it did not, range, speed, whether it was hostile, missile warnings and an objective’s health. A player’s name is never written, nor any picture. Off until you turn it on.</em>": "Garder une trace des combats <em class=\"muted\">Chaque vaisseau verrouillé et chaque annonce de combat, notés pour le débrief de la page Sessions : la coque quand le panneau en affichait une, la coque probable sinon, la distance, la vitesse, s’il était hostile, les alertes missile et la santé d’un objectif. Le nom d’un joueur n’est jamais noté, ni aucune image. Désactivé tant que vous ne l’activez pas.</em>",
+  "Keep a record of fights": "Garder une trace des combats",
+  "likely": "probable",
+  "Unknown contact": "Contact inconnu",
+  "hostile": "hostile",
+  "friendly": "allié",
+  "closest {km} km": "au plus près {km} km",
+  "up to {speed} m/s": "jusqu’à {speed} m/s",
+  "hologram critical": "hologramme critique",
+  "hologram damaged": "hologramme endommagé",
+  "Fights read off the screen": "Combats lus à l’écran",
+  "No ship was locked in this session while the screen was being read.": "Aucun vaisseau n’a été verrouillé pendant cette session tant que l’écran était lu.",
+  "The fight record is off, and nothing was kept for this session.": "La trace des combats est désactivée, et rien n’a été gardé pour cette session.",
+  "{count} minutes": {
+    "one": "{count} minute",
+    "other": "{count} minutes"
+  },
+  "{count} locks": {
+    "one": "{count} verrouillage",
+    "other": "{count} verrouillages"
+  },
+  "{count} likely": {
+    "one": "{count} probable",
+    "other": "{count} probables"
+  },
+  "{count} hostile": {
+    "one": "{count} hostile",
+    "other": "{count} hostiles"
+  },
+  "{count} stopped": {
+    "one": "{count} arrêté",
+    "other": "{count} arrêtés"
+  },
+  "{count} missile warnings": {
+    "one": "{count} alerte missile",
+    "other": "{count} alertes missile"
+  },
+  "objective below {percent}%": "objectif sous {percent} %",
+  "and {count} more": "et {count} de plus",
+  "Read off the screen. A likely hull is the signature’s guess, not the panel’s; the log lines are what Game.log wrote in the same minutes.": "Lu à l’écran. Une coque probable est une supposition d’après la signature, pas ce qu’affichait le panneau ; les lignes du journal sont ce que Game.log a écrit dans les mêmes minutes.",
+  "Game.log": "Game.log"
 }

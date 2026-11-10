@@ -76,10 +76,16 @@ public sealed record GameCapture(bool Taken, string? Why = null, int Width = 0, 
 /// </param>
 /// <param name="Wanted">The rocks the pilot is after, by the name the voice says - "Quantainium", "Hand-mining deposit".</param>
 /// <param name="WantedOnly">Say only pings that could be a wanted rock.</param>
+/// <param name="KeepFights">
+/// Whether each lock and fight callout is written to the combat log for the
+/// Sessions debrief (1.2.21). Off until turned on: the privacy page promised
+/// from 1.1 that the targeted ship was held in memory and never written down,
+/// and a yes to reading the screen was given on that promise.
+/// </param>
 public sealed record LiveScreenSettings(
     bool Asked = false, bool Enabled = false, DateTimeOffset? AnsweredAt = null, bool Voice = false,
     bool VoiceCombat = true, bool VoiceMining = true, bool VoiceMissions = true, IReadOnlyList<string>? Muted = null,
-    string? PingPlace = null, IReadOnlyList<string>? Wanted = null, bool WantedOnly = false)
+    string? PingPlace = null, IReadOnlyList<string>? Wanted = null, bool WantedOnly = false, bool KeepFights = false)
 {
     /// <summary>The <see cref="PingPlace"/> that reads a ping against every rock.</summary>
     public const string Anywhere = "*";
@@ -200,6 +206,17 @@ public sealed class LiveScreenStore
                     : wanted.Count == 0 ? null : [.. wanted.Where(w => !string.IsNullOrWhiteSpace(w)).Distinct(StringComparer.Ordinal)],
                 WantedOnly = wantedOnly ?? _current.WantedOnly,
             };
+            Save();
+            return _current;
+        }
+    }
+
+    /// <summary>Turns the fight record on or off; everything else stays as it was.</summary>
+    public LiveScreenSettings SetKeepFights(bool on)
+    {
+        lock (_gate)
+        {
+            _current = _current with { KeepFights = on };
             Save();
             return _current;
         }

@@ -51,6 +51,37 @@ public sealed record CombatTarget(
     bool Likely = false,
     string? Hull = null);
 
+/// <summary>One lock as it stood when it ended - what the combat log keeps of it.</summary>
+/// <param name="Since">When it was first read.</param>
+/// <param name="Until">When it was last read.</param>
+/// <param name="Name">The hull the panel printed, read twice alike - only ever a hull's name, never a player's.</param>
+/// <param name="Likely">The hull the signature favoured at 60% or better while it was unnamed; a guess.</param>
+/// <param name="Chance">That guess's odds.</param>
+/// <param name="Class">The game's class for <paramref name="Name"/> or <paramref name="Likely"/>, for its picture.</param>
+/// <param name="Faction">The faction line, when it carried one.</param>
+/// <param name="Stance">hostile, friendly, neutral or unread.</param>
+/// <param name="CrossSection">The median cross-section read.</param>
+/// <param name="ClosestKm">The nearest it was read at.</param>
+/// <param name="TopSpeedMs">The fastest it was read at.</param>
+/// <param name="Hull">The worst its hologram looked: sound, damaged or critical; null when never read three times.</param>
+/// <param name="Stopped">It was seen moving and then sat at 0 m/s - what the voice calls disabled.</param>
+/// <param name="Reads">Panels read while it was held.</param>
+public sealed record LockRecord(
+    DateTimeOffset Since,
+    DateTimeOffset Until,
+    string? Name,
+    string? Likely,
+    double? Chance,
+    string? Class,
+    string? Faction,
+    string Stance,
+    double? CrossSection,
+    double? ClosestKm,
+    double? TopSpeedMs,
+    string? Hull,
+    bool Stopped,
+    int Reads);
+
 /// <summary>What the combat page shows.</summary>
 /// <param name="Combat">A hostile lock has been seen in the last half minute.</param>
 /// <param name="Target">The current lock, or null.</param>
@@ -98,6 +129,7 @@ public sealed class CombatWatch(ShipSignatureBook book)
     private const double Moving = 15;
 
     private readonly List<CombatCallout> _said = [];
+    private readonly List<LockRecord> _ended = [];
     private Lock? _lock;
     private DateTimeOffset? _lastHostile;
     private int _locks, _hostileLocks;
@@ -116,6 +148,10 @@ public sealed class CombatWatch(ShipSignatureBook book)
         public TargetStance Stance = TargetStance.Unread;
         public readonly List<double> Damage = [];
         public bool SaidCritical;
+
+        // For the record of it once it ends.
+        public int Reads;
+        public double? Closest, Fastest, Worst;
 
         /// <summary>The median of the last three hologram reads, or null before three.</summary>
         public double? Hurt => Damage.Count < 3 ? null
@@ -148,7 +184,7 @@ public sealed class CombatWatch(ShipSignatureBook book)
         if (panel is null)
         {
             if (_lock is not null && at - _lock.SeenAt > Grace)
-                _lock = null;
+                End();
             return now;
         }
 
@@ -167,6 +203,7 @@ public sealed class CombatWatch(ShipSignatureBook book)
 
         if (_lock is null || NewName(_lock, panel) || _lock.Off >= 2 || _lock.Unnamed >= 2)
         {
+            if (_lock is not null) End();
             _lock = new Lock { Since = at };
             _locks++;
             off = false;
@@ -174,9 +211,12 @@ public sealed class CombatWatch(ShipSignatureBook book)
 
         var l = _lock;
         l.SeenAt = at;
+        l.Reads++;
         l.Em = panel.Em ?? l.Em;
         l.Ir = panel.Ir ?? l.Ir;
         l.Range = panel.RangeKm ?? l.Range;
+        if (panel.RangeKm is { } km) l.Closest = Math.Min(l.Closest ?? km, km);
+        if (panel.SpeedMs is { } ms) l.Fastest = Math.Max(l.Fastest ?? ms, ms);
         l.Faction = panel.Faction ?? l.Faction;
         if (panel.CrossSection is { } cs && !off) l.CrossSections.Add(cs);
 
@@ -273,6 +313,7 @@ public sealed class CombatWatch(ShipSignatureBook book)
         {
             l.Damage.Add(hologram.Damage);
             if (l.Damage.Count > 6) l.Damage.RemoveAt(0);
+            if (l.Hurt is { } hurt) l.Worst = Math.Max(l.Worst ?? hurt, hurt);
             if (l.Hurt >= Critical && l.Moved && !l.Disabled && !l.SaidCritical)
             {
                 l.SaidCritical = true;
@@ -379,6 +420,56 @@ public sealed class CombatWatch(ShipSignatureBook book)
         // and the Scythe and Glaive are 12% apart: 5% is room for a misread
         // decimal without swallowing the next hull.
         && Math.Abs(read - cs) > Math.Max(250, cs * 0.05);
+
+    /// <summary>
+    /// The locks that have ended since the last ask, oldest first - and the
+    /// current one too once it has gone unseen past the grace, which no frame
+    /// may come to say when the game is closed or put behind another window.
+    /// </summary>
+    public IReadOnlyList<LockRecord> TakeEnded(DateTimeOffset at)
+    {
+        if (_lock is not null && at - _lock.SeenAt > Grace) End();
+        if (_ended.Count == 0) return [];
+        var taken = _ended.ToList();
+        _ended.Clear();
+        return taken;
+    }
+
+    /// <summary>Ends the current lock whatever its age - reading switched off, or the app closing.</summary>
+    public IReadOnlyList<LockRecord> Flush()
+    {
+        if (_lock is not null) End();
+        return TakeEnded(DateTimeOffset.MaxValue);
+    }
+
+    /// <summary>
+    /// Closes the current lock into a record. A lock read once is not kept: a
+    /// single panel is as often a misread figure that started a "new" lock as
+    /// a ship, and a debrief of those would list ships that were never there.
+    /// </summary>
+    private void End()
+    {
+        var l = _lock!;
+        _lock = null;
+        if (l.Reads < 2) return;
+
+        // Only a name that is a hull is written down. The panel prints
+        // whatever the game labels the contact with, and a player's ship is
+        // labelled with the player - a handle the privacy page promises is
+        // never kept from a frame. A hull name is the game's, not a person's.
+        var name = l.Name is { } n && Book.Count > 0 ? Book.Hull(n) is not null ? n : null : null;
+        var odds = name is null && l.Cs is { } cs ? Odds(l, cs) : [];
+        var likely = odds.Count > 0 && odds[0].Chance >= 0.6 ? odds[0] : null;
+
+        _ended.Add(new LockRecord(
+            l.Since, l.SeenAt, name, likely?.Name, likely?.Chance,
+            name is not null ? Book.ClassOf(Book.Hull(name) ?? name) : likely?.Class,
+            // The faction on the same terms: one of the game's, never an org's name.
+            l.Faction is { } f && TargetPanel.IsHostileFaction(f) ? f : null,
+            l.Stance.ToString().ToLowerInvariant(), l.Cs, l.Closest, l.Fastest,
+            l.Worst switch { null => null, >= Critical => "critical", >= Damaged => "damaged", _ => "sound" },
+            l.Disabled || l.SaidDisabled, l.Reads));
+    }
 
     /// <summary>
     /// A callout another watch made - the HUD's missile warning, a mission's

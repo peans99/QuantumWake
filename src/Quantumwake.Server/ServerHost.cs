@@ -200,6 +200,7 @@ public static partial class ServerHost
         }
         if (capture is not null) builder.Services.AddSingleton(capture);
         if (voice is not null) builder.Services.AddSingleton(voice);
+        builder.Services.AddSingleton(new CombatLog(Core.AppPaths.In("combat")));
         builder.Services.AddSingleton<LiveScreenService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<LiveScreenService>());
 
@@ -3863,6 +3864,21 @@ public static partial class ServerHost
             live.SetCallout(body.Kind, body.On) is null
                 ? Results.Problem($"no callout called '{body.Kind}'", statusCode: 400)
                 : Results.Ok(service.Describe(live)));
+
+        // The fight record's switch (1.2.21): its own agreement, off until
+        // turned on, because the privacy page promised the locked ship was
+        // never written down until it was.
+        app.MapPost("/api/live/fights", (LiveFights body, LiveScreenStore live, LiveScreenService service) =>
+        {
+            live.SetKeepFights(body.On);
+            return Results.Ok(service.Describe(live));
+        });
+
+        // The fights kept between two times, for a session's debrief.
+        app.MapGet("/api/combat", (DateTimeOffset from, DateTimeOffset to, CombatLog log, LiveScreenStore live) =>
+            Results.Ok(new CombatRecord(live.Current.KeepFights, log.Any(), CombatLog.Fights(log.Between(from, to)))));
+
+        app.MapDelete("/api/combat", (CombatLog log) => Results.Ok(new { forgotten = log.Forget() }));
 
         // How pings are read, from Mining → Radar: the place, the wanted
         // rocks, and whether only those are said.

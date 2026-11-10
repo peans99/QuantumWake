@@ -3383,13 +3383,119 @@ async function toggleSessionDebrief(id) {
 
   if (!sessionDetails.has(id)) {
     try {
-      sessionDetails.set(id, await getJson(`/api/sessions/${encodeURIComponent(id)}`));
+      const detail = await getJson(`/api/sessions/${encodeURIComponent(id)}`);
+      // The fights the screen reader kept in this session's span. Asked apart
+      // so a server without the record, or a failed read, costs the debrief
+      // only its Fights section.
+      detail.combat = await sessionCombat(detail);
+      sessionDetails.set(id, detail);
     } catch {
       sessionDetails.set(id, { error: true });
     }
   }
 
   if (expandedSessionId === id) renderSessions();
+}
+
+/** The fight record for a session's span, or null when it could not be read. */
+async function sessionCombat(detail) {
+  if (!detail?.startedAt) return null;
+  const to = detail.endedAt || new Date().toISOString();
+  return getJson(`/api/combat?from=${encodeURIComponent(detail.startedAt)}&to=${encodeURIComponent(to)}`).catch(() => null);
+}
+
+/** What the game log wrote during a fight, a minute either side: the kills, deaths and pay it can vouch for. */
+const FIGHT_LOG_KINDS = ['kill', 'death', 'incapacitated', 'contract-done', 'payout', 'respawn'];
+
+function fightLogEntries(detail, fight) {
+  const from = new Date(fight.start).getTime() - 60000;
+  const to = new Date(fight.end).getTime() + 60000;
+  return (detail.timeline || []).filter((entry) => FIGHT_LOG_KINDS.includes(entry.kind)
+    && new Date(entry.at).getTime() >= from && new Date(entry.at).getTime() <= to);
+}
+
+/** One lock as a line: the hull printed, or the hull the signature favoured, said as a guess. */
+function fightLockLine(lock) {
+  const item = el('li', 'fight-lock');
+  item.append(el('span', 'muted', shortTimeOf(lock.since)));
+  const who = el('span');
+  if (lock.name) who.append(rowRefLink('ship', lock.class || lock.name, lock.name));
+  else if (lock.likely) {
+    who.append(tx('likely') + ' ', rowRefLink('ship', lock.class || lock.likely, lock.likely),
+      el('span', 'muted', ` ${Math.round((lock.chance || 0) * 100)}%`));
+  } else who.append(el('span', 'muted', tx('Unknown contact')));
+  item.append(who);
+
+  const facts = [
+    lock.stance === 'hostile' ? tx('hostile') : lock.stance === 'friendly' ? tx('friendly') : null,
+    lock.faction,
+    lock.closestKm != null ? tx('closest {km} km', { km: Number(lock.closestKm).toFixed(2) }) : null,
+    lock.topSpeedMs != null ? tx('up to {speed} m/s', { speed: Math.round(lock.topSpeedMs) }) : null,
+    lock.hull === 'critical' ? tx('hologram critical') : lock.hull === 'damaged' ? tx('hologram damaged') : null,
+    lock.stopped ? tx('stopped after moving') : null,
+  ].filter(Boolean);
+  item.append(el('span', lock.stance === 'hostile' ? 'outward' : 'muted', facts.join(' · ')));
+  return item;
+}
+
+/**
+ * The fights the live reader kept in this session (1.2.21), each joined to
+ * what the log wrote in the same minutes. Nothing at all when the record was
+ * never turned on: a section on every session saying so would be noise.
+ */
+function renderSessionFights(detail) {
+  const record = detail.combat;
+  if (!record || (!record.keeping && !record.any)) return null;
+
+  const section = el('section', 'session-debrief-section session-fights');
+  section.append(el('h3', null, tx('Fights read off the screen')));
+  const fights = record.fights || [];
+  if (!fights.length) {
+    section.append(el('p', 'muted', record.keeping
+      ? tx('No ship was locked in this session while the screen was being read.')
+      : tx('The fight record is off, and nothing was kept for this session.')));
+    return section;
+  }
+
+  for (const fight of fights) {
+    const block = el('div', 'session-fight');
+    const minutes = Math.max(1, Math.round((new Date(fight.end) - new Date(fight.start)) / 60000));
+    block.append(el('div', 'session-fight-head',
+      `${shortTimeOf(fight.start)} → ${shortTimeOf(fight.end)} · ${txn(minutes, '{count} minute', '{count} minutes')}`));
+
+    const counts = [
+      txn(fight.locks.length, '{count} lock', '{count} locks'),
+      fight.named ? txn(fight.named, '{count} named', '{count} named') : null,
+      fight.likely ? txn(fight.likely, '{count} likely', '{count} likely') : null,
+      fight.hostile ? txn(fight.hostile, '{count} hostile', '{count} hostile') : null,
+      fight.stopped ? txn(fight.stopped, '{count} stopped', '{count} stopped') : null,
+      fight.missiles ? txn(fight.missiles, '{count} missile warning', '{count} missile warnings') : null,
+      fight.lowestObjective != null ? tx('objective below {percent}%', { percent: fight.lowestObjective }) : null,
+    ].filter(Boolean);
+    block.append(el('div', 'muted', counts.join(' · ')));
+
+    // One timeline: each lock where it began, and the log's lines among them,
+    // so a death reads after the ship that was being fought when it came.
+    const lines = [
+      ...fight.locks.slice(0, 12).map((lock) => ({ at: lock.since, node: fightLockLine(lock) })),
+      ...fightLogEntries(detail, fight).map((entry) => {
+        const item = el('li', 'fight-logged');
+        item.append(el('span', 'muted', shortTimeOf(entry.at)));
+        item.append(el('span', ['kill', 'contract-done', 'payout'].includes(entry.kind) ? 'inward' : 'outward', feedText(withoutMarkup(entry.text))));
+        item.append(el('span', 'muted', [tx('Game.log'), entry.detail ? feedText(withoutMarkup(entry.detail)) : null].filter(Boolean).join(' · ')));
+        return { at: entry.at, node: item };
+      }),
+    ].sort((a, b) => new Date(a.at) - new Date(b.at));
+    const list = el('ul', 'session-debrief-list session-fight-lines');
+    lines.forEach((line) => list.append(line.node));
+    if (fight.locks.length > 12) list.append(el('li', 'muted', tx('and {count} more', { count: fight.locks.length - 12 })));
+    block.append(list);
+    section.append(block);
+  }
+
+  section.append(el('p', 'session-debrief-note muted',
+    tx('Read off the screen. A likely hull is the signature’s guess, not the panel’s; the log lines are what Game.log wrote in the same minutes.')));
+  return section;
 }
 
 function sessionRoute(detail) {
@@ -3630,6 +3736,9 @@ function renderSessionDebrief(summary) {
   if (!contracts.length) contractList.append(el('li', 'muted', tx('No contracts recorded.')));
   contractSection.append(contractList);
   content.append(contractSection);
+
+  const fightSection = renderSessionFights(detail);
+  if (fightSection) content.append(fightSection);
 
   const highlightSection = el('section', 'session-debrief-section');
   highlightSection.append(el('h3', null, tx('Latest highlights')));
@@ -36772,6 +36881,11 @@ function renderLiveScreen() {
       const missions = $('#live-voice-missions');
       if (missions) missions.checked = state.voiceMissions !== false;
     }
+    const fights = $('#live-fights-row');
+    if (fights) {
+      fights.hidden = !state.enabled;
+      $('#live-fights').checked = Boolean(state.keepFights);
+    }
     const trouble = $('#live-voice-trouble');
     if (trouble) {
       trouble.hidden = !(state.enabled && state.voice && state.voiceTrouble);
@@ -37022,6 +37136,26 @@ async function postLiveVoice(event, body) {
 }
 
 $('#live-voice')?.addEventListener('change', (event) => postLiveVoice(event, { enabled: event.target.checked }));
+
+// The fight record: its own agreement, posted on its own.
+$('#live-fights')?.addEventListener('change', async (event) => {
+  try {
+    const response = await fetch('/api/live/fights', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ on: event.target.checked }),
+    });
+    if (!response.ok) throw new Error(`fights ${response.status}`);
+    liveState = await response.json();
+    // Debriefs already open were drawn under the old answer.
+    sessionDetails.clear();
+    renderLiveScreen();
+  } catch {
+    event.target.checked = !event.target.checked;
+    const line = $('#live-status');
+    if (line) line.textContent = tx('The change did not save.');
+  }
+});
 $('#live-voice-combat')?.addEventListener('change', (event) =>
   postLiveVoice(event, { enabled: Boolean(liveState?.voice), combat: event.target.checked }));
 $('#live-voice-mining')?.addEventListener('change', (event) =>

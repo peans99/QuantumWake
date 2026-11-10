@@ -370,7 +370,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.20
+### 1.2.21
+
+**A debrief of each fight, if you want one.** With live reading on, a new switch under it, Keep a record of fights, writes down each ship you lock once the lock ends: the hull when the target panel named it, the likely hull and its odds when it did not, whether it was hostile, how close and how fast it came, how damaged its hologram looked and whether it stopped dead; and the missile warnings and objective-health calls made around it. Each session's debrief on the Sessions page then lists its fights, with what Game.log wrote in the same minutes (kills, deaths, pay, completed contracts) beside them. A player's name and anything that is not one of the game's factions is never written, nor any picture, and the switch is off until you turn it on: the privacy page had promised the targeted ship was never written down, and now says what changes when you turn the record on.
 
 **The previous look is back, with the new top bar kept.** The pages return to the blue-grey instrument panels, cyan highlights and page titles from before 1.2.18. The navigation keeps its 1.2.18 form: the Quantum Wake nameplate above a single row of menus with their symbols and a cyan mark under the page you are on, wrapping onto more lines in a narrow window with its menus kept on screen. The screenshots in this README are retaken to show it.
 

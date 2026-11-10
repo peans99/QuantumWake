@@ -1354,7 +1354,7 @@
             <input type="checkbox" id="live-enabled">
             <span>
               Read the game&rsquo;s screen live
-              <em class="muted">While Star Citizen is the window in front, a frame every two seconds is read like a screenshot and thrown away, every second while a ship is targeted. What a screenshot would be taken of is kept without one, a reading per screen: the Fleet Manager, the map, a loadout, a kiosk, a refinery, the hangar’s freight terminal, the Contracts and Rep apps, the balance on any mobiGlas screen, and each rock scanned. The target is only shown. Nothing touches the game itself.</em>
+              <em class="muted">While Star Citizen is the window in front, a frame every two seconds is read like a screenshot and thrown away, every second while a ship is targeted. What a screenshot would be taken of is kept without one, a reading per screen: the Fleet Manager, the map, a loadout, a kiosk, a refinery, the hangar’s freight terminal, the Contracts and Rep apps, the balance on any mobiGlas screen, and each rock scanned. The target is only shown, unless you keep a record of fights below. Nothing touches the game itself.</em>
             </span>
           </label>
           <p class="muted" id="live-status" aria-live="polite"></p>
@@ -1378,6 +1378,15 @@
             <label class="toggle"><input type="checkbox" id="live-voice-mining"><span>Mining</span></label>
           </div>
           <p class="muted" id="live-voice-trouble" hidden></p>
+          <!-- Its own agreement: from 1.1 the privacy page promised the locked
+               ship was held in memory and never written down. -->
+          <label class="toggle live-fights" id="live-fights-row" hidden>
+            <input type="checkbox" id="live-fights">
+            <span>
+              Keep a record of fights
+              <em class="muted">Each ship locked and each fight callout, written down for the debrief on the Sessions page: the hull when the panel printed one, the likely hull when it did not, range, speed, whether it was hostile, missile warnings and an objective&rsquo;s health. A player&rsquo;s name is never written, nor any picture. Off until you turn it on.</em>
+            </span>
+          </label>
         </div>
         </div>
       </details>

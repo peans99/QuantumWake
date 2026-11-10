@@ -659,6 +659,46 @@ read against every rock and shown with no place - with RisboTheBlade's Riccite
 video's frames replayed and Lagrange A picked (no Riccite there), 10,155 still came
 out three Riccite.
 
+### The fight record (1.2.21)
+
+Between 6 and 9 November 2026 the live reader on this install took 7,796
+frames; 1,390 of them held the target panel and 193 the missile band
+(`live\frames-*.csv`, the `kind` column). Every one of those went into the
+voice and the Now card and was gone: the combat watch held the current lock
+and the last dozen callouts, in memory. The log cannot be asked afterwards -
+it names the hulls that streamed in, never the one locked (see **The target
+panel**).
+
+So a lock now leaves a `LockRecord` when it ends - replaced by another ship,
+or unseen past the six-second grace, which is also how a lock ends when the
+game closes mid-fight, since no frame comes to say so. It keeps the hull
+printed (read twice alike), or the hull the signature gave 60% or better,
+with its odds; the faction, stance, median cross-section, closest range, top
+speed, the worst band the hologram reached, whether it stopped after moving,
+and how many panels were read. A lock read once is dropped: one panel is as
+often a misread figure that started a "new" lock as a ship.
+
+Every combat and HUD callout but "online" is kept beside the locks, and the
+two are grouped into fights by `CombatLog.Fights`: anchored on locks, missile
+warnings and an objective's falling health, split by two quiet minutes. The
+territory banner joins a fight only when it falls inside one, because hostile
+territory is also where rocks are mined in peace. The Sessions debrief asks
+for the session's span and lays each fight beside the log's kills, deaths,
+payouts and completed contracts from a minute either side.
+
+**Off until turned on, and narrower than what the panel shows.** The privacy
+page said from 1.1 that the targeted ship "is held in memory for the combat
+page and never written down", and pilots said yes to live reading on that
+page. So the record is its own switch under live reading, and it never
+writes a name that is not a hull in the signature book, nor a faction that
+is not one of the game's: the panel labels a player's ship with the player,
+and an org can sit on the faction line. A test holds both.
+
+Not yet checked against a real fight: no lock has been written on this
+install, because the switch did not exist during the 6-9 November sessions.
+The grouping is tested on built entries, and the lock records on panels shaped
+like the 2026-11-05 recording's.
+
 ---
 
 ## What other people already built
