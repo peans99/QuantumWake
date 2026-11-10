@@ -1336,6 +1336,8 @@
             <button class="ghost" id="screen-scan" hidden>Read last screenshot</button>
             <button class="ghost" id="screen-read-older" hidden
                     title="Read the screenshots already in the folder without switching the watch on - newest first, forty at a time"></button>
+            <button class="ghost" id="screen-reread-unplaced" hidden
+                    title="Read every screenshot no reader placed again, through the readers there are now">Read unplaced screenshots again</button>
             <label class="muted" title="Check the clipboard on its own every few seconds">
               <input type="checkbox" id="screen-watch"> <span>Watch clipboard</span>
             </label>
@@ -1358,6 +1360,12 @@
             </span>
           </label>
           <p class="muted" id="live-status" aria-live="polite"></p>
+          <!-- Counts from the frame log, in the app's own words: no screen
+               text is in it, so none is shown. -->
+          <details class="live-frames" id="live-frames">
+            <summary>What the reader saw this week</summary>
+            <div id="live-frames-body" class="muted"></div>
+          </details>
           <!-- Its own switch: reading the screen is one agreement, a voice in
                the headset another, and the first never turns on the second. -->
           <div class="live-voice" id="live-voice-row" hidden>

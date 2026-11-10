@@ -103,7 +103,10 @@ send nothing about you.
   deleted when reading is switched off or the app closes.
   Beside it, `live\frames-<date>.csv` notes when each frame was taken, what
   kind of screen it was and how long reading it took - no text from the
-  screen - one file a day, a week of them kept.
+  screen - one file a day, a week of them kept. Since 1.2.24 a screen the
+  app could not read is noted with a shape from a fixed list of the app's
+  own words, such as "chat" or "no text", so you can see on the Log page
+  what the reader keeps missing; still no text from the screen.
 - **The record of rocks worked**, while live reading is on (1.2.23):
   `rocks\<date>.jsonl` in the data folder - for each mining charge window,
   when it opened and closed, how long the charge sat in it, how often it

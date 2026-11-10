@@ -724,6 +724,37 @@ of the 239 readings kept between 8 Sep and 10 Nov 2026, none is a rock scan
 and none a refinery terminal - so the scan join is tested on built readings
 and the debrief's note says the yield is not there and why.
 
+### The frames nothing placed (1.2.24)
+
+5,018 of the 7,796 live frames of 6-9 November 2026 were filed Unknown, and
+the privacy page promises that a screen the app cannot read is not kept - so
+there was nothing to choose the next reader from. Not keeping them is right;
+what was missing was any description of them. The frame log's kind column now
+says `Unknown/<shape>`, a shape being one of six of the app's own words
+(`UnplacedFrames`): no-text, inventory, flight-hud, chat, few-words, other.
+The Log page counts a week of them under **What the reader saw this week**.
+
+The shapes were drawn from the 42 screenshots of this install the reading log
+had filed Unknown, whose text it does keep, and sort them 17 / 4 / 4 / 3 / 14
+(no-text, inventory, flight-hud, chat, other):
+
+- **All 17 no-text shots are one black picture.** Every one is the same
+  136,061 bytes - a screenshot the game saved before the scene drew. Not a
+  reader fault, and now said as "no text on it at all" rather than "nothing
+  this app knows how to read".
+- **8 of the 14 others are screens a reader now exists for**, kept from before
+  it did: four Freight Manager frames (12 Sep, 24-25 Oct) and four refinery
+  terminal frames (3 Oct). Re-read one by one, three of the refinery frames
+  are placed by the server's engine, and the 12 Sep Freight Manager frame by
+  the Windows engine; the three 24-25 Oct transaction confirmations were not
+  re-checked on the Windows engine. **Read unplaced screenshots again** on the
+  Log page puts all of them through today's readers at once.
+- Chat sits over every other screen and wraps onto untagged lines - five
+  tagged lines of thirteen on a chat-only shot - so a third tagged is chat.
+
+The live frames before 1.2.24 carry no shape, and the page says so rather
+than guessing at them.
+
 ---
 
 ## What other people already built

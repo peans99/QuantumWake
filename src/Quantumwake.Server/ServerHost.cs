@@ -4188,6 +4188,51 @@ public static partial class ServerHost
             }
         });
 
+        // Every screenshot no reader placed, through the readers there are now
+        // (1.2.24). Readers arrive after the frames that teach them: of this
+        // install's 42 Unknown screenshots, 8 were Freight Manager and refinery
+        // screens kept from before those readers existed. Screenshots only -
+        // a live reading of an unplaced screen was never kept to re-read.
+        app.MapPost("/api/screen/readings/reread-unplaced", async (
+            ScreenInsightService insight,
+            ScreenReadingStore readings,
+            ScreenSettingsStore settings,
+            CancellationToken token) =>
+        {
+            if (settings.Current.Mode != ScreenMode.Screenshots)
+                return Results.BadRequest(new { trouble = "screenshot analysis is switched off" });
+
+            if (insight.Excuse(install?.RootPath) is { } excuse)
+                return Results.BadRequest(new { trouble = excuse });
+
+            var unplaced = readings.All()
+                .Where(r => r.Kind is ScreenKind.Unknown or ScreenKind.MobiGlas)
+                .Where(r => !r.Shot.StartsWith("live-", StringComparison.Ordinal))
+                .ToList();
+
+            int read = 0, placed = 0, gone = 0;
+            try
+            {
+                foreach (var reading in unplaced)
+                {
+                    if (ShotPath(reading.Shot) is not { } path) { gone++; continue; }
+                    var fresh = await insight.ReadShotAsync(path, token);
+                    read++;
+                    if (fresh.Kind is not (ScreenKind.Unknown or ScreenKind.MobiGlas)) placed++;
+                }
+            }
+            catch (ScreenEngineUnavailableException e)
+            {
+                return Results.BadRequest(new { trouble = e.Message });
+            }
+
+            return Results.Ok(new { read, placed, gone });
+        });
+
+        // How the live reader's frames went this week, from its own frame log:
+        // every kind counted, and the unplaced ones by shape (1.2.24).
+        app.MapGet("/api/live/frames", () => Results.Ok(UnplacedFrames.Tally(Core.AppPaths.In("live"))));
+
         // The archive, on request. The watch reads nothing from before it
         // began - the pilot enabled reading their screenshots, not their
         // history - but the one loadout photograph of a ship is often from the

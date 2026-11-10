@@ -12467,6 +12467,9 @@ function applyScreenMode() {
   // count, and no button at all when there is nothing waiting.
   const unread = Number(screenSettings.unread) || 0;
   const watching = shots && screenSettings.watchScreenshots;
+  const unplaced = $('#screen-reread-unplaced');
+  if (unplaced) unplaced.hidden = !shots || !screenSettings.canReadScreenshots;
+
   const older = $('#screen-read-older');
   if (older) {
     older.hidden = !shots || !screenSettings.canReadScreenshots || watching || unread === 0;
@@ -18538,6 +18541,93 @@ $('#screen-scan')?.addEventListener('click', async (e) => {
   } finally {
     button.disabled = false;
   }
+});
+
+// Readers arrive after the frames that teach them; this puts every unplaced
+// screenshot through the readers there are now (1.2.24).
+$('#screen-reread-unplaced')?.addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  button.disabled = true;
+  screenSay(tx('reading the unplaced screenshots again…'));
+  try {
+    const response = await fetch('/api/screen/readings/reread-unplaced', { method: 'POST' });
+    const got = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(got.trouble || response.status);
+    screenSay([
+      txn(got.read || 0, '{count} read again', '{count} read again'),
+      txn(got.placed || 0, '{count} placed this time', '{count} placed this time'),
+      got.gone ? txn(got.gone, '{count} no longer in the folder', '{count} no longer in the folder') : null,
+    ].filter(Boolean).join(' · '));
+    renderScreenLog().catch(() => {});
+  } catch (err) {
+    screenSay(tx('could not read them again: {error}', { error: screenText(err.message) }));
+  } finally {
+    button.disabled = false;
+  }
+});
+
+/** Plain words for each shape of unplaced frame, in the order the reader tries them. */
+const FRAME_SHAPES = {
+  'no-text': () => tx('no text at all - a black or loading screen, or open space'),
+  inventory: () => tx('an inventory or looting view, which carries no item names'),
+  'flight-hud': () => tx('the flight HUD with nothing locked or fractured'),
+  chat: () => tx('chat and little else'),
+  'few-words': () => tx('a handful of words'),
+  other: () => tx('something else'),
+};
+
+/**
+ * The frame log's week, counted (1.2.24): what each frame turned out to be,
+ * and the ones nothing placed by shape. Loaded when opened - it reads a
+ * week of files.
+ */
+async function renderLiveFrames() {
+  const body = $('#live-frames-body');
+  if (!body) return;
+  body.textContent = tx('Counting…');
+  let tally;
+  try {
+    tally = await getJson('/api/live/frames');
+  } catch {
+    body.textContent = tx('The frame log could not be read.');
+    return;
+  }
+  body.textContent = '';
+  if (!tally.frames) {
+    body.append(el('p', null, tx('No frames read this week.')));
+    return;
+  }
+
+  body.append(el('p', null, tx('{count} frames read, {from} to {to}.', {
+    count: tally.frames.toLocaleString(QW_DATE_LOCALES), from: dateOf(tally.from), to: dateOf(tally.to),
+  })));
+  const kinds = el('ul', 'live-frame-kinds');
+  for (const [kind, n] of Object.entries(tally.kinds || {}).sort((a, b) => b[1] - a[1])) {
+    // The live loop's own kinds beside the screenshot ones: a close read of
+    // the target panel, the missile band or the fracture bar.
+    const live = { Target: tx('target panel'), Missile: tx('missile band'), Fracture: tx('fracture bar') };
+    const label = kind === 'Unknown' ? tx('not placed') : (live[kind] || SCREEN_KINDS[kind] || kind);
+    kinds.append(el('li', null, `${n.toLocaleString(QW_DATE_LOCALES)} · ${label} (${Math.round((n / tally.frames) * 100)}%)`));
+  }
+  body.append(kinds);
+
+  const shaped = Object.values(tally.shapes || {}).reduce((a, b) => a + b, 0);
+  const unknown = tally.kinds?.Unknown || 0;
+  if (unknown) {
+    if (!shaped) {
+      body.append(el('p', null, tx('The frames not placed have no shape yet: shapes are noted from 1.2.24 on.')));
+    } else {
+      body.append(el('p', null, tx('Of the {count} not placed since shapes were noted:', { count: shaped.toLocaleString(QW_DATE_LOCALES) })));
+      const shapes = el('ul', 'live-frame-kinds');
+      for (const [shape, n] of Object.entries(tally.shapes).sort((a, b) => b[1] - a[1]))
+        shapes.append(el('li', null, `${n.toLocaleString(QW_DATE_LOCALES)} · ${(FRAME_SHAPES[shape] || (() => shape))()}`));
+      body.append(shapes);
+    }
+  }
+}
+
+$('#live-frames')?.addEventListener('toggle', (event) => {
+  if (event.target.open) renderLiveFrames();
 });
 
 $('#screen-read-older')?.addEventListener('click', async (e) => {

@@ -6539,5 +6539,38 @@
   "{span} in the window": "{span} dans la fenêtre",
   "bar {percent}% full": "barre remplie à {percent} %",
   "resistance {percent}%": "résistance {percent} %",
-  "Read off the fracture bar. Time in the window is a floor: frames are a second or two apart. What each rock refined to is not shown - a refinery order never says which rocks went into it.": "Lu sur la barre de fracture. Le temps dans la fenêtre est un minimum : les images sont espacées d’une ou deux secondes. Le rendement de chaque roche au raffinage n’est pas montré - un ordre de raffinerie ne dit jamais quelles roches y sont entrées."
+  "Read off the fracture bar. Time in the window is a floor: frames are a second or two apart. What each rock refined to is not shown - a refinery order never says which rocks went into it.": "Lu sur la barre de fracture. Le temps dans la fenêtre est un minimum : les images sont espacées d’une ou deux secondes. Le rendement de chaque roche au raffinage n’est pas montré - un ordre de raffinerie ne dit jamais quelles roches y sont entrées.",
+  "Read unplaced screenshots again": "Relire les captures non classées",
+  "Read every screenshot no reader placed again, through the readers there are now": "Relire chaque capture qu’aucun lecteur n’a classée, avec les lecteurs actuels",
+  "What the reader saw this week": "Ce que le lecteur a vu cette semaine",
+  "reading the unplaced screenshots again…": "relecture des captures non classées…",
+  "{count} read again": {
+    "one": "{count} relue",
+    "other": "{count} relues"
+  },
+  "{count} placed this time": {
+    "one": "{count} classée cette fois",
+    "other": "{count} classées cette fois"
+  },
+  "{count} no longer in the folder": {
+    "one": "{count} plus dans le dossier",
+    "other": "{count} plus dans le dossier"
+  },
+  "could not read them again: {error}": "impossible de les relire : {error}",
+  "no text at all - a black or loading screen, or open space": "aucun texte - un écran noir ou de chargement, ou l’espace",
+  "an inventory or looting view, which carries no item names": "un inventaire ou une fouille, sans nom d’objet",
+  "the flight HUD with nothing locked or fractured": "l’ATH de vol, sans cible ni fracture",
+  "chat and little else": "le chat et presque rien d’autre",
+  "a handful of words": "quelques mots",
+  "something else": "autre chose",
+  "Counting…": "Décompte…",
+  "The frame log could not be read.": "Le journal des images n’a pas pu être lu.",
+  "No frames read this week.": "Aucune image lue cette semaine.",
+  "{count} frames read, {from} to {to}.": "{count} images lues, du {from} au {to}.",
+  "target panel": "panneau de cible",
+  "missile band": "bande missile",
+  "fracture bar": "barre de fracture",
+  "The frames not placed have no shape yet: shapes are noted from 1.2.24 on.": "Les images non classées n’ont pas encore de forme : les formes sont notées à partir de 1.2.24.",
+  "Of the {count} not placed since shapes were noted:": "Sur les {count} non classées depuis que les formes sont notées :",
+  "no text on it at all - a black or loading screen reads like this": "aucun texte - un écran noir ou de chargement se lit ainsi"
 }

@@ -370,7 +370,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.23
+### 1.2.24
+
+**What the live reader keeps missing.** The Log page has a new line under the live reading switch, What the reader saw this week: how many frames were read and what each turned out to be - target panel, contracts, fracture bar - and, for the ones no reader could place, what they looked like: a black or loading screen, chat, the flight HUD, an inventory. Still nothing from the screen is kept; the frame log notes one of a few words of the app's own.
+
+**Read unplaced screenshots again.** A new button on the Log page puts every screenshot no reader placed through the readers there are now - screenshots taken before the Freight Manager and refinery readers existed are among them. A screenshot with no text at all, which is what a black picture saved before the scene drew reads like, now says so.
 
 **The rocks you worked, in each session's debrief.** With live reading on, each mining charge window the app follows is now kept: how long you were on the laser, how long the charge sat in the window, how often it went over, and whether the rock cracked or was let go - with the scan of the rock beside it when one was read. Each session's debrief on the Sessions page lists them under Rocks worked. What each rock refined to is not shown: a refinery order never says which rocks went into it.
 

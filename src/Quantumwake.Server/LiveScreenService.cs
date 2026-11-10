@@ -572,7 +572,12 @@ public sealed class LiveScreenService(
             Speak(pinged, "Ping");
         }
 
-        var kind = target is not null && sighting.Kind == ScreenKind.Unknown ? "Target" : sighting.Kind.ToString();
+        // An unplaced frame is logged with its shape - the app's word for what
+        // it looked like, never the screen's - so a week of them says which
+        // reader is worth writing next; see UnplacedFrames.
+        var kind = target is not null && sighting.Kind == ScreenKind.Unknown ? "Target"
+            : sighting.Kind == ScreenKind.Unknown ? UnplacedFrames.Kind(lines)
+            : sighting.Kind.ToString();
         _log.Read(kind, copying.ElapsedMilliseconds, sighting.TookMs + panelMs, taken.Width, taken.Height, keptAs);
 
         Set(s => s with
