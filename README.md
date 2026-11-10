@@ -370,7 +370,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.21
+### 1.2.22
+
+**Kiosk prices you saw, beside UEX's.** Each commodity's page has a new table, Seen at the kiosk: every price read off a commodity kiosk on your screen, with the place, what UEX lists at that counter (or, when the place's name matches no UEX counter, which counters quote the same figure), both dates, and whether they agree. A price more than twice or under half what UEX lists is struck through and called a probable misread rather than offered as a price.
+
+**Commodity kiosks are read properly.** Building that comparison showed the kiosk reader had been getting kiosks wrong: a kiosk photographed in September was filed as the sell side when it was the buy side, Methane at 3,312 was read as 3.312, two prices lost their first digits, two rows were dropped, and every ammunition size was named plain "Ship Ammunition". All fixed, and a figure missing its first digits is now left unread instead of read short. Kiosk readings taken before this version are left out of the new table and counted; Read again on the Log page brings them in.
 
 **A debrief of each fight, if you want one.** With live reading on, a new switch under it, Keep a record of fights, writes down each ship you lock once the lock ends: the hull when the target panel named it, the likely hull and its odds when it did not, whether it was hostile, how close and how fast it came, how damaged its hologram looked and whether it stopped dead; and the missile warnings and objective-health calls made around it. Each session's debrief on the Sessions page then lists its fights, with what Game.log wrote in the same minutes (kills, deaths, pay, completed contracts) beside them. A player's name and anything that is not one of the game's factions is never written, nor any picture, and the switch is off until you turn it on: the privacy page had promised the targeted ship was never written down, and now says what changes when you turn the record on.
 

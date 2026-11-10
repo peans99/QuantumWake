@@ -6493,5 +6493,27 @@
   "objective below {percent}%": "objectif sous {percent} %",
   "and {count} more": "et {count} de plus",
   "Read off the screen. A likely hull is the signature’s guess, not the panel’s; the log lines are what Game.log wrote in the same minutes.": "Lu à l’écran. Une coque probable est une supposition d’après la signature, pas ce qu’affichait le panneau ; les lignes du journal sont ce que Game.log a écrit dans les mêmes minutes.",
-  "Game.log": "Game.log"
+  "Game.log": "Game.log",
+  "Seen at the kiosk": "Vu au kiosque",
+  "Prices read off a kiosk on your screen - the only prices here you saw yourself - each beside what UEX lists for the same counter, with both dates.": "Les prix lus sur un kiosque à votre écran - les seuls prix ici que vous avez vus vous-même - chacun à côté de celui qu’UEX donne pour le même comptoir, avec les deux dates.",
+  "Check": "Contrôle",
+  "No kiosk showing this one has been read.": "Aucun kiosque affichant celle-ci n’a été lu.",
+  "matches UEX": "conforme à UEX",
+  "differs from UEX": "diffère d’UEX",
+  "probably misread": "probablement mal lu",
+  "nothing to check against": "rien pour comparer",
+  "Asking": "Demandé",
+  "Paying": "Payé",
+  "not in a logged session": "hors d’une session enregistrée",
+  "{count} older kiosk readings are left out: they were taken by the reader before 1.2.22, which misread this install’s kiosk. Read them again from the Log page to bring them in.": {
+    "one": "{count} ancienne lecture de kiosque est écartée : elle a été faite par le lecteur d’avant 1.2.22, qui lisait mal le kiosque de cette installation. Relisez-la depuis la page Journal pour l’inclure.",
+    "other": "{count} anciennes lectures de kiosque sont écartées : elles ont été faites par le lecteur d’avant 1.2.22, qui lisait mal le kiosque de cette installation. Relisez-les depuis la page Journal pour les inclure."
+  },
+  "at {counter}": "à {counter}",
+  "as at {counters}": "comme à {counters}",
+  "as at {count} counters, {counters} among them": "comme à {count} comptoirs, dont {counters}",
+  "{count} frames": {
+    "one": "{count} image",
+    "other": "{count} images"
+  }
 }

@@ -12,7 +12,12 @@ namespace Quantumwake.Data;
 /// describes the week before. The session covering the moment is found by
 /// its span; a moment no session covers gets null, and the check says so.
 /// </remarks>
-public sealed class LibraryBeliefs(LogLibrary library) : IScreenBeliefs
+/// <param name="acrossWipes">
+/// Look in sessions from before the pilot's wipe too. Off for the screen
+/// checks, which compare against what the app counts now; on for where a kiosk
+/// stood, which no wipe moves.
+/// </param>
+public sealed class LibraryBeliefs(LogLibrary library, bool acrossWipes = false) : IScreenBeliefs
 {
     public (string Id, string Name, string? System)? WhereAt(DateTimeOffset at) =>
         Placed(at) is { } belief ? (belief.Id, belief.Name, belief.System) : null;
@@ -134,7 +139,8 @@ public sealed class LibraryBeliefs(LogLibrary library) : IScreenBeliefs
             .Distinct(StringComparer.OrdinalIgnoreCase)];
 
     private SessionSummary? Session(DateTimeOffset at) =>
-        library.Sessions().FirstOrDefault(s => s.StartedAt <= at && at <= s.EndedAt.AddMinutes(5));
+        (acrossWipes ? library.EverySession() : library.Sessions())
+            .FirstOrDefault(s => s.StartedAt <= at && at <= s.EndedAt.AddMinutes(5));
 }
 
 /// <summary>The line a place belief rests on.</summary>

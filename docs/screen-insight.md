@@ -1726,18 +1726,49 @@ outright. It lists the hold rather than the shop and has no `SHOP QUANTITY`
 to anchor on. A sell-side kiosk is filed as a kiosk and kept whole, and
 claims no rows.
 
-### The kiosk on this install, sell side, and the balance printed in full
+### The kiosk on this install, and the balance printed in full
 
 On 10 Sep 2026 the pilot photographed a commodity terminal here -
-`ScreenShot-2026-09-10_20-53-54-CF5.jpg`, the sell side, with no ship
-selected - and two of the paragraphs above stopped being true.
+`ScreenShot-2026-09-10_20-53-54-CF5.jpg`, with no hold selected - and two of
+the paragraphs above stopped being true.
 
-**The sell side reads.** The engine returned 56 lines in 265 ms, and the
-reader filed it as a kiosk selling with five commodities: Methane at
-`¤3.312/SCU` and four sizes of Ship Ammunition, two of which carried a
-price that read (`384/SCU`, `, 641/SCU`) and two of which did not and are
-absent. `NO OENAND` for *No demand* and `TO NAKE A TRANSACTION` are the
-engine's, and are kept as read.
+**It was the buy side, and the first reading of it was wrong.** Until 1.2.22
+this section said "the sell side reads": the reader filed the frame as a
+kiosk selling, with Methane at `¤3.312/SCU` and two ammunition sizes at
+`384/SCU` and `641/SCU`. Each of those was a plausible number and each was
+wrong. Looked at in 1.2.22, the picture shows the BUY tab under SHOP
+INVENTORY, seven rows, and these prices; UEX (9 Nov 2026), which the reader
+never consults, quotes every one of them to the unit at Stanton Gateway (Nyx):
+
+| Row | Stock | On the screen | First reading | 1.2.22 reading |
+|---|---|---|---|---|
+| Scrap | 2,040 SCU | ¤3,265 | row lost | 3,265 |
+| Methane | 18,000 SCU | ¤3,312 | 3.312 | 3,312 |
+| Ship Ammunition - Size 1 | 12,000 SCU | ¤6,868 | no price | 6,868 |
+| Ship Ammunition - Size 2 | 12,000 SCU | ¤7,126 | no price | 7,126 |
+| Ship Ammunition - Size 3 | 12,000 SCU | ¤7,384 | 384 | 7,384 |
+| Ship Ammunition - Size 4 | 12,000 SCU | ¤7,641 | 641 | 7,641 |
+| Ship Ammunition - Size 5 | 12,000 SCU | below the panel's edge | row lost | no price |
+
+What went wrong, from the engine's own lines and boxes (dumped from the
+screenshot; the log keeps only text): `YOUR INVENTORIES`, which heads the
+left panel on **both** sides, decided the side because `SHOP INVENTORY` read
+as two words; `SHOP OUANTITV` missed the row anchor, losing two rows;
+`18, ooo`, `Ä6 , 868` and `n 7. 126` failed the figure patterns; `3.312`
+was taken as a decimal; and every ammunition size was named plain "Ship
+Ammunition" because `SIZE 1` sits on the line below. All fixed for the
+1.2.22 reader (`KioskReading.Reader` 2), and a figure opening on a separator
+(`, 641`) is now refused rather than read short.
+
+The 1.2.22 numbers in the table are from the app's own pipeline, re-read
+from the screenshot on a copy of the data. The engine's first look alone,
+before the second looks, still reads Scrap as `43,265` (the currency sign as
+a 4) and Size 3 as `384`. Nothing on the frame gives those away, which is
+why every kiosk price is now set beside UEX's - see **Prices beside UEX
+(1.2.22)** below.
+
+`NO OENAND` for *No demand* and `TO NAKE A TRANSACTION` are the engine's,
+and are kept as read.
 
 **The balance is printed in full here.** `¤2,092, 773 AUEC` - every digit, in
 the regular face, with the separator padded by the engine. So the rule above
@@ -1765,6 +1796,33 @@ net −10,974 aUEC by the ledger's amounts and by its running totals alike, so
 the card says `2,092,773`, dated by the shot, and *about 2,081,799 now* -
 called an estimate, because money that moved without a line in the log is
 not in it, and the next screenshot says by how much.
+
+### Prices beside UEX (1.2.22)
+
+The commodity page lists every price read off a kiosk for that commodity,
+newest first, beside UEX's for the same side (what the counter asks, or what
+it pays), with both dates. The counter is found from where the logs put the
+pilot when the frame was taken - across a wipe, since a wipe moves no kiosk;
+this install's wipe hides everything before 8 Oct 2026, its only kiosk
+frames among it.
+
+The log's names do not always meet UEX's. This kiosk stood at what the log
+calls Nyx Castra Jump Point Rest Stop (`RR_JP_NyxCastra`), and no UEX counter
+is named anything like it. So a place that matches no counter is set beside
+every counter trading the commodity on that side, and those quoting the
+nearest figure are listed: Scrap at 3,265 is quoted at three (ARC-L4, MIC-L5,
+Stanton Gateway (Nyx)), Methane at 3,312 at five, and Stanton Gateway (Nyx)
+is the only one on both lists. The page lists them and does not pick one: the
+place-to-counter join is a name match, and one frame is not enough to teach
+it a new name.
+
+Verdicts: within 2% **matches**; within a factor of two **differs**, with the
+percentage; beyond it **probably misread**, struck through and never offered
+as a price. A price per UNITS is never set beside UEX's per SCU. Readings by
+the earlier reader are left out and counted, with Read again as the way to
+bring them in: the log keeps text, not boxes, so they cannot be re-read from
+the log. Repeats of one price at one place within half an hour are one row,
+with the frames counted - the three 10 Sep shots were five seconds apart.
 
 ### How the feature reaches the dashboard and HUD
 
@@ -1868,7 +1926,7 @@ shared a loader and an early return.
 
 | Screen | What it would confirm |
 |---|---|
-| A commodity kiosk on this install, buy side | The buy-side reader against this pilot's own terminal - the sell side was photographed on 10 Sep 2026 and reads, see above |
+| A commodity kiosk on this install, sell side | The sell-side reader at all - the 10 Sep 2026 frame thought to be the sell side was the buy side, see above |
 | The Wallet app, past its start screen | Whether the balance is printed anywhere in a face that reads every time |
 
 **The inventory screen carries no names.** Photographed with a location's
@@ -2268,11 +2326,9 @@ right.
    already moved. It would then work whenever the app runs rather than only
    while a page is open, and the paste log would fill without anyone watching
    it.
-9. **A price is a fact with a date on it.** A kiosk reading is the only price
-   in this app that is first-hand, and it is worth setting beside UEX's for
-   the same commodity with both ages attached. Not built: it wants a kiosk
-   frame from this install first, because the join is to a terminal and this
-   one is somebody else's.
+9. ~~**A price is a fact with a date on it.**~~ **Done** in 1.2.22 - see
+   **Prices beside UEX (1.2.22)**. Building it is what found that this
+   install's own kiosk had been misread.
 
 Step 1 was not a formality and did not go entirely the expected way: the panel
 text read better than hoped and the wallet balance did not read at all. Both of

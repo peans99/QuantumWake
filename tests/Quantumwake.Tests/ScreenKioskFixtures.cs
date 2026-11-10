@@ -87,43 +87,79 @@ internal static class ScreenKioskFixtures
     ];
 
     /// <summary>
-    /// A kiosk on this install at last - the sell side, 10 Sep 2026, with the
-    /// pilot's ship out of the frame - and the balance printed in full.
+    /// A kiosk on this install at last - the buy side, 10 Sep 2026, with no
+    /// hold selected - and the balance printed in full.
     /// </summary>
     /// <remarks>
-    /// The text is the engine's own, line for line, from
-    /// <c>ScreenShot-2026-09-10_20-53-54-CF5.jpg</c> as it sits in the
-    /// readings log: <c>NO OENAND</c>, <c>TO NAKE A TRANSACTION</c> and the
-    /// padded <c>2,092, 773</c> are all real. The boxes are not - the log keeps
-    /// text and not geometry - so they are plausible, and the two things they
-    /// have to get right are what the reading itself proved: the figure sits
-    /// under its label as on the other kiosk, and the close button's <c>x</c>
-    /// sits beside the label, which is what the first reader took for the
-    /// balance.
+    /// The Windows engine's own lines and boxes for
+    /// <c>ScreenShot-2026-09-10_20-53-54-CF5.jpg</c>, dumped from the
+    /// screenshot in 1.2.22. Until then this fixture was the log's text with
+    /// invented boxes, and it was called the sell side because the first
+    /// reader said so; the picture shows the BUY tab, and every price on it
+    /// matches what UEX lists Pyro's counters asking. What the frame really
+    /// says, row by row: Scrap 2,040 SCU at 3,265; Methane 18,000 at 3,312;
+    /// Ship Ammunition sizes 1-4, 12,000 each, at 6,868 / 7,126 / 7,384 /
+    /// 7,641; size 5 with its price below the edge of the panel. Every
+    /// misreading is the engine's: SHOP OUANTITV, 18, ooo, Ä6 , 868, n 7. 126,
+    /// 384 for 7,384, ", 641" for 7,641 and 43,265 for ¤3,265.
     /// </remarks>
-    public static readonly ScreenTextLine[] OwnSellSide =
+    public static readonly ScreenTextLine[] OwnBuySide =
     [
-        new("x", 3000, 70, 24),
-        new("COMMODITIES", 100, 40, 54),
-        new("YOUR INVENTORIES", 90, 155, 24),
-        new("SELECT LOCATION", 110, 209, 20),
-        new("IN DEMAND", 90, 624, 21),
-        new("NO OENAND", 90, 679, 20),
-        new("CANNOT SELL", 90, 734, 20),
-        new("SHOP", 1500, 160, 24),
-        new("BUY", 1600, 160, 24),
-        new("INVENTORY", 1700, 160, 24),
-        new("CURRENT BALANCE:", 2592, 68, 32),
-        new("Ä2,092, 773 AUEC", 2698, 114, 27),
-        new("LOCAL MARKET VALUE", 2481, 293, 27),
-        new("IN STOCK", 2500, 350, 20),
-        new("SCRAP", 1600, 473, 20),
-        new("MX INVENTORY", 1600, 496, 16),
-        new("METHANE", 1600, 560, 20),
-        new("INVENTORY", 1600, 583, 16),
-        new("PLEASE SELECT A VALID INVENTORY", 1500, 900, 22),
-        new("TO NAKE A TRANSACTION", 1500, 930, 22),
-        new("e", 2900, 1000, 16),
-        new("e", 2950, 1000, 16),
+        new("x", 2661, 151, 38),
+        new("COMMODITIES", 801, 184, 37),
+        new("YOUR INVENTORIES", 772, 294, 17),
+        new("SELECT LOCATION", 787, 343, 14),
+        new("IN DEMAND", 762, 388, 15),
+        new("NO OENAND", 761, 427, 15),
+        new("CANNOT SELL", 760, 465, 15),
+        new("SHOP", 2107, 258, 17),
+        new("BUY", 2126, 310, 18),
+        new("INVENTORY", 2172, 256, 18),
+        new("CURRENT BALANCE:", 2391, 148, 20),
+        new("Ä2,092, 773 AUEC", 2429, 180, 19),
+        new("LOCAL MARKET VALUE", 2312, 306, 18),
+        new("IN STOCK", 2106, 388, 17),
+        new("SCRAP", 2203, 446, 19),
+        new("MX INVENTORY", 2201, 476, 14),
+        new("METHANE", 2202, 562, 19),
+        new("INVENTORY", 2244, 593, 14),
+        new("PLEASE SELECT A VALID INVENTORY", 1470, 738, 18),
+        new("TO NAKE A TRANSACTION", 1536, 764, 17),
+        new("e", 2137, 804, 18),
+        new("e", 2136, 929, 19),
+        new("SHIP AMMUNITION -", 2202, 679, 19),
+        new("SIZE 1", 2202, 710, 18),
+        new("mx INVENTORY", 2200, 740, 14),
+        new("SHIP AMMUNITION -", 2201, 805, 19),
+        new("SIZE 2", 2201, 836, 19),
+        new("\"Ax INVENTORY", 2200, 866, 15),
+        new("SHIP AMMUNITION -", 2201, 931, 21),
+        new("SIZE 3", 2201, 962, 19),
+        new("mx INVENTORY", 2199, 992, 15),
+        new("SHIP AMMUNITION -", 2200, 1058, 21),
+        new("SIZE 4", 2200, 1088, 20),
+        new("NAX INVENTORY", 2199, 1119, 15),
+        new("SHIP AMMUNITION -", 2200, 1184, 22),
+        new("SIZE 5", 2200, 1215, 19),
+        new("SHOP OUANTITV", 2508, 441, 14),
+        new("2,040 SCU", 2511, 463, 22),
+        new("43,265/SCU", 2522, 496, 15),
+        new("SHOP QUANTITY", 2508, 560, 14),
+        new("18, ooo SCU", 2498, 581, 22),
+        new("Ä3.312/SCU", 2521, 615, 14),
+        new("SHOP OUANTITY", 2507, 678, 14),
+        new("12, ooo SCU", 2498, 699, 22),
+        new("Ä6 , 868/SCU", 2521, 732, 14),
+        new("SHOP QUANTITY", 2507, 805, 14),
+        new("12,000 SCU", 2498, 827, 22),
+        new("n 7. 126/SCU", 2520, 860, 15),
+        new("SHOP QUANTITY", 2507, 933, 14),
+        new("12,000 SCU", 2497, 955, 21),
+        new("384/SCU", 2557, 989, 15),
+        new("SHOP OUANTITY", 2506, 1061, 14),
+        new("12, ooo SCU", 2497, 1083, 22),
+        new(", 641/SCU", 2548, 1117, 15),
+        new("SHOP OUANTITV", 2506, 1189, 13),
+        new("12,000 scu", 2496, 1211, 22),
     ];
 }

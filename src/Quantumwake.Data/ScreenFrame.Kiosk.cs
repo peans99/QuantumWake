@@ -33,6 +33,12 @@ public sealed record KioskRow(
 /// The balance as printed, verbatim. See <see cref="KioskReading.Balance"/>
 /// for when there is a number beside it and when there is not.
 /// </param>
+/// <param name="Reader">
+/// Which reader wrote this: 0 for a reading kept before 1.2.22, whose side and
+/// prices were wrong on this install's own kiosk (see <see cref="ScreenFrames.KioskReader"/>).
+/// The log keeps text, not boxes, so an old reading cannot be re-read from
+/// the log - only from its screenshot, with Read again.
+/// </param>
 public sealed record KioskReading(
     bool? Buying,
     string? ShipRead,
@@ -40,7 +46,8 @@ public sealed record KioskReading(
     double? CargoUsed,
     double? CargoCapacity,
     string? BalanceRead,
-    IReadOnlyList<KioskRow> Rows)
+    IReadOnlyList<KioskRow> Rows,
+    int Reader = 0)
 {
     /// <summary>The balance as a number, only when the kiosk printed every digit of it.</summary>
     /// <remarks>
@@ -60,6 +67,13 @@ public sealed record KioskReading(
 
 public static partial class ScreenFrames
 {
+    /// <summary>
+    /// The kiosk reader's version. 2 from 1.2.22: the side from the shop's own
+    /// headings, two-line names, padded and dotted thousands, and a figure that
+    /// lost its leading digits refused.
+    /// </summary>
+    public const int KioskReader = 2;
+
     /// <summary>A commodity kiosk, or null when this is not one.</summary>
     /// <remarks>
     /// <para>
@@ -81,9 +95,19 @@ public static partial class ScreenFrames
     {
         if (!lines.Any(line => Is(line.Text, "COMMODITIES"))) return null;
 
-        var anchors = lines.Where(line => Opens(line.Text, "SHOP QUANTITY")).OrderBy(line => line.Top).ToList();
+        // "SHOP QUANTIT", not the whole word: this install's kiosk read the Y
+        // as a V on two of its seven rows (SHOP OUANTITV), and those rows -
+        // Scrap and the fifth ammunition size - were dropped whole.
+        var anchors = lines.Where(line => Opens(line.Text, "SHOP QUANTIT")).OrderBy(line => line.Top).ToList();
 
-        var shop = lines.Any(line => Is(line.Text, "SHOP INVENTORY"));
+        // The shop's heading, whole or as its two words on one row: the
+        // engine split it into SHOP and INVENTORY on this install's frame.
+        var heading = lines.FirstOrDefault(line => Is(line.Text, "SHOP INVENTORY"))
+            ?? lines.FirstOrDefault(line => Is(line.Text, "SHOP")
+                && lines.Any(other => Is(other.Text, "INVENTORY")
+                    && Math.Abs(other.Top - line.Top) <= line.Height
+                    && other.Left > line.Left && other.Left - line.Left < line.Height * 8));
+        var shop = heading is not null;
         var mine = lines.Any(line => Is(line.Text, "YOUR INVENTORIES"));
 
         // The heading needs one corroborating word: "COMMODITIES" on its own
@@ -92,9 +116,14 @@ public static partial class ScreenFrames
             return null;
 
         // Which way the counter faces. The buy side prints the shop's stock in
-        // its own panel; the sell side lists what is in the pilot's hold and
-        // has no such panel, so its absence is the tell.
-        bool? buying = shop ? true : mine ? false : null;
+        // its own panel, a SHOP QUANTITY per row; the sell side lists what is
+        // in the pilot's hold and has neither. YOUR INVENTORIES is no tell on
+        // its own - it heads the left panel on both sides. This install's
+        // 10 Sep frame was filed as selling on that word alone, while every
+        // price on it matched what UEX lists Pyro's terminals asking for the
+        // same commodity, to the unit (6,868 / 7,126 / 7,384 / 7,641 aUEC for
+        // ammunition sizes 1-4).
+        bool? buying = shop || anchors.Count > 0 ? true : mine ? false : null;
 
         // The shop's own panel. A kiosk has two, and the pilot's inventory on
         // the left prints a ship and a cargo grid on the very rows the shop
@@ -105,7 +134,7 @@ public static partial class ScreenFrames
         // headings of its rows, set back by the width of a commodity name,
         // when it did not. Zero when there are no rows at all, which is the
         // sell side, and the loop below then does not run.
-        var panel = lines.FirstOrDefault(line => Is(line.Text, "SHOP INVENTORY"));
+        var panel = heading;
 
         var panelLeft = panel?.Left
             ?? (anchors.Count > 0 ? anchors.Min(a => a.Left) - anchors[0].Height * 25 : 0);
@@ -138,6 +167,17 @@ public static partial class ScreenFrames
 
             var text = named.Text;
 
+            // A name over two lines: SHIP AMMUNITION - then SIZE 1 under it.
+            // Taken alone the first line names "Ship Ammunition", which is no
+            // commodity a kiosk sells - every size is its own, at its own price.
+            var size = lines
+                .Where(line => line.Top > name.Top + name.Height * 0.5 && line.Top < name.Top + name.Height * 2.2)
+                .Where(line => Math.Abs(line.Left - name.Left) <= name.Height * 1.5)
+                .Select(line => SizeRegex().Match(line.Text))
+                .FirstOrDefault(m => m.Success);
+            string? sized = size is null ? null
+                : $"{text.TrimEnd(' ', '-', '–')} - Size {size.Groups["n"].Value}";
+
             // Everything printed under this row's heading, down to the next.
             var next = anchors.FirstOrDefault(a => a.Top > anchor.Top + anchor.Height);
             var bottom = next?.Top ?? double.MaxValue;
@@ -147,13 +187,19 @@ public static partial class ScreenFrames
             var stock = lines
                 .Where(Below)
                 .Where(line => Math.Abs(line.Left - anchor.Left) <= anchor.Height * 3)
-                .Select(line => QuantityRegex().Match(line.Text))
+                .Select(line => QuantityRegex().Match(Zeroes(line.Text)))
                 .FirstOrDefault(m => m.Success);
 
+            // A price whose figure opens on a separator has lost the digits
+            // before it - ", 641/SCU" was 7,641 - and is not taken at all: a
+            // figure short by a thousands group is the plausible-looking
+            // wrong answer this reader exists not to give.
             var price = lines
                 .Where(Below)
-                .Select(line => PriceRegex().Match(line.Text))
+                .Select(line => PriceRegex().Match(Zeroes(line.Text)))
                 .FirstOrDefault(m => m.Success);
+            if (price is not null && price.Groups["lead"].Value.TrimEnd() is { Length: > 0 } lead && lead[^1] is ',' or '.')
+                price = null;
 
             var state = lines
                 .Where(Below)
@@ -162,10 +208,12 @@ public static partial class ScreenFrames
                 .FirstOrDefault(t => Fold(t).EndsWith("INVENTORY", StringComparison.Ordinal));
 
             rows.Add(new KioskRow(
-                text,
-                NameCommodity(text, commodities),
+                sized ?? text,
+                sized is null ? NameCommodity(text, commodities)
+                    : NameCommodity(sized, commodities)
+                      ?? (NameCommodity(text.TrimEnd(' ', '-', '–'), commodities) is { } family ? $"{family} - Size {size!.Groups["n"].Value}" : null),
                 state,
-                stock is null ? null : Number(stock.Groups["n"].Value),
+                stock is null ? null : Money(stock.Groups["n"].Value, ""),
                 stock?.Groups["unit"].Value is { Length: > 0 } qu ? qu.ToUpperInvariant() : null,
                 price is null ? null : Money(price.Groups["n"].Value, price.Groups["suffix"].Value),
                 price?.Groups["unit"].Value is { Length: > 0 } pu ? Unit(pu) : null));
@@ -210,7 +258,8 @@ public static partial class ScreenFrames
             fill is null ? null : Number(fill.Groups["used"].Value),
             fill is null ? null : Number(fill.Groups["of"].Value),
             balance,
-            rows);
+            rows,
+            KioskReader);
     }
 
     /// <summary>A whole number of aUEC, or null when a suffix or anything else stands in for digits.</summary>
@@ -277,6 +326,14 @@ public static partial class ScreenFrames
     /// </remarks>
     private static double? Money(string figure, string suffix)
     {
+        // Whole thousands groups and no suffix are a whole number, whichever
+        // separator the engine saw: "¤3,312/SCU" on this install's kiosk read
+        // as Ä3.312/SCU, and as a decimal it was a thousandth of the price.
+        // A suffix keeps the point a decimal point - 2.19700002K is 2,197.
+        if (suffix.Length == 0 && ThousandsRegex().IsMatch(figure))
+            return double.TryParse(new string([.. figure.Where(char.IsAsciiDigit)]), NumberStyles.None, CultureInfo.InvariantCulture, out var whole)
+                ? whole : null;
+
         if (Number(figure) is not { } value) return null;
 
         return suffix.ToUpperInvariant() switch
@@ -298,13 +355,31 @@ public static partial class ScreenFrames
 
     // "5,000 SCU". The unit is kept because a kiosk stocks by SCU and prices
     // by SCU or by unit, and the two are not always the same word.
-    [GeneratedRegex(@"^(?<n>[\d,]+(?:\.\d+)?)\s*(?<unit>SCU|UNITS?)\b", RegexOptions.IgnoreCase)]
+    // Padded like the prices: "18, ooo SCU" is 18,000 once its o's are zeroes.
+    [GeneratedRegex(@"^(?<n>[1-9]\d{0,2}(?:\s?[,.]\s?\d{3})+|\d+(?:\.\d+)?)\s*(?<unit>SCU|UNITS?)\b", RegexOptions.IgnoreCase)]
     private static partial Regex QuantityRegex();
 
     // "¤296/SCU" and "¤2.19700002K/UNITS". The currency glyph reads as Ä, n,
     // ¤ or nothing at all, so anything that is not a digit opens the line.
-    [GeneratedRegex(@"^\D{0,3}(?<n>\d[\d,]*(?:\.\d+)?)\s*(?<suffix>[KkMm]?)\s*/\s*(?<unit>UNITS?|SCU)\b", RegexOptions.IgnoreCase)]
+    // Groups may be padded - "Ä6 , 868/SCU", "n 7. 126/SCU" - and then the
+    // whole figure is still one price.
+    [GeneratedRegex(@"^(?<lead>\D{0,3})(?<n>[1-9]\d{0,2}(?:\s?[,.]\s?\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\s*(?<suffix>[KkMm]?)\s*/\s*(?<unit>UNITS?|SCU)\b", RegexOptions.IgnoreCase)]
     private static partial Regex PriceRegex();
+
+    // Thousands groups and nothing else: 3,312 / 3.312 / 6 , 868.
+    [GeneratedRegex(@"^[1-9]\d{0,2}(?:\s?[,.]\s?\d{3})+$")]
+    private static partial Regex ThousandsRegex();
+
+    // The second line of a two-line name: "SIZE 1".
+    [GeneratedRegex(@"^\s*S[I1l]ZE\s*(?<n>\d{1,2})\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex SizeRegex();
+
+    /// <summary>"18, ooo SCU" as the figure it is: an o in a thousands group is a zero.</summary>
+    private static string Zeroes(string text) =>
+        ZeroGroupRegex().Replace(text, m => m.Value.Replace('o', '0').Replace('O', '0'));
+
+    [GeneratedRegex(@"(?<=\d\s?[,.]\s?)[oO0]{3}\b")]
+    private static partial Regex ZeroGroupRegex();
 
     // "0 / 64 SCU".
     [GeneratedRegex(@"(?<used>[\d,]+(?:\.\d+)?)\s*/\s*(?<of>[\d,]+(?:\.\d+)?)\s*SCU", RegexOptions.IgnoreCase)]

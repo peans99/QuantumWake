@@ -4141,6 +4141,15 @@ public static partial class ServerHost
             return Results.File(path, contentType);
         });
 
+        // Prices read off kiosks for one commodity, each beside UEX's for the
+        // counter the logs put the pilot at when the frame was taken (1.2.22).
+        app.MapGet("/api/kiosk-prices", (string commodity, ScreenReadingStore readings, LogLibrary lib, UexData uex) =>
+        {
+            var beliefs = new LibraryBeliefs(lib, acrossWipes: true);
+            return Results.Ok(KioskPrices.For(commodity, readings.All(),
+                at => beliefs.WhereAt(at)?.Name, uex.TerminalFor, uex.Market));
+        });
+
         // The same file through the reader it has now. Every reader here was
         // written from a frame already in the log, and the frame that taught
         // it is the first one worth reading again - the log otherwise keeps

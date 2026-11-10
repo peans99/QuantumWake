@@ -23702,6 +23702,7 @@ async function openCommodity(name) {
   ]);
 
   renderCommodityCounters(await terminalsFor(name).catch(() => []), entry);
+  renderCommoditySeen(name);
   renderCommodityReceipts(name);
 
   // Named "trend", not "history": a local called history shadows window.history
@@ -23823,6 +23824,78 @@ function fillCounterTable(selector, rows, cells, isWorse) {
 }
 
 /** What this install actually paid and was paid for the thing. */
+/**
+ * Prices read off a kiosk (1.2.22), each beside UEX's for the same counter.
+ * A reading more than twice or under half UEX's is shown struck through and
+ * called a misread: the first kiosk on this install read 3,312 as 3.312.
+ */
+async function renderCommoditySeen(name) {
+  const body = $('#commodity-seen-table')?.querySelector('tbody');
+  if (!body) return;
+  body.textContent = '';
+  const note = $('#commodity-seen-note');
+
+  let report = null;
+  try {
+    report = await getJson(`/api/kiosk-prices?commodity=${encodeURIComponent(name)}`);
+  } catch { /* the rest of the page stands on its own */ }
+  if (openCommodityName !== name) return;
+
+  const seen = report?.seen || [];
+  if (!seen.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', tx('No kiosk showing this one has been read.'));
+    td.colSpan = 6;
+    tr.append(td);
+    body.append(tr);
+  }
+
+  const verdicts = {
+    matches: [tx('matches UEX'), 'inward'],
+    differs: [tx('differs from UEX'), 'muted'],
+    misread: [tx('probably misread'), 'outward'],
+    unchecked: [tx('nothing to check against'), 'muted'],
+  };
+  for (const row of seen) {
+    const tr = el('tr');
+    const when = el('td', null, dateOf(row.at));
+    if (row.frames > 1) when.append(el('div', 'muted small', txn(row.frames, '{count} frame', '{count} frames')));
+    tr.append(when);
+    tr.append(el('td', null, row.buying ? tx('Asking') : tx('Paying')));
+    tr.append(row.place ? tdPlace(row.place) : el('td', 'muted', tx('not in a logged session')));
+    const price = el('td', `num${row.verdict === 'misread' ? ' struck' : ''}`, money(row.price));
+    tr.append(price);
+    tr.append(el('td', 'num muted', row.uex != null
+      ? `${money(row.uex)}${row.uexAt ? ` · ${dateOf(row.uexAt)}` : ''}`
+      : '—'));
+    const [label, cls] = verdicts[row.verdict] || verdicts.unchecked;
+    const pct = row.uex ? Math.round(((row.price - row.uex) / row.uex) * 100) : null;
+    const check = el('td', cls, row.verdict === 'differs' && pct != null ? `${label} (${pct > 0 ? '+' : ''}${pct}%)` : label);
+    // Which counter the figure is UEX's at: the place's own, or - when the
+    // log's name for the place matched none - every counter quoting it.
+    const counters = row.uexCounters || [];
+    if (counters.length) {
+      const where = row.atThisCounter
+        ? tx('at {counter}', { counter: counters[0] })
+        : counters.length <= 6
+          ? tx('as at {counters}', { counters: counters.join(', ') })
+          : tx('as at {count} counters, {counters} among them', { count: counters.length, counters: counters.slice(0, 3).join(', ') });
+      check.append(el('div', 'muted small', where));
+    }
+    tr.append(check);
+    body.append(tr);
+  }
+
+  if (note) {
+    note.hidden = !report?.olderReader;
+    note.textContent = report?.olderReader
+      ? txn(report.olderReader,
+        '{count} older kiosk reading is left out: it was taken by the reader before 1.2.22, which misread this install’s kiosk. Read it again from the Log page to bring it in.',
+        '{count} older kiosk readings are left out: they were taken by the reader before 1.2.22, which misread this install’s kiosk. Read them again from the Log page to bring them in.')
+      : '';
+  }
+}
+
 async function renderCommodityReceipts(name) {
   const body = $('#commodity-mine-table').querySelector('tbody');
   body.textContent = '';
