@@ -200,6 +200,8 @@ public static partial class ServerHost
         }
         if (capture is not null) builder.Services.AddSingleton(capture);
         if (voice is not null) builder.Services.AddSingleton(voice);
+        builder.Services.AddSingleton(new CombatLog(Core.AppPaths.In("combat")));
+        builder.Services.AddSingleton(new RockLog(Core.AppPaths.In("rocks")));
         builder.Services.AddSingleton<LiveScreenService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<LiveScreenService>());
 
@@ -3864,6 +3866,26 @@ public static partial class ServerHost
                 ? Results.Problem($"no callout called '{body.Kind}'", statusCode: 400)
                 : Results.Ok(service.Describe(live)));
 
+        // The fight record's switch (1.2.21): its own agreement, off until
+        // turned on, because the privacy page promised the locked ship was
+        // never written down until it was.
+        app.MapPost("/api/live/fights", (LiveFights body, LiveScreenStore live, LiveScreenService service) =>
+        {
+            live.SetKeepFights(body.On);
+            return Results.Ok(service.Describe(live));
+        });
+
+        // The fights kept between two times, for a session's debrief.
+        app.MapGet("/api/combat", (DateTimeOffset from, DateTimeOffset to, CombatLog log, LiveScreenStore live) =>
+            Results.Ok(new CombatRecord(live.Current.KeepFights, log.Any(), CombatLog.Fights(log.Between(from, to)))));
+
+        app.MapDelete("/api/combat", (CombatLog log) => Results.Ok(new { forgotten = log.Forget() }));
+
+        // The rocks worked between two times, each with its scan when one was
+        // read (1.2.23), for a session's debrief.
+        app.MapGet("/api/rocks", (DateTimeOffset from, DateTimeOffset to, RockLog log, ScreenReadingStore readings) =>
+            Results.Ok(new { rocks = RockLog.WithScans(log.Between(from, to), readings.All()) }));
+
         // How pings are read, from Mining → Radar: the place, the wanted
         // rocks, and whether only those are said.
         app.MapPost("/api/live/ping", (LivePing body, LiveScreenStore live, LiveScreenService service) =>
@@ -4125,6 +4147,15 @@ public static partial class ServerHost
             return Results.File(path, contentType);
         });
 
+        // Prices read off kiosks for one commodity, each beside UEX's for the
+        // counter the logs put the pilot at when the frame was taken (1.2.22).
+        app.MapGet("/api/kiosk-prices", (string commodity, ScreenReadingStore readings, LogLibrary lib, UexData uex) =>
+        {
+            var beliefs = new LibraryBeliefs(lib, acrossWipes: true);
+            return Results.Ok(KioskPrices.For(commodity, readings.All(),
+                at => beliefs.WhereAt(at)?.Name, uex.TerminalFor, uex.Market));
+        });
+
         // The same file through the reader it has now. Every reader here was
         // written from a frame already in the log, and the frame that taught
         // it is the first one worth reading again - the log otherwise keeps
@@ -4156,6 +4187,51 @@ public static partial class ServerHost
                 return Results.BadRequest(new { trouble = e.Message });
             }
         });
+
+        // Every screenshot no reader placed, through the readers there are now
+        // (1.2.24). Readers arrive after the frames that teach them: of this
+        // install's 42 Unknown screenshots, 8 were Freight Manager and refinery
+        // screens kept from before those readers existed. Screenshots only -
+        // a live reading of an unplaced screen was never kept to re-read.
+        app.MapPost("/api/screen/readings/reread-unplaced", async (
+            ScreenInsightService insight,
+            ScreenReadingStore readings,
+            ScreenSettingsStore settings,
+            CancellationToken token) =>
+        {
+            if (settings.Current.Mode != ScreenMode.Screenshots)
+                return Results.BadRequest(new { trouble = "screenshot analysis is switched off" });
+
+            if (insight.Excuse(install?.RootPath) is { } excuse)
+                return Results.BadRequest(new { trouble = excuse });
+
+            var unplaced = readings.All()
+                .Where(r => r.Kind is ScreenKind.Unknown or ScreenKind.MobiGlas)
+                .Where(r => !r.Shot.StartsWith("live-", StringComparison.Ordinal))
+                .ToList();
+
+            int read = 0, placed = 0, gone = 0;
+            try
+            {
+                foreach (var reading in unplaced)
+                {
+                    if (ShotPath(reading.Shot) is not { } path) { gone++; continue; }
+                    var fresh = await insight.ReadShotAsync(path, token);
+                    read++;
+                    if (fresh.Kind is not (ScreenKind.Unknown or ScreenKind.MobiGlas)) placed++;
+                }
+            }
+            catch (ScreenEngineUnavailableException e)
+            {
+                return Results.BadRequest(new { trouble = e.Message });
+            }
+
+            return Results.Ok(new { read, placed, gone });
+        });
+
+        // How the live reader's frames went this week, from its own frame log:
+        // every kind counted, and the unplaced ones by shape (1.2.24).
+        app.MapGet("/api/live/frames", () => Results.Ok(UnplacedFrames.Tally(Core.AppPaths.In("live"))));
 
         // The archive, on request. The watch reads nothing from before it
         // began - the pilot enabled reading their screenshots, not their

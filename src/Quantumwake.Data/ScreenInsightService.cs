@@ -628,6 +628,10 @@ public sealed class ScreenInsightService(
         ScreenKind.Freight when frame.Freight is { } freight =>
             FreightSummary(freight),
         ScreenKind.MobiGlas => "a mobiGlas screen this app cannot read yet",
+        // 17 of this install's screenshots read no text at all, every one the
+        // same black picture the game saved before the scene drew (1.2.24).
+        ScreenKind.Unknown when !frame.Lines.Any(l => l.Count(char.IsLetter) >= 3) =>
+            "no text on it at all - a black or loading screen reads like this",
         _ => "nothing this app knows how to read",
     };
 

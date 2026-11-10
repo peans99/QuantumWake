@@ -36,6 +36,7 @@ public sealed record LiveScreenStatus(
 /// <param name="VoiceTrouble">Why the last callout was not heard, when it was not.</param>
 /// <param name="VoiceMissions">Whether mission callouts are, under it.</param>
 /// <param name="Callouts">Every sound the voice can make and whether it is on, for Settings → Callouts.</param>
+/// <param name="KeepFights">Whether each fight is written to the combat log for the Sessions debrief.</param>
 public sealed record LiveScreenState(
     bool Available,
     string? Unavailable,
@@ -51,7 +52,17 @@ public sealed record LiveScreenState(
     bool VoiceMining = true,
     bool VoiceMissions = true,
     IReadOnlyList<CalloutSwitch>? Callouts = null,
-    PingSettings? Pings = null);
+    PingSettings? Pings = null,
+    bool KeepFights = false);
+
+/// <summary>The fight record's switch, posted to <c>/api/live/fights</c>.</summary>
+public sealed record LiveFights(bool On);
+
+/// <summary>What <c>/api/combat</c> says.</summary>
+/// <param name="Keeping">Whether the record is on now.</param>
+/// <param name="Any">Whether anything was ever kept - a session with no fights reads differently from a record never turned on.</param>
+/// <param name="Fights">The fights in the window asked about, oldest first.</param>
+public sealed record CombatRecord(bool Keeping, bool Any, IReadOnlyList<Fight> Fights);
 
 /// <summary>How pings are read, for Mining → Radar.</summary>
 /// <param name="Place">The pilot's choice: null for where the log puts them, "*" for every rock, or a place.</param>
@@ -111,9 +122,11 @@ public sealed record LiveCallout(string Kind, bool On);
 /// once the panel has been found the loop reads only its patch - about 130 ms
 /// on the 2026-11-05 recording - every second, and the whole frame every
 /// third second, for the lock label's colour and everything else. Out of a
-/// fight it reads a whole frame every two seconds, as it always did. Nothing
-/// of a fight is stored: the combat watch keeps the current lock and the last
-/// few callouts in memory, and the voice, when switched on, says them.
+/// fight it reads a whole frame every two seconds, as it always did. The
+/// combat watch keeps the current lock and the last few callouts in memory,
+/// and the voice, when switched on, says them. Only with the fight record
+/// turned on (1.2.21) is any of it written down: each lock as it ends and
+/// each fight callout, to <see cref="CombatLog"/>.
 /// </para>
 /// </remarks>
 public sealed class LiveScreenService(
@@ -125,7 +138,9 @@ public sealed class LiveScreenService(
     LiveFrameLog? frames = null,
     ICalloutVoice? voice = null,
     NearbyHulls? nearby = null,
-    LiveSessionService? session = null) : BackgroundService
+    LiveSessionService? session = null,
+    CombatLog? fights = null,
+    RockLog? rocks = null) : BackgroundService
 {
     /// <summary>The tick, at a fight's pace. Out of a fight every other tick is skipped.</summary>
     private static readonly TimeSpan Every = TimeSpan.FromSeconds(1);
@@ -136,6 +151,8 @@ public sealed class LiveScreenService(
     /// <summary>One line a frame, in the data folder's <c>live</c> folder; see <see cref="LiveFrameLog"/>.</summary>
     private readonly LiveFrameLog _log = frames ?? new LiveFrameLog(Core.AppPaths.In("live"));
 
+    private readonly CombatLog _fights = fights ?? new CombatLog(Core.AppPaths.In("combat"));
+    private readonly RockLog _worked = rocks ?? new RockLog(Core.AppPaths.In("rocks"));
     private readonly LiveRocks _rocks = new();
     private readonly LiveScreens _screens = new();
     private readonly Lock _gate = new();
@@ -182,7 +199,8 @@ public sealed class LiveScreenService(
             [.. Callouts.All.Select(k => new CalloutSwitch(k.Kind, k.Group, k.Name, k.Sample, !answer.IsMuted(k.Kind), voice?.VoiceFor(k.Sample)))],
             new PingSettings(answer.PingPlace, Here()?.Name,
                 [.. insight.PingPlaces().Select(p => new PingPlaceName(p.Name, p.System, p.Asteroids))],
-                answer.Wanted ?? [], answer.WantedOnly));
+                answer.Wanted ?? [], answer.WantedOnly),
+            answer.KeepFights);
     }
 
     /// <summary>The place with a deposit table the log puts the pilot at: the body, the place, then where a jump is headed.</summary>
@@ -232,6 +250,11 @@ public sealed class LiveScreenService(
         {
             logger.LogInformation("{What} callout: {Text}", what, callout.Text);
             if (keep) lock (_gate) _combat?.Note(callout);
+
+            // A fight's callouts go in the record; "online" is the cockpit
+            // powering up, said in peace as often as not.
+            if (what is "Combat" or "HUD" && callout.Kind != "online" && settings.Current.KeepFights)
+                _fights.Add(callout);
             if (settings.Current.Speaks(callout.Kind)) voice?.Say(callout.Text);
         }
     }
@@ -273,6 +296,29 @@ public sealed class LiveScreenService(
                 HudText.FlightHud(lines));
         }
         Speak(missile.Concat(whole), "HUD", keep: true);
+    }
+
+    /// <summary>
+    /// Writes the locks that have ended to the fight record when it is on, or
+    /// drops them when it is not; <paramref name="flush"/> ends the current one
+    /// too, for reading being switched off or the app closing.
+    /// </summary>
+    private void Record(bool flush = false)
+    {
+        IReadOnlyList<LockRecord> ended;
+        IReadOnlyList<FractureRecord> windows;
+        lock (_gate)
+        {
+            ended = _combat is null ? [] : flush ? _combat.Flush() : _combat.TakeEnded(DateTimeOffset.UtcNow);
+            windows = _mining.TakeEnded();
+        }
+
+        // Rocks need no switch of their own: nothing read off the screen is
+        // in a window's record, only the bar's colours turned into times.
+        foreach (var window in windows) _worked.Add(window);
+
+        if (!settings.Current.KeepFights) return;
+        foreach (var record in ended) _fights.Add(record);
     }
 
     private void Set(Func<LiveScreenStatus, LiveScreenStatus> change)
@@ -321,6 +367,7 @@ public sealed class LiveScreenService(
                 if (!settings.Current.Enabled)
                 {
                     Set(s => s with { State = "off", Why = null });
+                    Record(flush: true);
                     _log.Stopped();
                     _panel = null;
                     _bar = null;
@@ -332,6 +379,7 @@ public sealed class LiveScreenService(
                 {
                     Set(s => s with { State = "unavailable", Why = why });
                     _log.Waiting(why);
+                    Record();
                     continue;
                 }
 
@@ -343,10 +391,12 @@ public sealed class LiveScreenService(
                 if (_panel is null && _bar is null && _tick % 2 != 0)
                 {
                     if (InAFight(DateTimeOffset.UtcNow)) await Tick(frame, stoppingToken, bandOnly: true);
+                    Record();
                     continue;
                 }
 
                 await Tick(frame, stoppingToken);
+                Record();
             }
         }
         catch (OperationCanceledException)
@@ -355,6 +405,7 @@ public sealed class LiveScreenService(
         }
         finally
         {
+            Record(flush: true);
             Forget(frame);
         }
     }
@@ -521,7 +572,12 @@ public sealed class LiveScreenService(
             Speak(pinged, "Ping");
         }
 
-        var kind = target is not null && sighting.Kind == ScreenKind.Unknown ? "Target" : sighting.Kind.ToString();
+        // An unplaced frame is logged with its shape - the app's word for what
+        // it looked like, never the screen's - so a week of them says which
+        // reader is worth writing next; see UnplacedFrames.
+        var kind = target is not null && sighting.Kind == ScreenKind.Unknown ? "Target"
+            : sighting.Kind == ScreenKind.Unknown ? UnplacedFrames.Kind(lines)
+            : sighting.Kind.ToString();
         _log.Read(kind, copying.ElapsedMilliseconds, sighting.TookMs + panelMs, taken.Width, taken.Height, keptAs);
 
         Set(s => s with

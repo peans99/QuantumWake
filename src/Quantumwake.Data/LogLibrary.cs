@@ -1570,6 +1570,14 @@ public sealed class LogLibrary : IDisposable
 
     public IReadOnlyList<SessionSummary> Sessions() => Counted(WipeScope.History);
 
+    /// <summary>
+    /// Every stored session, wipe or no wipe - for questions a wipe does not
+    /// change the answer to, such as which counter a kiosk frame was taken at.
+    /// This install's wipe hides everything before 8 Oct 2026, its only kiosk
+    /// frames among it.
+    /// </summary>
+    public IReadOnlyList<SessionSummary> EverySession() => _store.All();
+
     public SessionSummary? Session(string id) => _store.Get(id);
 
     /// <summary>

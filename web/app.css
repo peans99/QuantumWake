@@ -1500,6 +1500,23 @@ td.outward { color: var(--amber); }
 .session-debrief-highlights li { grid-template-columns: auto minmax(0, 1fr); gap: 2px 7px; }
 .session-debrief-highlights li > :nth-child(3) { grid-column: 2; overflow-wrap: anywhere; }
 .session-debrief-note { margin: 13px 0 0; font-size: 10px; }
+/* A kiosk price the UEX check calls a misread: shown, so the pilot sees what
+   was read, but never as a price to act on. */
+td.struck { text-decoration: line-through; opacity: .7; }
+#commodity-seen-table .small { font-size: 10px; margin-top: 2px; }
+
+/* Fights span the grid: a lock line carries a hull, its stance and four facts. */
+.session-fights { grid-column: 1 / -1; }
+.session-fight { padding: 8px 0; font-size: 11px; }
+.session-fight + .session-fight { border-top: 1px solid rgba(23, 41, 60, .8); }
+.session-fight-head { color: var(--text); font-weight: 600; margin-bottom: 2px; }
+.session-rocks { grid-column: 1 / -1; font-size: 11px; }
+.session-rock-lines { margin-top: 6px; max-width: 1100px; }
+.session-rock-lines li { grid-template-columns: 64px minmax(0, 120px) minmax(0, 1fr); }
+
+/* Facts beside the hull, not flung to the far edge of a full-width row. */
+.session-fight-lines { margin-top: 6px; max-width: 1100px; }
+.session-fight-lines li { grid-template-columns: 64px minmax(0, 240px) minmax(0, 1fr); }
 .session-debrief-loading { padding: 18px; }
 @media (max-width: 1300px) { .session-debrief-grid { grid-template-columns: repeat(2, minmax(220px, 1fr)); } }
 @media (max-width: 900px) { .sessions-deck { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sessions-latest-card { grid-column: 1 / -1; } }

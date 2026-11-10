@@ -7,7 +7,8 @@ occasion on which it talks to the internet, with the switch that controls each
 one.
 
 In force from version 1.0 (November 2026); reading the screen live was added
-in 1.1 (November 2026). Changes to this page are dated in
+in 1.1 (November 2026), and the record of fights, off unless you turn it on,
+in 1.2.21 (November 2026); the record of rocks worked in 1.2.23. Changes to this page are dated in
 the project's history on GitHub. Questions go to the project's issue tracker,
 <https://github.com/peans99/QuantumWake/issues>.
 
@@ -52,8 +53,16 @@ send nothing about you.
   screen while it stays up, in the same reading log screenshots go to, and
   since 1.1.22 your balance from the bar of any other mobiGlas screen. Item
   tooltips and screens the app cannot read are not kept. The ship you have targeted - its name, signatures, speed and whether
-  it is marked hostile - is held in memory for the combat page and never
-  written down. The MFD's Target page draws that ship from the game files, the
+  it is marked hostile - is held in memory for the combat page and not
+  written down, unless you turn on **Keep a record of fights** under the
+  live reading switch (1.2.21, off by default). With it on, each lock is
+  written down when it ends, for the debrief on the Sessions page: the hull's
+  name only when it is a ship in the game's files - a player's ship is
+  labelled with the player, and that label is never kept - the hull the
+  signature points to when it was not named, the faction only when it is one
+  of the game's own, its stance, closest range and top speed, how damaged its
+  hologram looked and whether it stopped; and each fight callout, such as a
+  missile warning or an objective's health. No picture is kept. The MFD's Target page draws that ship from the game files, the
   same pictures as the Garage, not from your screen. A frame can show anything the game does, other players' names
   included, and none of it leaves your computer. The app never opens the
   game's process, reads its memory or sends it input; voice commands and the
@@ -94,7 +103,19 @@ send nothing about you.
   deleted when reading is switched off or the app closes.
   Beside it, `live\frames-<date>.csv` notes when each frame was taken, what
   kind of screen it was and how long reading it took - no text from the
-  screen - one file a day, a week of them kept.
+  screen - one file a day, a week of them kept. Since 1.2.24 a screen the
+  app could not read is noted with a shape from a fixed list of the app's
+  own words, such as "chat" or "no text", so you can see on the Log page
+  what the reader keeps missing; still no text from the screen.
+- **The record of rocks worked**, while live reading is on (1.2.23):
+  `rocks\<date>.jsonl` in the data folder - for each mining charge window,
+  when it opened and closed, how long the charge sat in it, how often it
+  went over, and whether the rock broke. Worked out from the bar's colours;
+  no text from the screen is in it. One file a day, kept until you delete
+  the folder.
+- **The record of fights**, only while Keep a record of fights is on:
+  `combat\<date>.jsonl` in the data folder, one file a day, kept until you
+  delete the folder.
 - **The game folder, only when you ask**: installing item labels writes a text
   table into `Data\Localization\english` and, when `user.cfg` names no
   language, adds `g_language = english` to it. Removing the labels takes back

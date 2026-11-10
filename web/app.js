@@ -3383,13 +3383,185 @@ async function toggleSessionDebrief(id) {
 
   if (!sessionDetails.has(id)) {
     try {
-      sessionDetails.set(id, await getJson(`/api/sessions/${encodeURIComponent(id)}`));
+      const detail = await getJson(`/api/sessions/${encodeURIComponent(id)}`);
+      // The fights the screen reader kept in this session's span. Asked apart
+      // so a server without the record, or a failed read, costs the debrief
+      // only its Fights section.
+      detail.combat = await sessionCombat(detail);
+      detail.rocks = await sessionRocks(detail);
+      sessionDetails.set(id, detail);
     } catch {
       sessionDetails.set(id, { error: true });
     }
   }
 
   if (expandedSessionId === id) renderSessions();
+}
+
+/** The fight record for a session's span, or null when it could not be read. */
+async function sessionCombat(detail) {
+  if (!detail?.startedAt) return null;
+  const to = detail.endedAt || new Date().toISOString();
+  return getJson(`/api/combat?from=${encodeURIComponent(detail.startedAt)}&to=${encodeURIComponent(to)}`).catch(() => null);
+}
+
+/** The rocks the live reader followed in a session's span (1.2.23), or null when they could not be read. */
+async function sessionRocks(detail) {
+  if (!detail?.startedAt) return null;
+  const to = detail.endedAt || new Date().toISOString();
+  const answer = await getJson(`/api/rocks?from=${encodeURIComponent(detail.startedAt)}&to=${encodeURIComponent(to)}`).catch(() => null);
+  return answer?.rocks || null;
+}
+
+/** Seconds as "1m 20s" or "34s". */
+function shortSpan(seconds) {
+  const s = Math.max(0, Math.round(seconds));
+  return s >= 60 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s` : `${s}s`;
+}
+
+/**
+ * Each charge window the live reader followed in this session, with the scan
+ * of the rock when one was read. Nothing when there were none: most sessions
+ * mine nothing, and a section saying so on each would be noise.
+ */
+function renderSessionRocks(detail) {
+  const rocks = detail.rocks || [];
+  if (!rocks.length) return null;
+
+  const section = el('section', 'session-debrief-section session-rocks');
+  section.append(el('h3', null, tx('Rocks worked')));
+
+  const cracked = rocks.filter((r) => r.fracture.cracked).length;
+  const over = rocks.reduce((sum, r) => sum + (r.fracture.overcharges || 0), 0);
+  section.append(el('div', 'muted', [
+    txn(rocks.length, '{count} charge window', '{count} charge windows'),
+    txn(cracked, '{count} cracked', '{count} cracked'),
+    rocks.length - cracked ? txn(rocks.length - cracked, '{count} let go', '{count} let go') : null,
+    over ? txn(over, '{count} overcharge', '{count} overcharges') : null,
+  ].filter(Boolean).join(' · ')));
+
+  const list = el('ul', 'session-debrief-list session-rock-lines');
+  for (const rock of rocks) {
+    const f = rock.fracture;
+    const item = el('li');
+    item.append(el('span', 'muted', shortTimeOf(f.since)));
+    item.append(el('span', f.cracked ? 'inward' : 'muted', f.cracked ? tx('Cracked') : tx('Let go')));
+    const facts = [
+      tx('{span} on the laser', { span: shortSpan((new Date(f.until) - new Date(f.since)) / 1000) }),
+      tx('{span} in the window', { span: shortSpan(f.inWindowSeconds) }),
+      f.overcharges ? txn(f.overcharges, '{count} overcharge', '{count} overcharges') : null,
+      f.cracked ? null : tx('bar {percent}% full', { percent: Math.round((f.filled || 0) * 100) }),
+    ].filter(Boolean);
+    const scan = rock.scan;
+    if (scan) {
+      const top = (scan.parts || []).slice().sort((a, b) => b.percent - a.percent)[0];
+      facts.push([
+        top ? `${top.mineral || top.read} ${Math.round(top.percent)}%` : (scan.primary || scan.primaryRead),
+        scan.massKg != null ? `${Math.round(scan.massKg).toLocaleString(QW_DATE_LOCALES)} kg` : null,
+        scan.resistancePercent != null ? tx('resistance {percent}%', { percent: Math.round(scan.resistancePercent) }) : null,
+      ].filter(Boolean).join(', '));
+    }
+    item.append(el('span', 'muted', facts.join(' · ')));
+    list.append(item);
+  }
+  section.append(list);
+  section.append(el('p', 'session-debrief-note muted',
+    tx('Read off the fracture bar. Time in the window is a floor: frames are a second or two apart. What each rock refined to is not shown - a refinery order never says which rocks went into it.')));
+  return section;
+}
+
+/** What the game log wrote during a fight, a minute either side: the kills, deaths and pay it can vouch for. */
+const FIGHT_LOG_KINDS = ['kill', 'death', 'incapacitated', 'contract-done', 'payout', 'respawn'];
+
+function fightLogEntries(detail, fight) {
+  const from = new Date(fight.start).getTime() - 60000;
+  const to = new Date(fight.end).getTime() + 60000;
+  return (detail.timeline || []).filter((entry) => FIGHT_LOG_KINDS.includes(entry.kind)
+    && new Date(entry.at).getTime() >= from && new Date(entry.at).getTime() <= to);
+}
+
+/** One lock as a line: the hull printed, or the hull the signature favoured, said as a guess. */
+function fightLockLine(lock) {
+  const item = el('li', 'fight-lock');
+  item.append(el('span', 'muted', shortTimeOf(lock.since)));
+  const who = el('span');
+  if (lock.name) who.append(rowRefLink('ship', lock.class || lock.name, lock.name));
+  else if (lock.likely) {
+    who.append(tx('likely') + ' ', rowRefLink('ship', lock.class || lock.likely, lock.likely),
+      el('span', 'muted', ` ${Math.round((lock.chance || 0) * 100)}%`));
+  } else who.append(el('span', 'muted', tx('Unknown contact')));
+  item.append(who);
+
+  const facts = [
+    lock.stance === 'hostile' ? tx('hostile') : lock.stance === 'friendly' ? tx('friendly') : null,
+    lock.faction,
+    lock.closestKm != null ? tx('closest {km} km', { km: Number(lock.closestKm).toFixed(2) }) : null,
+    lock.topSpeedMs != null ? tx('up to {speed} m/s', { speed: Math.round(lock.topSpeedMs) }) : null,
+    lock.hull === 'critical' ? tx('hologram critical') : lock.hull === 'damaged' ? tx('hologram damaged') : null,
+    lock.stopped ? tx('stopped after moving') : null,
+  ].filter(Boolean);
+  item.append(el('span', lock.stance === 'hostile' ? 'outward' : 'muted', facts.join(' · ')));
+  return item;
+}
+
+/**
+ * The fights the live reader kept in this session (1.2.21), each joined to
+ * what the log wrote in the same minutes. Nothing at all when the record was
+ * never turned on: a section on every session saying so would be noise.
+ */
+function renderSessionFights(detail) {
+  const record = detail.combat;
+  if (!record || (!record.keeping && !record.any)) return null;
+
+  const section = el('section', 'session-debrief-section session-fights');
+  section.append(el('h3', null, tx('Fights read off the screen')));
+  const fights = record.fights || [];
+  if (!fights.length) {
+    section.append(el('p', 'muted', record.keeping
+      ? tx('No ship was locked in this session while the screen was being read.')
+      : tx('The fight record is off, and nothing was kept for this session.')));
+    return section;
+  }
+
+  for (const fight of fights) {
+    const block = el('div', 'session-fight');
+    const minutes = Math.max(1, Math.round((new Date(fight.end) - new Date(fight.start)) / 60000));
+    block.append(el('div', 'session-fight-head',
+      `${shortTimeOf(fight.start)} → ${shortTimeOf(fight.end)} · ${txn(minutes, '{count} minute', '{count} minutes')}`));
+
+    const counts = [
+      txn(fight.locks.length, '{count} lock', '{count} locks'),
+      fight.named ? txn(fight.named, '{count} named', '{count} named') : null,
+      fight.likely ? txn(fight.likely, '{count} likely', '{count} likely') : null,
+      fight.hostile ? txn(fight.hostile, '{count} hostile', '{count} hostile') : null,
+      fight.stopped ? txn(fight.stopped, '{count} stopped', '{count} stopped') : null,
+      fight.missiles ? txn(fight.missiles, '{count} missile warning', '{count} missile warnings') : null,
+      fight.lowestObjective != null ? tx('objective below {percent}%', { percent: fight.lowestObjective }) : null,
+    ].filter(Boolean);
+    block.append(el('div', 'muted', counts.join(' · ')));
+
+    // One timeline: each lock where it began, and the log's lines among them,
+    // so a death reads after the ship that was being fought when it came.
+    const lines = [
+      ...fight.locks.slice(0, 12).map((lock) => ({ at: lock.since, node: fightLockLine(lock) })),
+      ...fightLogEntries(detail, fight).map((entry) => {
+        const item = el('li', 'fight-logged');
+        item.append(el('span', 'muted', shortTimeOf(entry.at)));
+        item.append(el('span', ['kill', 'contract-done', 'payout'].includes(entry.kind) ? 'inward' : 'outward', feedText(withoutMarkup(entry.text))));
+        item.append(el('span', 'muted', [tx('Game.log'), entry.detail ? feedText(withoutMarkup(entry.detail)) : null].filter(Boolean).join(' · ')));
+        return { at: entry.at, node: item };
+      }),
+    ].sort((a, b) => new Date(a.at) - new Date(b.at));
+    const list = el('ul', 'session-debrief-list session-fight-lines');
+    lines.forEach((line) => list.append(line.node));
+    if (fight.locks.length > 12) list.append(el('li', 'muted', tx('and {count} more', { count: fight.locks.length - 12 })));
+    block.append(list);
+    section.append(block);
+  }
+
+  section.append(el('p', 'session-debrief-note muted',
+    tx('Read off the screen. A likely hull is the signature’s guess, not the panel’s; the log lines are what Game.log wrote in the same minutes.')));
+  return section;
 }
 
 function sessionRoute(detail) {
@@ -3630,6 +3802,11 @@ function renderSessionDebrief(summary) {
   if (!contracts.length) contractList.append(el('li', 'muted', tx('No contracts recorded.')));
   contractSection.append(contractList);
   content.append(contractSection);
+
+  const fightSection = renderSessionFights(detail);
+  if (fightSection) content.append(fightSection);
+  const rockSection = renderSessionRocks(detail);
+  if (rockSection) content.append(rockSection);
 
   const highlightSection = el('section', 'session-debrief-section');
   highlightSection.append(el('h3', null, tx('Latest highlights')));
@@ -12290,6 +12467,9 @@ function applyScreenMode() {
   // count, and no button at all when there is nothing waiting.
   const unread = Number(screenSettings.unread) || 0;
   const watching = shots && screenSettings.watchScreenshots;
+  const unplaced = $('#screen-reread-unplaced');
+  if (unplaced) unplaced.hidden = !shots || !screenSettings.canReadScreenshots;
+
   const older = $('#screen-read-older');
   if (older) {
     older.hidden = !shots || !screenSettings.canReadScreenshots || watching || unread === 0;
@@ -18363,6 +18543,93 @@ $('#screen-scan')?.addEventListener('click', async (e) => {
   }
 });
 
+// Readers arrive after the frames that teach them; this puts every unplaced
+// screenshot through the readers there are now (1.2.24).
+$('#screen-reread-unplaced')?.addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  button.disabled = true;
+  screenSay(tx('reading the unplaced screenshots again…'));
+  try {
+    const response = await fetch('/api/screen/readings/reread-unplaced', { method: 'POST' });
+    const got = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(got.trouble || response.status);
+    screenSay([
+      txn(got.read || 0, '{count} read again', '{count} read again'),
+      txn(got.placed || 0, '{count} placed this time', '{count} placed this time'),
+      got.gone ? txn(got.gone, '{count} no longer in the folder', '{count} no longer in the folder') : null,
+    ].filter(Boolean).join(' · '));
+    renderScreenLog().catch(() => {});
+  } catch (err) {
+    screenSay(tx('could not read them again: {error}', { error: screenText(err.message) }));
+  } finally {
+    button.disabled = false;
+  }
+});
+
+/** Plain words for each shape of unplaced frame, in the order the reader tries them. */
+const FRAME_SHAPES = {
+  'no-text': () => tx('no text at all - a black or loading screen, or open space'),
+  inventory: () => tx('an inventory or looting view, which carries no item names'),
+  'flight-hud': () => tx('the flight HUD with nothing locked or fractured'),
+  chat: () => tx('chat and little else'),
+  'few-words': () => tx('a handful of words'),
+  other: () => tx('something else'),
+};
+
+/**
+ * The frame log's week, counted (1.2.24): what each frame turned out to be,
+ * and the ones nothing placed by shape. Loaded when opened - it reads a
+ * week of files.
+ */
+async function renderLiveFrames() {
+  const body = $('#live-frames-body');
+  if (!body) return;
+  body.textContent = tx('Counting…');
+  let tally;
+  try {
+    tally = await getJson('/api/live/frames');
+  } catch {
+    body.textContent = tx('The frame log could not be read.');
+    return;
+  }
+  body.textContent = '';
+  if (!tally.frames) {
+    body.append(el('p', null, tx('No frames read this week.')));
+    return;
+  }
+
+  body.append(el('p', null, tx('{count} frames read, {from} to {to}.', {
+    count: tally.frames.toLocaleString(QW_DATE_LOCALES), from: dateOf(tally.from), to: dateOf(tally.to),
+  })));
+  const kinds = el('ul', 'live-frame-kinds');
+  for (const [kind, n] of Object.entries(tally.kinds || {}).sort((a, b) => b[1] - a[1])) {
+    // The live loop's own kinds beside the screenshot ones: a close read of
+    // the target panel, the missile band or the fracture bar.
+    const live = { Target: tx('target panel'), Missile: tx('missile band'), Fracture: tx('fracture bar') };
+    const label = kind === 'Unknown' ? tx('not placed') : (live[kind] || SCREEN_KINDS[kind] || kind);
+    kinds.append(el('li', null, `${n.toLocaleString(QW_DATE_LOCALES)} · ${label} (${Math.round((n / tally.frames) * 100)}%)`));
+  }
+  body.append(kinds);
+
+  const shaped = Object.values(tally.shapes || {}).reduce((a, b) => a + b, 0);
+  const unknown = tally.kinds?.Unknown || 0;
+  if (unknown) {
+    if (!shaped) {
+      body.append(el('p', null, tx('The frames not placed have no shape yet: shapes are noted from 1.2.24 on.')));
+    } else {
+      body.append(el('p', null, tx('Of the {count} not placed since shapes were noted:', { count: shaped.toLocaleString(QW_DATE_LOCALES) })));
+      const shapes = el('ul', 'live-frame-kinds');
+      for (const [shape, n] of Object.entries(tally.shapes).sort((a, b) => b[1] - a[1]))
+        shapes.append(el('li', null, `${n.toLocaleString(QW_DATE_LOCALES)} · ${(FRAME_SHAPES[shape] || (() => shape))()}`));
+      body.append(shapes);
+    }
+  }
+}
+
+$('#live-frames')?.addEventListener('toggle', (event) => {
+  if (event.target.open) renderLiveFrames();
+});
+
 $('#screen-read-older')?.addEventListener('click', async (e) => {
   const button = e.currentTarget;
   button.disabled = true;
@@ -23593,6 +23860,7 @@ async function openCommodity(name) {
   ]);
 
   renderCommodityCounters(await terminalsFor(name).catch(() => []), entry);
+  renderCommoditySeen(name);
   renderCommodityReceipts(name);
 
   // Named "trend", not "history": a local called history shadows window.history
@@ -23714,6 +23982,78 @@ function fillCounterTable(selector, rows, cells, isWorse) {
 }
 
 /** What this install actually paid and was paid for the thing. */
+/**
+ * Prices read off a kiosk (1.2.22), each beside UEX's for the same counter.
+ * A reading more than twice or under half UEX's is shown struck through and
+ * called a misread: the first kiosk on this install read 3,312 as 3.312.
+ */
+async function renderCommoditySeen(name) {
+  const body = $('#commodity-seen-table')?.querySelector('tbody');
+  if (!body) return;
+  body.textContent = '';
+  const note = $('#commodity-seen-note');
+
+  let report = null;
+  try {
+    report = await getJson(`/api/kiosk-prices?commodity=${encodeURIComponent(name)}`);
+  } catch { /* the rest of the page stands on its own */ }
+  if (openCommodityName !== name) return;
+
+  const seen = report?.seen || [];
+  if (!seen.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', tx('No kiosk showing this one has been read.'));
+    td.colSpan = 6;
+    tr.append(td);
+    body.append(tr);
+  }
+
+  const verdicts = {
+    matches: [tx('matches UEX'), 'inward'],
+    differs: [tx('differs from UEX'), 'muted'],
+    misread: [tx('probably misread'), 'outward'],
+    unchecked: [tx('nothing to check against'), 'muted'],
+  };
+  for (const row of seen) {
+    const tr = el('tr');
+    const when = el('td', null, dateOf(row.at));
+    if (row.frames > 1) when.append(el('div', 'muted small', txn(row.frames, '{count} frame', '{count} frames')));
+    tr.append(when);
+    tr.append(el('td', null, row.buying ? tx('Asking') : tx('Paying')));
+    tr.append(row.place ? tdPlace(row.place) : el('td', 'muted', tx('not in a logged session')));
+    const price = el('td', `num${row.verdict === 'misread' ? ' struck' : ''}`, money(row.price));
+    tr.append(price);
+    tr.append(el('td', 'num muted', row.uex != null
+      ? `${money(row.uex)}${row.uexAt ? ` · ${dateOf(row.uexAt)}` : ''}`
+      : '—'));
+    const [label, cls] = verdicts[row.verdict] || verdicts.unchecked;
+    const pct = row.uex ? Math.round(((row.price - row.uex) / row.uex) * 100) : null;
+    const check = el('td', cls, row.verdict === 'differs' && pct != null ? `${label} (${pct > 0 ? '+' : ''}${pct}%)` : label);
+    // Which counter the figure is UEX's at: the place's own, or - when the
+    // log's name for the place matched none - every counter quoting it.
+    const counters = row.uexCounters || [];
+    if (counters.length) {
+      const where = row.atThisCounter
+        ? tx('at {counter}', { counter: counters[0] })
+        : counters.length <= 6
+          ? tx('as at {counters}', { counters: counters.join(', ') })
+          : tx('as at {count} counters, {counters} among them', { count: counters.length, counters: counters.slice(0, 3).join(', ') });
+      check.append(el('div', 'muted small', where));
+    }
+    tr.append(check);
+    body.append(tr);
+  }
+
+  if (note) {
+    note.hidden = !report?.olderReader;
+    note.textContent = report?.olderReader
+      ? txn(report.olderReader,
+        '{count} older kiosk reading is left out: it was taken by the reader before 1.2.22, which misread this install’s kiosk. Read it again from the Log page to bring it in.',
+        '{count} older kiosk readings are left out: they were taken by the reader before 1.2.22, which misread this install’s kiosk. Read them again from the Log page to bring them in.')
+      : '';
+  }
+}
+
 async function renderCommodityReceipts(name) {
   const body = $('#commodity-mine-table').querySelector('tbody');
   body.textContent = '';
@@ -36772,6 +37112,11 @@ function renderLiveScreen() {
       const missions = $('#live-voice-missions');
       if (missions) missions.checked = state.voiceMissions !== false;
     }
+    const fights = $('#live-fights-row');
+    if (fights) {
+      fights.hidden = !state.enabled;
+      $('#live-fights').checked = Boolean(state.keepFights);
+    }
     const trouble = $('#live-voice-trouble');
     if (trouble) {
       trouble.hidden = !(state.enabled && state.voice && state.voiceTrouble);
@@ -37022,6 +37367,26 @@ async function postLiveVoice(event, body) {
 }
 
 $('#live-voice')?.addEventListener('change', (event) => postLiveVoice(event, { enabled: event.target.checked }));
+
+// The fight record: its own agreement, posted on its own.
+$('#live-fights')?.addEventListener('change', async (event) => {
+  try {
+    const response = await fetch('/api/live/fights', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ on: event.target.checked }),
+    });
+    if (!response.ok) throw new Error(`fights ${response.status}`);
+    liveState = await response.json();
+    // Debriefs already open were drawn under the old answer.
+    sessionDetails.clear();
+    renderLiveScreen();
+  } catch {
+    event.target.checked = !event.target.checked;
+    const line = $('#live-status');
+    if (line) line.textContent = tx('The change did not save.');
+  }
+});
 $('#live-voice-combat')?.addEventListener('change', (event) =>
   postLiveVoice(event, { enabled: Boolean(liveState?.voice), combat: event.target.checked }));
 $('#live-voice-mining')?.addEventListener('change', (event) =>

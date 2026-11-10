@@ -15,7 +15,9 @@ namespace Quantumwake.Tests;
 public class ScreenKioskTests
 {
     private static readonly string[] Commodities =
-        ["Hephaestanite", "Corundum", "Titanium", "Carbon", "Dymantium", "Aluminum", "Quartz"];
+        ["Hephaestanite", "Corundum", "Titanium", "Carbon", "Dymantium", "Aluminum", "Quartz",
+         // As the install's catalogue names them: every ammunition size is "Ship Ammunition".
+         "Scrap", "Methane", "Ship Ammunition"];
 
     private static readonly string[] Ships = ["MISC Hull A", "Drake Caterpillar", "Drake Corsair"];
 
@@ -121,7 +123,7 @@ public class ScreenKioskTests
     [Fact]
     public void A_balance_printed_in_full_is_the_wallet()
     {
-        var frame = Read(ScreenKioskFixtures.OwnSellSide);
+        var frame = Read(ScreenKioskFixtures.OwnBuySide);
 
         Assert.Equal(ScreenKind.Kiosk, frame.Kind);
         Assert.Equal(2_092_773, frame.Kiosk!.Balance);
@@ -192,6 +194,55 @@ public class ScreenKioskTests
         // Filed and kept whole, which is what a reader gets written from.
         Assert.Contains("DYMANTIUM", frame.Lines);
         Assert.Equal(576, frame.Kiosk.CargoCapacity);
+    }
+
+    /// <summary>
+    /// This install's own kiosk, as the 1.2.22 reader takes it: the buy side
+    /// (the shop's rows say so, though YOUR INVENTORIES heads the left panel
+    /// too), all seven rows, each size its own commodity, and the padded and
+    /// dotted figures read whole. The first reader filed it as selling, kept
+    /// five rows and priced Methane at 3.312.
+    /// </summary>
+    [Fact]
+    public void This_installs_kiosk_reads_as_the_buy_side_with_every_row()
+    {
+        var kiosk = Read(ScreenKioskFixtures.OwnBuySide).Kiosk!;
+
+        Assert.True(kiosk.Buying);
+        Assert.Equal(ScreenFrames.KioskReader, kiosk.Reader);
+        Assert.Equal(
+            ["Scrap", "Methane", "Ship Ammunition - Size 1", "Ship Ammunition - Size 2",
+             "Ship Ammunition - Size 3", "Ship Ammunition - Size 4", "Ship Ammunition - Size 5"],
+            kiosk.Rows.Select(r => r.Commodity));
+        Assert.Equal([2040d, 18000, 12000, 12000, 12000, 12000, 12000], kiosk.Rows.Select(r => r.Quantity ?? -1));
+
+        var price = kiosk.Rows.ToDictionary(r => r.Commodity!, r => r.Price);
+        Assert.Equal(3312, price["Methane"]);
+        Assert.Equal(6868, price["Ship Ammunition - Size 1"]);
+        Assert.Equal(7126, price["Ship Ammunition - Size 2"]);
+    }
+
+    /// <summary>
+    /// ", 641/SCU" was 7,641 with its first group gone. Refused, not taken as
+    /// 641: a price short by a thousands group is the plausible wrong answer.
+    /// What the frame cannot show - 384 for 7,384, 43,265 for ¤3,265 - is left
+    /// for the UEX check in <see cref="KioskPrices"/>.
+    /// </summary>
+    [Fact]
+    public void A_figure_that_opens_on_a_separator_is_refused()
+    {
+        var kiosk = Read(ScreenKioskFixtures.OwnBuySide).Kiosk!;
+
+        Assert.Null(kiosk.Rows.Single(r => r.Commodity == "Ship Ammunition - Size 4").Price);
+        Assert.Equal(384, kiosk.Rows.Single(r => r.Commodity == "Ship Ammunition - Size 3").Price);
+        Assert.Equal(43265, kiosk.Rows.Single(r => r.Commodity == "Scrap").Price);
+    }
+
+    [Fact]
+    public void A_suffix_keeps_the_point_a_decimal_point()
+    {
+        var hephaestanite = Read(ScreenKioskFixtures.BuySide).Kiosk!.Rows.Single(r => r.Commodity == "Hephaestanite");
+        Assert.Equal(2197.00002, hephaestanite.Price!.Value, 3);
     }
 
     [Fact]

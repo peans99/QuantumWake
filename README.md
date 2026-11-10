@@ -370,6 +370,22 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
+### 1.2.24
+
+**What the live reader keeps missing.** The Log page has a new line under the live reading switch, What the reader saw this week: how many frames were read and what each turned out to be - target panel, contracts, fracture bar - and, for the ones no reader could place, what they looked like: a black or loading screen, chat, the flight HUD, an inventory. Still nothing from the screen is kept; the frame log notes one of a few words of the app's own.
+
+**Read unplaced screenshots again.** A new button on the Log page puts every screenshot no reader placed through the readers there are now - screenshots taken before the Freight Manager and refinery readers existed are among them. A screenshot with no text at all, which is what a black picture saved before the scene drew reads like, now says so.
+
+**The rocks you worked, in each session's debrief.** With live reading on, each mining charge window the app follows is now kept: how long you were on the laser, how long the charge sat in the window, how often it went over, and whether the rock cracked or was let go - with the scan of the rock beside it when one was read. Each session's debrief on the Sessions page lists them under Rocks worked. What each rock refined to is not shown: a refinery order never says which rocks went into it.
+
+**Kiosk prices you saw, beside UEX's.** Each commodity's page has a new table, Seen at the kiosk: every price read off a commodity kiosk on your screen, with the place, what UEX lists at that counter (or, when the place's name matches no UEX counter, which counters quote the same figure), both dates, and whether they agree. A price more than twice or under half what UEX lists is struck through and called a probable misread rather than offered as a price.
+
+**Commodity kiosks are read properly.** Building that comparison showed the kiosk reader had been getting kiosks wrong: a kiosk photographed in September was filed as the sell side when it was the buy side, Methane at 3,312 was read as 3.312, two prices lost their first digits, two rows were dropped, and every ammunition size was named plain "Ship Ammunition". All fixed, and a figure missing its first digits is now left unread instead of read short. Kiosk readings taken before this version are left out of the new table and counted; Read again on the Log page brings them in.
+
+**A debrief of each fight, if you want one.** With live reading on, a new switch under it, Keep a record of fights, writes down each ship you lock once the lock ends: the hull when the target panel named it, the likely hull and its odds when it did not, whether it was hostile, how close and how fast it came, how damaged its hologram looked and whether it stopped dead; and the missile warnings and objective-health calls made around it. Each session's debrief on the Sessions page then lists its fights, with what Game.log wrote in the same minutes (kills, deaths, pay, completed contracts) beside them. A player's name and anything that is not one of the game's factions is never written, nor any picture, and the switch is off until you turn it on: the privacy page had promised the targeted ship was never written down, and now says what changes when you turn the record on.
+
+**The previous look is back, with the new top bar kept.** The pages return to the blue-grey instrument panels, cyan highlights and page titles from before 1.2.18. The navigation keeps its 1.2.18 form: the Quantum Wake nameplate above a single row of menus with their symbols and a cyan mark under the page you are on, wrapping onto more lines in a narrow window with its menus kept on screen. The screenshots in this README are retaken to show it.
+
 ### 1.2.18
 
 **A spacecraft console for Quantum Wake.** The dashboard has a charcoal and warm-white palette, restrained orange controls, a clearer navigation index, and a course-chart motif built around the wake mark. Flatter instrument panels and larger page titles give the flight record and reference views their own character, and the navigation symbols and the ships flying along page headers stay. On a narrow window the navigation wraps onto more lines and its menus stay on screen. The in-game overlay and the Cockpit HUD keep their own look. The screenshots in this README show the new console.

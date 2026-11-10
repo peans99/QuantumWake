@@ -302,10 +302,6 @@
 
   <!-- NOW -->
   <section id="view-now" class="view active">
-    <div class="console-heading">
-      <div><p class="console-overline">Flight recorder</p><h1>Now</h1></div>
-      <p class="console-description">A pilot's logbook</p>
-    </div>
     <!-- When the game is closed. Game.log keeps the last session until the
          next launch, so without this the page reads days-old state as live. -->
     <section class="now-focus now-closed" id="now-closed" hidden>
@@ -1340,6 +1336,8 @@
             <button class="ghost" id="screen-scan" hidden>Read last screenshot</button>
             <button class="ghost" id="screen-read-older" hidden
                     title="Read the screenshots already in the folder without switching the watch on - newest first, forty at a time"></button>
+            <button class="ghost" id="screen-reread-unplaced" hidden
+                    title="Read every screenshot no reader placed again, through the readers there are now">Read unplaced screenshots again</button>
             <label class="muted" title="Check the clipboard on its own every few seconds">
               <input type="checkbox" id="screen-watch"> <span>Watch clipboard</span>
             </label>
@@ -1358,10 +1356,16 @@
             <input type="checkbox" id="live-enabled">
             <span>
               Read the game&rsquo;s screen live
-              <em class="muted">While Star Citizen is the window in front, a frame every two seconds is read like a screenshot and thrown away, every second while a ship is targeted. What a screenshot would be taken of is kept without one, a reading per screen: the Fleet Manager, the map, a loadout, a kiosk, a refinery, the hangar’s freight terminal, the Contracts and Rep apps, the balance on any mobiGlas screen, and each rock scanned. The target is only shown. Nothing touches the game itself.</em>
+              <em class="muted">While Star Citizen is the window in front, a frame every two seconds is read like a screenshot and thrown away, every second while a ship is targeted. What a screenshot would be taken of is kept without one, a reading per screen: the Fleet Manager, the map, a loadout, a kiosk, a refinery, the hangar’s freight terminal, the Contracts and Rep apps, the balance on any mobiGlas screen, and each rock scanned. The target is only shown, unless you keep a record of fights below. Nothing touches the game itself.</em>
             </span>
           </label>
           <p class="muted" id="live-status" aria-live="polite"></p>
+          <!-- Counts from the frame log, in the app's own words: no screen
+               text is in it, so none is shown. -->
+          <details class="live-frames" id="live-frames">
+            <summary>What the reader saw this week</summary>
+            <div id="live-frames-body" class="muted"></div>
+          </details>
           <!-- Its own switch: reading the screen is one agreement, a voice in
                the headset another, and the first never turns on the second. -->
           <div class="live-voice" id="live-voice-row" hidden>
@@ -1382,6 +1386,15 @@
             <label class="toggle"><input type="checkbox" id="live-voice-mining"><span>Mining</span></label>
           </div>
           <p class="muted" id="live-voice-trouble" hidden></p>
+          <!-- Its own agreement: from 1.1 the privacy page promised the locked
+               ship was held in memory and never written down. -->
+          <label class="toggle live-fights" id="live-fights-row" hidden>
+            <input type="checkbox" id="live-fights">
+            <span>
+              Keep a record of fights
+              <em class="muted">Each ship locked and each fight callout, written down for the debrief on the Sessions page: the hull when the panel printed one, the likely hull when it did not, range, speed, whether it was hostile, missile warnings and an objective&rsquo;s health. A player&rsquo;s name is never written, nor any picture. Off until you turn it on.</em>
+            </span>
+          </label>
         </div>
         </div>
       </details>
@@ -2367,6 +2380,24 @@
         <tbody></tbody>
       </table>
     </div>
+
+    <h2 class="spaced">Seen at the kiosk</h2>
+    <p class="muted caption">
+      Prices read off a kiosk on your screen - the only prices here you saw
+      yourself - each beside what UEX lists for the same counter, with both dates.
+    </p>
+    <div class="table-wrap">
+      <table id="commodity-seen-table">
+        <thead>
+          <tr>
+            <th>When</th><th>Side</th><th>Place</th>
+            <th class="num">Seen</th><th class="num">UEX</th><th>Check</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="muted caption" id="commodity-seen-note" hidden></p>
 
     <h2 class="spaced">Your own receipts</h2>
     <p class="muted caption">
