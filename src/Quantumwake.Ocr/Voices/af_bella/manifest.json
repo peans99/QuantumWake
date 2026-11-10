@@ -105,7 +105,8 @@
     "Shields off": "p_shields_off.m4a",
     "Shields toggled": "p_shields_toggled.m4a",
     "Confirm shields off?": "p_confirm_shields_off.m4a",
-    "Confirm abort self destruct?": "p_confirm_abort_self_destruct.m4a"
+    "Confirm abort self destruct?": "p_confirm_abort_self_destruct.m4a",
+    "Next mode": "p_next_mode.m4a"
   },
   "names": {
     "Aegis Avenger Stalker": "n_aegis_avenger_stalker.m4a",

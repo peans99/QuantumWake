@@ -370,6 +370,10 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
+### 1.2.25
+
+**"Next mode", ready for 4.10.3.** The 4.10.3 PTU moves M off mining mode and salvage mode and onto a new control that cycles through the operator modes. A new voice command, "next mode" (or "cycle industrial mode"), presses it. On today's 4.10.2 the game has no such control yet, so the command says so instead of pressing anything, and "mining mode" and "salvage mode" keep working on M; once 4.10.3 is out, those two will offer a spare key like any command with no key of its own.
+
 ### 1.2.24
 
 **What the live reader keeps missing.** The Log page has a new line under the live reading switch, What the reader saw this week: how many frames were read and what each turned out to be - target panel, contracts, fracture bar - and, for the ones no reader could place, what they looked like: a black or loading screen, chat, the flight HUD, an inventory. Still nothing from the screen is kept; the frame log notes one of a few words of the app's own.
