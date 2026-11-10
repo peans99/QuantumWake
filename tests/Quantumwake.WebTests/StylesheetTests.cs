@@ -131,6 +131,18 @@ public class StylesheetTests
         }
     }
 
+    /// <summary>
+    /// 1.2.19 kept 1.2.18's orange under the active menu by redefining --cyan
+    /// inside .topbar; Nicolas wanted the pages' cyan there. Redefining it
+    /// again would bring the orange back without touching a single rule.
+    /// </summary>
+    [Fact]
+    public void Console_header_keeps_the_pages_cyan()
+    {
+        var css = System.Text.RegularExpressions.Regex.Replace(Css("console.css"), @"/\*.*?\*/", "", System.Text.RegularExpressions.RegexOptions.Singleline);
+        Assert.DoesNotMatch(@"--cyan(-hot)?\s*:", css);
+    }
+
     private static int CountOf(string text, string token)
     {
         var count = 0;

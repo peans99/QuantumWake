@@ -1,7 +1,7 @@
 /* The console's top edge: a nameplate above a continuous navigation index.
    Only the header is restyled; the pages below keep app.css. The palette is
-   scoped to the header so its orange selection rule and warm-white type do
-   not leak into the cyan pages, and the in-game overlay is left alone. */
+   scoped to the header so its warm-white type does not leak into the pages;
+   the selection mark uses the pages' cyan. The in-game overlay is left alone. */
 body:not(.overlay) {
   --console-header: 96px;
   --console-telemetry: 34px;
@@ -12,8 +12,6 @@ body:not(.overlay) .topbar {
   --text: #e9e8df;
   --muted: #aab5b7;
   --dim: #8a999e;
-  --cyan: #efa66f;
-  --cyan-hot: #ffd0a9;
   --display: "Bahnschrift", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
 }
 

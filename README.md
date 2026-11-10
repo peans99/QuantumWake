@@ -370,9 +370,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.19
+### 1.2.20
 
-**The previous look is back, with the new top bar kept.** The pages return to the blue-grey instrument panels, cyan highlights and page titles from before 1.2.18. The navigation keeps its 1.2.18 form: the Quantum Wake nameplate above a single row of menus with their symbols and an orange mark under the page you are on, wrapping onto more lines in a narrow window with its menus kept on screen. The screenshots in this README are retaken to show it.
+**The previous look is back, with the new top bar kept.** The pages return to the blue-grey instrument panels, cyan highlights and page titles from before 1.2.18. The navigation keeps its 1.2.18 form: the Quantum Wake nameplate above a single row of menus with their symbols and a cyan mark under the page you are on, wrapping onto more lines in a narrow window with its menus kept on screen. The screenshots in this README are retaken to show it.
 
 ### 1.2.18
 

@@ -13,9 +13,10 @@ header go in `console.css`, and changes to the pages go in `app.css`.
 
 - A nameplate row (mark, name, live status, search) above the navigation row.
 - The navigation symbols from `PAGE_GLYPHS` beside each menu name.
-- An orange mark under the page you are on. The header has its own palette,
-  scoped to `.topbar`, so that orange and its warm-white type stay in the
-  header and the pages keep their cyan.
+- A cyan mark under the page you are on, the same cyan as the pages. 1.2.19
+  briefly kept 1.2.18's orange there; Nicolas asked for the cyan back. The
+  header's other colours (warm-white type, slate rules) are scoped to
+  `.topbar` so they stay in the header.
 - In a narrow window the navigation wraps onto more lines instead of
   scrolling sideways, and `initNavigationMenuBounds` in `app.js` moves each
   dropdown so it stays inside the window. A scroller would cut the dropdowns
