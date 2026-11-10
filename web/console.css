@@ -37,8 +37,7 @@ body:not(.overlay) {
 body:not(.overlay)::before,
 body:not(.overlay) .margin-mark,
 body:not(.overlay) .railmark,
-body:not(.overlay) .sector-scan,
-body:not(.overlay) .wake-chase { display: none; }
+body:not(.overlay) .sector-scan { display: none; }
 
 /* A ship nameplate above a continuous navigation index, rather than a row of
    glowing buttons competing with the data underneath. Menus retain overflow. */
@@ -66,7 +65,7 @@ body:not(.overlay) .search-box .search { width: 225px; background: #10181e; bord
 body:not(.overlay) .tabs { grid-area: 2 / 1 / 3 / -1; align-self: stretch; gap: 9px; border-top: 1px solid var(--rule); }
 body:not(.overlay) .tabs button { border-radius: 0; padding: 10px 12px; color: var(--muted); font: 12px/1.5 var(--display); letter-spacing: .025em; text-transform: none; transition: color .15s ease; }
 body:not(.overlay) .tabs > button:first-child { padding-left: 0; }
-body:not(.overlay) .tabs button[data-glyph]::before { display: none; }
+body:not(.overlay) #tabs button[data-glyph]::before { display: inline-block; }
 body:not(.overlay) .tabs button:hover { color: var(--text); background: #202c34; box-shadow: none; }
 body:not(.overlay) .tabs button.active { color: var(--text); background: none; box-shadow: none; }
 body:not(.overlay) .tabs button::after { left: 12px; right: 12px; height: 3px; bottom: -1px; border-radius: 0; background: var(--cyan); box-shadow: none; }
@@ -103,7 +102,7 @@ body:not(.overlay) .mining-view > .section-bar {
   box-shadow: none;
 }
 body:not(.overlay) .view > .section-bar:has(> .wake-chase),
-body:not(.overlay) #now-closed:has(> .wake-chase) { --flight-lane: 0px; padding-bottom: 20px; }
+body:not(.overlay) #now-closed:has(> .wake-chase) { --flight-lane: 32px; padding-bottom: var(--flight-lane); }
 body:not(.overlay) .console-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; background: url(assets/wake-chart.svg) right 24px top / 360px 120px no-repeat; }
 body:not(.overlay) .console-overline,
 body:not(.overlay) .page-kicker { margin: 0 0 8px; color: var(--cyan); font: 10px/1.4 var(--mono); letter-spacing: .13em; text-transform: uppercase; }

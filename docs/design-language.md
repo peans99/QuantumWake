@@ -17,6 +17,9 @@ the overlay's footprint, transparency and type scale are a separate concern.
   names and colours.
 - A nameplate and continuous navigation index form the console's top edge.
   Menus remain attached to their controls and fit inside the viewport.
+  Navigation symbols and the animated ships along page headers are retained
+  as recognisable parts of Quantum Wake. The ships keep their own lane clear
+  of controls and respect reduced-motion preferences.
 - The wake mark extends into a restrained course-chart motif on the Now page.
   It is decorative, with no invented coordinates, route claims or telemetry.
   Working page headers leave room for filters rather than putting art behind

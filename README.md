@@ -370,7 +370,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.16
+### 1.2.17
+
+**The menu symbols and animated ship wakes are back.** The spacecraft console keeps its new palette and panels, with the familiar navigation icons and ships flying along page headers restored.
 
 **A spacecraft console for Quantum Wake.** The dashboard has a charcoal and warm-white palette, restrained orange controls, a clearer navigation index, and a course-chart motif built around the wake mark. Flatter instrument panels and larger page titles give the flight record and reference views their own character. The in-game overlay keeps its compact presentation.
 
