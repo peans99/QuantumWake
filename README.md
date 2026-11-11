@@ -388,7 +388,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.26
+### 1.2.27
+
+**Built on the November .NET security release.** Quantum Wake carries its own copy of .NET, so Windows Update and the .NET on your PC never patch it; only a new build does. This one carries .NET 10.0.15, released on 10 November 2026 with fixes for sixteen security issues. Nothing else changes.
 
 **The guide catches up with live reading.** This README said the app never captures your screen, which stopped being true when live reading arrived in 1.1. It now has its own section saying what live reading looks at, what it keeps and where the switch is, and the documentation index lists everything that has been built since it was last written.
 
