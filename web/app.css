@@ -8972,3 +8972,17 @@ button.deck-key { width:100%; height:auto; min-width:0; padding:0; letter-spacin
 .deck-category .deck-command-icon { width:19px; height:19px; }
 .deck-category .deck-command-icon svg { width:18px; height:18px; }
 .deck-category small { font:10px var(--mono); }
+
+/* Continue your work (1.2.37): the deck leads with what is under way. */
+.operations-continue { margin-bottom: 18px; }
+.continue-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.continue-card { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 12px 14px; cursor: pointer;
+  border: 1px solid var(--rule); border-left: 2px solid var(--cyan, #35c8f0); color: var(--text);
+  background: linear-gradient(160deg, rgba(10, 20, 32, .6), rgba(6, 12, 20, .4)); font: inherit;
+  /* A card, not a button: the app's buttons are capitals and wide-spaced. */
+  text-transform: none; letter-spacing: normal; }
+.continue-card:hover, .continue-card:focus-visible { border-color: var(--rule-hot, #1e4763); border-left-color: var(--cyan-hot, #7fe4ff); }
+.continue-card b { font-size: 14px; color: var(--cyan-hot, #7fe4ff); }
+.continue-card .muted { font-size: 12px; }
+.continue-card .operation-status { margin-top: auto; font-size: 11px; }
+.continue-card.continue-ready { border-left-color: var(--green); }

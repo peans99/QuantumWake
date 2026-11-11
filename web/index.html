@@ -46,6 +46,7 @@
         <button data-view="blueprints">Blueprints</button>
         <button data-view="wikelo">Wikelo</button>
         <button data-view="events">Events</button>
+        <button data-view="mining">Mining</button>
       </div>
     </div>
     <div class="tab-group">
@@ -79,7 +80,6 @@
         <button data-view="encounters">Encounters</button>
         <button data-view="missions">Missions</button>
         <button data-view="models">3D models</button>
-        <button data-view="mining">Mining</button>
         <button data-view="crafting">Crafting</button>
       </div>
     </div>
@@ -1184,49 +1184,68 @@
         <button class="ghost" id="jobs-new">New shopping list</button>
       </div>
     </div>
+    <!-- Work under way first (1.2.37): the deck used to open on a grid of
+         doors, and the plan being flown, the list being filled and the
+         refinery order waiting were each a page away. -->
+    <section class="operations-deck operations-continue" aria-labelledby="operations-continue-title">
+      <div class="operations-deck-head">
+        <div>
+          <span class="operations-kicker">In progress</span>
+          <h3 id="operations-continue-title">Continue your work</h3>
+        </div>
+        <p>Your tracked flight plan, the supplies still to find, an open checklist, refinery orders and the event you are playing.</p>
+      </div>
+      <div class="continue-grid" id="operations-continue" aria-live="polite"><p class="muted">Looking for work under way…</p></div>
+    </section>
+
     <section class="operations-deck" aria-labelledby="operations-deck-title">
       <div class="operations-deck-head">
         <div>
-          <span class="operations-kicker">Choose a workspace</span>
-          <h3 id="operations-deck-title">What are you preparing to do?</h3>
+          <span class="operations-kicker">Workspaces</span>
+          <h3 id="operations-deck-title">Start something new</h3>
         </div>
-        <p>Start with the task in front of you; each workspace keeps its related planning tools together.</p>
+        <p>Each workspace is named as the Operations menu names it, with what it is for underneath.</p>
       </div>
       <div class="operations-grid">
         <button type="button" class="operation-card operation-card-primary" id="operations-new-list">
           <span class="operation-icon" aria-hidden="true">▦</span>
-          <span class="operation-card-main"><b>Gather supplies</b><span>Make a list and check what is already in your stashes.</span></span>
+          <span class="operation-card-main"><b>Shopping lists</b><span>Gather supplies: make a list and check what is already in your stashes.</span></span>
           <span class="operation-status" id="operations-shopping-status" aria-live="polite">Loading lists…</span>
         </button>
         <a class="operation-card" href="#routes">
           <span class="operation-icon" aria-hidden="true">↗</span>
-          <span class="operation-card-main"><b>Plan a run</b><span>Compare cargo, ship capacity, and current trade routes.</span></span>
-          <span class="operation-status">Open route planner</span>
+          <span class="operation-card-main"><b>Routes</b><span>Plan a trade run: compare cargo, ship capacity and current trade routes.</span></span>
+          <span class="operation-status">Open Routes</span>
         </a>
         <a class="operation-card" href="#contracts">
           <span class="operation-icon" aria-hidden="true">◈</span>
-          <span class="operation-card-main"><b>Review contracts</b><span>See your completed work and the live contracts from this session.</span></span>
+          <span class="operation-card-main"><b>Contracts</b><span>Your completed work, and the live contracts and hauling runs from this session.</span></span>
           <span class="operation-status" id="operations-contract-status" aria-live="polite">Checking session…</span>
         </a>
         <a class="operation-card" href="#checklists">
           <span class="operation-icon" aria-hidden="true">✓</span>
-          <span class="operation-card-main"><b>Prepare departure</b><span>Keep authored checks, notes, and important tasks in one place.</span></span>
-          <span class="operation-status">Open checklists</span>
+          <span class="operation-card-main"><b>Checklists</b><span>Prepare a departure: your own checks, notes and tasks in one place.</span></span>
+          <span class="operation-status">Open Checklists</span>
         </a>
         <a class="operation-card" href="#blueprints">
           <span class="operation-icon" aria-hidden="true">✦</span>
-          <span class="operation-card-main"><b>Build a project</b><span>Turn an owned blueprint into a material goal.</span></span>
-          <span class="operation-status">Open blueprints</span>
+          <span class="operation-card-main"><b>Blueprints</b><span>Build a project: turn an owned blueprint into a material goal.</span></span>
+          <span class="operation-status">Open Blueprints</span>
         </a>
         <a class="operation-card" href="#wikelo">
           <span class="operation-icon" aria-hidden="true">◇</span>
-          <span class="operation-card-main"><b>Browse Wikelo trades</b><span>Check collection requirements against what you already hold.</span></span>
-          <span class="operation-status">Open emporium</span>
+          <span class="operation-card-main"><b>Wikelo</b><span>Browse Wikelo trades against what you already hold.</span></span>
+          <span class="operation-status">Open Wikelo</span>
         </a>
         <a class="operation-card" href="#events">
           <span class="operation-icon" aria-hidden="true">◆</span>
-          <span class="operation-card-main"><b>Work an event</b><span>See the points behind each event bar, and which contracts reach the next tier soonest.</span></span>
-          <span class="operation-status" id="operations-event-status">Open events</span>
+          <span class="operation-card-main"><b>Events</b><span>Work an event: the points behind each bar, and which contracts reach the next tier soonest.</span></span>
+          <span class="operation-status" id="operations-event-status">Open Events</span>
+        </a>
+        <a class="operation-card" href="#mining">
+          <span class="operation-icon" aria-hidden="true">⛏</span>
+          <span class="operation-card-main"><b>Mining</b><span>Mine and refine: the fracture charge, radar pings, refinery orders and what each rock is worth.</span></span>
+          <span class="operation-status">Open Mining</span>
         </a>
       </div>
     </section>
@@ -2683,11 +2702,13 @@
     </details>
   </section>
 
-  <!-- REFERENCE: mining and salvage spawns -->
+  <!-- OPERATIONS: mining and salvage - the charge, the radar, refinery
+       orders and spawns. Under Reference until 1.2.37, though most of it
+       is work under way rather than something looked up. -->
   <section id="view-mining" class="view mining-view">
     <div class="section-bar" data-workspace="PROSPECTING">
       <div class="mining-title">
-        <span class="page-kicker">Reference</span>
+        <span class="page-kicker">Operations</span>
         <div class="mining-heading-line">
           <span class="mining-workspace-icon" id="mining-workspace-icon" aria-hidden="true"></span>
           <h2 id="mining-workspace-title">Prospecting</h2>

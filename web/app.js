@@ -15588,7 +15588,7 @@ function renderNowEvent() {
   const event = currentEvent();
   const overall = event ? (event.tracks.find((t) => t.overall) || event.tracks[0]) : null;
 
-  if (status) status.textContent = event && overall ? `${event.title} · ${eventPoints(overall.points)}` : tx('Open events');
+  if (status) status.textContent = event && overall ? `${event.title} · ${eventPoints(overall.points)}` : tx('Open Events');
 
   if (!card) return;
   card.hidden = !event;
@@ -24299,6 +24299,87 @@ async function loadOutfitting() {
  */
 async function loadJobs() {
   await Promise.all([loadJobContracts(), loadJobList(), fillBlueprintGoals()]);
+  await renderContinueWork().catch(() => {});
+}
+
+/* ---------- continue your work (1.2.37) ----------
+   The deck's first section: what is under way, each a card that opens the
+   page it lives on. Read from what the pages already load - the tracked
+   plan, the shopping lists, the checklists, the refinery picture, the
+   events - and asked for only when the page has not loaded it yet. A card
+   is drawn only when there is something to continue: an empty one is a
+   door, and the workspaces below are the doors. */
+let deckJobs = [];
+function continueCard(kicker, title, detail, action, go, tone = '') {
+  const card = el('button', `continue-card${tone ? ` ${tone}` : ''}`);
+  card.type = 'button';
+  card.append(el('span', 'operations-kicker', kicker), el('b', null, title));
+  if (detail) card.append(el('span', 'muted', detail));
+  card.append(el('span', 'operation-status', action));
+  card.addEventListener('click', go);
+  return card;
+}
+
+async function renderContinueWork() {
+  const host = $('#operations-continue');
+  if (!host) return;
+  if (!trips.length) await loadTrips().catch(() => {});
+  if (!checklists.length) checklists = await getJson(`/api/checklists${importedQuery()}`).catch(() => []);
+  const refinery = refineryPicture || await getJson('/api/mining/refinery').catch(() => null);
+  if (!eventsData) eventsData = await getJson('/api/events').catch(() => null);
+  const now = Date.now();
+  const cards = [];
+
+  const trip = tracked();
+  if (trip?.stops?.length && trip.stops.some((s) => !s.done || (s.actions || []).some((a) => !a.done))) {
+    const next = nextStop(trip);
+    const done = trip.stops.filter((s) => s.done).length;
+    cards.push(continueCard(tx('Flight plan'), trip.title,
+      [next ? tx('Next: {place}', { place: next.place }) : null, tx('{done} of {total} stops', { done, total: trip.stops.length })].filter(Boolean).join(' · '),
+      tx('Open the Itinerary'), () => showView('itinerary')));
+  }
+
+  const lists = deckJobs.filter((j) => j.kind !== 'craft' && !j.done);
+  if (lists.length) {
+    const list = lists.find((j) => j.pinned) || lists[0];
+    const more = lists.length - 1;
+    cards.push(continueCard(tx('Supplies'), list.title,
+      [tx('{have} of {total} in hand', { have: list.haveCount || 0, total: list.totalCount || 0 }),
+        more ? txn(more, '{count} more list', '{count} more lists') : null].filter(Boolean).join(' · '),
+      tx('Open the list'), () => $('#shopping-workspace-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' })));
+  }
+
+  const open = (checklists || []).filter((c) => (c.items || []).some((i) => !i.done));
+  if (open.length) {
+    const list = open.find((c) => c.pinned) || open[0];
+    const ticked = list.items.filter((i) => i.done).length;
+    cards.push(continueCard(tx('Checklist'), list.title,
+      tx('{done} of {total} ticked', { done: ticked, total: list.items.length }),
+      tx('Open Checklists'), () => showView('checklists')));
+  }
+
+  if (refinery) {
+    const groups = refineryGroups(refinery, now);
+    if (groups.waiting.length) {
+      cards.push(continueCard(tx('Refinery'), refineryWaitingLine(groups),
+        groups.refining.length ? txn(groups.refining.length, '{count} more still refining', '{count} more still refining') : null,
+        tx('Open Mining'), () => showView('mining'), 'continue-ready'));
+    } else if (groups.refining.length) {
+      cards.push(continueCard(tx('Refinery'), txn(groups.refining.length, '{count} order refining', '{count} orders refining'),
+        refineryReadyText(groups.refining[0], now), tx('Open Mining'), () => showView('mining')));
+    }
+  }
+
+  const event = currentEvent(eventsData, now);
+  if (event) {
+    const overall = event.tracks.find((t) => t.overall) || event.tracks[0];
+    cards.push(continueCard(tx('Event'), event.title,
+      overall ? `${eventPoints(overall.points)} · ${eventNextText(overall)}` : null,
+      tx('Open Events'), () => showView('events')));
+  }
+
+  host.replaceChildren(...(cards.length ? cards
+    : [el('p', 'muted', tx('Nothing under way. Start something from a workspace below.'))]));
 }
 
 /** The command deck is a door into the existing tools, not a second data model. */
@@ -25229,6 +25310,7 @@ async function loadJobList() {
     jobs = await getJson(`/api/jobs${importedQuery()}`);
   } catch { jobsUnavailable = true; }
 
+  deckJobs = jobs;
   renderPinnedJob(jobs);
   refreshMapFocusContext(mapFocusFilter === 'shopping' || mapFocusFilter === 'stash').catch(() => {});
   reloadPilotBriefing().catch(() => {});

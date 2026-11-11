@@ -388,7 +388,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.36
+### 1.2.37
+
+**The Command deck starts with your work.** It opens on **Continue your work**: your tracked flight plan with its next stop, the shopping list still being filled, an open checklist, refinery orders waiting or still refining, and the event you are playing, each a card that takes you to it. Only what is actually under way gets a card. The workspaces underneath now carry the names the Operations menu uses (Shopping lists, Routes, Contracts and so on), with what each is for beneath. **Mining has moved from Reference to Operations**: its refinery orders, radar and fracture charge are work in progress rather than something you look up.
 
 **Saved setups are kept like kits.** Routes presets lived in the browser, so the overlay never saw one made in a browser and no backup carried them; Stream Deck choices were not kept at all and reset on every reload. Both are now kept by the app, in their own file and in your backup, the way kits and Garage builds always were. Your existing presets move across by themselves the first time the Routes page opens. The Stream Deck page comes back to the model, bindings and commands you last had, and can keep a choice under a name. Backups now use format 3: this version restores older backups, and an older version asks you to update before restoring a new one rather than dropping your setups.
 
