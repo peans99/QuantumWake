@@ -10384,6 +10384,64 @@ async function suitFromLoadout() {
   return suit;
 }
 
+/**
+ * The outfit on the calculator as kit lines (1.2.34): each worn piece, each
+ * gun and everything carried, by the names the kit's Prepare and shopping
+ * steps match against. The same name twice is one line with its count, so a
+ * kit of three medpens reads as one line, as a kit typed by hand would.
+ */
+function suitKitItems(suit) {
+  const index = suitIndex();
+  const lines = new Map();
+  const add = (name, quantity) => {
+    if (!name) return;
+    const line = lines.get(name) || { name, quantity: 0, optional: false };
+    line.quantity += quantity;
+    lines.set(name, line);
+  };
+  for (const slot of SUIT_SLOTS) add(index.pieces.get(suit.slots?.[slot])?.name, 1);
+  for (const holster of SUIT_WEAPONS) {
+    const cls = suit.weapons?.[holster];
+    add(index.weapons.get(cls)?.name || index.small.get(cls)?.name, 1);
+  }
+  for (const item of suit.carried || []) add(item.name, Math.max(1, Number(item.count) || 1));
+  return [...lines.values()];
+}
+
+/**
+ * Saves the outfit as a kit and offers the next step: Prepare, which says
+ * what is already owned and where the rest is sold, and from there a
+ * shopping list. The calculator designed it; the Loadout page keeps it.
+ */
+async function saveSuitAsKit(name, status) {
+  const items = suitKitItems(armourySuit || emptySuit());
+  if (!items.length) {
+    status.textContent = tx('Nothing is worn or carried, so there is no kit to save.');
+    return null;
+  }
+  const response = await fetch('/api/kits', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name || tx('Suit'), items }),
+  });
+  const kit = response.ok ? await response.json().catch(() => null) : null;
+  if (!kit?.id) {
+    status.textContent = tx('The kit was not saved. Check the app is still running.');
+    return null;
+  }
+  status.textContent = txn(items.length, 'Saved as the kit {name}, {count} line.', 'Saved as the kit {name}, {count} lines.', { name: kit.name });
+  const prepare = el('button', 'ghost tiny', tx('Prepare it'));
+  prepare.type = 'button';
+  prepare.title = tx('What you already own, and where the rest is sold - then a shopping list');
+  prepare.addEventListener('click', async () => {
+    showView('loadout');
+    await loadKits().catch(() => {});
+    await prepareKit(kit.id).catch(() => {});
+  });
+  status.append(' ', prepare);
+  return kit;
+}
+
 /** "3.5 kg", or "0 kg" for an empty field. */
 function suitKg(kg) {
   return tx('{value} kg', { value: fmt1(Number(kg) || 0) });
@@ -10526,7 +10584,18 @@ function renderArmourySuit() {
     saveSuitState();
     renderArmourySuit();
   });
-  bar.append(copy, strip, el('span', 'muted small', suit.from === 'loadout'
+  const kitName = el('input', 'search suit-kit-name');
+  kitName.type = 'text';
+  kitName.placeholder = tx('Name the kit');
+  const asKit = el('button', 'ghost', tx('Save as kit'));
+  asKit.type = 'button';
+  asKit.title = tx('Keep this outfit as a kit on the Loadout page, ready to prepare and shop for');
+  asKit.addEventListener('click', async () => {
+    asKit.disabled = true;
+    try { if (await saveSuitAsKit(kitName.value.trim(), status)) kitName.value = ''; }
+    finally { asKit.disabled = false; }
+  });
+  bar.append(copy, strip, kitName, asKit, el('span', 'muted small', suit.from === 'loadout'
     ? tx('Copied from the loadout the log last saw.')
     : suit.from === 'stripped' ? tx('Stripped: nothing worn or carried.') : tx('Your own choice of pieces.')), status);
   host.append(bar);

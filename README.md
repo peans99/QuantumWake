@@ -388,7 +388,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.33
+### 1.2.34
+
+**A suit you design becomes a kit.** The Armoury's suit calculator has **Save as kit**: the pieces worn, the guns holstered and everything carried are kept as a kit on the Loadout page, repeats counted. **Prepare it** then opens that kit's Prepare panel, which says what you already own and where the rest is sold, and from there it becomes a shopping list. Before, a kit could only be saved from what the log last saw you wearing.
 
 **Every planner writes a run sheet you can edit.** A trade circuit and a shopping-list run used to land in the flight plan as notes, so their amounts and prices could not be changed once flown and the profit could not be worked out again. They now write the same priced buy and sell lines a single trade run always did: the circuit's outbound buy and sale, the return load bought where the outbound one is sold, and its sale; the shopping run's one buy per item at the counter chosen for it, with the amount and that counter's price.
 

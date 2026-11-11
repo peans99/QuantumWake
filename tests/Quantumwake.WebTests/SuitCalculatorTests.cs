@@ -177,4 +177,38 @@ public class SuitCalculatorTests
         Assert.Equal(0.15, page.Number("suitTotals(armourySuit).resistance"), 4);
         Assert.Contains("WearMovement.Heavy", page.NodeText("#armoury-suit"));
     }
+
+    /// <summary>The outfit becomes kit lines by name - worn, guns, carried - with repeats counted (1.2.34).</summary>
+    [Fact]
+    public void The_outfit_becomes_kit_lines_by_name()
+    {
+        var page = Loaded();
+        var items = page.Text("suitKitItems(armourySuit).map(i => i.name + ' x' + i.quantity).join('|')");
+
+        Assert.Equal("Clash Helmet x1|Clash Core x1|Clash Arms x1|Clash Legs x1|Odyssey II Undersuit Alpha x1|P4-AR Rifle Tan x1|Arclight Pistol x1|MK-4 Frag Grenade x2|MedPen (Hemozal) x1", items);
+    }
+
+    [Fact]
+    public void Save_as_kit_posts_the_outfit_and_offers_prepare()
+    {
+        var page = Loaded();
+        page.Serve("/api/kits", """{"id":"k1","name":"Clash run","items":[],"createdAt":"2026-11-11T00:00:00Z"}""");
+        page.Do("window.__status = document.createElement('span'); await saveSuitAsKit('Clash run', window.__status);");
+
+        var sent = page.BodyOf("/api/kits");
+        Assert.Contains("\"name\":\"Clash run\"", sent);
+        Assert.Contains("{\"name\":\"MK-4 Frag Grenade\",\"quantity\":2,\"optional\":false}", sent);
+        Assert.Contains("Saved as the kit Clash run, 9 lines.", page.Text("__status.textContent"));
+        Assert.Contains("Prepare it", page.Text("__status.textContent"));
+    }
+
+    [Fact]
+    public void A_stripped_suit_saves_no_kit()
+    {
+        var page = Loaded();
+        page.Do("armourySuit = emptySuit(); window.__status = document.createElement('span'); await saveSuitAsKit('Nothing', window.__status);");
+
+        Assert.Contains("nothing", page.Text("__status.textContent").ToLowerInvariant());
+        Assert.DoesNotContain("POST /api/kits", page.Fetched());
+    }
 }
