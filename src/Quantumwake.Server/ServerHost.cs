@@ -153,6 +153,7 @@ public static partial class ServerHost
         builder.Services.AddSingleton<RestoreService>();
         builder.Services.AddSingleton<RunSettingsStore>();
         builder.Services.AddSingleton<CrewStore>();
+        builder.Services.AddSingleton<SetupStore>();
         builder.Services.AddSingleton<LanguageStore>();
         builder.Services.AddSingleton<EventTrackStore>();
         builder.Services.AddSingleton<ScreenSettingsStore>();
@@ -3736,6 +3737,24 @@ public static partial class ServerHost
          * it back together. The preparing half writes nothing - it is a reading
          * of the logs and a set of questions only the pilot can answer.
          */
+        // Named setups (1.2.36): Routes presets and Stream Deck choices, kept
+        // like kits - their own file, in the backup - rather than in one
+        // browser's storage, where the overlay never saw them.
+        app.MapGet("/api/setups", (SetupStore setups, string? kind) =>
+            kind is null ? setups.All() : setups.Of(kind));
+
+        app.MapPost("/api/setups", (SetupStore setups, SetupRequest body) =>
+            setups.Save(body.Kind, body.Name, body.Data) is { } saved
+                ? Results.Ok(saved)
+                : Results.BadRequest(new { message = "A setup needs a known kind, a name and its settings." }));
+
+        app.MapDelete("/api/setups/{id}", (string id, SetupStore setups, TombstoneStore deleted) =>
+        {
+            if (!setups.Remove(id)) return Results.NotFound();
+            deleted.Record(TombstoneStore.Kinds.Setups, id);
+            return Results.Ok(new { id });
+        });
+
         app.MapGet("/api/kits", (KitStore kits) => kits.All());
 
         // The guns in each kit, as the Armoury knows them, with the kit's own
@@ -6959,6 +6978,9 @@ public sealed record ShardDispositionRequest(string? Disposition);
 /// <summary>Body of POST /api/mining/log/{id}/submit.</summary>
 public sealed record RefineryRequest(
     string? Place, string? Method, decimal? Cost, DateTimeOffset? ExpectedAt);
+
+/// <summary>Body of POST /api/setups: which page, the name, and the page's settings as it keeps them.</summary>
+public sealed record SetupRequest(string? Kind, string? Name, JsonElement Data);
 
 /// <summary>Body of POST and PUT /api/kits.</summary>
 public sealed record KitRequest(string? Name, IReadOnlyList<KitItem>? Items);

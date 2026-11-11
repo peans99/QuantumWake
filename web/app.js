@@ -19586,13 +19586,16 @@ function choosePlanningShip(name) {
 }
 
 /* Local route memory is deliberately separate from flight plans. A plan is an
- * authored shared object; a preset, watch and save count are private browser
- * conveniences and must not claim the game or another device knows them. */
+ * authored shared object; a watch and a save count are private browser
+ * conveniences and must not claim the game or another device knows them.
+ * Presets are named setups since 1.2.36: kept by the app like kits, so the
+ * overlay sees them and a backup carries them. The browser's old list is
+ * moved across once and then left alone. */
 const ROUTE_PROFILES_KEY = 'qw-route-profiles';
 const ROUTE_HISTORY_KEY = 'qw-route-history';
 const ROUTE_WATCH_KEY = 'qw-route-watches';
 const readRouteMemory = (key) => { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; } };
-let routeProfiles = readRouteMemory(ROUTE_PROFILES_KEY);
+let routeProfiles = [];
 let routeHistory = readRouteMemory(ROUTE_HISTORY_KEY);
 let routeWatches = readRouteMemory(ROUTE_WATCH_KEY);
 let highlightBestRoute = false;
@@ -19638,6 +19641,31 @@ function splitTradeRoute(route) {
   return remaining === 0 && portions.length > 1 ? portions : [];
 }
 
+/** A kept setup as the preset shape the Routes controls read. */
+const routeProfileOf = (setup) => ({ ...(setup.data || {}), id: setup.id, name: setup.name });
+
+/** The settings a preset keeps, without its id and name, which are the store's. */
+function routeProfileData(profile) {
+  const { id, name, ...data } = profile;
+  return data;
+}
+
+async function loadRouteProfiles() {
+  let kept;
+  try { kept = await getJson('/api/setups?kind=route-preset'); } catch { return; }
+  const old = readRouteMemory(ROUTE_PROFILES_KEY);
+  if (!kept.length && old.length) {
+    for (const profile of old.filter((p) => p?.name)) {
+      await fetch('/api/setups', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'route-preset', name: profile.name, data: routeProfileData(profile) }) }).catch(() => {});
+    }
+    try { localStorage.removeItem(ROUTE_PROFILES_KEY); } catch { /* moved; the old copy is harmless */ }
+    try { kept = await getJson('/api/setups?kind=route-preset'); } catch { kept = []; }
+  }
+  routeProfiles = kept.map(routeProfileOf);
+  renderRouteProfiles();
+}
+
 function renderRouteProfiles() {
   const select = $('#routes-profile');
   if (!select) return;
@@ -19664,8 +19692,8 @@ function applyRouteProfile(profile) {
   choosePlanningShip(typeof profile.ship === 'string' ? profile.ship : resolvedPlanningShipName());
 }
 
-function saveRouteProfile() {
-  const name = window.prompt(tx('Name this local route preset:'), tx('Preset {n}', { n: routeProfiles.length + 1 }))?.trim();
+async function saveRouteProfile() {
+  const name = window.prompt(tx('Name this route preset:'), tx('Preset {n}', { n: routeProfiles.length + 1 }))?.trim();
   if (!name) return;
   const profile = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name,
@@ -19674,10 +19702,13 @@ function saveRouteProfile() {
     safety: $('#routes-safety').value, pad: $('#routes-pad').value,
     here: $('#routes-here').checked, fresh: $('#routes-fresh-only').checked,
   };
-  routeProfiles = [...routeProfiles.filter((saved) => saved.name !== name), profile].slice(-12);
-  writeRouteMemory(ROUTE_PROFILES_KEY, routeProfiles);
+  const saved = await fetch('/api/setups', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'route-preset', name, data: routeProfileData(profile) }) })
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  if (!saved?.id) return;
+  routeProfiles = [...routeProfiles.filter((p) => p.id !== saved.id && p.name.toLowerCase() !== name.toLowerCase()), routeProfileOf(saved)];
   renderRouteProfiles();
-  $('#routes-profile').value = profile.id;
+  $('#routes-profile').value = saved.id;
 }
 
 function rememberRoute(route, kind = 'route') {
@@ -20465,7 +20496,7 @@ $('#routes-pad')?.addEventListener('change', loadRoutes);
 $('#routes-profile')?.addEventListener('change', () => {
   applyRouteProfile(routeProfiles.find((profile) => profile.id === $('#routes-profile').value));
 });
-$('#routes-profile-save')?.addEventListener('click', saveRouteProfile);
+$('#routes-profile-save')?.addEventListener('click', () => saveRouteProfile().catch(() => {}));
 $('#routes-best-safe')?.addEventListener('click', chooseBestSafeRoute);
 function openRoutePlanOnMap() {
   showTripPanel();
@@ -20489,6 +20520,7 @@ $('#routes-history-clear')?.addEventListener('click', () => {
   renderRouteDashboard([]);
 });
 renderRouteProfiles();
+loadRouteProfiles().catch(() => {});
 
 /**
  * "Wake up at" on the dashboard: where the last death put you, which is as
@@ -27179,6 +27211,7 @@ async function renderBackupPreview() {
     [counts.miningRuns, '{count} mining haul', '{count} mining hauls'],
     [counts.notes, '{count} map note', '{count} map notes'],
     [counts.kits, '{count} kit', '{count} kits'],
+    [counts.setups, '{count} saved setup (Routes presets, Stream Deck choices)', '{count} saved setups (Routes presets, Stream Deck choices)'],
     [counts.pins, '{count} point of interest', '{count} points of interest'],
   ].filter(([n]) => n > 0).map(([n, one, other]) => txn(n, one, other));
 
@@ -38509,7 +38542,66 @@ function deckTiming(command) {
   if (seconds > 0) return tx('Hold {seconds} s before it fires', { seconds: shown });
   return command.activation === 'hold' ? tx('Hold the button') : '';
 }
+/* The deck choice (1.2.36): model, bindings and the commands picked. It
+   reset to the default categories on every reload; now the last one is kept
+   as a setup called "Last used" and comes back, and any choice can be kept
+   under a name. Kept by the app, so it is in the backup like a kit. */
+const DECK_LAST = 'Last used';
+let deckSetups = [], deckRestored = null, deckSaveTimer = 0, deckSavedJson = '';
+function deckChoice() {
+  return { model: $('#deck-model')?.value || '15', source: $('#deck-source')?.value || 'current', actions: [...deckSelection] };
+}
+async function loadDeckSetups() {
+  try { deckSetups = await getJson('/api/setups?kind=deck'); } catch { deckSetups = []; }
+  renderDeckSetups();
+  return deckSetups;
+}
+function renderDeckSetups() {
+  const select = $('#deck-saved');
+  if (!select) return;
+  const previous = select.value;
+  select.textContent = '';
+  select.append(new Option(tx('Saved choices…'), ''));
+  for (const setup of deckSetups.filter((s) => s.name !== DECK_LAST)) select.append(new Option(setup.name, setup.id));
+  select.value = deckSetups.some((s) => s.id === previous) ? previous : '';
+}
+function applyDeckChoice(data) {
+  if (!data) return;
+  if ($('#deck-model') && ['15', 'xl'].includes(data.model)) $('#deck-model').value = data.model;
+  if ($('#deck-source') && ['current', 'defaults'].includes(data.source)) $('#deck-source').value = data.source;
+  deckSelection = new Set(Array.isArray(data.actions) ? data.actions : []);
+  deckInitialised = true;
+}
+/** Keeps the choice as "Last used", a moment after it stops changing, and only when it did. */
+function rememberDeckChoice() {
+  if (!deckInitialised || !deckCommands.length) return;
+  clearTimeout(deckSaveTimer);
+  deckSaveTimer = setTimeout(() => {
+    const data = deckChoice();
+    const json = JSON.stringify(data);
+    if (json === deckSavedJson) return;
+    deckSavedJson = json;
+    fetch('/api/setups', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'deck', name: DECK_LAST, data }) }).catch(() => {});
+  }, 800);
+}
+async function saveDeckSetup() {
+  const name = window.prompt(tx('Name this Stream Deck choice:'), tx('Deck {n}', { n: deckSetups.filter((s) => s.name !== DECK_LAST).length + 1 }))?.trim();
+  if (!name || name === DECK_LAST) return;
+  const saved = await fetch('/api/setups', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'deck', name, data: deckChoice() }) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  if (!saved?.id) return;
+  await loadDeckSetups();
+  $('#deck-saved').value = saved.id;
+}
 async function loadStreamDeck() {
+  // The first visit takes back the last choice before anything picks the
+  // default categories over it.
+  if (deckRestored === null) {
+    const last = (await loadDeckSetups()).find((s) => s.name === DECK_LAST);
+    deckRestored = !!last;
+    if (last) { applyDeckChoice(last.data); deckSavedJson = JSON.stringify(deckChoice()); }
+  }
   const status = $('#deck-status');
   status.textContent = tx('Reading control mappings…');
   $('#deck-download').disabled = true;
@@ -38540,6 +38632,7 @@ function deckIcon(appearance) {
   return icon;
 }
 function renderStreamDeck() {
+  rememberDeckChoice();
   const categories = $('#deck-categories'); categories.textContent = '';
   for (const group of [...new Set(deckCommands.filter(c => c.preset).map(c => c.group))]) {
     const commands = deckCommands.filter(c => c.preset && c.group === group && !c.problem);
@@ -38631,6 +38724,15 @@ $('#deck-model')?.addEventListener('change', () => {
   renderDeckPreview();
 });
 $('#deck-source')?.addEventListener('change', loadStreamDeck);
+$('#deck-saved')?.addEventListener('change', async () => {
+  const setup = deckSetups.find((s) => s.id === $('#deck-saved').value);
+  if (!setup) return;
+  const sourceBefore = $('#deck-source')?.value;
+  applyDeckChoice(setup.data);
+  if ($('#deck-source')?.value !== sourceBefore) await loadStreamDeck();
+  else { deckSelection = new Set([...deckSelection].filter(id => deckCommands.some(c => c.id === id && !c.problem))); renderStreamDeck(); }
+});
+$('#deck-save')?.addEventListener('click', () => saveDeckSetup().catch(() => {}));
 $('#deck-refresh')?.addEventListener('click', loadStreamDeck);
 $('#deck-select')?.addEventListener('click', () => { for (const c of deckShown()) if (!c.problem) deckSelection.add(c.id); renderStreamDeck(); });
 $('#deck-clear')?.addEventListener('click', () => { deckSelection.clear(); renderStreamDeck(); });

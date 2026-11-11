@@ -388,7 +388,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.35
+### 1.2.36
+
+**Saved setups are kept like kits.** Routes presets lived in the browser, so the overlay never saw one made in a browser and no backup carried them; Stream Deck choices were not kept at all and reset on every reload. Both are now kept by the app, in their own file and in your backup, the way kits and Garage builds always were. Your existing presets move across by themselves the first time the Routes page opens. The Stream Deck page comes back to the model, bindings and commands you last had, and can keep a choice under a name. Backups now use format 3: this version restores older backups, and an older version asks you to update before restoring a new one rather than dropping your setups.
 
 **A plan remembers the ship it was planned for.** Trade runs, circuits and split loads now keep the ship the Routes planner was sizing for and the hold it assumed, with where that figure came from; hauling runs keep the ship the log had you in. The flight plan and the Itinerary show it, and when the log says you are flying something else, the plan says so - loads sized for a Hercules do not go in a Cutlass.
 

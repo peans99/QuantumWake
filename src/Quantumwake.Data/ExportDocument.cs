@@ -163,7 +163,9 @@ public sealed record ExportBackup(
     IReadOnlyList<PinnedLocation>? Pins = null,
     // Same rule as Pins: a backup from before servers were kept has no key.
     IReadOnlyList<ShardNote>? Shards = null,
-    IReadOnlyList<ShipBuild>? Builds = null);
+    IReadOnlyList<ShipBuild>? Builds = null,
+    // Named setups (1.2.36): Routes presets and Stream Deck choices.
+    IReadOnlyList<SavedSetup>? Setups = null);
 
 /// <summary>
 /// The user's own commodity trades.
