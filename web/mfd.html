@@ -35,6 +35,11 @@
 <button id="more" type="button" hidden>More details</button>
 <div id="scroll-hint" hidden>UP / DOWN · more below</div>
     <div id="action" hidden><b id="action-text"></b><span id="action-note"></span></div>
+    <!-- What the voice just said, over the page for a few seconds on the frame
+         that follows the action (1.2.28). Over, not instead of: the page
+         underneath is still the page, and a press still goes to it. -->
+    <div id="callout" role="status" aria-live="assertive" hidden><span class="callout-head"><span id="callout-label">CALLOUT</span><time id="callout-when"></time></span>
+      <b id="callout-text"></b><ol id="callout-earlier"></ol></div>
   </section>
   <nav id="right" class="edge right" aria-label="Right buttons"></nav>
   <nav id="bottom" class="edge bottom" aria-label="Navigation buttons"></nav>

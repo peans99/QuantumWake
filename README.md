@@ -388,7 +388,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.27
+### 1.2.28
+
+**What the voice says is on the MFD too.** Every line the voice says (a callout, a mission toast, a copilot reply) now comes up over the page on the frame that follows the action, in large type, for six seconds. Then the page underneath is back exactly as it was. Lines that come close together stack, newest on top. Any button clears the card early, and the press still does what it always did on that page.
+
+**Target goes back when the lock does.** The Target page used to stay up for most of a minute after a fight: half a minute for "a hostile was locked lately", then twenty seconds more, and a single button press during the fight cancelled the trip back altogether. Now Target goes back six seconds after the lock is gone. It returns to the page the fight took the frame from, or to the frame’s own default page when there is none. A Target page you opened yourself on either frame does the same once the lock it was showing has gone. Opened onto nothing, it is left alone, because then you are looking rather than fighting.
 
 **Built on the November .NET security release.** Quantum Wake carries its own copy of .NET, so Windows Update and the .NET on your PC never patch it; only a new build does. This one carries .NET 10.0.15, released on 10 November 2026 with fixes for sixteen security issues. Nothing else changes.
 

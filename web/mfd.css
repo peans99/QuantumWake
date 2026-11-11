@@ -242,3 +242,23 @@ h1 { font-size: clamp(15px, 4cqw, 34px); letter-spacing: .06em; margin: 0 0 4%; 
    page, and the rows under it scroll. Every other page keeps readings first. */
 #mfd[data-screen="target"] #content { display: flex; flex-direction: column; }
 #mfd[data-screen="target"] #target-view { order: -1; margin: 0 0 2%; }
+
+/* What the voice just said (1.2.28): a card over the readings, with the
+   header, captions and buttons still showing round it so the frame never
+   looks like it has gone somewhere else. Big enough to read in a glance, which
+   is the whole point of putting a spoken line on the glass. */
+#callout { position: absolute; inset: 14% 3% 3%; z-index: 5; display: flex; flex-direction: column; justify-content: center;
+  gap: 4%; padding: 5% 6%; border: 1px solid var(--glow); background: rgba(4, 7, 12, .985);
+  box-shadow: 0 0 0 1px rgba(53, 200, 240, .25), inset 0 0 40px rgba(53, 200, 240, .12); animation: callout-in .18s ease-out; }
+#callout[hidden] { display: none; }
+.callout-head { display: flex; justify-content: space-between; gap: 1em; font-family: var(--mono);
+  font-size: clamp(7px, 1.8cqw, 13px); letter-spacing: .18em; color: var(--glow); }
+#callout-when { color: var(--muted); letter-spacing: .08em; }
+#callout-text { font-family: var(--display); font-weight: 600; text-transform: uppercase; color: var(--hot); line-height: 1.12;
+  font-size: calc(clamp(14px, 5.2cqw, 40px) * var(--text-scale)); overflow-wrap: anywhere; }
+#callout-earlier { margin: 0; padding: 0; list-style: none; display: grid; gap: .35em; color: var(--muted);
+  font-size: calc(clamp(8px, 2.2cqw, 16px) * var(--text-scale)); }
+#callout-earlier:empty { display: none; }
+#callout-earlier li::before { content: '\2022\00a0'; color: var(--dim); }
+@keyframes callout-in { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { #callout { animation: none; } }

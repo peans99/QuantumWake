@@ -200,23 +200,61 @@ const isMenu = () => !QwMfd.pageIds.includes(screen);
    Nicolas's 631 x 601 right frame, 2026-11-07 (1.2.7). */
 const scroller = () => byId(isMenu() ? 'menu' : 'content');
 const overflows = element => element.scrollHeight > element.clientHeight + 1;
+/* The page before this one, so a Target opened by hand can go back to where
+   the pilot was once the lock it was opened for has gone. */
+let previousScreen = null;
 function navigate(target, auto = false) {
   if (!QwMfd.validScreen(target)) return;
   standDown(); notice = ''; saved = ''; details = false; selected = 0; radarFocus = 0; offset = 0;
+  if (target !== screen) previousScreen = screen;
   screen = target; page = Math.max(0, QwMfd.pageIds.indexOf(screen));
   byId('content').scrollTop = 0; byId('menu').scrollTop = 0;
   // A page the fight chose is not the pilot's choice to come back to.
   if (!auto) savePreferences();
   render();
 }
-/* One step of Follow the action, after each live reading. */
+/* One step of Follow the action, after each live reading. Every frame takes
+   it, because an empty Target goes back wherever it is showing; only the
+   frame that follows the action is ever sent to a page by the fight. */
 function followTheAction() {
-  if (!followsHere()) return;
   const now = Date.now();
+  const want = followsHere() ? QwMfd.followWant(extra.live, now) : null;
+  const locked = !!(extra.live?.enabled && extra.live?.status?.combat?.target);
   const { memory, go } = QwMfd.followStep(followMemory, {
-    want: QwMfd.followWant(extra.live, now), screen, now, lastPress });
+    want, locked, screen, now, lastPress, previous: previousScreen, home: panelRole.defaultScreen });
   followMemory = memory;
-  if (go && go !== screen) navigate(go, true);
+  // Going to the fight is not saved; coming back is to a page the pilot chose.
+  if (go && go !== screen) navigate(go, go === want);
+}
+/* Lines the voice said, put up over the page on the frame that follows the
+   action; see QwMfd.calloutStep. */
+let callout = QwMfd.calloutIdle(), calloutTimer = 0;
+function showHeard(heard) {
+  const now = Date.now();
+  const next = QwMfd.calloutStep(callout, { heard, now });
+  if (next === callout) return;
+  const fresh = next.until !== callout.until;
+  callout = next;
+  if (!fresh) return;
+  drawCallout(); render();
+  clearTimeout(calloutTimer);
+  calloutTimer = setTimeout(() => { drawCallout(); render(); }, QwMfd.CALLOUT_SHOW + 50);
+}
+function drawCallout() {
+  const card = byId('callout');
+  if (!card) return;
+  const showing = followsHere() && QwMfd.calloutShowing(callout, Date.now());
+  card.hidden = !showing;
+  byId('mfd').classList.toggle('calling', showing);
+  if (!showing) return;
+  const [newest, ...earlier] = callout.lines;
+  byId('callout-label').textContent = say('CALLOUT');
+  byId('callout-when').textContent = new Date(newest.at).toLocaleTimeString(typeof QW_DATE_LOCALES === 'undefined' ? undefined : QW_DATE_LOCALES, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  byId('callout-text').textContent = newest.text;
+  const list = byId('callout-earlier');
+  list.replaceChildren(...earlier.map(line => {
+    const item = document.createElement('li'); item.textContent = line.text; return item;
+  }));
 }
 function back() {
   if (details) { details = false; lastRows = ''; byId('content').scrollTop = 0; render(); }
@@ -278,7 +316,8 @@ function drawMenu(plan) {
 function render() {
   // Recomputed here so the frame can never be left showing a dimming that
   // has since expired; the timer below only decides when to ask again.
-  dozing = QwMfd.dozed(sleepAfterMinutes, Date.now() - lastPress);
+  // A callout on the glass lights a dozing frame for as long as it is up.
+  dozing = QwMfd.dozed(sleepAfterMinutes, Date.now() - lastPress) && !QwMfd.calloutShowing(callout, Date.now());
   byId('mfd').style.filter = `brightness(${dozing ? brightness * QwMfd.DOZE : brightness})`;
   byId('mfd').style.setProperty('--text-scale', textScale);
   const where = QwMfd.pageLabel(screen, { extra, offset });
@@ -601,6 +640,8 @@ function press(number) {
   // back on.
   lastPress = Date.now();
   if (dozing) { dozing = false; render(); }
+  // The press goes to the page as well: a callout is news, not a dialog.
+  if (QwMfd.calloutShowing(callout, lastPress)) { callout = { ...callout, until: 0 }; drawCallout(); }
   // Each press starts clean, so a message only ever describes this one.
   notice = '';
   const button = face[number]?.button;
@@ -725,7 +766,7 @@ function hostMessage(data) {
     if (Number.isFinite(data.textScale)) textScale = QwMfd.clamp(data.textScale, .8, 1.5);
     if (typeof data.follow === 'string') {
       follow = data.follow;
-      if (!followsHere()) followMemory = QwMfd.followIdle();
+      if (!followsHere()) { followMemory = QwMfd.followIdle(); drawCallout(); }
     }
     if (Number.isFinite(data.sleepAfterMinutes)) {
       sleepAfterMinutes = QwMfd.clamp(data.sleepAfterMinutes, 0, 120);
@@ -847,6 +888,17 @@ async function bootMfd() {
       if (response.ok) { extra = { ...extra, live: await response.json() }; lastRows = ''; followTheAction(); render(); }
     } catch { /* the page says what it is missing */ }
   }, 1500);
+  /* What the voice said, every tick on the frame that follows the action and
+     whatever reading is doing: copilot replies are spoken with reading off.
+     Its own small answer rather than part of /api/live, which carries the
+     whole callout and ping-place lists. */
+  const heardTimer = setInterval(async () => {
+    if (!followsHere()) return;
+    try {
+      const response = await fetch('/api/heard', { signal: AbortSignal.timeout(4000) });
+      if (response.ok) showHeard(await response.json());
+    } catch { /* nothing shown is what a frame with no voice shows anyway */ }
+  }, 1500);
   /* Its own timer rather than a check inside render: the panel re-renders
      whenever anything changes, and a frame nobody is touching is exactly the
      case where nothing is changing. */
@@ -863,7 +915,7 @@ async function bootMfd() {
   };
   stream.onerror = () => { connection = state ? 'DISCONNECTED · LAST DATA' : 'SERVER UNAVAILABLE'; drawIdentity(); };
   window.addEventListener('beforeunload', () => {
-    stream.close(); clearInterval(briefingTimer); clearInterval(extraTimer); clearInterval(liveTimer); clearInterval(dozeTimer);
+    stream.close(); clearInterval(briefingTimer); clearInterval(extraTimer); clearInterval(liveTimer); clearInterval(heardTimer); clearInterval(dozeTimer);
   });
 }
 bootMfd();

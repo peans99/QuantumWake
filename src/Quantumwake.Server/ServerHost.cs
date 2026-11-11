@@ -199,7 +199,12 @@ public static partial class ServerHost
             Console.WriteLine($"Replaying {replay.Count} recorded frames in place of the game window.");
         }
         if (capture is not null) builder.Services.AddSingleton(capture);
-        if (voice is not null) builder.Services.AddSingleton(voice);
+        // Every line goes through HeardVoice so the MFD can show what was said.
+        // Registered as the voice only when there is one: a copy without
+        // speech must still say CanSpeak false.
+        var heard = voice as HeardVoice ?? new HeardVoice(voice);
+        builder.Services.AddSingleton(heard);
+        if (voice is not null) builder.Services.AddSingleton<ICalloutVoice>(heard);
         builder.Services.AddSingleton(new CombatLog(Core.AppPaths.In("combat")));
         builder.Services.AddSingleton(new RockLog(Core.AppPaths.In("rocks")));
         builder.Services.AddSingleton<LiveScreenService>();
@@ -3906,6 +3911,11 @@ public static partial class ServerHost
         // does: ?kind= picks the sound, as each row of Settings → Callouts does.
         app.MapPost("/api/live/voice/test", (string? kind, LiveScreenService service) =>
             service.TestVoice(kind) ? Results.Ok() : Results.Problem("this copy has no voice - only the Windows app speaks", statusCode: 409));
+
+        // The last few lines the voice was asked to say, newest first, for the
+        // MFD to put up on the glass as they are spoken. Small on purpose: the
+        // frame asks every second and a half.
+        app.MapGet("/api/heard", (HeardVoice heard) => Results.Ok(heard.Recent()));
 
         // The install comes from the closure and not the container: on a
         // machine with none it is not registered, and a GET cannot take it
