@@ -74,7 +74,7 @@ models of the patch you are actually playing. Nothing is downloaded for it.
 The dashboard is for planning and history. The optional overlay gives the same
 short answers over the game, and the optional Cougar MFD mode keeps navigation,
 tasks and cargo close to the cockpit. The dashboard, overlay and MFD pages are
-in English or French; choose under **Settings → General**.
+in English.
 
 ## Start here
 
@@ -213,7 +213,7 @@ not what a Linux pilot is missing.
 - **An x86-64 distribution with glibc 2.27 or later**, which is every
   distribution above. The Linux download carries its own copy of .NET, so
   nothing is installed for the dashboard; it needs `libicu` (the dashboard's
-  French and date formats come from it) and `libstdc++` (the screenshot
+  number and date formats come from it) and `libstdc++` (the screenshot
   reader), both present on a desktop install. Microsoft lists Fedora 43 and
   44, Ubuntu 22.04 to 26.04, Debian 13, openSUSE Leap 16 and RHEL 8 to 10 as
   [supported by .NET 10](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md);
@@ -388,7 +388,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.28
+### 1.2.29
+
+**English only.** The French translation is gone. Few people read the app in French, and keeping it complete meant translating every new sentence before a change could ship. If you had French chosen, the app opens in English after this update and there is nothing to change; the language picker in Settings → General is gone with it. Names from the game were always English and are unchanged.
 
 **What the voice says is on the MFD too.** Every line the voice says (a callout, a mission toast, a copilot reply) now comes up over the page on the frame that follows the action, in large type, for six seconds. Then the page underneath is back exactly as it was. Lines that come close together stack, newest on top. Any button clears the card early, and the press still does what it always did on that page.
 

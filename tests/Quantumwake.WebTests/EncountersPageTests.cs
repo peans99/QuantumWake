@@ -176,17 +176,6 @@ public class EncountersPageTests
     }
 
     [Fact]
-    public void The_page_reads_in_french()
-    {
-        var page = Opened("fr");
-        var bounty = Row(page, 0);
-
-        Assert.Contains("Missions de prime", bounty);
-        Assert.Contains("Aucun script ne la nomme ; son nom dit difficile · Crusader", bounty);
-        Assert.Contains("2 rencontres", page.NodeText("#encounters-count"));
-    }
-
-    [Fact]
     public void An_npc_ship_card_says_which_encounters_spawn_it_and_what_it_carries()
     {
         var page = new Page();

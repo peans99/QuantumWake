@@ -101,8 +101,7 @@ public class GameRepFiguresTests
 
     /// <summary>
     /// The installer stays, optional, and its card says the app does not depend
-    /// on it. Static markup, so it is read from the page file the way the
-    /// catalogue tests read it; they check the French is there.
+    /// on it. Static markup, so it is read straight from the page file.
     /// </summary>
     [Fact]
     public void The_starstrings_card_says_the_app_no_longer_needs_it()
@@ -112,16 +111,5 @@ public class GameRepFiguresTests
 
         Assert.Contains("Quantum Wake no longer needs it.", card[..400]);
         Assert.True(markup.IndexOf("starstrings-not-needed", StringComparison.Ordinal) < markup.IndexOf("id=\"starstrings-warning\"", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void In_french_the_new_sentences_are_translated()
-    {
-        var page = new Page("fr");
-
-        Assert.StartsWith("Ce que le jeu installé dit qu’ont rapporté 3 contrats terminés", page.Text("repFromTitle(3, 0)"));
-        Assert.StartsWith("Le jeu installé donne à ce contrat 25%", page.Text("blueprintChipTitle(0.25)"));
-        Assert.StartsWith("Ce que rapporte un de leurs contrats de rang Member",
-            page.Text("repRunPaySource({ place: { rank: 'Member' }, pay: { rep: 500, source: 'game', contract: 'Member' } })"));
     }
 }

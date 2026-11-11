@@ -36249,6 +36249,10 @@ async function renderLanguageSettings() {
 
   const answer = await getJson('/api/language');
   const languages = answer.available || [];
+  // Nothing to choose with one language on offer, and a picker of one
+  // reads as a promise of more.
+  const card = $('#language-card');
+  if (card) card.hidden = languages.length < 2;
 
   pick.textContent = '';
   for (const language of languages) {

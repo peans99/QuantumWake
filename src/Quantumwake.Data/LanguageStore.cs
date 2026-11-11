@@ -33,10 +33,17 @@ public sealed class LanguageStore
 {
     public const string English = "en";
 
+    /// <remarks>
+    /// English alone since 1.2.29. French was offered from 0.18 and retired
+    /// because few read it and every change had to be translated before it
+    /// could ship. The machinery stayed: a language comes back as a catalogue
+    /// under <c>web/locales/</c> and a line here, and Settings shows the
+    /// picker again once there are two. A saved <c>fr</c> reads as English
+    /// through <see cref="Clean"/>.
+    /// </remarks>
     public static readonly IReadOnlyList<DashboardLanguage> Available =
     [
         new(English, "English", null),
-        new("fr", "Français", null),
     ];
 
     private readonly string _path;

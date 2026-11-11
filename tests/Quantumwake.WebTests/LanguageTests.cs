@@ -1,21 +1,14 @@
 namespace Quantumwake.WebTests;
 
 /// <summary>
-/// The page in another language: the lookup, the plurals, and the picker.
+/// The page's language: the lookup, the plurals, and the picker.
 /// </summary>
 /// <remarks>
-/// <para>
 /// English is the key, so every other test in this project is also a test that
-/// an English page is unchanged. What is left to prove is that a French page
-/// actually comes out French, that a string nobody has translated yet still
-/// reads, and that the counts agree with their nouns - the one place French and
-/// English rules differ in a way a reader notices.
-/// </para>
-/// <para>
-/// The markup half (<c>txDocument</c>) needs a parsed document, which the stub
-/// is not; the catalogue tests guard its keys instead, and a screenshot is
-/// what shows it working.
-/// </para>
+/// an English page is unchanged. French was retired in 1.2.29 and English is
+/// the only language on offer, so the picker stays hidden; the picker tests
+/// below serve it a second language to prove it still works for the day one
+/// comes back.
 /// </remarks>
 public class LanguageTests
 {
@@ -34,39 +27,6 @@ public class LanguageTests
         Assert.Equal("2 of 5 items in hand", page.Text("tx('{have} of {total} items in hand', { have: 2, total: 5 })"));
     }
 
-    [Fact]
-    public void A_french_page_reads_the_catalogue_and_fills_it()
-    {
-        var page = new Page("fr");
-
-        Assert.Equal("Ouvrir la carte", page.Text("tx('Open map')"));
-        Assert.Equal("2 objets sur 5 en main", page.Text("tx('{have} of {total} items in hand', { have: 2, total: 5 })"));
-    }
-
-    /// <summary>A partial language is a readable page, not a page of gaps.</summary>
-    [Fact]
-    public void A_string_nobody_has_translated_stays_english()
-    {
-        var page = new Page("fr");
-
-        Assert.Equal("Nothing like this is in the catalogue", page.Text("tx('Nothing like this is in the catalogue')"));
-    }
-
-    /// <summary>
-    /// The difference that matters: French puts nought with one, English with
-    /// the many. A rule written as <c>count === 1</c> prints "0 journaux".
-    /// </summary>
-    [Theory]
-    [InlineData(0, "0 journal")]
-    [InlineData(1, "1 journal")]
-    [InlineData(2, "2 journaux")]
-    public void French_counts_take_french_plurals(int count, string expected)
-    {
-        var page = new Page("fr");
-
-        Assert.Equal(expected, page.Text($"txn({count}, '{{count}} log', '{{count}} logs')"));
-    }
-
     [Theory]
     [InlineData(0, "0 logs")]
     [InlineData(1, "1 log")]
@@ -78,28 +38,16 @@ public class LanguageTests
         Assert.Equal(expected, page.Text($"txn({count}, '{{count}} log', '{{count}} logs')"));
     }
 
-    /// <summary>
-    /// An untranslated plural on a French page is English words, so it takes
-    /// English's rule - French's would print "0 widget".
-    /// </summary>
+    /// <summary>English alone: no picker to show.</summary>
     [Fact]
-    public void An_untranslated_plural_keeps_the_english_rule()
+    public void With_english_alone_the_card_is_hidden()
     {
-        var page = new Page("fr");
+        var page = new Page();
+        page.Serve("/api/language", """{"current":"en","available":[{"code":"en","name":"English","covers":null}]}""");
 
-        Assert.Equal("0 widgets", page.Text("txn(0, '{count} widget', '{count} widgets')"));
-    }
+        page.Do("await renderLanguageSettings();");
 
-    [Fact]
-    public void The_command_palette_speaks_the_page_language()
-    {
-        var page = new Page("fr");
-
-        var labels = page.Text("commandEntries().map(entry => entry.label).join('|')");
-
-        Assert.Contains("Afficher l’overlay", labels);
-        Assert.Contains("Disposition d’overlay : minage", labels);
-        Assert.DoesNotContain("overlay layout", labels);
+        Assert.True(page.Truth("__dom.node('#language-card').hidden"));
     }
 
     /// <summary>
@@ -120,6 +68,7 @@ public class LanguageTests
         Assert.Equal("en", page.Text("__dom.node('#language-pick').value"));
         Assert.Equal("Français — traduit pour l’instant : la navigation.", page.NodeText("#language-covers"));
         Assert.False(page.Truth("__dom.node('#language-covers').hidden"));
+        Assert.False(page.Truth("__dom.node('#language-card').hidden"));
     }
 
     /// <summary>

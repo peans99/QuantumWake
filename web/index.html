@@ -4344,11 +4344,13 @@
 
     </div>
 
-    <!-- Named in both languages on purpose: someone who needs French has to
-         find this card while the page is still in English. -->
-    <div class="option-block settings-language-card">
+    <!-- Hidden while English is the only language (French was retired in
+         1.2.29). A language added back brings the card with it; name its
+         heading in that language too, because whoever needs it has to find
+         the card while the page is still in English. -->
+    <div class="option-block settings-language-card" id="language-card" hidden>
       <div class="option-head">
-        <h3>Language · Langue</h3>
+        <h3>Language</h3>
         <select id="language-pick" class="search" aria-label="Language"></select>
       </div>
       <p class="muted">
