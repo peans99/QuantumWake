@@ -510,10 +510,56 @@ function drawSweep(group) {
 const TARGET_MARK = `url("data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100"><path d="M80 6 90 38 150 64v10l-58-8-4 20 16 8H56l16-8-4-20-58 8V64l60-26z"/></svg>')}")`;
 let targetShape = null, targetDrawn = null;
+/* The hull as a 3D model, over the picture once it is in (1.2.31). One at a
+   time: a new lock, a lost lock or another page frees it, because a WebGL
+   context left running on a panel is GPU the game wanted. */
+let targetModel = null;
+const modelled = () => !!targetModel?.view;
+function dropModel() {
+  if (!targetModel) return;
+  targetModel.view?.dispose();
+  targetModel = null;
+  const box = byId('target-model');
+  box.replaceChildren(); box.classList.add('loading');
+  byId('target-view').classList.remove('modelled');
+}
+function loadTargetViewer() {
+  if (window.QW3D) return Promise.resolve(window.QW3D);
+  if (!loadTargetViewer.pending) loadTargetViewer.pending = new Promise((resolve, reject) => {
+    window.addEventListener('qw3d-ready', () => resolve(window.QW3D), { once: true });
+    const script = document.createElement('script');
+    script.type = 'module'; script.src = 'viewer3d.js';
+    script.onerror = () => { loadTargetViewer.pending = null; reject(new Error('no viewer')); };
+    document.head.append(script);
+  });
+  return loadTargetViewer.pending;
+}
+function drawModel(cls) {
+  if (targetModel?.cls === cls) return;
+  dropModel();
+  if (!cls || !window.WebGL2RenderingContext || failedModels.has(cls)) return;
+  const mine = targetModel = { cls, view: null };
+  const box = byId('target-model');
+  loadTargetViewer().then(viewer => viewer.mountTarget(box, cls)).then(view => {
+    if (targetModel !== mine) { view.dispose(); return; }
+    mine.view = view;
+    box.classList.remove('loading');
+    byId('target-view').classList.add('modelled');
+    byId('target-shape').hidden = true; byId('target-render').hidden = true;
+    view.resize();
+  }).catch(() => {
+    // Not asked again this session: an install without the model will not
+    // grow one between locks.
+    failedModels.add(cls);
+    if (targetModel === mine) dropModel();
+  });
+}
+const failedModels = new Set();
 function drawTarget(visible) {
   const figure = byId('target-view');
   const picture = visible ? QwMfd.targetPicture(extra.live) : null;
   figure.hidden = !picture;
+  drawModel(picture ? QwMfd.targetModel(picture, garagePictures()) : null);
   if (!picture) { targetShape = null; return; }
   figure.classList.toggle('hostile', picture.tone === 'hostile');
   figure.classList.toggle('likely', picture.likely);
@@ -526,13 +572,13 @@ function drawTarget(visible) {
     if (!still() || targetDrawn === url) return;
     targetDrawn = url;
     shape.style.setProperty('--shape', url);
-    shape.hidden = false; render.hidden = true;
+    shape.hidden = modelled(); render.hidden = true;
   };
   const photo = src => {
     if (!still()) return;
     targetDrawn = src;
     if (render.getAttribute('src') !== src) render.src = src;
-    shape.hidden = true; render.hidden = false;
+    shape.hidden = true; render.hidden = modelled();
   };
   const steps = QwMfd.targetSteps(picture, garagePictures());
   const loads = (src, shown, next) => {

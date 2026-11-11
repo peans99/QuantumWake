@@ -820,7 +820,13 @@ class ModelView {
     if (this.disposed) return;
     requestAnimationFrame(this.frame);
     this.stats.frames += 1;
-    const moved = this.controls.update();
+    // A panel beside the game draws at a capped rate, and turns by the clock
+    // rather than by the frame so the cap does not slow the turn.
+    const now = performance.now();
+    if (this.opts.maxFps && now - (this.lastDraw ?? -Infinity) < 1000 / this.opts.maxFps) return;
+    const delta = this.opts.maxFps && this.lastDraw != null ? (now - this.lastDraw) / 1000 : null;
+    this.lastDraw = now;
+    const moved = this.controls.update(delta);
     if (!moved && !this.dirty && !this.controls.autoRotate) return;
     this.dirty = false;
     this.fill.position.copy(this.camera.position);
@@ -1908,5 +1914,47 @@ export function closeModel() {
   current = null;
 }
 
-window.QW3D = { openModel, closeModel, textureLog };
+/**
+ * The locked ship on an MFD's Target page (1.2.31): the hull from the
+ * install, turning slowly, on a transparent canvas inside `host`. Kept
+ * light because the game is running beside it - no effects, no shadows, no
+ * floor, one pixel per pixel, 1,024-texel textures, 24 frames a second - and
+ * nothing to handle: the frame is read, not flown. Resolves to the view once
+ * the hull and its parts are in; rejects (and frees the GPU) when the
+ * install has no model the view can read, so the page keeps its picture.
+ */
+export async function mountTarget(host, cls) {
+  host.innerHTML = '<div class="v3d-stage"><canvas></canvas></div>';
+  const view = new ModelView(host, { quality: false, maxFps: 24 });
+  view.renderer.setPixelRatio(1);
+  view.renderer.shadowMap.enabled = false;
+  view.key.castShadow = false;
+  view.scene.background = null;
+  view.floor.visible = false;
+  view.grid.visible = false;
+  view.textureMax = 1024;
+  view.controls.enabled = false;
+  view.setLighting('hangar');
+  // Brighter than the bench: a dark Vanduul hull on a dark panel, glanced at.
+  view.setBrightness(1.6);
+  view.setTurntable(true);
+  view.controls.autoRotateSpeed = 3;
+  try {
+    await view.load(cls);
+  } catch (err) {
+    view.dispose();
+    host.replaceChildren();
+    throw err;
+  }
+  if (view.disposed) throw new Error('dropped');
+  // Closer than the viewer's framing, which leaves room for a whole turn of
+  // a long hull: on a panel this size the ship is the point, not the space.
+  const centre = view.controls.target;
+  view.camera.position.sub(centre).multiplyScalar(0.5).add(centre);
+  view.controls.update();
+  view.invalidate();
+  return view;
+}
+
+window.QW3D = { openModel, closeModel, mountTarget, textureLog };
 window.dispatchEvent(new Event('qw3d-ready'));

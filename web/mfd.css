@@ -273,3 +273,16 @@ h1 { font-size: clamp(15px, 4cqw, 34px); letter-spacing: .06em; margin: 0 0 4%; 
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 #callout.strip #callout-earlier { display: none; }
 #mfd.calling-strip #breadcrumb, #mfd.calling-strip #title { display: none; }
+
+/* The hull as a model (1.2.31). Built at full size but out of sight while
+   it loads, so the renderer measures a real canvas; the picture under it
+   stays up until the model is in. Same footprint as the render, a little
+   taller, because a turning hull is longer than it is wide only some of
+   the time. */
+#target-view { position: relative; }
+#target-model { position: relative; width: 100%; max-width: 56cqh; aspect-ratio: 1.9; margin: 0 auto; }
+#target-model.loading { position: absolute; left: 0; top: 0; opacity: 0; pointer-events: none; }
+#target-model .v3d-stage { position: absolute; inset: 0; }
+#target-model canvas { display: block; width: 100%; height: 100%; }
+#target-view.hostile.modelled #target-model { filter: drop-shadow(0 0 10px rgba(255, 90, 77, .55)); }
+#target-view.likely #target-model { opacity: .75; }

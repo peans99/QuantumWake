@@ -1231,6 +1231,17 @@ window.QwMfd = (() => {
     return [...(chosen ? [{ paint: chosen }] : []), 'stock', 'silhouette', 'mark'];
   }
 
+  /* Whether to draw the locked hull as a 3D model (1.2.31) rather than only
+     a picture: when the hull is named, and the pilot has not told the Garage
+     they prefer silhouettes - for this hull or for every one. The picture
+     from targetSteps stays up until the model is in, and stays if it never
+     comes. */
+  function targetModel(picture, garage) {
+    if (picture?.kind !== 'silhouette' || !picture.cls) return null;
+    if (garage?.style === 'tint' || garage?.paints?.[picture.cls] === 'silhouette') return null;
+    return picture.cls;
+  }
+
   function actionLine(pageId, view) {
     if (pageId !== 'act') return null;
     if (view?.saved) return { state: 'saved', text: view.saved };
@@ -1285,7 +1296,7 @@ window.QwMfd = (() => {
         ? sayn(bed.times, 'A medical bed used {count} time · the game never states a regen point', 'A medical bed used {count} times · the game never states a regen point')
         : sayn(respawn.of, '{agreeing} of {count} death woke there · the game never states a regen point', '{agreeing} of {count} deaths woke there · the game never states a regen point', { agreeing: respawn.agreeing }) };
   }
-  return { targetSteps, followWant, followStep, followIdle, FOLLOW_RETURN, FOLLOW_HANDS_OFF, TARGET_GONE,
+  return { targetSteps, targetModel, followWant, followStep, followIdle, FOLLOW_RETURN, FOLLOW_HANDS_OFF, TARGET_GONE,
     calloutStep, calloutIdle, calloutShowing, calloutStrip, CALLOUT_SHOW, say, sayn, fit, inset, defaultInset, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, radarFocus, radarHere, routeLine, panelRole, missionCard, makerOf, makers, dormant, actionLine, targetPicture, sameTask, taskId, rowIcon,
     groups, menuNodes, menuNode, parent, title, validScreen, menuItems, previewPage, trail, resolveCommand, restoreScreen, readingView,
     pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, dozed, DOZE, prettyItem, pageOf, pageStep, pageLabel, LEDGER_PAGE, BRIGHTNESS, brightnessLevel, brightnessAt,
