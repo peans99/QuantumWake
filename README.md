@@ -388,7 +388,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.32
+### 1.2.33
+
+**Every planner writes a run sheet you can edit.** A trade circuit and a shopping-list run used to land in the flight plan as notes, so their amounts and prices could not be changed once flown and the profit could not be worked out again. They now write the same priced buy and sell lines a single trade run always did: the circuit's outbound buy and sale, the return load bought where the outbound one is sold, and its sale; the shopping run's one buy per item at the counter chosen for it, with the amount and that counter's price.
 
 **Hauling runs, shared with a group.** Under the hauling run on Jobs there is now **Share the run**: keep a list of the wingmates you haul with and the ship each one brings, tick who is flying, say where each one is, and your open contracts are shared out so the whole run is done soonest, with the longest single ship’s run made as short as it can be. Each ship gets its stops in flying order, the distance of each hop and what is aboard after each stop. Pickups always come before drops, no ship is ever given more than its hold, and a contract stays on one ship unless you tick *split* for a run of party-shared contracts. Your share can be made your flight plan; a wingmate’s copies as lines for party chat. With only you ticked, it orders your own run by distance. Distances are straight lines between planets and moons from the community star map, not the route flown; two stops on one body count as none, and a place with no position on file makes the figure a floor. **Put in order** on the Itinerary page now also takes the nearest stop next when it knows the distance.
 

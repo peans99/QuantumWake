@@ -116,4 +116,46 @@ public class TradeTweakTests
         Assert.Equal(0, page.Count("__dom.node('#cargo-body').byClass('trade-run-money').length"));
         Assert.Equal(0, page.Count("__dom.node('#cargo-body').byClass('run-action-tweak').length"));
     }
+
+    /// <summary>A circuit keeps its four trades as priced lines, the return load bought where the outbound one is sold (1.2.33).</summary>
+    [Fact]
+    public void A_circuit_is_saved_as_priced_trades_rather_than_notes()
+    {
+        var page = new Page();
+        var stops = page.Text("""
+            JSON.stringify(circuitStops({ commodity: 'Agricium', buyAt: 'Lorville', buyAtId: 'L', buyPrice: 1234, units: 96.7,
+              sellAt: 'Area18', sellAtId: 'A', sellPrice: 1656, returnCommodity: 'Waste', returnBuyAt: 'Area18', returnBuyPrice: 10,
+              returnUnits: 96, returnSellAt: 'Lorville', returnSellAtId: 'L', returnSellPrice: 40 }))
+            """);
+
+        Assert.Equal("""[{"placeId":"L","place":"Lorville","actions":[{"kind":"buy","text":"Agricium","quantity":96,"unit":"SCU","price":1234}]},{"placeId":"A","place":"Area18","actions":[{"kind":"sell","text":"Agricium","quantity":96,"unit":"SCU","price":1656},{"kind":"buy","text":"Waste","quantity":96,"unit":"SCU","price":10}]},{"placeId":"L","place":"Lorville","actions":[{"kind":"sell","text":"Waste","quantity":96,"unit":"SCU","price":40}]}]""", stops);
+        Assert.DoesNotContain("note", stops);
+    }
+
+    [Fact]
+    public void A_circuit_whose_return_load_is_elsewhere_gets_its_own_stop()
+    {
+        var page = new Page();
+        Assert.Equal(4, page.Count("""
+            circuitStops({ commodity: 'A', buyAt: 'X', buyPrice: 1, units: 1, sellAt: 'Y', sellPrice: 2,
+              returnCommodity: 'B', returnBuyAt: 'Z', returnBuyPrice: 1, returnUnits: 1, returnSellAt: 'X', returnSellPrice: 2 }).length
+            """));
+    }
+
+    /// <summary>A shopping run is one priced buy per item at its counter, not a note listing them (1.2.33).</summary>
+    [Fact]
+    public void A_shopping_run_is_saved_as_priced_buys_per_counter()
+    {
+        var page = new Page();
+        var stops = page.Text("""
+            JSON.stringify(shoppingRunStops([
+              { item: { name: 'Quantanium', needed: 12, unit: 'SCU' }, sellers: [{ terminal: 'Shubin', placeId: 'S', price: 88 }] },
+              { item: { name: 'Medpen', needed: 4 }, sellers: [{ terminal: 'Shubin', placeId: 'S', price: 1500 }] },
+              { item: { name: 'Ore pod', needed: 2, unit: 'cSCU' }, sellers: [{ terminal: 'Area18', placeId: 'A', price: 0 }] },
+              { item: { name: 'Not chosen', needed: 1 }, sellers: [] },
+            ], new Map([['Quantanium', 'Shubin'], ['Medpen', 'Shubin'], ['Ore pod', 'Area18']])))
+            """);
+
+        Assert.Equal("""[{"placeId":"S","place":"Shubin","actions":[{"kind":"buy","text":"Quantanium","quantity":12,"unit":"SCU","price":88},{"kind":"buy","text":"Medpen","quantity":4,"unit":"units","price":1500}]},{"placeId":"A","place":"Area18","actions":[{"kind":"buy","text":"Ore pod (cSCU)","quantity":2,"unit":null,"price":null}]}]""", stops);
+    }
 }

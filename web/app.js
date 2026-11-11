@@ -19697,14 +19697,7 @@ async function loadRouteCircuits(query) {
     save.addEventListener('click', () => {
       rememberRoute({ commodity: `${circuit.commodity} / ${circuit.returnCommodity}`, buyAt: circuit.buyAt,
         sellAt: circuit.returnSellAt, totalProfit: circuit.totalProfit }, 'circuit');
-      planTrip(`${circuit.commodity} ⇄ ${circuit.returnCommodity}`, [
-        { placeId: circuit.buyAtId, place: circuit.buyAt,
-          note: tx('Buy {units} SCU {commodity}', { units: Math.floor(circuit.units), commodity: circuit.commodity }) },
-        { placeId: circuit.sellAtId, place: circuit.sellAt,
-          note: tx('Sell {commodity}; buy {next}', { commodity: circuit.commodity, next: circuit.returnCommodity }) },
-        { placeId: circuit.returnSellAtId, place: circuit.returnSellAt,
-          note: `${tx('Sell {commodity}', { commodity: circuit.returnCommodity })} · +${money(circuit.returnProfit)}` },
-      ]);
+      planTrip(`${circuit.commodity} ⇄ ${circuit.returnCommodity}`, circuitStops(circuit));
     });
     card.append(save);
     list.append(card);
@@ -19721,6 +19714,53 @@ async function loadRouteCircuits(query) {
 const tradeAction = (kind, commodity, units, price) => ({
   kind, text: commodity, quantity: Math.floor(Number(units) || 0), unit: 'SCU', price: Number(price) || 0,
 });
+
+/**
+ * A circuit as run-sheet lines (1.2.33): the outbound buy and sale, the
+ * return load bought where the outbound one is sold - or at its own counter
+ * when the circuit names another - and its sale, every one priced. It was
+ * three notes, so a circuit could not be tweaked or its profit worked out
+ * again once flown, which a single trade run always could.
+ */
+function circuitStops(circuit) {
+  const same = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
+  const sellOut = tradeAction('sell', circuit.commodity, circuit.units, circuit.sellPrice);
+  const buyBack = tradeAction('buy', circuit.returnCommodity, circuit.returnUnits, circuit.returnBuyPrice);
+  const returnBuyAt = circuit.returnBuyAt || circuit.sellAt;
+  const stops = [
+    { placeId: circuit.buyAtId || placeIdForTerminal(circuit.buyAt), place: circuit.buyAt,
+      actions: [tradeAction('buy', circuit.commodity, circuit.units, circuit.buyPrice)] },
+    { placeId: circuit.sellAtId || placeIdForTerminal(circuit.sellAt), place: circuit.sellAt,
+      actions: same(returnBuyAt, circuit.sellAt) ? [sellOut, buyBack] : [sellOut] },
+  ];
+  if (!same(returnBuyAt, circuit.sellAt))
+    stops.push({ placeId: circuit.returnBuyAtId || placeIdForTerminal(returnBuyAt), place: returnBuyAt, actions: [buyBack] });
+  stops.push({ placeId: circuit.returnSellAtId || placeIdForTerminal(circuit.returnSellAt), place: circuit.returnSellAt,
+    actions: [tradeAction('sell', circuit.returnCommodity, circuit.returnUnits, circuit.returnSellPrice)] });
+  return stops;
+}
+
+/**
+ * A shopping list's run as run-sheet lines (1.2.33): one buy per item at the
+ * counter chosen for it, with the amount and the counter's price, instead
+ * of a note listing them. Units the run sheet does not draw (it knows SCU
+ * and units) stay in the line's text, so nothing is lost.
+ */
+function shoppingRunStops(options, chosen) {
+  const byPlace = new Map();
+  for (const { item, sellers } of options) {
+    const terminal = chosen.get(item.name);
+    if (!terminal) continue;
+    const seller = sellers.find((s) => s.terminal === terminal);
+    const unit = /^(scu|units?)$/i.test(item.unit || '') ? item.unit : null;
+    const text = item.unit && !unit ? `${item.name} (${item.unit})` : item.name;
+    const stop = byPlace.get(terminal) || { placeId: seller?.placeId || placeIdForTerminal(terminal), place: terminal, actions: [] };
+    stop.actions.push({ kind: 'buy', text, quantity: item.needed > 0 ? item.needed : null,
+      unit: item.needed > 0 ? unit || (item.unit ? null : 'units') : null, price: seller?.price > 0 ? seller.price : null });
+    byPlace.set(terminal, stop);
+  }
+  return [...byPlace.values()];
+}
 
 /** Save either the best buyer or a named alternate as the same editable flight plan. */
 function saveTradeRoute(route, sellAt, sellAtId, sellPrice, label = '') {
@@ -34342,41 +34382,11 @@ async function planShoppingTrip(job, card) {
 
   const create = el('button', 'ghost', tx('Create plan'));
   create.addEventListener('click', async () => {
-    const byPlace = new Map();
-
-    for (const { item, sellers } of options) {
-      const terminal = chosen.get(item.name);
-      if (!terminal) continue;
-
-      const seller = sellers.find((s) => s.terminal === terminal);
-      const need = item.needed > 0
-        ? `${item.name} ${item.needed}${item.unit ? ` ${item.unit}` : ''}`
-        : item.name;
-
-      const line = byPlace.get(terminal)
-        || { items: [], cost: 0, priced: true, placeId: seller?.placeId || '' };
-
-      line.items.push(need);
-
-      if (seller?.price > 0 && item.needed > 0) line.cost += seller.price * item.needed;
-      else line.priced = false;
-
-      byPlace.set(terminal, line);
-    }
-
-    if (!byPlace.size) {
+    const stops = shoppingRunStops(options, chosen);
+    if (!stops.length) {
       alertLine($('#jobs-list'), tx('Nothing is chosen, so there is no run to fly.'));
       return;
     }
-
-    const stops = [...byPlace.entries()].map(([place, line]) => ({
-      placeId: line.placeId || placeIdForTerminal(place),
-      place,
-
-      // The estimate is only shown when every item at the stop has a price;
-      // a partial total reads as the cost of the landing and is not.
-      note: line.items.join(', ') + (line.priced && line.cost > 0 ? ` · ~${money(line.cost)}` : ''),
-    }));
 
     chooser.remove();
     await planTrip(tx('{title} run', { title: job.title }), stops);

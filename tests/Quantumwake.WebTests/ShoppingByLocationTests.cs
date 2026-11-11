@@ -177,7 +177,8 @@ public class ShoppingByLocationTests
         var body = page.BodyOf("/api/trips");
 
         // Laranite was Levski's; Area18 sells it too, and was already a stop.
-        Assert.Contains("Laranite 10 SCU, Agricium 5 SCU", body);
+        Assert.Contains("\"text\":\"Laranite\",\"quantity\":10", body);
+        Assert.Contains("\"text\":\"Agricium\",\"quantity\":5", body);
         Assert.DoesNotContain("Levski", body);
         Assert.Contains("GrimHEX", body);
     }
