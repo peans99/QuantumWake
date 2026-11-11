@@ -29,7 +29,8 @@ public sealed record StopWhere(string? Body, string? System);
 /// same system, then stops with something to load, then the order they were
 /// already in. Nothing here knows a distance - the atlas has no coordinates
 /// for a station - so it never claims a shortest route, only one that holds
-/// together.
+/// together. Since 1.2.32 a distance can be handed in - body centre to body
+/// centre - and the nearest ready stop in the system goes next.
 /// </para>
 /// <para>
 /// A stop already flown, with nothing left to do at it, stays where it is at
@@ -45,7 +46,14 @@ public static class TripOrder
     private static readonly HashSet<string> Sinks = new(StringComparer.OrdinalIgnoreCase) { "unload", "sell" };
 
     /// <summary>The stop ids in the new order. The same ids, every one of them, so nothing can be lost by applying it.</summary>
-    public static IReadOnlyList<string> Optimise(Trip trip, Func<TripStop, StopWhere> where, TripStop? start = null, StopWhere? startWhere = null)
+    /// <param name="distance">
+    /// Body to body in Gm, null when unknown (1.2.32). Given, the nearest
+    /// ready stop in the system goes next; the body and system rules still
+    /// come first, so a stop with no position on file is not pushed to the
+    /// back for want of one.
+    /// </param>
+    public static IReadOnlyList<string> Optimise(Trip trip, Func<TripStop, StopWhere> where, TripStop? start = null, StopWhere? startWhere = null,
+        Func<StopWhere, StopWhere, double?>? distance = null)
     {
         var flown = trip.Stops.Where(s => !Trip.Outstanding(s)).ToList();
         var open = trip.Stops.Where(Trip.Outstanding).ToList();
@@ -96,6 +104,7 @@ public static class TripOrder
             next ??= ready
                 .OrderByDescending(s => last?.Body is { } body && Same(where(s).Body, body))
                 .ThenByDescending(s => last?.System is { } system && Same(where(s).System, system))
+                .ThenBy(s => last is not null && distance?.Invoke(last, where(s)) is { } gm ? gm : double.MaxValue)
                 .ThenByDescending(s => Pending(s).Any(a => Sources.Contains(a.Kind)))
                 .ThenBy(s => index[s.Id])
                 .First();

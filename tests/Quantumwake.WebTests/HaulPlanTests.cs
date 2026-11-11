@@ -332,4 +332,100 @@ public class HaulPlanTests
         // Re-read, so the stops on screen are the ones that now exist.
         Assert.Equal(2, page.Fetched().Count(c => c == "GET /api/haul/plan"));
     }
+
+    private const string Crew = """
+        {"crew":[{"id":"c1","name":"Rook","hull":"DRAK_Cutlass_Black","hullName":"Drake Cutlass Black","scu":46}],
+         "hulls":[{"class":"DRAK_Cutlass_Black","name":"Drake Cutlass Black","scu":46},{"class":"RSI_Hermes","name":"RSI Hermes","scu":480}],
+         "max":12}
+        """;
+
+    private const string Shared = """
+        {"planId":"p1","longestGm":31.62,"totalGm":45.2,"split":false,"leftOut":[{"contractTitle":"Junior | Stellar Small Haul | to Ruin Station","why":"Where it picks up or delivers is not known yet - photograph its card in the Contracts app."}],
+         "notes":["Where Rook is now was not given, so the first leg of that run is not counted."],
+         "runs":[
+           {"ship":{"id":"me","name":"You","hull":"RSI Hermes","scu":480,"me":true},"gm":31.62,"gmPartial":false,"peakScu":18,"contracts":1,
+            "stops":[{"place":"Fallow Field","placeId":"","body":"Pyro IV","system":"Pyro","legGm":0,"aboardScu":18,
+                      "actions":[{"kind":"load","commodity":"Aluminum","scu":18,"contract":0,"contractTitle":"Junior | Stellar Small Haul | to Stanton Gateway"}]},
+                     {"place":"Stanton Gateway","placeId":"Pyro_StantonGateway","body":"Pyro Jump","system":"Pyro","legGm":31.62,"aboardScu":0,
+                      "actions":[{"kind":"unload","commodity":"Aluminum","scu":18,"contract":0,"contractTitle":"Junior | Stellar Small Haul | to Stanton Gateway"}]}]},
+           {"ship":{"id":"c1","name":"Rook","hull":"Drake Cutlass Black","scu":46,"me":false},"gm":13.58,"gmPartial":true,"peakScu":0,"contracts":1,
+            "stops":[{"place":"Ashland","placeId":"","body":"Pyro 5a","system":"Pyro","legGm":null,"aboardScu":0,
+                      "actions":[{"kind":"load","commodity":"Aluminum","scu":null,"contract":0,"contractTitle":"Junior | Stellar Small Haul | to Stanton Gateway"}]}]}
+         ]}
+        """;
+
+    private static Page Sharing()
+    {
+        var page = new Page();
+        page.Serve("/api/now", Now);
+        page.Serve("/api/contracts?days=2", Contracts);
+        page.Serve("/api/haul/plan", Plan.Replace("{\"inGame\":true,", "{\"planId\":\"p1\",\"inGame\":true,"));
+        page.Serve("/api/trips", "[]");
+        page.Serve("/api/haul/crew", Crew);
+        page.Serve("/api/crew", """[{"handle":"Rook","sessions":4}]""");
+        page.Serve("/api/haul/share", Shared);
+        page.Do("await loadHaulCrew(); await loadJobContracts();");
+        return page;
+    }
+
+    /// <summary>The crew is listed under the run, with each hull's hold, and a wingmate is only on the run once ticked (1.2.32).</summary>
+    [Fact]
+    public void The_share_panel_lists_the_crew_and_sends_only_who_is_ticked()
+    {
+        var page = Sharing();
+
+        var panel = page.Text($"{Host}.byClass('haul-share')[0].textContent");
+        Assert.Contains("Share the run", panel);
+        Assert.Contains("Rook", panel);
+        Assert.Contains("Drake Cutlass Black · 46 SCU", panel);
+
+        page.Do($"await {Host}.byClass('haul-share-go')[0].fire('click');");
+        Assert.Contains("\"ships\":[{\"id\":\"me\",\"place\":null}]", page.BodyOf("/api/haul/share"));
+
+        page.Do("haulShareWho.c1 = { on: true, place: 'Checkmate' };");
+        page.Do($"await {Host}.byClass('haul-share-go')[0].fire('click');");
+        Assert.Contains("{\"id\":\"c1\",\"place\":\"Checkmate\"}", page.BodyOf("/api/haul/share"));
+        Assert.Contains("\"planId\":\"p1\"", page.BodyOf("/api/haul/share"));
+    }
+
+    /// <summary>Each ship's run in the order it flies, with the distance it is and what it is not: a floor where a hop had no position.</summary>
+    [Fact]
+    public void The_share_shows_a_run_per_ship_with_its_distance_and_what_was_left_out()
+    {
+        var page = Sharing();
+        page.Do($"await {Host}.byClass('haul-share-go')[0].fire('click'); await loadJobContracts();");
+
+        Assert.Equal(2, page.Count($"{Host}.byClass('haul-share-run').length"));
+        var panel = page.Text($"{Host}.byClass('haul-share')[0].textContent");
+        Assert.Contains("longest run 31.6 Gm", panel);
+        Assert.Contains("+31.6 Gm", panel);
+        Assert.Contains("13.6 Gm+", panel);
+        Assert.Contains("distance not on file", panel);
+        Assert.Contains("a floor", panel);
+        Assert.Contains("photograph its card in the Contracts app", panel);
+        Assert.Contains("Make it my flight plan", panel);
+        Assert.Contains("Copy for chat", panel);
+    }
+
+    [Fact]
+    public void A_wingmates_run_reads_as_lines_for_party_chat()
+    {
+        var page = Sharing();
+        var text = page.Text($"haulShareChat({Shared}.runs[1])");
+
+        Assert.Equal("Rook (Drake Cutlass Black):\n1. Ashland (Pyro 5a): load Aluminum", text);
+    }
+
+    /// <summary>A share of contracts the page no longer shows is not kept: a new run drops it.</summary>
+    [Fact]
+    public void A_share_of_an_older_run_is_dropped()
+    {
+        var page = Sharing();
+        page.Do($"await {Host}.byClass('haul-share-go')[0].fire('click'); await loadJobContracts();");
+        Assert.Equal(2, page.Count($"{Host}.byClass('haul-share-run').length"));
+
+        page.Serve("/api/haul/plan", Plan.Replace("{\"inGame\":true,", "{\"planId\":\"p2\",\"inGame\":true,"));
+        page.Do("await loadJobContracts();");
+        Assert.Equal(0, page.Count($"{Host}.byClass('haul-share-run').length"));
+    }
 }

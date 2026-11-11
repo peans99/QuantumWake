@@ -24453,7 +24453,7 @@ function renderHaulPlan(host, plan) {
     plan.travelling ? tx('in transit') : null,
   ].filter(Boolean).join(', ');
   section.append(el('p', 'muted haul-origin', plan.start
-    ? tx('Route from {place} ({known}). Pickups first, grouped by body and system; distances are not known.',
+    ? tx('Route from {place} ({known}). Pickups first, grouped by body and system. For an order by distance, use Share the run below - with only you on it, it orders your own run.',
       { place: `${plan.start.name}${plan.start.body ? ` · ${plan.start.body}` : ''}`, known })
     : tx('Current location unknown — this route cannot choose a nearby starting stop.')));
   section.append(el('p', 'muted caption',
@@ -24612,7 +24612,310 @@ function renderHaulPlan(host, plan) {
 
   for (const note of plan.notes || []) section.append(el('p', 'muted caption', serverText(note)));
 
+  renderHaulShare(section, plan);
+
   host.append(section);
+}
+
+/* ---------- Sharing the run (1.2.32) ----------
+   With a group: who is flying, where each one is, and the open contracts
+   shared out so the whole run is done soonest. The crew list is kept on the
+   server; who is ticked, where they are and the last answer live here,
+   because the Jobs page redraws the run every few seconds and a choice
+   that vanished on each redraw would be no choice at all. */
+let haulCrew = null, haulCrewAsked = false;
+let haulShareWho = {};
+let haulShareSplit = false;
+let haulShareResult = null;
+let haulShareBusy = false;
+let haulSharePlaces = null, haulShareWingmen = null;
+
+async function loadHaulCrew() {
+  haulCrewAsked = true;
+  try { haulCrew = await getJson('/api/haul/crew'); } catch { haulCrew = { crew: [], hulls: [], max: 12 }; }
+  // Names to suggest: places the atlas knows, and pilots the party channel
+  // has named. Both only suggestions - anything typed is used as typed.
+  if (!haulSharePlaces) {
+    try { haulSharePlaces = ((await getJson('/api/map')).nodes || []).map((n) => n.name).filter(Boolean); } catch { haulSharePlaces = []; }
+  }
+  if (!haulShareWingmen) {
+    try { haulShareWingmen = (await getJson('/api/crew')).map((w) => w.name || w.handle).filter(Boolean); } catch { haulShareWingmen = []; }
+  }
+}
+
+function haulShareBody(plan) {
+  const ships = [{ id: 'me', place: haulShareWho.me?.place || null }];
+  for (const mate of haulCrew?.crew || []) {
+    const who = haulShareWho[mate.id];
+    if (who?.on) ships.push({ id: mate.id, place: who.place || null });
+  }
+  return { planId: plan.planId || null, split: haulShareSplit, ships };
+}
+
+function shareGm(gm) {
+  if (gm === null || gm === undefined) return null;
+  return gm >= 100 ? gm.toFixed(0) : gm >= 10 ? gm.toFixed(1) : gm.toFixed(2);
+}
+
+/** One ship's run as lines a wingmate can read in party chat. */
+function haulShareChat(run) {
+  const lines = [`${run.ship.name}${run.ship.hull ? ` (${run.ship.hull})` : ''}:`];
+  run.stops.forEach((stop, i) => {
+    const what = stop.actions.map((a) => `${a.kind === 'load' ? tx('load') : tx('drop')}${a.scu ? ` ${a.scu} SCU` : ''}${a.commodity ? ` ${a.commodity}` : ''}`).join(', ');
+    lines.push(`${i + 1}. ${stop.place}${stop.body ? ` (${stop.body})` : ''}: ${what}`);
+  });
+  return lines.join('\n');
+}
+
+function renderHaulShare(section, plan) {
+  const box = el('div', 'haul-share');
+  section.append(box);
+  drawHaulShare(box, plan);
+}
+
+/* Drawn in place: the crew arriving, a wingmate added or a share coming
+   back redraws this panel and not the whole run, which would re-read the
+   plan for nothing. */
+function drawHaulShare(box, plan) {
+  box.replaceChildren();
+  const redraw = () => drawHaulShare(box, plan);
+  box.append(el('h4', 'spaced', tx('Share the run')));
+  box.append(el('p', 'muted caption', tx('Flying with a group? Tick who is coming and where each one is now, and the contracts are shared out so the whole run is done soonest: the longest single run made as short as it can be.')));
+
+  if (!haulCrewAsked) {
+    loadHaulCrew().then(redraw);
+    box.append(el('p', 'muted caption', tx('Reading your crew…')));
+    return;
+  }
+
+  // A share of contracts the page no longer shows is a share of nothing.
+  if (haulShareResult && haulShareResult.planId !== plan.planId) haulShareResult = null;
+
+  const list = el('ul', 'haul-crew');
+  const me = el('li', 'haul-crew-me');
+  me.append(el('b', null, tx('You')));
+  me.append(el('span', 'muted', [plan.ship, plan.shipScu ? tx('{scu} SCU', { scu: plan.shipScu }) : null].filter(Boolean).join(' · ') || tx('ship not known')));
+  const myPlace = el('input', 'search haul-crew-place');
+  myPlace.setAttribute('list', 'haul-share-places');
+  myPlace.placeholder = plan.start?.name ? tx('at {place} (from the log)', { place: plan.start.name }) : tx('where you are');
+  myPlace.value = haulShareWho.me?.place || '';
+  myPlace.addEventListener('change', () => { haulShareWho.me = { on: true, place: myPlace.value.trim() }; });
+  me.append(myPlace);
+  list.append(me);
+
+  for (const mate of haulCrew.crew || []) {
+    const who = haulShareWho[mate.id] || { on: false, place: '' };
+    const row = el('li', who.on ? 'haul-crew-on' : null);
+    const tick = el('label', 'haul-crew-name');
+    const box2 = el('input');
+    box2.type = 'checkbox';
+    box2.checked = !!who.on;
+    box2.addEventListener('change', () => {
+      haulShareWho[mate.id] = { ...who, on: box2.checked };
+      row.classList.toggle('haul-crew-on', box2.checked);
+    });
+    tick.append(box2, el('b', null, ` ${mate.name}`));
+    row.append(tick);
+    row.append(el('span', 'muted', mate.hullName
+      ? [mate.hullName, mate.scu ? tx('{scu} SCU', { scu: mate.scu }) : null].filter(Boolean).join(' · ')
+      : tx('hull not set: hold not limited')));
+    const place = el('input', 'search haul-crew-place');
+    place.setAttribute('list', 'haul-share-places');
+    place.placeholder = tx('where they are (yours if empty)');
+    place.value = who.place || '';
+    place.addEventListener('change', () => { haulShareWho[mate.id] = { ...(haulShareWho[mate.id] || who), place: place.value.trim() }; });
+    row.append(place);
+    const remove = el('button', 'ghost haul-crew-remove', '×');
+    remove.title = tx('Remove {name} from your crew', { name: mate.name });
+    remove.addEventListener('click', async () => {
+      await fetch(`/api/haul/crew/${encodeURIComponent(mate.id)}`, { method: 'DELETE' }).catch(() => {});
+      delete haulShareWho[mate.id];
+      await loadHaulCrew();
+      redraw();
+    });
+    row.append(remove);
+    list.append(row);
+  }
+  box.append(list);
+
+  const places = el('datalist');
+  places.id = 'haul-share-places';
+  for (const name of haulSharePlaces || []) { const o = el('option'); o.value = name; places.append(o); }
+  box.append(places);
+
+  // Adding a wingmate: a name (the party channel's are suggested) and the
+  // hull they bring, which is what sets their hold.
+  if ((haulCrew.crew || []).length < (haulCrew.max || 12)) {
+    const add = el('form', 'haul-crew-add');
+    const name = el('input', 'search');
+    name.placeholder = tx('Wingmate');
+    name.setAttribute('list', 'haul-share-wingmen');
+    const people = el('datalist');
+    people.id = 'haul-share-wingmen';
+    for (const who of haulShareWingmen || []) { const o = el('option'); o.value = who; people.append(o); }
+    const hull = el('select', 'search');
+    const none = el('option', null, tx('Hull (sets the hold)'));
+    none.value = '';
+    hull.append(none);
+    for (const h of haulCrew.hulls || []) {
+      const o = el('option', null, `${h.name} · ${tx('{scu} SCU', { scu: h.scu })}`);
+      o.value = h.class;
+      hull.append(o);
+    }
+    const go = el('button', 'ghost', tx('Add to crew'));
+    go.type = 'submit';
+    add.append(name, people, hull, go);
+    add.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!name.value.trim()) return;
+      go.disabled = true;
+      try {
+        const mate = await fetch('/api/haul/crew', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: name.value.trim(), hull: hull.value || null }),
+        }).then((r) => (r.ok ? r.json() : null));
+        if (mate?.id) haulShareWho[mate.id] = { on: true, place: '' };
+      } finally {
+        await loadHaulCrew();
+        redraw();
+      }
+    });
+    box.append(add);
+  }
+
+  const splitLabel = el('label', 'haul-share-split');
+  const split = el('input');
+  split.type = 'checkbox';
+  split.checked = haulShareSplit;
+  split.addEventListener('change', () => { haulShareSplit = split.checked; });
+  splitLabel.append(split, document.createTextNode(` ${tx('Let one contract be split between ships (only for contracts shared with the party)')}`));
+  box.append(splitLabel);
+
+  const actions = el('div', 'haul-actions');
+  const go = el('button', 'ghost haul-share-go', haulShareResult ? tx('Share it out again') : tx('Share it out'));
+  go.disabled = haulShareBusy;
+  go.addEventListener('click', async () => {
+    haulShareBusy = true;
+    go.disabled = true;
+    try {
+      const response = await fetch('/api/haul/share', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(haulShareBody(plan)),
+      });
+      const answer = await response.json();
+      if (response.ok) {
+        haulShareResult = answer;
+      } else if (answer?.planId) {
+        // The run moved under it: show the new one, as the run's own button does.
+        haulPlanNotice = serverText(answer.message);
+        haulShareBusy = false;
+        loadJobContracts().catch(() => {});
+        return;
+      } else {
+        haulShareResult = null;
+        box.append(el('p', 'outward caption', serverText(answer?.message) || tx('could not share the run')));
+        return;
+      }
+    } catch {
+      box.append(el('p', 'outward caption', tx('could not share the run')));
+      return;
+    } finally {
+      haulShareBusy = false;
+    }
+    redraw();
+  });
+  actions.append(go);
+  box.append(actions);
+
+  if (haulShareResult) renderHaulShareResult(box, plan, haulShareResult);
+}
+
+function renderHaulShareResult(box, plan, share) {
+  const runs = share.runs || [];
+  const partial = runs.some((r) => r.gmPartial);
+  box.append(el('p', 'haul-share-summary', [
+    txn(runs.length, '{count} ship', '{count} ships'),
+    tx('longest run {gm} Gm', { gm: shareGm(share.longestGm) }),
+    tx('all ships {gm} Gm', { gm: shareGm(share.totalGm) }),
+    share.split ? tx('contracts may be split') : tx('each contract on one ship'),
+  ].join(' · ')));
+  box.append(el('p', 'muted caption', partial
+    ? tx('Straight lines between body centres, not the route flown; a hop with no position on file is not in the figure, so it is a floor.')
+    : tx('Straight lines between body centres, not the route flown. Two stops on one body count as no distance.')));
+
+  for (const run of runs) {
+    const card = el('article', 'job-card haul-share-run');
+    const head = el('div', 'job-head');
+    head.append(el('b', null, run.ship.name));
+    head.append(el('span', 'muted', [run.ship.hull, run.ship.scu ? tx('{scu} SCU', { scu: run.ship.scu }) : null].filter(Boolean).join(' · ')));
+    head.append(el('span', 'spacer'));
+    head.append(el('span', 'job-kind', run.stops.length
+      ? `${shareGm(run.gm)} Gm${run.gmPartial ? '+' : ''} · ${txn(run.contracts, '{count} contract', '{count} contracts')}`
+      : tx('nothing to do')));
+    card.append(head);
+
+    if (run.stops.length) {
+      const stops = el('ol', 'haul-share-stops');
+      run.stops.forEach((stop, index) => {
+        const li = el('li');
+        const where = el('div', 'haul-share-where');
+        where.append(el('b', null, stop.place));
+        if (stop.body) where.append(el('span', 'muted', ` · ${stop.body}`));
+        const startsHere = index === 0 && run.ship.start?.name && run.ship.start.name === stop.place;
+        where.append(el('span', 'muted haul-share-leg', startsHere ? tx('where the run starts')
+          : stop.legGm === null || stop.legGm === undefined ? tx('distance not on file')
+            : stop.legGm === 0 ? tx('same body') : `+${shareGm(stop.legGm)} Gm`));
+        li.append(where);
+        for (const a of stop.actions) {
+          const scu = a.scu ? tx('{scu} SCU', { scu: a.scu }) : tx('amount not printed');
+          li.append(el('div', a.kind === 'load' ? 'haul-load' : 'haul-unload',
+            `${a.kind === 'load' ? tx('Load') : tx('Unload')} ${scu}${a.commodity ? ` ${a.commodity}` : ''} · ${a.contractTitle}`));
+        }
+        if (stop.aboardScu > 0) li.append(el('div', 'muted haul-aboard', tx('aboard after: {scu} SCU known', { scu: stop.aboardScu })));
+        stops.append(li);
+      });
+      card.append(stops);
+      if (run.ship.scu && run.peakScu > 0)
+        card.append(el('p', 'muted caption', tx('Fullest: {peak} of {scu} SCU.', { peak: run.peakScu, scu: run.ship.scu })));
+
+      const buttons = el('div', 'haul-actions');
+      if (run.ship.me) {
+        const make = el('button', 'ghost', tx('Make it my flight plan'));
+        make.addEventListener('click', async () => {
+          make.disabled = true;
+          try {
+            const response = await fetch('/api/haul/share/trip', {
+              method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(haulShareBody(plan)),
+            });
+            const result = await response.json();
+            if (result?.id) {
+              make.textContent = `✓ ${result.title} — ${txn(result.stops, '{count} stop, tracked', '{count} stops, tracked')}`;
+              if (typeof loadTrips === 'function') loadTrips().catch(() => {});
+            } else {
+              make.textContent = serverText(result?.message) || tx('could not plan');
+              make.disabled = false;
+            }
+          } catch {
+            make.textContent = tx('failed');
+            make.disabled = false;
+          }
+        });
+        buttons.append(make);
+      } else {
+        const copy = el('button', 'ghost', tx('Copy for chat'));
+        copy.addEventListener('click', async () => {
+          try { await navigator.clipboard.writeText(haulShareChat(run)); copy.textContent = tx('Copied'); }
+          catch { copy.textContent = tx('could not copy'); }
+        });
+        buttons.append(copy);
+      }
+      card.append(buttons);
+    }
+    box.append(card);
+  }
+
+  for (const out of share.leftOut || [])
+    box.append(el('p', 'outward caption', `${out.contractTitle}: ${serverText(out.why)}`));
+  for (const note of share.notes || []) box.append(el('p', 'muted caption', serverText(note)));
 }
 
 /**

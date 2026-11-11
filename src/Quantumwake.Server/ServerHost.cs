@@ -152,6 +152,7 @@ public static partial class ServerHost
         builder.Services.AddSingleton<BackupBuilder>();
         builder.Services.AddSingleton<RestoreService>();
         builder.Services.AddSingleton<RunSettingsStore>();
+        builder.Services.AddSingleton<CrewStore>();
         builder.Services.AddSingleton<LanguageStore>();
         builder.Services.AddSingleton<EventTrackStore>();
         builder.Services.AddSingleton<ScreenSettingsStore>();
@@ -4405,6 +4406,76 @@ public static partial class ServerHost
             return Results.Ok(new { trip.Id, trip.Title, stops = trip.Stops.Count });
         });
 
+        // Hauling as a group (1.2.32): the wingmates, kept, and the open
+        // contracts shared out between the ships on this run so the whole of
+        // it is done soonest. Where each wingmate is comes with every ask,
+        // because it changes every run.
+        app.MapGet("/api/haul/crew", (CrewStore crew, LogLibrary lib) =>
+        {
+            var ships = lib.Community.Ships;
+            double? Hold(string? cls) => cls is not null && ships.TryGetValue(cls, out var s) && s.CargoScu > 0 ? s.CargoScu : null;
+            return Results.Ok(new
+            {
+                crew = crew.All.Select(m => new
+                {
+                    m.Id,
+                    m.Name,
+                    m.Hull,
+                    hullName = m.Hull is { } h && ships.TryGetValue(h, out var s) ? s.Name : null,
+                    scu = Hold(m.Hull),
+                }),
+                hulls = ships.Where(s => s.Value.IsSpaceship && s.Value.CargoScu > 0)
+                    .Select(s => new { @class = s.Key, s.Value.Name, scu = s.Value.CargoScu })
+                    .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase),
+                max = CrewStore.Max,
+            });
+        });
+
+        app.MapPost("/api/haul/crew", (CrewStore crew, CrewRequest body) =>
+            crew.Save(body.Id, body.Name, body.Hull) is { } mate
+                ? Results.Ok(mate)
+                : Results.BadRequest(new { message = $"A wingmate needs a name, and the list holds {CrewStore.Max}." }));
+
+        app.MapDelete("/api/haul/crew/{id}", (string id, CrewStore crew) =>
+            crew.Remove(id) ? Results.Ok() : Results.NotFound());
+
+        app.MapPost("/api/haul/share", (LiveSessionService live, ScreenReadingStore readings, LogLibrary lib, CrewStore crew, HaulShareRequest body) =>
+        {
+            var (share, plan, error) = ShareOut(live, readings, lib, crew, body);
+            if (error is not null) return error;
+            return Results.Ok(new
+            {
+                planId = HaulPlanner.Fingerprint(plan!),
+                share!.Runs,
+                share.LongestGm,
+                share.TotalGm,
+                share.Split,
+                share.LeftOut,
+                share.Notes,
+            });
+        });
+
+        // The pilot's own share, written into a tracked flight plan the way
+        // the whole run is by "Make it the flight plan".
+        app.MapPost("/api/haul/share/trip", (LiveSessionService live, ScreenReadingStore readings, LogLibrary lib, CrewStore crew, TripStore trips, HaulShareRequest body) =>
+        {
+            var (share, _, error) = ShareOut(live, readings, lib, crew, body);
+            if (error is not null) return error;
+
+            var mine = share!.Runs.FirstOrDefault(r => r.Ship.Me);
+            if (mine is null || mine.Stops.Count == 0)
+                return Results.BadRequest(new { message = "Your ship has nothing to do on this run." });
+
+            var title = $"Hauling run · my share, {share.Runs.Count} ships";
+            var trip = trips.Add(title, mine.Stops.Select(s => new TripStop("", s.PlaceId, s.Place, null, false, null)));
+            for (var i = 0; i < mine.Stops.Count && i < trip.Stops.Count; i++)
+                foreach (var action in mine.Stops[i].Actions)
+                    trips.AddAction(trip.Id, trip.Stops[i].Id, action.Kind, HaulLine(action), action.Scu, action.Scu is null ? null : "SCU",
+                        new RunActionLink(action.MissionId, action.LegIds));
+
+            return Results.Ok(new { trip.Id, trip.Title, stops = trip.Stops.Count });
+        });
+
         // The lines of the run the pilot ticked, merged into a plan - the one
         // open on the Itinerary page, or a new one for "new". Checked against
         // the run the page was showing, as the button above is, because the
@@ -4472,7 +4543,8 @@ public static partial class ServerHost
             var here = now.InGame ? HaulStart(now) : null;
             var start = here is null ? null : new TripStop("", here.Id, here.Name, null, false, null);
 
-            var order = TripOrder.Optimise(trip, Where, start, here is null ? null : new StopWhere(here.Body, here.System));
+            var order = TripOrder.Optimise(trip, Where, start, here is null ? null : new StopWhere(here.Body, here.System),
+                (a, b) => HaulShare.BodyGm(a, b, s => lib.Community.BodyPositions(s)));
             var moved = order.Where((stopId, i) => trip.Stops[i].Id != stopId).Count();
 
             return trips.Reorder(id, order) ? Results.Ok(new { id, moved }) : Results.Conflict(new { message = "The plan changed while it was being ordered. Try again." });
@@ -5408,6 +5480,47 @@ static WipeScope ScopeOf(List<string>? covers)
 }
 
 /// <summary>A run's load or unload as a plan's line reads it: the cargo, then the contract it is for.</summary>
+/// <summary>
+/// The open contracts shared between the pilot's ship and the wingmates
+/// asked for, or why not. Checked against the run the page showed, as the
+/// other haul buttons are, so a share is never of contracts nobody saw.
+/// </summary>
+static (SharePlan? Share, HaulPlan? Plan, IResult? Error) ShareOut(
+    LiveSessionService live, ScreenReadingStore readings, LogLibrary lib, CrewStore crew, HaulShareRequest body)
+{
+    var now = live.Current;
+    if (!now.InGame)
+        return (null, null, Results.BadRequest(new { message = "No session running, so no contracts to share." }));
+
+    var plan = HaulPlanner.Plan(live.LiveSummary.Contracts, readings.ContractFrames(), name => ResolvePlace(lib, name), HaulStart(now));
+    var current = HaulPlanner.Fingerprint(plan);
+    if (body.PlanId is { Length: > 0 } seen && seen != current)
+        return (null, plan, Results.Json(
+            new { message = "The run changed since this was shown - here it is again, have another look.", planId = current },
+            statusCode: StatusCodes.Status409Conflict));
+
+    var hulls = lib.Community.Ships;
+    double? Hold(string? cls) => cls is not null && hulls.TryGetValue(cls, out var s) && s.CargoScu > 0 ? s.CargoScu : null;
+    var start = HaulStart(now);
+    ResolvedPlace? Where(string? place) =>
+        string.IsNullOrWhiteSpace(place) ? start : ResolvePlace(lib, place) ?? new ResolvedPlace("", place.Trim(), null, null);
+
+    var asked = body.Ships ?? [];
+    var myClass = now.Ship is { Length: > 0 } name && VehicleClasses(lib).TryGetValue(name, out var cls) ? cls : null;
+    var ships = new List<ShareShip>
+    {
+        new("me", "You", now.Ship, Hold(myClass), Where(asked.FirstOrDefault(s => s.Id == "me")?.Place), Me: true),
+    };
+    var roster = crew.All.ToDictionary(m => m.Id, StringComparer.Ordinal);
+    foreach (var want in asked.Where(s => s.Id != "me").DistinctBy(s => s.Id))
+        if (roster.TryGetValue(want.Id, out var mate))
+            ships.Add(new ShareShip(mate.Id, mate.Name, mate.Hull is { } h && hulls.TryGetValue(h, out var s) ? s.Name : null,
+                Hold(mate.Hull), Where(want.Place)));
+
+    var share = HaulShare.Share(plan.Contracts, ships, body.Split, name => ResolvePlace(lib, name), s => lib.Community.BodyPositions(s));
+    return (share, plan, null);
+}
+
 static string HaulLine(HaulAction action) =>
     $"{action.Commodity ?? "cargo"} — {action.ContractTitle}{(action.Note is null ? "" : $" ({action.Note})")}";
 
@@ -6780,6 +6893,16 @@ public sealed record TripRequest(string? Title, List<TripStop>? Stops);
 /// a caller that never rendered one wants.
 /// </param>
 public sealed record HaulTripRequest(string? PlanId);
+
+/// <summary>Body of POST /api/haul/crew: a wingmate added, or changed when the id names one.</summary>
+/// <param name="Hull">The game's class id for their usual ship.</param>
+public sealed record CrewRequest(string? Id, string? Name, string? Hull);
+
+/// <summary>Body of POST /api/haul/share[/trip]: the run the page showed, who is flying it, and whether contracts may be split.</summary>
+public sealed record HaulShareRequest(string? PlanId, bool Split, List<ShareShipRequest>? Ships);
+
+/// <summary>One ship on the run: <c>me</c> or a crew id, and where it is now - a place name, or empty for where the log puts the pilot.</summary>
+public sealed record ShareShipRequest(string Id, string? Place);
 
 /// <summary>Body of POST /api/trips/{id}/haul: the run the page showed, and the lines ticked in it.</summary>
 public sealed record HaulMergeRequest(string? PlanId, List<HaulPickRef>? Picks);

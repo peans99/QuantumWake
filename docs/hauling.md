@@ -145,14 +145,60 @@ name and is listed as *not on the map yet* rather than dropped.
 
 ---
 
+## Sharing the run with a group (1.2.32)
+
+The run above is one pilot's. Under it, **Share the run** takes the same open
+contracts and shares them between the ships flying together, so the whole of
+it is done soonest: the longest single ship's run is what is made short,
+because a group waits on its slowest member.
+
+- **Who and where.** The pilot's own ship and location come from the log, as
+  for the run. Wingmates are a saved list (`crew.json`, name and usual hull,
+  at most twelve); where each one is now is asked on the page every run and
+  never kept. A hull sets the hold from the community ship data; a wingmate
+  with no hull set is not limited, and the page says so.
+- **Distance** is a straight line between body centres from the community
+  star map - the same measure the MFD map draws - in Gm. Two stops on one
+  body count as nothing, a stop with no position on file is counted as 25 Gm
+  when sharing and left out of the figure shown (which is then marked as a
+  floor), and another system is never measured. Checked against this
+  install's star map on 2026-11-11: Hurston to Crusader 31.9 Gm, Hurston to
+  microTech 38.4 Gm, Crusader to Daymar 0.06 Gm. The first check found that
+  the star map spells bodies its own way ("microTech") in an ordinary
+  case-sensitive dictionary, and a lower-cased lookup matched none of the 202
+  atlas places that have a body; the lookup ignores case now.
+- **Rules that always hold.** A contract's pickups come before its drops on
+  the ship that carries it; no ship is planned over its hold, and a leg bigger
+  than the hold becomes several hold-sized trips. Each contract stays on one
+  ship unless the pilot ticks *split* for the run (contracts shared with the
+  party), and then each leg can go its own way. A contract with a pickup
+  already made stays with the pilot, whose loading is the only loading the
+  log can see.
+- **The method** is cheapest insertion, longest contract first, then moving
+  contracts off the longest run while that shortens it. Not an optimum, and
+  not claimed as one. On the real star map, four contracts around Stanton
+  took one Hercules 171.8 Gm; with a Cutlass Black starting at New Babbage the
+  longest run fell to 89.4 Gm, the Cutlass's 46 SCU never exceeded.
+- **What comes out.** One card per ship in flying order, with each hop's
+  distance and the cargo aboard after each stop. The pilot's own share can be
+  written into a tracked flight plan; a wingmate's copies as numbered lines
+  for party chat. A contract with an end not read yet is listed as left out,
+  with the screenshot that would place it.
+
+With only the pilot ticked it is a distance-ordered version of the run
+above. *Put in order* on the Itinerary page uses the same distance since
+1.2.32: after the same-body and same-system rules, the nearest ready stop
+goes next.
+
 ## Not done, and why
 
 - **Which pickup is done.** The objective ids carry an index (`_0`, `_1`) that
   might follow the card's order. Nothing here checks it, so the plan shows
   *1 of 3 pickups done* on the contract and ticks no stop on its own.
-- **Distances between stops.** The atlas is places, not coordinates. A
-  `/showlocation` pin has coordinates, and one day the stops could be ordered
-  by them; today the order is by body and by what there is to do.
+- **Distances inside a body's space.** Since 1.2.32 hops between bodies are
+  measured, body centre to body centre; a station's own orbit, a Lagrange
+  point and the quantum route actually flown are not. A `/showlocation` pin
+  has coordinates and could one day place a stop more finely.
 - **The Offers tab.** The reader anchors on `ACCEPTED (n/m)`, so a frame of a
   contract not yet taken reads as nothing. Deliberate: a plan is for contracts
   the pilot holds.
