@@ -4595,6 +4595,9 @@ body:has(#view-map.active) .entity-drawer.map-place-open .entity-actions { displ
 /* A plan written for contracts that have since ended says so above its stops,
    and each such line carries the same word, so the stale half of a mixed
    plan can be told from the live half at a glance. */
+/* The ship a plan was sized for, beside the one flown (1.2.35). */
+.trip-ship { font-size: 12px; margin: 6px 0; }
+
 .trip-ended {
   display: flex;
   flex-wrap: wrap;

@@ -388,7 +388,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.34
+### 1.2.35
+
+**A plan remembers the ship it was planned for.** Trade runs, circuits and split loads now keep the ship the Routes planner was sizing for and the hold it assumed, with where that figure came from; hauling runs keep the ship the log had you in. The flight plan and the Itinerary show it, and when the log says you are flying something else, the plan says so - loads sized for a Hercules do not go in a Cutlass.
 
 **A suit you design becomes a kit.** The Armoury's suit calculator has **Save as kit**: the pieces worn, the guns holstered and everything carried are kept as a kit on the Loadout page, repeats counted. **Prepare it** then opens that kit's Prepare panel, which says what you already own and where the rest is sold, and from there it becomes a shopping list. Before, a kit could only be saved from what the log last saw you wearing.
 

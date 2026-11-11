@@ -158,4 +158,35 @@ public class TradeTweakTests
 
         Assert.Equal("""[{"placeId":"S","place":"Shubin","actions":[{"kind":"buy","text":"Quantanium","quantity":12,"unit":"SCU","price":88},{"kind":"buy","text":"Medpen","quantity":4,"unit":"units","price":1500}]},{"placeId":"A","place":"Area18","actions":[{"kind":"buy","text":"Ore pod (cSCU)","quantity":2,"unit":null,"price":null}]}]""", stops);
     }
+
+    /// <summary>A trade run keeps the ship it was planned for, with the hold it assumed (1.2.35).</summary>
+    [Fact]
+    public void A_trade_run_keeps_the_ship_it_was_planned_for()
+    {
+        var page = new Page();
+        page.Serve("/api/trips", "[]");
+        page.Do("""
+            libraryStats = { ships: [{ name: 'Crusader C2 Hercules', className: 'CRUS_Starlifter_C2', reference: { cargoScu: 696 } }] };
+            await saveTradeRoute({ commodity: 'Agricium', buyAt: 'Lorville', units: 96, buyPrice: 1234 }, 'Area18', 'A', 1656);
+            """);
+
+        const string sent = "JSON.parse(__fetch.calls.filter(c => c.url === '/api/trips' && c.body).pop().body).ship";
+        Assert.Equal("Crusader C2 Hercules", page.Text($"{sent}.name"));
+        Assert.Equal(696, page.Count($"{sent}.scu"));
+        Assert.Equal("community", page.Text($"{sent}.scuSource"));
+    }
+
+    [Fact]
+    public void The_plan_says_when_the_ship_flown_is_not_the_one_planned()
+    {
+        var page = new Page();
+        page.Do("nowState = { inGame: true, ship: 'Drake Cutlass Black' };");
+        var other = page.Text("tripShipNotice({ ship: { name: 'Crusader C2 Hercules', scu: 696, scuSource: 'community' } }).textContent");
+        Assert.Contains("Planned for Crusader C2 Hercules · 696 SCU (reference data)", other);
+        Assert.Contains("you are flying the Drake Cutlass Black now", other);
+
+        page.Do("nowState = { inGame: true, ship: 'Crusader C2 Hercules' };");
+        Assert.Contains("flying it now", page.Text("tripShipNotice({ ship: { name: 'Crusader C2 Hercules', scu: 696 } }).textContent"));
+        Assert.True(page.Truth("tripShipNotice({ stops: [] }) === null"));
+    }
 }

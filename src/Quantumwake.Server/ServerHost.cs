@@ -4392,7 +4392,7 @@ public static partial class ServerHost
                     statusCode: StatusCodes.Status409Conflict);
 
             var title = $"Hauling run · {plan.Contracts.Count} contract{(plan.Contracts.Count == 1 ? "" : "s")}";
-            var trip = trips.Add(title, plan.Stops.Select(s => new TripStop("", s.PlaceId, s.Place, s.Note, false, null)));
+            var trip = trips.Add(title, plan.Stops.Select(s => new TripStop("", s.PlaceId, s.Place, s.Note, false, null)), LoggedShip(now, lib));
 
             for (var i = 0; i < plan.Stops.Count && i < trip.Stops.Count; i++)
             {
@@ -4467,7 +4467,8 @@ public static partial class ServerHost
                 return Results.BadRequest(new { message = "Your ship has nothing to do on this run." });
 
             var title = $"Hauling run · my share, {share.Runs.Count} ships";
-            var trip = trips.Add(title, mine.Stops.Select(s => new TripStop("", s.PlaceId, s.Place, null, false, null)));
+            var trip = trips.Add(title, mine.Stops.Select(s => new TripStop("", s.PlaceId, s.Place, null, false, null)),
+                mine.Ship.Hull is { } hull ? new PlannedShip(hull, null, mine.Ship.Scu, mine.Ship.Scu is null ? null : "log") : null);
             for (var i = 0; i < mine.Stops.Count && i < trip.Stops.Count; i++)
                 foreach (var action in mine.Stops[i].Actions)
                     trips.AddAction(trip.Id, trip.Stops[i].Id, action.Kind, HaulLine(action), action.Scu, action.Scu is null ? null : "SCU",
@@ -4551,7 +4552,7 @@ public static partial class ServerHost
         });
 
         app.MapPost("/api/trips", (TripStore trips, TripRequest body) =>
-            Results.Ok(trips.Add(body.Title, body.Stops)));
+            Results.Ok(trips.Add(body.Title, body.Stops, body.Ship)));
 
         // One stop added from the map, a route or a list, into whichever plan
         // the player is filling.
@@ -5519,6 +5520,15 @@ static (SharePlan? Share, HaulPlan? Plan, IResult? Error) ShareOut(
 
     var share = HaulShare.Share(plan.Contracts, ships, body.Split, name => ResolvePlace(lib, name), s => lib.Community.BodyPositions(s));
     return (share, plan, null);
+}
+
+/// <summary>The ship the log has the pilot in, with the reference's hold: what a haul run made from the log is sized against.</summary>
+static PlannedShip? LoggedShip(NowState now, LogLibrary lib)
+{
+    if (now.Ship is not { Length: > 0 } name) return null;
+    var cls = VehicleClasses(lib).TryGetValue(name, out var c) ? c : null;
+    double? hold = cls is not null && lib.Community.Ships.TryGetValue(cls, out var s) && s.CargoScu > 0 ? s.CargoScu : null;
+    return new PlannedShip(name, cls, hold, hold is null ? null : "log");
 }
 
 static string HaulLine(HaulAction action) =>
@@ -6882,7 +6892,7 @@ public sealed record MapServicePlace(string PlaceId, IReadOnlyList<string> Servi
 public sealed record WipeRequest(DateTimeOffset? At, string? Patch, List<string>? Covers);
 
 /// <summary>Body of POST /api/trips.</summary>
-public sealed record TripRequest(string? Title, List<TripStop>? Stops);
+public sealed record TripRequest(string? Title, List<TripStop>? Stops, PlannedShip? Ship = null);
 
 /// <summary>
 /// Body of POST /api/haul/plan/trip.

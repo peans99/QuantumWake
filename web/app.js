@@ -19766,7 +19766,7 @@ async function loadRouteCircuits(query) {
     save.addEventListener('click', () => {
       rememberRoute({ commodity: `${circuit.commodity} / ${circuit.returnCommodity}`, buyAt: circuit.buyAt,
         sellAt: circuit.returnSellAt, totalProfit: circuit.totalProfit }, 'circuit');
-      planTrip(`${circuit.commodity} ⇄ ${circuit.returnCommodity}`, circuitStops(circuit));
+      planTrip(`${circuit.commodity} ⇄ ${circuit.returnCommodity}`, circuitStops(circuit), plannedShip());
     });
     card.append(save);
     list.append(card);
@@ -19845,7 +19845,7 @@ function saveTradeRoute(route, sellAt, sellAtId, sellPrice, label = '') {
       place: sellAt,
       actions: [tradeAction('sell', route.commodity, route.units, sellPrice)],
     },
-  ]);
+  ], plannedShip());
 }
 
 function saveSplitTradeRoute(route, portions) {
@@ -19858,7 +19858,7 @@ function saveSplitTradeRoute(route, portions) {
       actions: [tradeAction('buy', route.commodity, units, route.buyPrice)] },
     ...portions.map((portion) => ({ placeId: portion.placeId || placeIdForTerminal(portion.terminal), place: portion.terminal,
       actions: [tradeAction('sell', route.commodity, portion.units, portion.sellPrice)] })),
-  ]);
+  ], plannedShip());
 }
 
 /* ---------- rep runs ----------
@@ -32304,8 +32304,43 @@ async function addStop(placeId, place, note) {
   showTripPanel();
 }
 
+/**
+ * The ship the Routes planner is sizing loads for, as a plan keeps it
+ * (1.2.35): its name, class and the hold with where that figure came from.
+ * Null on foot, or with nothing chosen.
+ */
+function plannedShip(candidate = activePlanningShip()) {
+  if (!candidate?.ship?.name) return null;
+  const scu = planningCargo(candidate);
+  return { name: candidate.ship.name, class: candidate.ship.className || null,
+    scu: scu > 0 ? scu : null, scuSource: scu > 0 ? planningCargoSource(candidate) : null };
+}
+
+/**
+ * What the plan was sized for, beside what the log says is being flown.
+ * Null for a plan that never said. A different ship is pointed out, with the
+ * hold the plan assumed, because loads sized to a Hercules do not go in a
+ * Cutlass; the same ship is said quietly.
+ */
+function tripShipNotice(trip) {
+  const ship = trip?.ship;
+  if (!ship?.name) return null;
+  const SOURCES = { community: 'reference data', screenshot: 'from a screenshot', manual: 'entered by you', log: 'reference data' };
+  const hold = ship.scu ? `${tx('{scu} SCU', { scu: fmtInt(ship.scu) })}${ship.scuSource ? ` (${tx(SOURCES[ship.scuSource] || ship.scuSource)})` : ''}` : tx('hold not known');
+  const box = el('div', 'trip-ship');
+  box.append(el('span', 'muted', tx('Planned for {ship} · {hold}', { ship: ship.name, hold })));
+  const flying = nowState?.inGame ? nowState?.ship : null;
+  if (flying) {
+    const same = planningShipKey(flying) === planningShipKey(ship.name);
+    box.append(el('span', same ? 'muted' : 'outward', same
+      ? ` · ${tx('flying it now')}`
+      : ` · ${tx('you are flying the {ship} now: check the loads fit', { ship: flying })}`));
+  }
+  return box;
+}
+
 /** Starts a plan from a list of stops - a trade run, or a shopping trip. */
-async function planTrip(title, stops) {
+async function planTrip(title, stops, ship = null) {
   setContextFocus({
     kind: 'flight-plan',
     title,
@@ -32317,7 +32352,7 @@ async function planTrip(title, stops) {
   await fetch('/api/trips', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, stops }),
+    body: JSON.stringify({ title, stops, ship }),
   });
 
   await loadTrips();
@@ -32543,6 +32578,8 @@ function renderTripPanel() {
 
   const trade = tradeRunSummary(trip);
   if (trade) body.append(trade);
+  const shipNote = tripShipNotice(trip);
+  if (shipNote) body.append(shipNote);
 
   const next = nextStop(trip);
 
@@ -33091,6 +33128,8 @@ function renderItineraryPlan(main, trip) {
 
   const ended = tripEndedNotice(trip);
   if (ended) main.append(ended);
+  const shipNote = tripShipNotice(trip);
+  if (shipNote) main.append(shipNote);
 
   const removed = tripRemovedLog(trip);
   if (removed) main.append(removed);
