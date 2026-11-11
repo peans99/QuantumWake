@@ -236,16 +236,19 @@ function showHeard(heard) {
   const fresh = next.until !== callout.until;
   callout = next;
   if (!fresh) return;
-  drawCallout(); render();
+  render();
   clearTimeout(calloutTimer);
-  calloutTimer = setTimeout(() => { drawCallout(); render(); }, QwMfd.CALLOUT_SHOW + 50);
+  calloutTimer = setTimeout(render, QwMfd.CALLOUT_SHOW + 50);
 }
 function drawCallout() {
   const card = byId('callout');
   if (!card) return;
   const showing = followsHere() && QwMfd.calloutShowing(callout, Date.now());
+  const strip = QwMfd.calloutStrip(screen);
   card.hidden = !showing;
+  card.classList.toggle('strip', strip);
   byId('mfd').classList.toggle('calling', showing);
+  byId('mfd').classList.toggle('calling-strip', showing && strip);
   if (!showing) return;
   const [newest, ...earlier] = callout.lines;
   byId('callout-label').textContent = say('CALLOUT');
@@ -320,6 +323,9 @@ function render() {
   dozing = QwMfd.dozed(sleepAfterMinutes, Date.now() - lastPress) && !QwMfd.calloutShowing(callout, Date.now());
   byId('mfd').style.filter = `brightness(${dozing ? brightness * QwMfd.DOZE : brightness})`;
   byId('mfd').style.setProperty('--text-scale', textScale);
+  // Card or strip follows the page, so a frame the fight turns to Target
+  // mid-callout swaps one for the other.
+  drawCallout();
   const where = QwMfd.pageLabel(screen, { extra, offset });
   byId('title').textContent = say(QwMfd.title(screen))
     + (details ? ` · ${say('details')}` : '') + (where ? ' · ' + where : '');

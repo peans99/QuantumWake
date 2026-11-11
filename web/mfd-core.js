@@ -665,6 +665,13 @@ window.QwMfd = (() => {
     return { seen: newest, lines: [...fresh.map(h => ({ text: h.text, at: h.at })), ...still].slice(0, 3), until: now + CALLOUT_SHOW };
   };
   const calloutShowing = (memory, now) => !!memory && memory.until > now && memory.lines.length > 0;
+  /* On the pages read live in the moment - Target, Callouts, Charge - the
+     line goes in a strip where the breadcrumb and title were, and the
+     readings stay in sight (1.2.30). A recorded fight with a line every four
+     or five seconds kept the full card up from the lock to the kill, so the
+     hull, range and speed the Target page exists for were never seen. */
+  const CALLOUT_STRIP_PAGES = ['target', 'calls', 'charge'];
+  const calloutStrip = screen => CALLOUT_STRIP_PAGES.includes(screen);
 
   const panelRole = panel => panel === 'right'
     ? { label: 'MISSION', defaultScreen: 'task' }
@@ -1100,7 +1107,7 @@ window.QwMfd = (() => {
         const combat = live.status?.combat;
         const target = combat?.target;
         if (!target) return [['NO TARGET', combat?.locks
-          ? say('{locks} locks this session, {hostile} hostile', { locks: combat.locks, hostile: combat.hostileLocks || 0 })
+          ? sayn(combat.locks, '{count} lock this session, {hostile} hostile', '{count} locks this session, {hostile} hostile', { hostile: combat.hostileLocks || 0 })
           : say('Lock a ship and its panel is read every second.')]];
         /* Odds for an UNKNOWN are weights from the signature, the ships the
            log saw nearby and the faction - a guess, labelled ROUGH ODDS. */
@@ -1279,7 +1286,7 @@ window.QwMfd = (() => {
         : sayn(respawn.of, '{agreeing} of {count} death woke there · the game never states a regen point', '{agreeing} of {count} deaths woke there · the game never states a regen point', { agreeing: respawn.agreeing }) };
   }
   return { targetSteps, followWant, followStep, followIdle, FOLLOW_RETURN, FOLLOW_HANDS_OFF, TARGET_GONE,
-    calloutStep, calloutIdle, calloutShowing, CALLOUT_SHOW, say, sayn, fit, inset, defaultInset, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, radarFocus, radarHere, routeLine, panelRole, missionCard, makerOf, makers, dormant, actionLine, targetPicture, sameTask, taskId, rowIcon,
+    calloutStep, calloutIdle, calloutShowing, calloutStrip, CALLOUT_SHOW, say, sayn, fit, inset, defaultInset, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, radarFocus, radarHere, routeLine, panelRole, missionCard, makerOf, makers, dormant, actionLine, targetPicture, sameTask, taskId, rowIcon,
     groups, menuNodes, menuNode, parent, title, validScreen, menuItems, previewPage, trail, resolveCommand, restoreScreen, readingView,
     pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, dozed, DOZE, prettyItem, pageOf, pageStep, pageLabel, LEDGER_PAGE, BRIGHTNESS, brightnessLevel, brightnessAt,
     cycleBrightness, stepBrightness, OSBS, BUTTONS };

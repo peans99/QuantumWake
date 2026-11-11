@@ -202,6 +202,18 @@ public class MfdFollowTests
         Assert.Equal("task", e.Evaluate("step(null, 'charge', t0 + 90000)").AsString());
     }
 
+    /// <summary>
+    /// The pages read live in the moment take the strip, so their readings
+    /// stay in sight; every other page takes the full card.
+    /// </summary>
+    [Fact]
+    public void Live_pages_take_the_strip_and_the_rest_the_card()
+    {
+        var e = Engine();
+        Assert.True(True(e, "['target', 'calls', 'charge'].every(QwMfd.calloutStrip)"));
+        Assert.False(True(e, "['nav', 'task', 'map', 'home', 'ship'].some(QwMfd.calloutStrip)"));
+    }
+
     [Fact]
     public void What_was_said_before_the_frame_opened_is_not_shown()
     {

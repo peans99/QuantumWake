@@ -262,3 +262,14 @@ h1 { font-size: clamp(15px, 4cqw, 34px); letter-spacing: .06em; margin: 0 0 4%; 
 #callout-earlier li::before { content: '\2022\00a0'; color: var(--dim); }
 @keyframes callout-in { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { #callout { animation: none; } }
+
+/* The strip (1.2.30): on Target, Callouts and Charge the line sits in the
+   flow under the header, where the breadcrumb and title were, so nothing
+   the page reads is covered and the readings move by a line at most. */
+.display > header { order: -2; }
+#callout.strip { position: static; inset: auto; order: -1; flex: 0 0 auto; justify-content: flex-start; gap: .25em;
+  margin: 2% 0 1.5%; padding: 1.4% 3% 1.6%; border-left-width: 3px; box-shadow: inset 0 0 18px rgba(53, 200, 240, .14); }
+#callout.strip #callout-text { font-size: calc(clamp(11px, 3.1cqw, 24px) * var(--text-scale)); line-height: 1.15;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+#callout.strip #callout-earlier { display: none; }
+#mfd.calling-strip #breadcrumb, #mfd.calling-strip #title { display: none; }

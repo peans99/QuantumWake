@@ -388,7 +388,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.29
+### 1.2.30
+
+**Callouts no longer hide the Target page.** On Target, Callouts and Charge, a spoken line now appears in a slim strip where the page title was, so the locked ship, its hull and its range stay in sight through a busy fight. Other pages still get the large card. A recorded fight with a line every four or five seconds showed why: the large card stayed up from the lock to the kill, and the Target page underneath was never seen. Also fixed: one lock now reads "1 lock this session", not "1 locks".
 
 **English only.** The French translation is gone. Few people read the app in French, and keeping it complete meant translating every new sentence before a change could ship. If you had French chosen, the app opens in English after this update and there is nothing to change; the language picker in Settings → General is gone with it. Names from the game were always English and are unchanged.
 

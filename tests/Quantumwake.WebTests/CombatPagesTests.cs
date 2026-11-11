@@ -195,6 +195,14 @@ public class CombatPagesTests
             e.Evaluate("JSON.stringify(QwMfd.rows(QwMfd.pageIds.indexOf('target'),{},null,false,{extra:{live:{...live,status:{combat:{...live.status.combat,target:null}}}}}))").AsString());
     }
 
+    /// <summary>One lock is "1 lock" - the recorded fight read "1 locks this session" (1.2.30).</summary>
+    [Fact]
+    public void One_lock_is_counted_in_the_singular()
+    {
+        Assert.Contains("1 lock this session, 1 hostile",
+            Mfd().Evaluate("JSON.stringify(QwMfd.rows(QwMfd.pageIds.indexOf('target'),{},null,false,{extra:{live:{...live,status:{combat:{...live.status.combat,target:null,locks:1,hostileLocks:1}}}}}))").AsString());
+    }
+
     [Fact]
     public void The_callouts_page_lists_what_was_said_newest_first()
     {

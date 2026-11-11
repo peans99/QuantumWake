@@ -37227,7 +37227,7 @@ function renderNowTarget() {
   $('#now-target-label').textContent = combat.combat ? tx('Target · in combat') : tx('Target');
   $('#now-target').textContent = targetTitle(target);
   $('#now-target-detail').textContent = target ? targetDetail(target)
-    : tx('No target held · {locks} locks this session, {hostile} hostile', { locks: combat.locks || 0, hostile: combat.hostileLocks || 0 });
+    : txn(combat.locks || 0, 'No target held · {count} lock this session, {hostile} hostile', 'No target held · {count} locks this session, {hostile} hostile', { hostile: combat.hostileLocks || 0 });
   const odds = $('#now-target-odds');
   if (odds) {
     odds.textContent = targetOdds(target);
