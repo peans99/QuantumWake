@@ -319,7 +319,7 @@ public static partial class ServerHost
 
     /// <summary>A hull's display name: the install's text, then the community's, then the class.</summary>
     static string ShipName(LogLibrary lib, string cls) =>
-        lib.GameCommodities.Vehicles.TryGetValue(cls, out var v) && v.Name is { Length: > 0 } n && !n.StartsWith('@') ? n
+        lib.GameCommodities.Vehicle(cls)?.Name is { Length: > 0 } n && !n.StartsWith('@') ? n
         : lib.Community.Ships.TryGetValue(cls, out var s) ? s.Name
         : lib.ItemName(cls);
 

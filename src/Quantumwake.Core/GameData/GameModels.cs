@@ -76,7 +76,10 @@ public sealed class GameModelCatalogue
         Palettes = new(palettes, StringComparer.OrdinalIgnoreCase);
     }
 
-    public ModelEntity? Find(string cls) => Entities.GetValueOrDefault(cls);
+    /// <summary>The entity by class, or its <c>_GS</c> rework when the patch deleted it (<see cref="GoldStandard"/>).</summary>
+    public ModelEntity? Find(string cls) =>
+        Entities.GetValueOrDefault(cls)
+        ?? (GoldStandard.Successor(cls, Entities.ContainsKey) is { } rework ? Entities[rework] : null);
 
     private static readonly string[] Folders = ["objects/spaceships/", "objects/vehicles/", "objects/fps_weapons/", "objects/characters/"];
 
