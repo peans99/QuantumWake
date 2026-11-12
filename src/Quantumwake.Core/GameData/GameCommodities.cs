@@ -126,9 +126,25 @@ public sealed partial class GameCommodities
     /// <summary>Wikelo's emporium: every trade, its price and its reward, as the install states them.</summary>
     public GameWikeloCatalogue Wikelo => _wikelo;
 
-    /// <summary>What the install says a vehicle class is - name, size and silhouette - or null.</summary>
+    /// <summary>
+    /// What the install says a vehicle class is - name, size and silhouette - or null.
+    /// A class the patch deleted answers with its <c>_GS</c> rework; see <see cref="GoldStandard"/>.
+    /// </summary>
     public GameVehicle? Vehicle(string? vehicleClass) =>
-        vehicleClass is { Length: > 0 } && _vehicles.TryGetValue(vehicleClass, out var vehicle) ? vehicle : null;
+        vehicleClass is not { Length: > 0 } ? null
+        : _vehicles.TryGetValue(vehicleClass, out var vehicle) ? vehicle
+        : GoldStandard.Successor(vehicleClass, _vehicles.ContainsKey) is { } rework ? _vehicles[rework]
+        : null;
+
+    /// <summary>
+    /// One hull's cargo grids, or null - with the same stand-in as <see cref="Vehicle"/>
+    /// for a class the patch deleted.
+    /// </summary>
+    public InstallCargoHull? CargoHull(string? vehicleClass) =>
+        vehicleClass is not { Length: > 0 } ? null
+        : _cargoHulls.TryGetValue(vehicleClass, out var hull) ? hull
+        : GoldStandard.Successor(vehicleClass, _cargoHulls.ContainsKey) is { } rework ? _cargoHulls[rework]
+        : null;
 
     /// <summary>Every vehicle the install describes, by class.</summary>
     public IReadOnlyDictionary<string, GameVehicle> Vehicles => _vehicles;

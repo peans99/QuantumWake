@@ -3170,7 +3170,7 @@ public static partial class ServerHost
             foreach (var (id, info) in lib.Community.All) { commodities.TryAdd(id, info.Name); commodities.TryAdd(info.Name, info.Name); }
             foreach (var (id, name) in lib.GameCommodities.All) { commodities.TryAdd(id, name); commodities.TryAdd(name, name); }
             string? KindOf(string cls) =>
-                lib.GameCommodities.Vehicles.ContainsKey(cls) || lib.Community.Ships.ContainsKey(cls) ? "ship"
+                lib.GameCommodities.Vehicle(cls) is not null || lib.Community.Ships.ContainsKey(cls) ? "ship"
                 : commodities.ContainsKey(cls) ? "commodity"
                 : items.Contains(cls) ? "item"
                 : null;
@@ -6558,7 +6558,7 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
             ships = loot.ShipsFor(item).Select(s => new
             {
                 s.Ship,
-                name = lib.GameCommodities.Vehicles.TryGetValue(s.Ship, out var v) && v.Name is { Length: > 0 } vn ? vn : lib.ItemName(s.Ship),
+                name = lib.GameCommodities.Vehicle(s.Ship)?.Name is { Length: > 0 } vn ? vn : lib.ItemName(s.Ship),
                 crew = GameShipLoot.Crew(s.Ship),
                 s.Count
             }),
@@ -6612,10 +6612,10 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
     /// </remarks>
     static CargoHullView? CargoHull(LogLibrary lib, string className)
     {
-        var name = lib.GameCommodities.Vehicles.TryGetValue(className, out var vehicle) && vehicle.Name is { Length: > 0 } vn ? vn : null;
+        var name = lib.GameCommodities.Vehicle(className)?.Name is { Length: > 0 } vn ? vn : null;
         var community = lib.Community.GarageShip(className);
 
-        if (lib.GameCommodities.CargoHulls.TryGetValue(className, out var hull) && hull.Grids.Count > 0
+        if (lib.GameCommodities.CargoHull(className) is { } hull && hull.Grids.Count > 0
             && !(community?.CargoGrids is { Count: > 0 } dump && dump.Sum(g => g.Scu) > hull.Scu))
             return new CargoHullView(className, name ?? community?.Name ?? className, hull.Scu, hull.Grids, hull.Spaceship, "install");
 

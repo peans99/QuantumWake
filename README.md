@@ -419,6 +419,20 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
+### 1.2.39
+
+- **Older Constellations and the Hammerhead keep their 3D model, size and
+  cargo hold after Star Citizen 4.10.3.** The patch deleted the original
+  Constellation Andromeda, Aquila and Phoenix Emerald and the Aegis Hammerhead,
+  keeping only their reworked versions, while every log written before it
+  names the originals. Sessions flown in those ships now use the reworked
+  hull's figures, picture and model instead of showing none.
+- **4.10.3's new ships are read straight from the game:** the Anvil
+  Liberator, RSI Galaxy, Gatac Hyun and Drake Marauder have their size, cargo
+  hold and 3D model, and the Hyun's mining laser and salvage heads appear on
+  the Mining and Salvage pages. Their Garage sheets follow once the community
+  dataset publishes 4.10.3.
+
 ### 1.2.38
 
 - **The Stream Deck page opens properly again from a refresh or a link.**
