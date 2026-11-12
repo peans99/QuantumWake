@@ -1,100 +1,145 @@
-<img src="web/assets/emblem.jpg" width="120" align="right" alt="Quantum Wake emblem">
+<p align="center">
+  <img src="web/assets/emblem.jpg" width="110" alt="Quantum Wake emblem">
+</p>
 
-# Quantum Wake
+<h1 align="center">Quantum Wake</h1>
 
-**A private Star Citizen logbook for Windows.**
+<p align="center">
+  <b>Your Star Citizen flights, ships, contracts and plans, on one dashboard.</b><br>
+  It reads the logs and game files already on your PC. No account, nothing uploaded.
+</p>
 
-Quantum Wake reads the logs Star Citizen already writes and turns them into a
-personal record of your flights: where you went, what you flew, contracts,
-trades, ships, gear and the things you choose to plan next. It runs on your PC;
-there is no account and no required online service.
+<p align="center">
+  <a href="https://github.com/peans99/QuantumWake/releases/latest"><img alt="Download for Windows" src="https://img.shields.io/badge/Download-Windows_10_%2F_11-0078D6?style=for-the-badge"></a>
+  <a href="#linux"><img alt="Also on Linux" src="https://img.shields.io/badge/Also_on-Linux-46617a?style=for-the-badge"></a>
+</p>
 
-[![CI](https://github.com/peans99/QuantumWake/actions/workflows/ci.yml/badge.svg)](https://github.com/peans99/QuantumWake/actions/workflows/ci.yml)
-![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
-![Local data](https://img.shields.io/badge/data-stays%20local-46617a)
+<p align="center">
+  <a href="https://github.com/peans99/QuantumWake/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/peans99/QuantumWake/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="Data stays local" src="https://img.shields.io/badge/data-stays%20local-46617a">
+</p>
 
-> **Your game, your data.** Quantum Wake reads your logs and game files locally.
-> Network features such as current market prices are off until you turn them on.
+<p align="center">
+  <img src="docs/images/tour.gif" width="900" alt="A tour of the dashboard: Now, Map, the 3D view, the Command deck, the Itinerary, the fleet in 3D, the Market, armour in 3D and Contracts">
+</p>
 
-## See it in use
+## Pick up where you left off
 
 <table>
   <tr>
-    <td width="33%"><a href="docs/images/now.png"><img src="docs/images/now.png" alt="The Now page"></a><br><sub><b>Now</b><br>Start with the last known location, ship, wake-up point and this session.</sub></td>
-    <td width="33%"><a href="docs/images/map.png"><img src="docs/images/map.png" alt="The map"></a><br><sub><b>Map</b><br>Find places you have visited and nearby refuel, repair or clinic services.</sub></td>
-    <td width="33%"><a href="docs/images/itinerary.png"><img src="docs/images/itinerary.png" alt="The Itinerary page"></a><br><sub><b>Itinerary</b><br>Lay out a flight plan stop by stop, and merge a hauling run into it.</sub></td>
+    <td width="50%" valign="top"><a href="docs/images/now.png"><img src="docs/images/now.png" alt="The Now page"></a><br><b>Now</b> · your last place, ship and wake-up point</td>
+    <td width="50%" valign="top"><a href="docs/images/map.png"><img src="docs/images/map.png" alt="The map"></a><br><b>Map</b> · everywhere you have been, and the nearest refuel, repair or clinic</td>
+  </tr>
+</table>
+
+## Plan the next run
+
+<table>
+  <tr>
+    <td width="50%" valign="top"><a href="docs/images/operations.png"><img src="docs/images/operations.png" alt="The Command deck"></a><br><b>Command deck</b> · work under way, and everything you can start</td>
+    <td width="50%" valign="top"><a href="docs/images/itinerary.png"><img src="docs/images/itinerary.png" alt="The Itinerary"></a><br><b>Itinerary</b> · a flight plan stop by stop, hauling runs merged in</td>
   </tr>
   <tr>
-    <td width="33%"><a href="docs/images/ship3d.png"><img src="docs/images/ship3d.png" alt="A ship in the 3D view"></a><br><sub><b>3D view</b><br>Any ship, vehicle, gun or armour from your install's own models, with its loadout fitted and swappable.</sub></td>
-    <td width="33%"><a href="docs/images/fleet3d.png"><img src="docs/images/fleet3d.png" alt="The fleet in 3D"></a><br><sub><b>Fleet in 3D</b><br>The ships you own side by side on one floor, smallest first, each in its own paint.</sub></td>
-    <td width="33%"><a href="docs/images/armour3d.png"><img src="docs/images/armour3d.png" alt="An armour set in 3D"></a><br><sub><b>Armour in 3D</b><br>A whole suit in one colourway, opened from any helmet, torso, arm or leg piece.</sub></td>
+    <td valign="top"><a href="docs/images/routes.png"><img src="docs/images/routes.png" alt="Routes"></a><br><b>Routes</b> · cargo runs sized to your ship, rep runs to the next rank</td>
+    <td valign="top"><a href="docs/images/reputation.png"><img src="docs/images/reputation.png" alt="Reputation"></a><br><b>Reputation</b> · your rank with every organisation</td>
+  </tr>
+</table>
+
+## Ships and gear in 3D, from your own install
+
+<table>
+  <tr>
+    <td width="50%" valign="top"><a href="docs/images/ship3d.png"><img src="docs/images/ship3d.png" alt="A ship in the 3D view"></a><br><b>3D view</b> · any ship, vehicle, gun or armour, loadout swappable</td>
+    <td width="50%" valign="top"><a href="docs/images/fleet3d.png"><img src="docs/images/fleet3d.png" alt="The fleet in 3D"></a><br><b>Your fleet</b> · every ship you own on one floor, in its own paint</td>
+  </tr>
+  <tr>
+    <td valign="top"><a href="docs/images/armour3d.png"><img src="docs/images/armour3d.png" alt="An armour set in 3D"></a><br><b>Armour</b> · a whole suit in one colourway</td>
+    <td valign="top"><a href="docs/images/compare.png"><img src="docs/images/compare.png" alt="Ships compared by size"></a><br><b>Size comparison</b> · ships side by side at real scale</td>
+  </tr>
+</table>
+
+Models come from your game's `Data.p4k`, so they match the patch you play. Nothing is downloaded.
+
+## In the cockpit
+
+<a href="docs/images/cockpit.png"><img src="docs/images/cockpit.png" alt="The overlay, the Cougar MFD pages, a Stream Deck profile and voice commands"></a>
+
+An overlay over the game, pages for Cougar MFDs, a Stream Deck profile built from your own keybindings, and voice commands. All optional, all Windows.
+
+## Your play, counted
+
+<table>
+  <tr>
+    <td width="50%" valign="top"><a href="docs/images/contracts.png"><img src="docs/images/contracts.png" alt="Contracts"></a><br><b>Contracts</b> · every contract by issuer: finished, dropped, failed</td>
+    <td width="50%" valign="top"><a href="docs/images/sessions.png"><img src="docs/images/sessions.png" alt="Sessions"></a><br><b>Sessions</b> · every session with its ship, jumps, contracts and server</td>
+  </tr>
+  <tr>
+    <td valign="top"><a href="docs/images/ledger.png"><img src="docs/images/ledger.png" alt="The Ledger"></a><br><b>Ledger</b> · money in and out, as the logs record it</td>
+    <td valign="top"><a href="docs/images/market.png"><img src="docs/images/market.png" alt="The Market"></a><br><b>Market</b> · where each commodity sells, beside your own trades</td>
+  </tr>
+</table>
+
+## Kit, parts and game data
+
+<table>
+  <tr>
+    <td width="50%" valign="top"><a href="docs/images/loadout.png"><img src="docs/images/loadout.png" alt="The Loadout"></a><br><b>Loadout</b> · what you carry, as the log last saw it</td>
+    <td width="50%" valign="top"><a href="docs/images/garage.png"><img src="docs/images/garage.png" alt="The Garage"></a><br><b>Garage</b> · a ship's fitted parts and what they add up to</td>
+  </tr>
+  <tr>
+    <td valign="top"><a href="docs/images/missions.png"><img src="docs/images/missions.png" alt="Missions"></a><br><b>Missions</b> · every contract in the game files, with issuer and pay</td>
+    <td valign="top"><a href="docs/images/loot.png"><img src="docs/images/loot.png" alt="Loot"></a><br><b>Loot</b> · where any item drops, from the game's own loot tables</td>
   </tr>
 </table>
 
 <details>
-<summary>More pages</summary>
+<summary><b>More pages</b>: Armoury, suit calculator, climate, mining, encounters, events, logbook, crew, fleet, 3D models, Stream Deck</summary>
 
 <table>
   <tr>
-    <td width="33%"><a href="docs/images/operations.png"><img src="docs/images/operations.png" alt="The Command deck"></a><br><sub><b>Command deck</b><br>Shopping lists, checklists, projects and the contracts open in this session.</sub></td>
-    <td width="33%"><a href="docs/images/routes.png"><img src="docs/images/routes.png" alt="The Routes page"></a><br><sub><b>Routes</b><br>Find a cargo run sized to your ship, or a rep run to the next rank.</sub></td>
-    <td width="33%"><a href="docs/images/reputation.png"><img src="docs/images/reputation.png" alt="The Reputation page"></a><br><sub><b>Reputation</b><br>Your rank with each organisation, read from Rep app screenshots.</sub></td>
+    <td width="50%" valign="top"><a href="docs/images/armoury.png"><img src="docs/images/armoury.png" alt="The Armoury"></a><br><b>Armoury</b> · guns, armour and attachments from your game files</td>
+    <td width="50%" valign="top"><a href="docs/images/suit.png"><img src="docs/images/suit.png" alt="The suit calculator"></a><br><b>Suit calculator</b> · what a suit weighs, carries and lets you take in G</td>
   </tr>
   <tr>
-    <td><a href="docs/images/events.png"><img src="docs/images/events.png" alt="The Events page"></a><br><sub><b>Events</b><br>The points behind each event bar, counted from contracts you finished.</sub></td>
-    <td><a href="docs/images/logbook.png"><img src="docs/images/logbook.png" alt="The Logbook"></a><br><sub><b>Logbook</b><br>Sessions, purchases and discoveries, newest first.</sub></td>
-    <td><a href="docs/images/sessions.png"><img src="docs/images/sessions.png" alt="The Sessions page"></a><br><sub><b>Sessions</b><br>Every session with its ship, time, jumps, contracts and server.</sub></td>
+    <td valign="top"><a href="docs/images/climate.png"><img src="docs/images/climate.png" alt="Climate"></a><br><b>Climate</b> · which suits cope on each planet and moon</td>
+    <td valign="top"><a href="docs/images/mining.png"><img src="docs/images/mining.png" alt="Mining"></a><br><b>Mining</b> · where to look for each ore, and what a rock is worth</td>
   </tr>
   <tr>
-    <td><a href="docs/images/ledger.png"><img src="docs/images/ledger.png" alt="The Ledger"></a><br><sub><b>Ledger</b><br>Money in and out as the logs record it, with cash on hand from a screenshot.</sub></td>
-    <td><a href="docs/images/market.png"><img src="docs/images/market.png" alt="The Market page"></a><br><sub><b>Market</b><br>Every commodity, where it sells, and your own trading against it.</sub></td>
-    <td><a href="docs/images/fleet.png"><img src="docs/images/fleet.png" alt="The Fleet page"></a><br><sub><b>Fleet</b><br>The ships you fly, with flight counts, claim times and prices.</sub></td>
+    <td valign="top"><a href="docs/images/encounters.png"><img src="docs/images/encounters.png" alt="Encounters"></a><br><b>Encounters</b> · the NPC waves and hold cargo a contract can send</td>
+    <td valign="top"><a href="docs/images/events.png"><img src="docs/images/events.png" alt="Events"></a><br><b>Events</b> · the points behind each event bar</td>
   </tr>
   <tr>
-    <td><a href="docs/images/garage.png"><img src="docs/images/garage.png" alt="The Garage"></a><br><sub><b>Garage</b><br>A ship's fitted parts and the figures they add up to.</sub></td>
-    <td><a href="docs/images/armoury.png"><img src="docs/images/armoury.png" alt="The Armoury"></a><br><sub><b>Armoury</b><br>Guns, armour and attachments from your installed game files.</sub></td>
-    <td><a href="docs/images/loot.png"><img src="docs/images/loot.png" alt="The Loot page"></a><br><sub><b>Loot</b><br>Where any item drops, read from the game's own loot tables, beside what you have found.</sub></td>
+    <td valign="top"><a href="docs/images/logbook.png"><img src="docs/images/logbook.png" alt="The Logbook"></a><br><b>Logbook</b> · sessions, purchases and discoveries, newest first</td>
+    <td valign="top"><a href="docs/images/crew.png"><img src="docs/images/crew.png" alt="Crew"></a><br><b>Crew</b> · who you flew with, and how often</td>
   </tr>
   <tr>
-    <td><a href="docs/images/suit.png"><img src="docs/images/suit.png" alt="The suit calculator"></a><br><sub><b>Suit calculator</b><br>What a suit weighs, carries and lets you take in G, from the game files.</sub></td>
-    <td><a href="docs/images/climate.png"><img src="docs/images/climate.png" alt="The Climate tab"></a><br><sub><b>Climate</b><br>Which suits cope on each planet and moon, from its baseline temperature and the suits' own ranges.</sub></td>
-    <td><a href="docs/images/compare.png"><img src="docs/images/compare.png" alt="The size comparison"></a><br><sub><b>Size comparison</b><br>Ships side by side at their real size; add and remove them freely.</sub></td>
+    <td valign="top"><a href="docs/images/fleet.png"><img src="docs/images/fleet.png" alt="The Fleet"></a><br><b>Fleet</b> · the ships you fly, with flight counts and claim times</td>
+    <td valign="top"><a href="docs/images/models.png"><img src="docs/images/models.png" alt="3D models"></a><br><b>3D models</b> · every hull your install can draw, by maker</td>
   </tr>
   <tr>
-    <td><a href="docs/images/models.png"><img src="docs/images/models.png" alt="The 3D models page"></a><br><sub><b>3D models</b><br>Every hull the install can draw, by maker, in the game's own pictures of them.</sub></td>
-    <td><a href="docs/images/missions.png"><img src="docs/images/missions.png" alt="The Missions reference"></a><br><sub><b>Missions</b><br>Every contract in the game files, with its issuer, places and pay, beside your own runs.</sub></td>
-    <td><a href="docs/images/encounters.png"><img src="docs/images/encounters.png" alt="The Encounters reference"></a><br><sub><b>Encounters</b><br>The NPC waves and hold cargo a contract can send, from the game's mission data.</sub></td>
+    <td valign="top"><a href="docs/images/streamdeck.png"><img src="docs/images/streamdeck.png" alt="Stream Deck settings"></a><br><b>Stream Deck</b> · pick commands, preview the keys, install the profile</td>
+    <td valign="top"></td>
   </tr>
 </table>
 </details>
 
-The 3D view reads your own Star Citizen install, `Data.p4k`, so it shows the
-models of the patch you are actually playing. Nothing is downloaded for it.
+## Get started
 
-The dashboard is for planning and history. The optional overlay gives the same
-short answers over the game, and the optional Cougar MFD mode keeps navigation,
-tasks and cargo close to the cockpit. The dashboard, overlay and MFD pages are
-in English.
+1. **[Download QuantumWake.exe](https://github.com/peans99/QuantumWake/releases/latest)** and open it. No install, no account, no separate .NET.
+2. It finds Star Citizen (LIVE, PTU or EPTU) and reads your log history. A long history takes a few minutes.
+3. Right-click the tray icon and open the dashboard, or go to <http://127.0.0.1:31337>.
 
-## Start here
+> **Your game, your data.** Everything is read and kept on your PC. Online
+> extras such as current market prices are off until you turn them on.
 
-### 1. Download and run
+<details>
+<summary>Rather have an installer?</summary>
 
-**[Download QuantumWake.exe](https://github.com/peans99/QuantumWake/releases/latest)**,
-move it somewhere you keep applications, then open it. There is no account or
-separate .NET download.
-
-If you would rather have it installed, download
-`QuantumWake-<version>-win-x64.msi` from the same page instead. It installs into
-your own profile without asking for an administrator, adds a Start menu entry,
-and can be removed from Apps and features. Later versions install over it.
-
-Quantum Wake starts in the notification area. Right-click its tray icon to open
-the dashboard or overlay. The dashboard is also available at
-<http://127.0.0.1:31337> while the app is running.
-
-On Linux there is a separate download and no tray icon; see [Linux](#linux)
-below.
+Download `QuantumWake-<version>-win-x64.msi` from the same page. It installs
+into your own profile without asking for an administrator, adds a Start menu
+entry, and can be removed from Apps and features. Later versions install over
+it.
+</details>
 
 <details>
 <summary>Windows shows an unknown-publisher warning</summary>
@@ -105,20 +150,18 @@ Microsoft Defender during the release build; that is a malware scan of the
 published files, not a publisher identity check.
 </details>
 
-### 2. Let it read your history
+<details>
+<summary>Star Citizen is installed somewhere unusual</summary>
 
-Quantum Wake finds LIVE, PTU and EPTU installations on fixed drives. On first
-start it reads `Game.log` and its backups, then watches only the current log as
-you play. A large log history can take a few minutes; the app shows the reading
-progress.
-
-If your installation is in an unusual location, run:
+Quantum Wake looks on every fixed drive. If it still cannot find the game, run:
 
 ```powershell
 QuantumWake.exe --path "D:\...\StarCitizen\LIVE"
 ```
+</details>
 
-### 3. Pick the view you need
+<details>
+<summary>Where to find things</summary>
 
 | When you want to… | Open… |
 |---|---|
@@ -126,66 +169,50 @@ QuantumWake.exe --path "D:\...\StarCitizen\LIVE"
 | Find a station, city, outpost or nearby service | **Map** |
 | Lay out a flight plan, or merge a hauling run into one | **Itinerary** |
 | Read the live feed, or a screenshot you just took | **Log** |
-| Plan the work: the Command deck, a cargo or rep run, contracts, reputation, checklists, blueprints, Wikelo trades or an event | **Operations** |
+| Plan the work: the Command deck, a cargo or rep run, contracts, reputation, checklists, blueprints, mining, Wikelo trades or an event | **Operations** |
 | Review a flight, session, place, server, crewmate or death | **Flight** |
 | Follow money in and out, your cargo, or commodity prices | **Economy** |
-| Look up ships, components, items, missions, encounters, loot odds, mining or crafting, or open any hull in 3D | **Reference** |
+| Look up ships, components, items, missions, encounters, loot odds or crafting, or open any hull in 3D | **Reference** |
 | See your ships, fittings, loadout and stash, bench a part in the Garage, or compare guns, add up a suit and check it against a climate in the Armoury | **Hangar** |
 | Keep a small answer visible in Star Citizen | **Overlay** |
+</details>
 
 ## Optional extras
 
-### Overlay
+| Extra | What it does | Turn it on |
+|---|---|---|
+| **Overlay** | Short answers on top of the game. Needs **Borderless Windowed**. | Tray icon, or `Ctrl+Alt+O` |
+| **Cockpit HUD** | Navigation, tasks, cargo, contracts and the live feed on paired Cougar MFDs. | `Ctrl+Alt+M` · [guide](docs/mfd-mode.md) |
+| **Voice commands** | Say "gear down" or "full power to shields" and the app presses the game's key. | Settings → Voice & callouts · [list](docs/voice-commands.md) |
+| **Stream Deck** | A 15-key or XL profile built from your own keybindings, in folders. | Settings → Stream Deck · [guide](docs/stream-deck.md) |
+| **Screenshots** | Reads a saved screenshot or a copied `/showlocation`: kiosk balance, fitted parts, rep, hauling legs. | **Log** page |
+| **Live screen reading** | The same readings without taking a screenshot, while the game is in front. | Asked once at start; switch on the **Log** page |
 
-The overlay starts off. Star Citizen needs **Borderless Windowed** mode for it
-to sit above the game. Use the tray icon or `Ctrl+Alt+O` to show it. Its pin
-button makes it click-through; `Ctrl+Alt+←/→` changes page, `Ctrl+Alt+F`
-expands it and `Ctrl+Alt+C` shrinks it to a two- or three-line strip.
+<details>
+<summary>Overlay keys</summary>
 
-### Cockpit HUD
+`Ctrl+Alt+O` shows or hides it. Its pin button makes it click-through;
+`Ctrl+Alt+←/→` changes page, `Ctrl+Alt+F` expands it and `Ctrl+Alt+C` shrinks
+it to a two- or three-line strip.
+</details>
 
-If you use paired Cougar MFDs, Quantum Wake can show navigation, tasks, cargo,
-contracts, money and the live feed on them. Read the [Cockpit HUD guide](docs/mfd-mode.md)
-when you are ready to set it up; `Ctrl+Alt+M` opens MFD setup from anywhere.
+<details>
+<summary>What voice and screen reading do with your PC</summary>
 
-### Voice commands
+**Voice.** Listening is done by Windows' own speech recogniser, on your PC;
+nothing is recorded or sent. Commands press the game's key only while Star
+Citizen is in front. Say "Quantum Wake copilot on", or hold a push-to-talk key.
 
-Turn on Voice commands in Settings → Voice & callouts, then say "Quantum Wake
-copilot on" or hold a push-to-talk key, and say things like "gear down",
-"mining mode" or "full power to shields". The app presses the game's key for
-that action, only while Star Citizen is in front. Listening is done by Windows'
-own speech recogniser, on your PC; nothing is recorded or sent. See
-[voice-commands.md](docs/voice-commands.md) for the full list.
-
-### Stream Deck
-
-Settings → Stream Deck builds a Star Citizen profile for a 15-key or XL Stream
-Deck from your own keybindings, with commands in folders by category, and
-installs the small plugin that presses them. Rebuild it after changing your
-bindings in game. Windows only; see [stream-deck.md](docs/stream-deck.md).
-
-### Screenshots and copied locations
-
-You can ask Quantum Wake to read a saved Star Citizen screenshot or a copied
-`/showlocation` result. This can add facts the log does not carry, such as a
-kiosk balance, fitted ship parts, your rank with an organisation in the Rep
-app, or the pickups and SCU on a hauling contract in the Contracts app. It reads
-the saved file on your computer, and nothing about this needs live reading,
-described next.
-
-### Reading the screen live
-
-On Windows the app can read the game's screen as you play instead of waiting
-for a screenshot. It asks once, at start, and the switch is on the **Log** page
-afterwards; Linux never offers it. While Star Citizen is the window in front, a
-frame is read about every two seconds, every second while a ship is targeted,
-and then thrown away. What is kept is what was read, never the picture: the
-Fleet Manager, the map, a loadout, a kiosk, a refinery, the hangar's freight
-terminal, the Contracts and Rep apps, your balance and each rock scanned. The
-Sessions debrief also gets the rocks you worked, and, only if you turn on **Keep
-a record of fights**, the ships you locked. The app never opens the game's
-process, reads its memory or presses a key for this. What is kept, and where,
-is in the [privacy policy](docs/privacy.md).
+**Screen reading.** While Star Citizen is the window in front, a frame is read
+about every two seconds, every second while a ship is targeted, and then thrown
+away. What is kept is what was read, never the picture: the Fleet Manager, the
+map, a loadout, a kiosk, a refinery, the hangar's freight terminal, the
+Contracts and Rep apps, your balance and each rock scanned. The Sessions
+debrief also gets the rocks you worked, and, only if you turn on **Keep a
+record of fights**, the ships you locked. The app never opens the game's
+process, reads its memory or presses a key for this. Linux never offers it.
+What is kept, and where, is in the [privacy policy](docs/privacy.md).
+</details>
 
 ## Linux
 
@@ -194,6 +221,9 @@ Proton. The dashboard, the log and game-data readers, screenshots and copied
 locations all work there. The overlay, the cockpit HUD and joystick input stay
 on Windows: all three are built on Windows desktop components, and they are
 not what a Linux pilot is missing.
+
+<details>
+<summary>Install, start, stop and update on Linux</summary>
 
 ### Before you start
 
@@ -296,6 +326,7 @@ The dashboard still checks for new versions and tells you, but it does not
 replace itself on Linux; unpack the new archive over the old folder. To remove
 Quantum Wake, delete the unpacked folder, `~/.local/share/Quantumwake` and
 `~/.net/quantumwake`, and disable the user service if you created one.
+</details>
 
 
 ## What Quantum Wake reads
@@ -387,6 +418,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 ## Release notes
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
+
+### 1.2.38
+
+- **The Stream Deck page opens properly again from a refresh or a link.**
+  Since 1.2.36, opening the dashboard straight onto the Stream Deck page left
+  it blank, with no categories and no key preview, until you went to another
+  page and came back.
 
 ### 1.2.37
 

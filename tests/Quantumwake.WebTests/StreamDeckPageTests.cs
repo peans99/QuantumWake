@@ -1,6 +1,21 @@
 namespace Quantumwake.WebTests;
 public class StreamDeckPageTests
 {
+    /// <summary>
+    /// The harness strips <c>boot()</c>, so it cannot replay the load order that
+    /// broke: boot opens the fragment's view before its first await, and the
+    /// Stream Deck's state was declared below the call. Opening the app on
+    /// #streamdeck threw on <c>deckRestored</c> and left the page blank. Keeping
+    /// the call as the file's last statement is what prevents the whole class.
+    /// </summary>
+    [Fact]
+    public void Boot_runs_after_every_top_level_declaration()
+    {
+        var source = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "app.js")).TrimEnd();
+        Assert.EndsWith("\nboot();", source.Replace("\r\n", "\n"));
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(source, @"^boot\(\);", System.Text.RegularExpressions.RegexOptions.Multiline).Count);
+    }
+
     [Theory]
     [InlineData("f5+lalt", "Alt + F5")]
     [InlineData("rctrl+np_8", "R Ctrl + Num 8")]
