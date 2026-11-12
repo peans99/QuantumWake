@@ -27,8 +27,8 @@
 
 <table>
   <tr>
-    <td width="50%"><a href="docs/images/now.png"><img src="docs/images/now.png" alt="The Now page"></a><br><b>Now</b> · your last place, ship and wake-up point</td>
-    <td width="50%"><a href="docs/images/map.png"><img src="docs/images/map.png" alt="The map"></a><br><b>Map</b> · everywhere you have been, and the nearest refuel, repair or clinic</td>
+    <td width="50%" valign="top"><a href="docs/images/now.png"><img src="docs/images/now.png" alt="The Now page"></a><br><b>Now</b> · your last place, ship and wake-up point</td>
+    <td width="50%" valign="top"><a href="docs/images/map.png"><img src="docs/images/map.png" alt="The map"></a><br><b>Map</b> · everywhere you have been, and the nearest refuel, repair or clinic</td>
   </tr>
 </table>
 
@@ -36,12 +36,12 @@
 
 <table>
   <tr>
-    <td width="50%"><a href="docs/images/operations.png"><img src="docs/images/operations.png" alt="The Command deck"></a><br><b>Command deck</b> · work under way, and everything you can start</td>
-    <td width="50%"><a href="docs/images/itinerary.png"><img src="docs/images/itinerary.png" alt="The Itinerary"></a><br><b>Itinerary</b> · a flight plan stop by stop, hauling runs merged in</td>
+    <td width="50%" valign="top"><a href="docs/images/operations.png"><img src="docs/images/operations.png" alt="The Command deck"></a><br><b>Command deck</b> · work under way, and everything you can start</td>
+    <td width="50%" valign="top"><a href="docs/images/itinerary.png"><img src="docs/images/itinerary.png" alt="The Itinerary"></a><br><b>Itinerary</b> · a flight plan stop by stop, hauling runs merged in</td>
   </tr>
   <tr>
-    <td><a href="docs/images/routes.png"><img src="docs/images/routes.png" alt="Routes"></a><br><b>Routes</b> · cargo runs sized to your ship, rep runs to the next rank</td>
-    <td><a href="docs/images/reputation.png"><img src="docs/images/reputation.png" alt="Reputation"></a><br><b>Reputation</b> · your rank with every organisation</td>
+    <td valign="top"><a href="docs/images/routes.png"><img src="docs/images/routes.png" alt="Routes"></a><br><b>Routes</b> · cargo runs sized to your ship, rep runs to the next rank</td>
+    <td valign="top"><a href="docs/images/reputation.png"><img src="docs/images/reputation.png" alt="Reputation"></a><br><b>Reputation</b> · your rank with every organisation</td>
   </tr>
 </table>
 
@@ -49,12 +49,12 @@
 
 <table>
   <tr>
-    <td width="50%"><a href="docs/images/ship3d.png"><img src="docs/images/ship3d.png" alt="A ship in the 3D view"></a><br><b>3D view</b> · any ship, vehicle, gun or armour, loadout swappable</td>
-    <td width="50%"><a href="docs/images/fleet3d.png"><img src="docs/images/fleet3d.png" alt="The fleet in 3D"></a><br><b>Your fleet</b> · every ship you own on one floor, in its own paint</td>
+    <td width="50%" valign="top"><a href="docs/images/ship3d.png"><img src="docs/images/ship3d.png" alt="A ship in the 3D view"></a><br><b>3D view</b> · any ship, vehicle, gun or armour, loadout swappable</td>
+    <td width="50%" valign="top"><a href="docs/images/fleet3d.png"><img src="docs/images/fleet3d.png" alt="The fleet in 3D"></a><br><b>Your fleet</b> · every ship you own on one floor, in its own paint</td>
   </tr>
   <tr>
-    <td><a href="docs/images/armour3d.png"><img src="docs/images/armour3d.png" alt="An armour set in 3D"></a><br><b>Armour</b> · a whole suit in one colourway</td>
-    <td><a href="docs/images/compare.png"><img src="docs/images/compare.png" alt="Ships compared by size"></a><br><b>Size comparison</b> · ships side by side at real scale</td>
+    <td valign="top"><a href="docs/images/armour3d.png"><img src="docs/images/armour3d.png" alt="An armour set in 3D"></a><br><b>Armour</b> · a whole suit in one colourway</td>
+    <td valign="top"><a href="docs/images/compare.png"><img src="docs/images/compare.png" alt="Ships compared by size"></a><br><b>Size comparison</b> · ships side by side at real scale</td>
   </tr>
 </table>
 
@@ -70,12 +70,12 @@ An overlay over the game, pages for Cougar MFDs, a Stream Deck profile built fro
 
 <table>
   <tr>
-    <td width="50%"><a href="docs/images/contracts.png"><img src="docs/images/contracts.png" alt="Contracts"></a><br><b>Contracts</b> · every contract by issuer: finished, dropped, failed</td>
-    <td width="50%"><a href="docs/images/sessions.png"><img src="docs/images/sessions.png" alt="Sessions"></a><br><b>Sessions</b> · every session with its ship, jumps, contracts and server</td>
+    <td width="50%" valign="top"><a href="docs/images/contracts.png"><img src="docs/images/contracts.png" alt="Contracts"></a><br><b>Contracts</b> · every contract by issuer: finished, dropped, failed</td>
+    <td width="50%" valign="top"><a href="docs/images/sessions.png"><img src="docs/images/sessions.png" alt="Sessions"></a><br><b>Sessions</b> · every session with its ship, jumps, contracts and server</td>
   </tr>
   <tr>
-    <td><a href="docs/images/ledger.png"><img src="docs/images/ledger.png" alt="The Ledger"></a><br><b>Ledger</b> · money in and out, as the logs record it</td>
-    <td><a href="docs/images/market.png"><img src="docs/images/market.png" alt="The Market"></a><br><b>Market</b> · where each commodity sells, beside your own trades</td>
+    <td valign="top"><a href="docs/images/ledger.png"><img src="docs/images/ledger.png" alt="The Ledger"></a><br><b>Ledger</b> · money in and out, as the logs record it</td>
+    <td valign="top"><a href="docs/images/market.png"><img src="docs/images/market.png" alt="The Market"></a><br><b>Market</b> · where each commodity sells, beside your own trades</td>
   </tr>
 </table>
 
@@ -83,12 +83,12 @@ An overlay over the game, pages for Cougar MFDs, a Stream Deck profile built fro
 
 <table>
   <tr>
-    <td width="50%"><a href="docs/images/loadout.png"><img src="docs/images/loadout.png" alt="The Loadout"></a><br><b>Loadout</b> · what you carry, as the log last saw it</td>
-    <td width="50%"><a href="docs/images/garage.png"><img src="docs/images/garage.png" alt="The Garage"></a><br><b>Garage</b> · a ship's fitted parts and what they add up to</td>
+    <td width="50%" valign="top"><a href="docs/images/loadout.png"><img src="docs/images/loadout.png" alt="The Loadout"></a><br><b>Loadout</b> · what you carry, as the log last saw it</td>
+    <td width="50%" valign="top"><a href="docs/images/garage.png"><img src="docs/images/garage.png" alt="The Garage"></a><br><b>Garage</b> · a ship's fitted parts and what they add up to</td>
   </tr>
   <tr>
-    <td><a href="docs/images/missions.png"><img src="docs/images/missions.png" alt="Missions"></a><br><b>Missions</b> · every contract in the game files, with issuer and pay</td>
-    <td><a href="docs/images/loot.png"><img src="docs/images/loot.png" alt="Loot"></a><br><b>Loot</b> · where any item drops, from the game's own loot tables</td>
+    <td valign="top"><a href="docs/images/missions.png"><img src="docs/images/missions.png" alt="Missions"></a><br><b>Missions</b> · every contract in the game files, with issuer and pay</td>
+    <td valign="top"><a href="docs/images/loot.png"><img src="docs/images/loot.png" alt="Loot"></a><br><b>Loot</b> · where any item drops, from the game's own loot tables</td>
   </tr>
 </table>
 
@@ -97,28 +97,28 @@ An overlay over the game, pages for Cougar MFDs, a Stream Deck profile built fro
 
 <table>
   <tr>
-    <td width="50%"><a href="docs/images/armoury.png"><img src="docs/images/armoury.png" alt="The Armoury"></a><br><b>Armoury</b> · guns, armour and attachments from your game files</td>
-    <td width="50%"><a href="docs/images/suit.png"><img src="docs/images/suit.png" alt="The suit calculator"></a><br><b>Suit calculator</b> · what a suit weighs, carries and lets you take in G</td>
+    <td width="50%" valign="top"><a href="docs/images/armoury.png"><img src="docs/images/armoury.png" alt="The Armoury"></a><br><b>Armoury</b> · guns, armour and attachments from your game files</td>
+    <td width="50%" valign="top"><a href="docs/images/suit.png"><img src="docs/images/suit.png" alt="The suit calculator"></a><br><b>Suit calculator</b> · what a suit weighs, carries and lets you take in G</td>
   </tr>
   <tr>
-    <td><a href="docs/images/climate.png"><img src="docs/images/climate.png" alt="Climate"></a><br><b>Climate</b> · which suits cope on each planet and moon</td>
-    <td><a href="docs/images/mining.png"><img src="docs/images/mining.png" alt="Mining"></a><br><b>Mining</b> · where to look for each ore, and what a rock is worth</td>
+    <td valign="top"><a href="docs/images/climate.png"><img src="docs/images/climate.png" alt="Climate"></a><br><b>Climate</b> · which suits cope on each planet and moon</td>
+    <td valign="top"><a href="docs/images/mining.png"><img src="docs/images/mining.png" alt="Mining"></a><br><b>Mining</b> · where to look for each ore, and what a rock is worth</td>
   </tr>
   <tr>
-    <td><a href="docs/images/encounters.png"><img src="docs/images/encounters.png" alt="Encounters"></a><br><b>Encounters</b> · the NPC waves and hold cargo a contract can send</td>
-    <td><a href="docs/images/events.png"><img src="docs/images/events.png" alt="Events"></a><br><b>Events</b> · the points behind each event bar</td>
+    <td valign="top"><a href="docs/images/encounters.png"><img src="docs/images/encounters.png" alt="Encounters"></a><br><b>Encounters</b> · the NPC waves and hold cargo a contract can send</td>
+    <td valign="top"><a href="docs/images/events.png"><img src="docs/images/events.png" alt="Events"></a><br><b>Events</b> · the points behind each event bar</td>
   </tr>
   <tr>
-    <td><a href="docs/images/logbook.png"><img src="docs/images/logbook.png" alt="The Logbook"></a><br><b>Logbook</b> · sessions, purchases and discoveries, newest first</td>
-    <td><a href="docs/images/crew.png"><img src="docs/images/crew.png" alt="Crew"></a><br><b>Crew</b> · who you flew with, and how often</td>
+    <td valign="top"><a href="docs/images/logbook.png"><img src="docs/images/logbook.png" alt="The Logbook"></a><br><b>Logbook</b> · sessions, purchases and discoveries, newest first</td>
+    <td valign="top"><a href="docs/images/crew.png"><img src="docs/images/crew.png" alt="Crew"></a><br><b>Crew</b> · who you flew with, and how often</td>
   </tr>
   <tr>
-    <td><a href="docs/images/fleet.png"><img src="docs/images/fleet.png" alt="The Fleet"></a><br><b>Fleet</b> · the ships you fly, with flight counts and claim times</td>
-    <td><a href="docs/images/models.png"><img src="docs/images/models.png" alt="3D models"></a><br><b>3D models</b> · every hull your install can draw, by maker</td>
+    <td valign="top"><a href="docs/images/fleet.png"><img src="docs/images/fleet.png" alt="The Fleet"></a><br><b>Fleet</b> · the ships you fly, with flight counts and claim times</td>
+    <td valign="top"><a href="docs/images/models.png"><img src="docs/images/models.png" alt="3D models"></a><br><b>3D models</b> · every hull your install can draw, by maker</td>
   </tr>
   <tr>
-    <td><a href="docs/images/streamdeck.png"><img src="docs/images/streamdeck.png" alt="Stream Deck settings"></a><br><b>Stream Deck</b> · pick commands, preview the keys, install the profile</td>
-    <td></td>
+    <td valign="top"><a href="docs/images/streamdeck.png"><img src="docs/images/streamdeck.png" alt="Stream Deck settings"></a><br><b>Stream Deck</b> · pick commands, preview the keys, install the profile</td>
+    <td valign="top"></td>
   </tr>
 </table>
 </details>
