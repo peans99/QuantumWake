@@ -38603,8 +38603,6 @@ async function boot() {
   }
 }
 
-boot();
-
 /* Stream Deck profiles are snapshots: export resolves the selected action ids
    again on the server so a changed or cleared binding cannot send a stale key. */
 let deckGroups = new Map(), deckPreviewTrail = [];
@@ -38838,3 +38836,10 @@ $('#deck-open')?.addEventListener('click', async event => {
   } catch (error) { $('#deck-status').textContent = error.message; }
   finally { button.disabled = !deckSelected().length; }
 });
+
+/* Last, after every top-level declaration. boot() runs synchronously up to its
+   first await, and that part opens the view named in the fragment - so a `let`
+   further down the file is still uninitialised when that view's loader reads
+   it. Opening the app on #streamdeck threw on `deckRestored` (1.2.36) and left
+   the page blank until it was visited again. */
+boot();
