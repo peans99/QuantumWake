@@ -121,14 +121,4 @@ public class ArmouryClimateTests
 
         Assert.True(page.Truth("__dom.node('#armoury-open-armour').classList.contains('active')"));
     }
-
-    [Fact]
-    public void In_french_the_tab_reads_in_french()
-    {
-        var page = Opened("fr");
-
-        Assert.Contains("Combinaison requise", Row(page, 0));
-        Assert.Contains("lune de Hurston", Row(page, 0));
-        Assert.Contains("Une référence, pas la météo", page.NodeText("#armoury-climate-note"));
-    }
 }

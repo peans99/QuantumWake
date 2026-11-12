@@ -174,22 +174,6 @@ public class ReputationTests
             Loaded(empty.Replace("\"canRead\":true", "\"canRead\":false")).NodeText("#reputation-list"));
     }
 
-    [Fact]
-    public void Reputation_reads_in_french_and_keeps_the_games_names()
-    {
-        var page = Loaded(lang: "fr");
-        var list = page.NodeText("#reputation-list").Replace(' ', ' ').Replace(' ', ' ');
-
-        Assert.Contains("RED WIND LINEHAUL", list);
-        Assert.Contains("RangMember", list);
-        Assert.Contains("Progression54 %", list);
-        Assert.Contains("Réputation estimée", list);
-        Assert.Contains("au moins 10 contrats Red Wind terminés entre-temps", list);
-        Assert.Contains("Rang non lu", list);
-        Assert.DoesNotContain("of the way through", list);
-        Assert.Equal("2 organisations · 3 captures d’écran", page.NodeText("#reputation-count").Replace(' ', ' '));
-    }
-
     /// <summary>The game's own mark where the install has one; no empty frame where it has none.</summary>
     [Fact]
     public void An_organisation_wears_its_logo_when_the_game_has_one()

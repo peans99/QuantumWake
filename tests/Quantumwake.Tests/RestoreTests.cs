@@ -255,14 +255,15 @@ public class RestoreTests : IDisposable
 
     /// <summary>
     /// A backup written before saved Garage builds existed is format 1 and
-    /// still restores; this build writes 2, so a build before 0.13.3 refuses
-    /// the file and says to update rather than putting everything else back
-    /// and dropping the builds without a word.
+    /// still restores, and so does one from before named setups (format 2);
+    /// this build writes 3 (1.2.36), so an older build refuses the file and
+    /// says to update rather than putting everything else back and dropping
+    /// the builds or the setups without a word.
     /// </summary>
     [Fact]
     public void A_backup_from_before_saved_builds_still_restores_and_this_build_writes_the_newer_format()
     {
-        Assert.Equal(2, BackupBuilder.Version);
+        Assert.Equal(3, BackupBuilder.Version);
 
         var older = new ExportFile(ExportDocument.Format, ExportDocument.FormatVersion,
             1, DateTimeOffset.UtcNow,
@@ -274,6 +275,11 @@ public class RestoreTests : IDisposable
         Assert.Null(problem);
         Assert.NotNull(contents);
         Assert.Empty(contents.Builds);
+
+        var two = older with { ContentVersion = 2, Producer = new ExportProducer("Quantumwake", "1.2.35") };
+        var (fromTwo, _, twoProblem) = BackupReader.Read(JsonSerializer.Serialize(two, ExportDocument.Json));
+        Assert.Null(twoProblem);
+        Assert.Empty(fromTwo!.Setups ?? []);
     }
 
     [Fact]

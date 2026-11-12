@@ -593,36 +593,85 @@ window.QwMfd = (() => {
      Charge at a rock, then goes back. Pure, so the rules are tested rather than
      flown: what the live reading wants on the glass, and one step of the
      switch's memory - where it came from, when it went, when the reason left. */
-  const FOLLOW_HANDS_OFF = 5000, FOLLOW_RETURN = 20000, FOLLOW_MISSILE = 15000;
+  /* 1.2.28: Target no longer outstays the lock. It used to stay while
+     "a hostile was locked in the last half minute" and then twenty seconds
+     more - most of a minute of NOTHING LOCKED on the frame a pilot glances at
+     - and a single press during the fight cancelled the trip back altogether.
+     Now an empty Target goes back a few seconds after the lock does, on any
+     frame that saw the lock: to the page the fight took it from, the page
+     the pilot came from, or the frame's own default page. */
+  const FOLLOW_HANDS_OFF = 5000, FOLLOW_RETURN = 20000, FOLLOW_MISSILE = 15000, TARGET_GONE = 6000;
   const followWant = (live, now) => {
     if (!live?.available || !live.enabled) return null;
     const combat = live.status?.combat;
     // A missile can come from a ship nobody locked.
     const missile = (combat?.callouts || []).some(c => c.kind === 'missile' && now - new Date(c.at).getTime() < FOLLOW_MISSILE);
-    if (combat?.target || combat?.combat || missile) return 'target';
+    if (combat?.target || missile) return 'target';
     if (live.status?.fracture?.active) return 'charge';
     return null;
   };
-  const followIdle = () => ({ auto: null, back: null, at: 0, lostAt: null });
-  const followStep = (memory, { want, screen, now, lastPress }) => {
-    const m = memory || followIdle();
-    // A press since the switch hands the frame back to the pilot: no return
-    // trip to a page they have since left on purpose.
-    if (m.auto && lastPress > m.at) return { memory: followIdle(), go: null };
+  /* auto: the page the fight or the rock chose; back: where it came from;
+     on: the page this memory is about; held: whether a lock was seen while
+     Target was up, which is what makes an empty Target worth leaving. */
+  const followIdle = () => ({ auto: null, back: null, at: 0, lostAt: null, held: false, on: null });
+  const followStep = (memory, { want, locked = false, screen, now, lastPress, previous = null, home = null }) => {
+    let m = memory || followIdle();
+    // The page changed and not by this: the pilot went somewhere on purpose,
+    // and nothing remembered about the old page applies to the new one.
+    if (m.on !== null && m.on !== screen) m = followIdle();
+    m = { ...m, on: screen };
     if (want) {
       // Callouts is a combat page too; a pilot reading it is not moved off it.
-      if (screen === want || (want === 'target' && screen === 'calls')) return { memory: { ...m, lostAt: null }, go: null };
+      if (screen === want || (want === 'target' && screen === 'calls'))
+        return { memory: { ...m, lostAt: null, held: m.held || (screen === 'target' && locked) }, go: null };
       // Mid-press is no time to move the page under the thumb.
       if (now - lastPress < FOLLOW_HANDS_OFF) return { memory: { ...m, lostAt: null }, go: null };
-      return { memory: { auto: want, back: m.auto ? m.back : screen, at: now, lostAt: null }, go: want };
+      return { memory: { auto: want, back: m.auto ? m.back : screen, at: now, lostAt: null, held: want === 'target' && locked, on: want }, go: want };
+    }
+    const backTo = page => page && page !== screen && validScreen(page) ? page : home;
+    if (screen === 'target') {
+      if (locked) return { memory: { ...m, held: true, lostAt: null }, go: null };
+      // Opened by hand onto nothing: the pilot is looking, not fighting.
+      if (!m.held && m.auto !== 'target') return { memory: m, go: null };
+      // A lock dropped for a second in a turn is not the end of a fight.
+      const lostAt = m.lostAt ?? now;
+      if (now - lostAt < TARGET_GONE || now - lastPress < FOLLOW_HANDS_OFF) return { memory: { ...m, lostAt }, go: null };
+      return { memory: followIdle(), go: backTo(m.auto === 'target' ? m.back : previous) };
     }
     if (!m.auto) return { memory: m, go: null };
-    if (screen !== m.auto) return { memory: followIdle(), go: null };
-    // A lock dropped for a second in a turn is not the end of a fight.
+    // A rock between bursts of the laser is still the rock being worked.
     const lostAt = m.lostAt ?? now;
     if (now - lostAt < FOLLOW_RETURN) return { memory: { ...m, lostAt }, go: null };
-    return { memory: followIdle(), go: m.back };
+    return { memory: followIdle(), go: backTo(m.back) };
   };
+
+  /* Callouts on the glass (1.2.28): every line the voice says - a callout, a
+     copilot reply - is put up on the frame that follows the action for a few
+     seconds, then the page underneath is back as it was. Drawn over the page
+     rather than navigated to, so there is no page to remember or return to
+     and a press goes to the page as it always did. The first reading only
+     sets where "new" starts: a frame opened mid-evening has not just heard
+     everything said since teatime. */
+  const CALLOUT_SHOW = 6000;
+  const calloutIdle = () => ({ seen: null, lines: [], until: 0 });
+  const calloutStep = (memory, { heard, now }) => {
+    const m = memory || calloutIdle();
+    const list = (Array.isArray(heard) ? heard : []).filter(h => h?.text && Number.isFinite(Date.parse(h.at)));
+    const newest = list.length ? Math.max(...list.map(h => Date.parse(h.at))) : null;
+    if (m.seen === null) return { ...m, seen: newest ?? 0 };
+    const fresh = list.filter(h => Date.parse(h.at) > m.seen).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+    if (!fresh.length) return m;
+    const still = m.until > now ? m.lines : [];
+    return { seen: newest, lines: [...fresh.map(h => ({ text: h.text, at: h.at })), ...still].slice(0, 3), until: now + CALLOUT_SHOW };
+  };
+  const calloutShowing = (memory, now) => !!memory && memory.until > now && memory.lines.length > 0;
+  /* On the pages read live in the moment - Target, Callouts, Charge - the
+     line goes in a strip where the breadcrumb and title were, and the
+     readings stay in sight (1.2.30). A recorded fight with a line every four
+     or five seconds kept the full card up from the lock to the kill, so the
+     hull, range and speed the Target page exists for were never seen. */
+  const CALLOUT_STRIP_PAGES = ['target', 'calls', 'charge'];
+  const calloutStrip = screen => CALLOUT_STRIP_PAGES.includes(screen);
 
   const panelRole = panel => panel === 'right'
     ? { label: 'MISSION', defaultScreen: 'task' }
@@ -1058,7 +1107,7 @@ window.QwMfd = (() => {
         const combat = live.status?.combat;
         const target = combat?.target;
         if (!target) return [['NO TARGET', combat?.locks
-          ? say('{locks} locks this session, {hostile} hostile', { locks: combat.locks, hostile: combat.hostileLocks || 0 })
+          ? sayn(combat.locks, '{count} lock this session, {hostile} hostile', '{count} locks this session, {hostile} hostile', { hostile: combat.hostileLocks || 0 })
           : say('Lock a ship and its panel is read every second.')]];
         /* Odds for an UNKNOWN are weights from the signature, the ships the
            log saw nearby and the faction - a guess, labelled ROUGH ODDS. */
@@ -1182,6 +1231,17 @@ window.QwMfd = (() => {
     return [...(chosen ? [{ paint: chosen }] : []), 'stock', 'silhouette', 'mark'];
   }
 
+  /* Whether to draw the locked hull as a 3D model (1.2.31) rather than only
+     a picture: when the hull is named, and the pilot has not told the Garage
+     they prefer silhouettes - for this hull or for every one. The picture
+     from targetSteps stays up until the model is in, and stays if it never
+     comes. */
+  function targetModel(picture, garage) {
+    if (picture?.kind !== 'silhouette' || !picture.cls) return null;
+    if (garage?.style === 'tint' || garage?.paints?.[picture.cls] === 'silhouette') return null;
+    return picture.cls;
+  }
+
   function actionLine(pageId, view) {
     if (pageId !== 'act') return null;
     if (view?.saved) return { state: 'saved', text: view.saved };
@@ -1236,7 +1296,8 @@ window.QwMfd = (() => {
         ? sayn(bed.times, 'A medical bed used {count} time · the game never states a regen point', 'A medical bed used {count} times · the game never states a regen point')
         : sayn(respawn.of, '{agreeing} of {count} death woke there · the game never states a regen point', '{agreeing} of {count} deaths woke there · the game never states a regen point', { agreeing: respawn.agreeing }) };
   }
-  return { targetSteps, followWant, followStep, followIdle, FOLLOW_RETURN, FOLLOW_HANDS_OFF, say, sayn, fit, inset, defaultInset, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, radarFocus, radarHere, routeLine, panelRole, missionCard, makerOf, makers, dormant, actionLine, targetPicture, sameTask, taskId, rowIcon,
+  return { targetSteps, targetModel, followWant, followStep, followIdle, FOLLOW_RETURN, FOLLOW_HANDS_OFF, TARGET_GONE,
+    calloutStep, calloutIdle, calloutShowing, calloutStrip, CALLOUT_SHOW, say, sayn, fit, inset, defaultInset, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, radarFocus, radarHere, routeLine, panelRole, missionCard, makerOf, makers, dormant, actionLine, targetPicture, sameTask, taskId, rowIcon,
     groups, menuNodes, menuNode, parent, title, validScreen, menuItems, previewPage, trail, resolveCommand, restoreScreen, readingView,
     pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, dozed, DOZE, prettyItem, pageOf, pageStep, pageLabel, LEDGER_PAGE, BRIGHTNESS, brightnessLevel, brightnessAt,
     cycleBrightness, stepBrightness, OSBS, BUTTONS };

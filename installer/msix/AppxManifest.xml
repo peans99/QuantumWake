@@ -38,8 +38,8 @@
     <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
   </Dependencies>
 
-  <!-- English only for now: every language declared here needs its own Store
-       listing. fr-fr goes in with a French listing. -->
+  <!-- English only: the app is (French was retired in 1.2.29), and every
+       language declared here needs its own Store listing. -->
   <Resources>
     <Resource Language="en-us" />
   </Resources>

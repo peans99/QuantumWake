@@ -10384,6 +10384,64 @@ async function suitFromLoadout() {
   return suit;
 }
 
+/**
+ * The outfit on the calculator as kit lines (1.2.34): each worn piece, each
+ * gun and everything carried, by the names the kit's Prepare and shopping
+ * steps match against. The same name twice is one line with its count, so a
+ * kit of three medpens reads as one line, as a kit typed by hand would.
+ */
+function suitKitItems(suit) {
+  const index = suitIndex();
+  const lines = new Map();
+  const add = (name, quantity) => {
+    if (!name) return;
+    const line = lines.get(name) || { name, quantity: 0, optional: false };
+    line.quantity += quantity;
+    lines.set(name, line);
+  };
+  for (const slot of SUIT_SLOTS) add(index.pieces.get(suit.slots?.[slot])?.name, 1);
+  for (const holster of SUIT_WEAPONS) {
+    const cls = suit.weapons?.[holster];
+    add(index.weapons.get(cls)?.name || index.small.get(cls)?.name, 1);
+  }
+  for (const item of suit.carried || []) add(item.name, Math.max(1, Number(item.count) || 1));
+  return [...lines.values()];
+}
+
+/**
+ * Saves the outfit as a kit and offers the next step: Prepare, which says
+ * what is already owned and where the rest is sold, and from there a
+ * shopping list. The calculator designed it; the Loadout page keeps it.
+ */
+async function saveSuitAsKit(name, status) {
+  const items = suitKitItems(armourySuit || emptySuit());
+  if (!items.length) {
+    status.textContent = tx('Nothing is worn or carried, so there is no kit to save.');
+    return null;
+  }
+  const response = await fetch('/api/kits', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name || tx('Suit'), items }),
+  });
+  const kit = response.ok ? await response.json().catch(() => null) : null;
+  if (!kit?.id) {
+    status.textContent = tx('The kit was not saved. Check the app is still running.');
+    return null;
+  }
+  status.textContent = txn(items.length, 'Saved as the kit {name}, {count} line.', 'Saved as the kit {name}, {count} lines.', { name: kit.name });
+  const prepare = el('button', 'ghost tiny', tx('Prepare it'));
+  prepare.type = 'button';
+  prepare.title = tx('What you already own, and where the rest is sold - then a shopping list');
+  prepare.addEventListener('click', async () => {
+    showView('loadout');
+    await loadKits().catch(() => {});
+    await prepareKit(kit.id).catch(() => {});
+  });
+  status.append(' ', prepare);
+  return kit;
+}
+
 /** "3.5 kg", or "0 kg" for an empty field. */
 function suitKg(kg) {
   return tx('{value} kg', { value: fmt1(Number(kg) || 0) });
@@ -10526,7 +10584,18 @@ function renderArmourySuit() {
     saveSuitState();
     renderArmourySuit();
   });
-  bar.append(copy, strip, el('span', 'muted small', suit.from === 'loadout'
+  const kitName = el('input', 'search suit-kit-name');
+  kitName.type = 'text';
+  kitName.placeholder = tx('Name the kit');
+  const asKit = el('button', 'ghost', tx('Save as kit'));
+  asKit.type = 'button';
+  asKit.title = tx('Keep this outfit as a kit on the Loadout page, ready to prepare and shop for');
+  asKit.addEventListener('click', async () => {
+    asKit.disabled = true;
+    try { if (await saveSuitAsKit(kitName.value.trim(), status)) kitName.value = ''; }
+    finally { asKit.disabled = false; }
+  });
+  bar.append(copy, strip, kitName, asKit, el('span', 'muted small', suit.from === 'loadout'
     ? tx('Copied from the loadout the log last saw.')
     : suit.from === 'stripped' ? tx('Stripped: nothing worn or carried.') : tx('Your own choice of pieces.')), status);
   host.append(bar);
@@ -15519,7 +15588,7 @@ function renderNowEvent() {
   const event = currentEvent();
   const overall = event ? (event.tracks.find((t) => t.overall) || event.tracks[0]) : null;
 
-  if (status) status.textContent = event && overall ? `${event.title} · ${eventPoints(overall.points)}` : tx('Open events');
+  if (status) status.textContent = event && overall ? `${event.title} · ${eventPoints(overall.points)}` : tx('Open Events');
 
   if (!card) return;
   card.hidden = !event;
@@ -19517,13 +19586,16 @@ function choosePlanningShip(name) {
 }
 
 /* Local route memory is deliberately separate from flight plans. A plan is an
- * authored shared object; a preset, watch and save count are private browser
- * conveniences and must not claim the game or another device knows them. */
+ * authored shared object; a watch and a save count are private browser
+ * conveniences and must not claim the game or another device knows them.
+ * Presets are named setups since 1.2.36: kept by the app like kits, so the
+ * overlay sees them and a backup carries them. The browser's old list is
+ * moved across once and then left alone. */
 const ROUTE_PROFILES_KEY = 'qw-route-profiles';
 const ROUTE_HISTORY_KEY = 'qw-route-history';
 const ROUTE_WATCH_KEY = 'qw-route-watches';
 const readRouteMemory = (key) => { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; } };
-let routeProfiles = readRouteMemory(ROUTE_PROFILES_KEY);
+let routeProfiles = [];
 let routeHistory = readRouteMemory(ROUTE_HISTORY_KEY);
 let routeWatches = readRouteMemory(ROUTE_WATCH_KEY);
 let highlightBestRoute = false;
@@ -19569,6 +19641,31 @@ function splitTradeRoute(route) {
   return remaining === 0 && portions.length > 1 ? portions : [];
 }
 
+/** A kept setup as the preset shape the Routes controls read. */
+const routeProfileOf = (setup) => ({ ...(setup.data || {}), id: setup.id, name: setup.name });
+
+/** The settings a preset keeps, without its id and name, which are the store's. */
+function routeProfileData(profile) {
+  const { id, name, ...data } = profile;
+  return data;
+}
+
+async function loadRouteProfiles() {
+  let kept;
+  try { kept = await getJson('/api/setups?kind=route-preset'); } catch { return; }
+  const old = readRouteMemory(ROUTE_PROFILES_KEY);
+  if (!kept.length && old.length) {
+    for (const profile of old.filter((p) => p?.name)) {
+      await fetch('/api/setups', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'route-preset', name: profile.name, data: routeProfileData(profile) }) }).catch(() => {});
+    }
+    try { localStorage.removeItem(ROUTE_PROFILES_KEY); } catch { /* moved; the old copy is harmless */ }
+    try { kept = await getJson('/api/setups?kind=route-preset'); } catch { kept = []; }
+  }
+  routeProfiles = kept.map(routeProfileOf);
+  renderRouteProfiles();
+}
+
 function renderRouteProfiles() {
   const select = $('#routes-profile');
   if (!select) return;
@@ -19595,8 +19692,8 @@ function applyRouteProfile(profile) {
   choosePlanningShip(typeof profile.ship === 'string' ? profile.ship : resolvedPlanningShipName());
 }
 
-function saveRouteProfile() {
-  const name = window.prompt(tx('Name this local route preset:'), tx('Preset {n}', { n: routeProfiles.length + 1 }))?.trim();
+async function saveRouteProfile() {
+  const name = window.prompt(tx('Name this route preset:'), tx('Preset {n}', { n: routeProfiles.length + 1 }))?.trim();
   if (!name) return;
   const profile = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name,
@@ -19605,10 +19702,13 @@ function saveRouteProfile() {
     safety: $('#routes-safety').value, pad: $('#routes-pad').value,
     here: $('#routes-here').checked, fresh: $('#routes-fresh-only').checked,
   };
-  routeProfiles = [...routeProfiles.filter((saved) => saved.name !== name), profile].slice(-12);
-  writeRouteMemory(ROUTE_PROFILES_KEY, routeProfiles);
+  const saved = await fetch('/api/setups', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'route-preset', name, data: routeProfileData(profile) }) })
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  if (!saved?.id) return;
+  routeProfiles = [...routeProfiles.filter((p) => p.id !== saved.id && p.name.toLowerCase() !== name.toLowerCase()), routeProfileOf(saved)];
   renderRouteProfiles();
-  $('#routes-profile').value = profile.id;
+  $('#routes-profile').value = saved.id;
 }
 
 function rememberRoute(route, kind = 'route') {
@@ -19697,14 +19797,7 @@ async function loadRouteCircuits(query) {
     save.addEventListener('click', () => {
       rememberRoute({ commodity: `${circuit.commodity} / ${circuit.returnCommodity}`, buyAt: circuit.buyAt,
         sellAt: circuit.returnSellAt, totalProfit: circuit.totalProfit }, 'circuit');
-      planTrip(`${circuit.commodity} ⇄ ${circuit.returnCommodity}`, [
-        { placeId: circuit.buyAtId, place: circuit.buyAt,
-          note: tx('Buy {units} SCU {commodity}', { units: Math.floor(circuit.units), commodity: circuit.commodity }) },
-        { placeId: circuit.sellAtId, place: circuit.sellAt,
-          note: tx('Sell {commodity}; buy {next}', { commodity: circuit.commodity, next: circuit.returnCommodity }) },
-        { placeId: circuit.returnSellAtId, place: circuit.returnSellAt,
-          note: `${tx('Sell {commodity}', { commodity: circuit.returnCommodity })} · +${money(circuit.returnProfit)}` },
-      ]);
+      planTrip(`${circuit.commodity} ⇄ ${circuit.returnCommodity}`, circuitStops(circuit), plannedShip());
     });
     card.append(save);
     list.append(card);
@@ -19722,6 +19815,53 @@ const tradeAction = (kind, commodity, units, price) => ({
   kind, text: commodity, quantity: Math.floor(Number(units) || 0), unit: 'SCU', price: Number(price) || 0,
 });
 
+/**
+ * A circuit as run-sheet lines (1.2.33): the outbound buy and sale, the
+ * return load bought where the outbound one is sold - or at its own counter
+ * when the circuit names another - and its sale, every one priced. It was
+ * three notes, so a circuit could not be tweaked or its profit worked out
+ * again once flown, which a single trade run always could.
+ */
+function circuitStops(circuit) {
+  const same = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
+  const sellOut = tradeAction('sell', circuit.commodity, circuit.units, circuit.sellPrice);
+  const buyBack = tradeAction('buy', circuit.returnCommodity, circuit.returnUnits, circuit.returnBuyPrice);
+  const returnBuyAt = circuit.returnBuyAt || circuit.sellAt;
+  const stops = [
+    { placeId: circuit.buyAtId || placeIdForTerminal(circuit.buyAt), place: circuit.buyAt,
+      actions: [tradeAction('buy', circuit.commodity, circuit.units, circuit.buyPrice)] },
+    { placeId: circuit.sellAtId || placeIdForTerminal(circuit.sellAt), place: circuit.sellAt,
+      actions: same(returnBuyAt, circuit.sellAt) ? [sellOut, buyBack] : [sellOut] },
+  ];
+  if (!same(returnBuyAt, circuit.sellAt))
+    stops.push({ placeId: circuit.returnBuyAtId || placeIdForTerminal(returnBuyAt), place: returnBuyAt, actions: [buyBack] });
+  stops.push({ placeId: circuit.returnSellAtId || placeIdForTerminal(circuit.returnSellAt), place: circuit.returnSellAt,
+    actions: [tradeAction('sell', circuit.returnCommodity, circuit.returnUnits, circuit.returnSellPrice)] });
+  return stops;
+}
+
+/**
+ * A shopping list's run as run-sheet lines (1.2.33): one buy per item at the
+ * counter chosen for it, with the amount and the counter's price, instead
+ * of a note listing them. Units the run sheet does not draw (it knows SCU
+ * and units) stay in the line's text, so nothing is lost.
+ */
+function shoppingRunStops(options, chosen) {
+  const byPlace = new Map();
+  for (const { item, sellers } of options) {
+    const terminal = chosen.get(item.name);
+    if (!terminal) continue;
+    const seller = sellers.find((s) => s.terminal === terminal);
+    const unit = /^(scu|units?)$/i.test(item.unit || '') ? item.unit : null;
+    const text = item.unit && !unit ? `${item.name} (${item.unit})` : item.name;
+    const stop = byPlace.get(terminal) || { placeId: seller?.placeId || placeIdForTerminal(terminal), place: terminal, actions: [] };
+    stop.actions.push({ kind: 'buy', text, quantity: item.needed > 0 ? item.needed : null,
+      unit: item.needed > 0 ? unit || (item.unit ? null : 'units') : null, price: seller?.price > 0 ? seller.price : null });
+    byPlace.set(terminal, stop);
+  }
+  return [...byPlace.values()];
+}
+
 /** Save either the best buyer or a named alternate as the same editable flight plan. */
 function saveTradeRoute(route, sellAt, sellAtId, sellPrice, label = '') {
   rememberRoute({ ...route, sellAt, sellPrice }, label ? 'alternate' : 'route');
@@ -19736,7 +19876,7 @@ function saveTradeRoute(route, sellAt, sellAtId, sellPrice, label = '') {
       place: sellAt,
       actions: [tradeAction('sell', route.commodity, route.units, sellPrice)],
     },
-  ]);
+  ], plannedShip());
 }
 
 function saveSplitTradeRoute(route, portions) {
@@ -19749,7 +19889,7 @@ function saveSplitTradeRoute(route, portions) {
       actions: [tradeAction('buy', route.commodity, units, route.buyPrice)] },
     ...portions.map((portion) => ({ placeId: portion.placeId || placeIdForTerminal(portion.terminal), place: portion.terminal,
       actions: [tradeAction('sell', route.commodity, portion.units, portion.sellPrice)] })),
-  ]);
+  ], plannedShip());
 }
 
 /* ---------- rep runs ----------
@@ -20356,7 +20496,7 @@ $('#routes-pad')?.addEventListener('change', loadRoutes);
 $('#routes-profile')?.addEventListener('change', () => {
   applyRouteProfile(routeProfiles.find((profile) => profile.id === $('#routes-profile').value));
 });
-$('#routes-profile-save')?.addEventListener('click', saveRouteProfile);
+$('#routes-profile-save')?.addEventListener('click', () => saveRouteProfile().catch(() => {}));
 $('#routes-best-safe')?.addEventListener('click', chooseBestSafeRoute);
 function openRoutePlanOnMap() {
   showTripPanel();
@@ -20380,6 +20520,7 @@ $('#routes-history-clear')?.addEventListener('click', () => {
   renderRouteDashboard([]);
 });
 renderRouteProfiles();
+loadRouteProfiles().catch(() => {});
 
 /**
  * "Wake up at" on the dashboard: where the last death put you, which is as
@@ -24158,6 +24299,87 @@ async function loadOutfitting() {
  */
 async function loadJobs() {
   await Promise.all([loadJobContracts(), loadJobList(), fillBlueprintGoals()]);
+  await renderContinueWork().catch(() => {});
+}
+
+/* ---------- continue your work (1.2.37) ----------
+   The deck's first section: what is under way, each a card that opens the
+   page it lives on. Read from what the pages already load - the tracked
+   plan, the shopping lists, the checklists, the refinery picture, the
+   events - and asked for only when the page has not loaded it yet. A card
+   is drawn only when there is something to continue: an empty one is a
+   door, and the workspaces below are the doors. */
+let deckJobs = [];
+function continueCard(kicker, title, detail, action, go, tone = '') {
+  const card = el('button', `continue-card${tone ? ` ${tone}` : ''}`);
+  card.type = 'button';
+  card.append(el('span', 'operations-kicker', kicker), el('b', null, title));
+  if (detail) card.append(el('span', 'muted', detail));
+  card.append(el('span', 'operation-status', action));
+  card.addEventListener('click', go);
+  return card;
+}
+
+async function renderContinueWork() {
+  const host = $('#operations-continue');
+  if (!host) return;
+  if (!trips.length) await loadTrips().catch(() => {});
+  if (!checklists.length) checklists = await getJson(`/api/checklists${importedQuery()}`).catch(() => []);
+  const refinery = refineryPicture || await getJson('/api/mining/refinery').catch(() => null);
+  if (!eventsData) eventsData = await getJson('/api/events').catch(() => null);
+  const now = Date.now();
+  const cards = [];
+
+  const trip = tracked();
+  if (trip?.stops?.length && trip.stops.some((s) => !s.done || (s.actions || []).some((a) => !a.done))) {
+    const next = nextStop(trip);
+    const done = trip.stops.filter((s) => s.done).length;
+    cards.push(continueCard(tx('Flight plan'), trip.title,
+      [next ? tx('Next: {place}', { place: next.place }) : null, tx('{done} of {total} stops', { done, total: trip.stops.length })].filter(Boolean).join(' · '),
+      tx('Open the Itinerary'), () => showView('itinerary')));
+  }
+
+  const lists = deckJobs.filter((j) => j.kind !== 'craft' && !j.done);
+  if (lists.length) {
+    const list = lists.find((j) => j.pinned) || lists[0];
+    const more = lists.length - 1;
+    cards.push(continueCard(tx('Supplies'), list.title,
+      [tx('{have} of {total} in hand', { have: list.haveCount || 0, total: list.totalCount || 0 }),
+        more ? txn(more, '{count} more list', '{count} more lists') : null].filter(Boolean).join(' · '),
+      tx('Open the list'), () => $('#shopping-workspace-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' })));
+  }
+
+  const open = (checklists || []).filter((c) => (c.items || []).some((i) => !i.done));
+  if (open.length) {
+    const list = open.find((c) => c.pinned) || open[0];
+    const ticked = list.items.filter((i) => i.done).length;
+    cards.push(continueCard(tx('Checklist'), list.title,
+      tx('{done} of {total} ticked', { done: ticked, total: list.items.length }),
+      tx('Open Checklists'), () => showView('checklists')));
+  }
+
+  if (refinery) {
+    const groups = refineryGroups(refinery, now);
+    if (groups.waiting.length) {
+      cards.push(continueCard(tx('Refinery'), refineryWaitingLine(groups),
+        groups.refining.length ? txn(groups.refining.length, '{count} more still refining', '{count} more still refining') : null,
+        tx('Open Mining'), () => showView('mining'), 'continue-ready'));
+    } else if (groups.refining.length) {
+      cards.push(continueCard(tx('Refinery'), txn(groups.refining.length, '{count} order refining', '{count} orders refining'),
+        refineryReadyText(groups.refining[0], now), tx('Open Mining'), () => showView('mining')));
+    }
+  }
+
+  const event = currentEvent(eventsData, now);
+  if (event) {
+    const overall = event.tracks.find((t) => t.overall) || event.tracks[0];
+    cards.push(continueCard(tx('Event'), event.title,
+      overall ? `${eventPoints(overall.points)} · ${eventNextText(overall)}` : null,
+      tx('Open Events'), () => showView('events')));
+  }
+
+  host.replaceChildren(...(cards.length ? cards
+    : [el('p', 'muted', tx('Nothing under way. Start something from a workspace below.'))]));
 }
 
 /** The command deck is a door into the existing tools, not a second data model. */
@@ -24453,7 +24675,7 @@ function renderHaulPlan(host, plan) {
     plan.travelling ? tx('in transit') : null,
   ].filter(Boolean).join(', ');
   section.append(el('p', 'muted haul-origin', plan.start
-    ? tx('Route from {place} ({known}). Pickups first, grouped by body and system; distances are not known.',
+    ? tx('Route from {place} ({known}). Pickups first, grouped by body and system. For an order by distance, use Share the run below - with only you on it, it orders your own run.',
       { place: `${plan.start.name}${plan.start.body ? ` · ${plan.start.body}` : ''}`, known })
     : tx('Current location unknown — this route cannot choose a nearby starting stop.')));
   section.append(el('p', 'muted caption',
@@ -24612,7 +24834,310 @@ function renderHaulPlan(host, plan) {
 
   for (const note of plan.notes || []) section.append(el('p', 'muted caption', serverText(note)));
 
+  renderHaulShare(section, plan);
+
   host.append(section);
+}
+
+/* ---------- Sharing the run (1.2.32) ----------
+   With a group: who is flying, where each one is, and the open contracts
+   shared out so the whole run is done soonest. The crew list is kept on the
+   server; who is ticked, where they are and the last answer live here,
+   because the Jobs page redraws the run every few seconds and a choice
+   that vanished on each redraw would be no choice at all. */
+let haulCrew = null, haulCrewAsked = false;
+let haulShareWho = {};
+let haulShareSplit = false;
+let haulShareResult = null;
+let haulShareBusy = false;
+let haulSharePlaces = null, haulShareWingmen = null;
+
+async function loadHaulCrew() {
+  haulCrewAsked = true;
+  try { haulCrew = await getJson('/api/haul/crew'); } catch { haulCrew = { crew: [], hulls: [], max: 12 }; }
+  // Names to suggest: places the atlas knows, and pilots the party channel
+  // has named. Both only suggestions - anything typed is used as typed.
+  if (!haulSharePlaces) {
+    try { haulSharePlaces = ((await getJson('/api/map')).nodes || []).map((n) => n.name).filter(Boolean); } catch { haulSharePlaces = []; }
+  }
+  if (!haulShareWingmen) {
+    try { haulShareWingmen = (await getJson('/api/crew')).map((w) => w.name || w.handle).filter(Boolean); } catch { haulShareWingmen = []; }
+  }
+}
+
+function haulShareBody(plan) {
+  const ships = [{ id: 'me', place: haulShareWho.me?.place || null }];
+  for (const mate of haulCrew?.crew || []) {
+    const who = haulShareWho[mate.id];
+    if (who?.on) ships.push({ id: mate.id, place: who.place || null });
+  }
+  return { planId: plan.planId || null, split: haulShareSplit, ships };
+}
+
+function shareGm(gm) {
+  if (gm === null || gm === undefined) return null;
+  return gm >= 100 ? gm.toFixed(0) : gm >= 10 ? gm.toFixed(1) : gm.toFixed(2);
+}
+
+/** One ship's run as lines a wingmate can read in party chat. */
+function haulShareChat(run) {
+  const lines = [`${run.ship.name}${run.ship.hull ? ` (${run.ship.hull})` : ''}:`];
+  run.stops.forEach((stop, i) => {
+    const what = stop.actions.map((a) => `${a.kind === 'load' ? tx('load') : tx('drop')}${a.scu ? ` ${a.scu} SCU` : ''}${a.commodity ? ` ${a.commodity}` : ''}`).join(', ');
+    lines.push(`${i + 1}. ${stop.place}${stop.body ? ` (${stop.body})` : ''}: ${what}`);
+  });
+  return lines.join('\n');
+}
+
+function renderHaulShare(section, plan) {
+  const box = el('div', 'haul-share');
+  section.append(box);
+  drawHaulShare(box, plan);
+}
+
+/* Drawn in place: the crew arriving, a wingmate added or a share coming
+   back redraws this panel and not the whole run, which would re-read the
+   plan for nothing. */
+function drawHaulShare(box, plan) {
+  box.replaceChildren();
+  const redraw = () => drawHaulShare(box, plan);
+  box.append(el('h4', 'spaced', tx('Share the run')));
+  box.append(el('p', 'muted caption', tx('Flying with a group? Tick who is coming and where each one is now, and the contracts are shared out so the whole run is done soonest: the longest single run made as short as it can be.')));
+
+  if (!haulCrewAsked) {
+    loadHaulCrew().then(redraw);
+    box.append(el('p', 'muted caption', tx('Reading your crew…')));
+    return;
+  }
+
+  // A share of contracts the page no longer shows is a share of nothing.
+  if (haulShareResult && haulShareResult.planId !== plan.planId) haulShareResult = null;
+
+  const list = el('ul', 'haul-crew');
+  const me = el('li', 'haul-crew-me');
+  me.append(el('b', null, tx('You')));
+  me.append(el('span', 'muted', [plan.ship, plan.shipScu ? tx('{scu} SCU', { scu: plan.shipScu }) : null].filter(Boolean).join(' · ') || tx('ship not known')));
+  const myPlace = el('input', 'search haul-crew-place');
+  myPlace.setAttribute('list', 'haul-share-places');
+  myPlace.placeholder = plan.start?.name ? tx('at {place} (from the log)', { place: plan.start.name }) : tx('where you are');
+  myPlace.value = haulShareWho.me?.place || '';
+  myPlace.addEventListener('change', () => { haulShareWho.me = { on: true, place: myPlace.value.trim() }; });
+  me.append(myPlace);
+  list.append(me);
+
+  for (const mate of haulCrew.crew || []) {
+    const who = haulShareWho[mate.id] || { on: false, place: '' };
+    const row = el('li', who.on ? 'haul-crew-on' : null);
+    const tick = el('label', 'haul-crew-name');
+    const box2 = el('input');
+    box2.type = 'checkbox';
+    box2.checked = !!who.on;
+    box2.addEventListener('change', () => {
+      haulShareWho[mate.id] = { ...who, on: box2.checked };
+      row.classList.toggle('haul-crew-on', box2.checked);
+    });
+    tick.append(box2, el('b', null, ` ${mate.name}`));
+    row.append(tick);
+    row.append(el('span', 'muted', mate.hullName
+      ? [mate.hullName, mate.scu ? tx('{scu} SCU', { scu: mate.scu }) : null].filter(Boolean).join(' · ')
+      : tx('hull not set: hold not limited')));
+    const place = el('input', 'search haul-crew-place');
+    place.setAttribute('list', 'haul-share-places');
+    place.placeholder = tx('where they are (yours if empty)');
+    place.value = who.place || '';
+    place.addEventListener('change', () => { haulShareWho[mate.id] = { ...(haulShareWho[mate.id] || who), place: place.value.trim() }; });
+    row.append(place);
+    const remove = el('button', 'ghost haul-crew-remove', '×');
+    remove.title = tx('Remove {name} from your crew', { name: mate.name });
+    remove.addEventListener('click', async () => {
+      await fetch(`/api/haul/crew/${encodeURIComponent(mate.id)}`, { method: 'DELETE' }).catch(() => {});
+      delete haulShareWho[mate.id];
+      await loadHaulCrew();
+      redraw();
+    });
+    row.append(remove);
+    list.append(row);
+  }
+  box.append(list);
+
+  const places = el('datalist');
+  places.id = 'haul-share-places';
+  for (const name of haulSharePlaces || []) { const o = el('option'); o.value = name; places.append(o); }
+  box.append(places);
+
+  // Adding a wingmate: a name (the party channel's are suggested) and the
+  // hull they bring, which is what sets their hold.
+  if ((haulCrew.crew || []).length < (haulCrew.max || 12)) {
+    const add = el('form', 'haul-crew-add');
+    const name = el('input', 'search');
+    name.placeholder = tx('Wingmate');
+    name.setAttribute('list', 'haul-share-wingmen');
+    const people = el('datalist');
+    people.id = 'haul-share-wingmen';
+    for (const who of haulShareWingmen || []) { const o = el('option'); o.value = who; people.append(o); }
+    const hull = el('select', 'search');
+    const none = el('option', null, tx('Hull (sets the hold)'));
+    none.value = '';
+    hull.append(none);
+    for (const h of haulCrew.hulls || []) {
+      const o = el('option', null, `${h.name} · ${tx('{scu} SCU', { scu: h.scu })}`);
+      o.value = h.class;
+      hull.append(o);
+    }
+    const go = el('button', 'ghost', tx('Add to crew'));
+    go.type = 'submit';
+    add.append(name, people, hull, go);
+    add.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!name.value.trim()) return;
+      go.disabled = true;
+      try {
+        const mate = await fetch('/api/haul/crew', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: name.value.trim(), hull: hull.value || null }),
+        }).then((r) => (r.ok ? r.json() : null));
+        if (mate?.id) haulShareWho[mate.id] = { on: true, place: '' };
+      } finally {
+        await loadHaulCrew();
+        redraw();
+      }
+    });
+    box.append(add);
+  }
+
+  const splitLabel = el('label', 'haul-share-split');
+  const split = el('input');
+  split.type = 'checkbox';
+  split.checked = haulShareSplit;
+  split.addEventListener('change', () => { haulShareSplit = split.checked; });
+  splitLabel.append(split, document.createTextNode(` ${tx('Let one contract be split between ships (only for contracts shared with the party)')}`));
+  box.append(splitLabel);
+
+  const actions = el('div', 'haul-actions');
+  const go = el('button', 'ghost haul-share-go', haulShareResult ? tx('Share it out again') : tx('Share it out'));
+  go.disabled = haulShareBusy;
+  go.addEventListener('click', async () => {
+    haulShareBusy = true;
+    go.disabled = true;
+    try {
+      const response = await fetch('/api/haul/share', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(haulShareBody(plan)),
+      });
+      const answer = await response.json();
+      if (response.ok) {
+        haulShareResult = answer;
+      } else if (answer?.planId) {
+        // The run moved under it: show the new one, as the run's own button does.
+        haulPlanNotice = serverText(answer.message);
+        haulShareBusy = false;
+        loadJobContracts().catch(() => {});
+        return;
+      } else {
+        haulShareResult = null;
+        box.append(el('p', 'outward caption', serverText(answer?.message) || tx('could not share the run')));
+        return;
+      }
+    } catch {
+      box.append(el('p', 'outward caption', tx('could not share the run')));
+      return;
+    } finally {
+      haulShareBusy = false;
+    }
+    redraw();
+  });
+  actions.append(go);
+  box.append(actions);
+
+  if (haulShareResult) renderHaulShareResult(box, plan, haulShareResult);
+}
+
+function renderHaulShareResult(box, plan, share) {
+  const runs = share.runs || [];
+  const partial = runs.some((r) => r.gmPartial);
+  box.append(el('p', 'haul-share-summary', [
+    txn(runs.length, '{count} ship', '{count} ships'),
+    tx('longest run {gm} Gm', { gm: shareGm(share.longestGm) }),
+    tx('all ships {gm} Gm', { gm: shareGm(share.totalGm) }),
+    share.split ? tx('contracts may be split') : tx('each contract on one ship'),
+  ].join(' · ')));
+  box.append(el('p', 'muted caption', partial
+    ? tx('Straight lines between body centres, not the route flown; a hop with no position on file is not in the figure, so it is a floor.')
+    : tx('Straight lines between body centres, not the route flown. Two stops on one body count as no distance.')));
+
+  for (const run of runs) {
+    const card = el('article', 'job-card haul-share-run');
+    const head = el('div', 'job-head');
+    head.append(el('b', null, run.ship.name));
+    head.append(el('span', 'muted', [run.ship.hull, run.ship.scu ? tx('{scu} SCU', { scu: run.ship.scu }) : null].filter(Boolean).join(' · ')));
+    head.append(el('span', 'spacer'));
+    head.append(el('span', 'job-kind', run.stops.length
+      ? `${shareGm(run.gm)} Gm${run.gmPartial ? '+' : ''} · ${txn(run.contracts, '{count} contract', '{count} contracts')}`
+      : tx('nothing to do')));
+    card.append(head);
+
+    if (run.stops.length) {
+      const stops = el('ol', 'haul-share-stops');
+      run.stops.forEach((stop, index) => {
+        const li = el('li');
+        const where = el('div', 'haul-share-where');
+        where.append(el('b', null, stop.place));
+        if (stop.body) where.append(el('span', 'muted', ` · ${stop.body}`));
+        const startsHere = index === 0 && run.ship.start?.name && run.ship.start.name === stop.place;
+        where.append(el('span', 'muted haul-share-leg', startsHere ? tx('where the run starts')
+          : stop.legGm === null || stop.legGm === undefined ? tx('distance not on file')
+            : stop.legGm === 0 ? tx('same body') : `+${shareGm(stop.legGm)} Gm`));
+        li.append(where);
+        for (const a of stop.actions) {
+          const scu = a.scu ? tx('{scu} SCU', { scu: a.scu }) : tx('amount not printed');
+          li.append(el('div', a.kind === 'load' ? 'haul-load' : 'haul-unload',
+            `${a.kind === 'load' ? tx('Load') : tx('Unload')} ${scu}${a.commodity ? ` ${a.commodity}` : ''} · ${a.contractTitle}`));
+        }
+        if (stop.aboardScu > 0) li.append(el('div', 'muted haul-aboard', tx('aboard after: {scu} SCU known', { scu: stop.aboardScu })));
+        stops.append(li);
+      });
+      card.append(stops);
+      if (run.ship.scu && run.peakScu > 0)
+        card.append(el('p', 'muted caption', tx('Fullest: {peak} of {scu} SCU.', { peak: run.peakScu, scu: run.ship.scu })));
+
+      const buttons = el('div', 'haul-actions');
+      if (run.ship.me) {
+        const make = el('button', 'ghost', tx('Make it my flight plan'));
+        make.addEventListener('click', async () => {
+          make.disabled = true;
+          try {
+            const response = await fetch('/api/haul/share/trip', {
+              method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(haulShareBody(plan)),
+            });
+            const result = await response.json();
+            if (result?.id) {
+              make.textContent = `✓ ${result.title} — ${txn(result.stops, '{count} stop, tracked', '{count} stops, tracked')}`;
+              if (typeof loadTrips === 'function') loadTrips().catch(() => {});
+            } else {
+              make.textContent = serverText(result?.message) || tx('could not plan');
+              make.disabled = false;
+            }
+          } catch {
+            make.textContent = tx('failed');
+            make.disabled = false;
+          }
+        });
+        buttons.append(make);
+      } else {
+        const copy = el('button', 'ghost', tx('Copy for chat'));
+        copy.addEventListener('click', async () => {
+          try { await navigator.clipboard.writeText(haulShareChat(run)); copy.textContent = tx('Copied'); }
+          catch { copy.textContent = tx('could not copy'); }
+        });
+        buttons.append(copy);
+      }
+      card.append(buttons);
+    }
+    box.append(card);
+  }
+
+  for (const out of share.leftOut || [])
+    box.append(el('p', 'outward caption', `${out.contractTitle}: ${serverText(out.why)}`));
+  for (const note of share.notes || []) box.append(el('p', 'muted caption', serverText(note)));
 }
 
 /**
@@ -24785,6 +25310,7 @@ async function loadJobList() {
     jobs = await getJson(`/api/jobs${importedQuery()}`);
   } catch { jobsUnavailable = true; }
 
+  deckJobs = jobs;
   renderPinnedJob(jobs);
   refreshMapFocusContext(mapFocusFilter === 'shopping' || mapFocusFilter === 'stash').catch(() => {});
   reloadPilotBriefing().catch(() => {});
@@ -26767,6 +27293,7 @@ async function renderBackupPreview() {
     [counts.miningRuns, '{count} mining haul', '{count} mining hauls'],
     [counts.notes, '{count} map note', '{count} map notes'],
     [counts.kits, '{count} kit', '{count} kits'],
+    [counts.setups, '{count} saved setup (Routes presets, Stream Deck choices)', '{count} saved setups (Routes presets, Stream Deck choices)'],
     [counts.pins, '{count} point of interest', '{count} points of interest'],
   ].filter(([n]) => n > 0).map(([n, one, other]) => txn(n, one, other));
 
@@ -31892,8 +32419,43 @@ async function addStop(placeId, place, note) {
   showTripPanel();
 }
 
+/**
+ * The ship the Routes planner is sizing loads for, as a plan keeps it
+ * (1.2.35): its name, class and the hold with where that figure came from.
+ * Null on foot, or with nothing chosen.
+ */
+function plannedShip(candidate = activePlanningShip()) {
+  if (!candidate?.ship?.name) return null;
+  const scu = planningCargo(candidate);
+  return { name: candidate.ship.name, class: candidate.ship.className || null,
+    scu: scu > 0 ? scu : null, scuSource: scu > 0 ? planningCargoSource(candidate) : null };
+}
+
+/**
+ * What the plan was sized for, beside what the log says is being flown.
+ * Null for a plan that never said. A different ship is pointed out, with the
+ * hold the plan assumed, because loads sized to a Hercules do not go in a
+ * Cutlass; the same ship is said quietly.
+ */
+function tripShipNotice(trip) {
+  const ship = trip?.ship;
+  if (!ship?.name) return null;
+  const SOURCES = { community: 'reference data', screenshot: 'from a screenshot', manual: 'entered by you', log: 'reference data' };
+  const hold = ship.scu ? `${tx('{scu} SCU', { scu: fmtInt(ship.scu) })}${ship.scuSource ? ` (${tx(SOURCES[ship.scuSource] || ship.scuSource)})` : ''}` : tx('hold not known');
+  const box = el('div', 'trip-ship');
+  box.append(el('span', 'muted', tx('Planned for {ship} · {hold}', { ship: ship.name, hold })));
+  const flying = nowState?.inGame ? nowState?.ship : null;
+  if (flying) {
+    const same = planningShipKey(flying) === planningShipKey(ship.name);
+    box.append(el('span', same ? 'muted' : 'outward', same
+      ? ` · ${tx('flying it now')}`
+      : ` · ${tx('you are flying the {ship} now: check the loads fit', { ship: flying })}`));
+  }
+  return box;
+}
+
 /** Starts a plan from a list of stops - a trade run, or a shopping trip. */
-async function planTrip(title, stops) {
+async function planTrip(title, stops, ship = null) {
   setContextFocus({
     kind: 'flight-plan',
     title,
@@ -31905,7 +32467,7 @@ async function planTrip(title, stops) {
   await fetch('/api/trips', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, stops }),
+    body: JSON.stringify({ title, stops, ship }),
   });
 
   await loadTrips();
@@ -32131,6 +32693,8 @@ function renderTripPanel() {
 
   const trade = tradeRunSummary(trip);
   if (trade) body.append(trade);
+  const shipNote = tripShipNotice(trip);
+  if (shipNote) body.append(shipNote);
 
   const next = nextStop(trip);
 
@@ -32679,6 +33243,8 @@ function renderItineraryPlan(main, trip) {
 
   const ended = tripEndedNotice(trip);
   if (ended) main.append(ended);
+  const shipNote = tripShipNotice(trip);
+  if (shipNote) main.append(shipNote);
 
   const removed = tripRemovedLog(trip);
   if (removed) main.append(removed);
@@ -34039,41 +34605,11 @@ async function planShoppingTrip(job, card) {
 
   const create = el('button', 'ghost', tx('Create plan'));
   create.addEventListener('click', async () => {
-    const byPlace = new Map();
-
-    for (const { item, sellers } of options) {
-      const terminal = chosen.get(item.name);
-      if (!terminal) continue;
-
-      const seller = sellers.find((s) => s.terminal === terminal);
-      const need = item.needed > 0
-        ? `${item.name} ${item.needed}${item.unit ? ` ${item.unit}` : ''}`
-        : item.name;
-
-      const line = byPlace.get(terminal)
-        || { items: [], cost: 0, priced: true, placeId: seller?.placeId || '' };
-
-      line.items.push(need);
-
-      if (seller?.price > 0 && item.needed > 0) line.cost += seller.price * item.needed;
-      else line.priced = false;
-
-      byPlace.set(terminal, line);
-    }
-
-    if (!byPlace.size) {
+    const stops = shoppingRunStops(options, chosen);
+    if (!stops.length) {
       alertLine($('#jobs-list'), tx('Nothing is chosen, so there is no run to fly.'));
       return;
     }
-
-    const stops = [...byPlace.entries()].map(([place, line]) => ({
-      placeId: line.placeId || placeIdForTerminal(place),
-      place,
-
-      // The estimate is only shown when every item at the stop has a price;
-      // a partial total reads as the cost of the landing and is not.
-      note: line.items.join(', ') + (line.priced && line.cost > 0 ? ` · ~${money(line.cost)}` : ''),
-    }));
 
     chooser.remove();
     await planTrip(tx('{title} run', { title: job.title }), stops);
@@ -36249,6 +36785,10 @@ async function renderLanguageSettings() {
 
   const answer = await getJson('/api/language');
   const languages = answer.available || [];
+  // Nothing to choose with one language on offer, and a picker of one
+  // reads as a promise of more.
+  const card = $('#language-card');
+  if (card) card.hidden = languages.length < 2;
 
   pick.textContent = '';
   for (const language of languages) {
@@ -37223,7 +37763,7 @@ function renderNowTarget() {
   $('#now-target-label').textContent = combat.combat ? tx('Target · in combat') : tx('Target');
   $('#now-target').textContent = targetTitle(target);
   $('#now-target-detail').textContent = target ? targetDetail(target)
-    : tx('No target held · {locks} locks this session, {hostile} hostile', { locks: combat.locks || 0, hostile: combat.hostileLocks || 0 });
+    : txn(combat.locks || 0, 'No target held · {count} lock this session, {hostile} hostile', 'No target held · {count} locks this session, {hostile} hostile', { hostile: combat.hostileLocks || 0 });
   const odds = $('#now-target-odds');
   if (odds) {
     odds.textContent = targetOdds(target);
@@ -38084,7 +38624,66 @@ function deckTiming(command) {
   if (seconds > 0) return tx('Hold {seconds} s before it fires', { seconds: shown });
   return command.activation === 'hold' ? tx('Hold the button') : '';
 }
+/* The deck choice (1.2.36): model, bindings and the commands picked. It
+   reset to the default categories on every reload; now the last one is kept
+   as a setup called "Last used" and comes back, and any choice can be kept
+   under a name. Kept by the app, so it is in the backup like a kit. */
+const DECK_LAST = 'Last used';
+let deckSetups = [], deckRestored = null, deckSaveTimer = 0, deckSavedJson = '';
+function deckChoice() {
+  return { model: $('#deck-model')?.value || '15', source: $('#deck-source')?.value || 'current', actions: [...deckSelection] };
+}
+async function loadDeckSetups() {
+  try { deckSetups = await getJson('/api/setups?kind=deck'); } catch { deckSetups = []; }
+  renderDeckSetups();
+  return deckSetups;
+}
+function renderDeckSetups() {
+  const select = $('#deck-saved');
+  if (!select) return;
+  const previous = select.value;
+  select.textContent = '';
+  select.append(new Option(tx('Saved choices…'), ''));
+  for (const setup of deckSetups.filter((s) => s.name !== DECK_LAST)) select.append(new Option(setup.name, setup.id));
+  select.value = deckSetups.some((s) => s.id === previous) ? previous : '';
+}
+function applyDeckChoice(data) {
+  if (!data) return;
+  if ($('#deck-model') && ['15', 'xl'].includes(data.model)) $('#deck-model').value = data.model;
+  if ($('#deck-source') && ['current', 'defaults'].includes(data.source)) $('#deck-source').value = data.source;
+  deckSelection = new Set(Array.isArray(data.actions) ? data.actions : []);
+  deckInitialised = true;
+}
+/** Keeps the choice as "Last used", a moment after it stops changing, and only when it did. */
+function rememberDeckChoice() {
+  if (!deckInitialised || !deckCommands.length) return;
+  clearTimeout(deckSaveTimer);
+  deckSaveTimer = setTimeout(() => {
+    const data = deckChoice();
+    const json = JSON.stringify(data);
+    if (json === deckSavedJson) return;
+    deckSavedJson = json;
+    fetch('/api/setups', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'deck', name: DECK_LAST, data }) }).catch(() => {});
+  }, 800);
+}
+async function saveDeckSetup() {
+  const name = window.prompt(tx('Name this Stream Deck choice:'), tx('Deck {n}', { n: deckSetups.filter((s) => s.name !== DECK_LAST).length + 1 }))?.trim();
+  if (!name || name === DECK_LAST) return;
+  const saved = await fetch('/api/setups', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'deck', name, data: deckChoice() }) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  if (!saved?.id) return;
+  await loadDeckSetups();
+  $('#deck-saved').value = saved.id;
+}
 async function loadStreamDeck() {
+  // The first visit takes back the last choice before anything picks the
+  // default categories over it.
+  if (deckRestored === null) {
+    const last = (await loadDeckSetups()).find((s) => s.name === DECK_LAST);
+    deckRestored = !!last;
+    if (last) { applyDeckChoice(last.data); deckSavedJson = JSON.stringify(deckChoice()); }
+  }
   const status = $('#deck-status');
   status.textContent = tx('Reading control mappings…');
   $('#deck-download').disabled = true;
@@ -38115,6 +38714,7 @@ function deckIcon(appearance) {
   return icon;
 }
 function renderStreamDeck() {
+  rememberDeckChoice();
   const categories = $('#deck-categories'); categories.textContent = '';
   for (const group of [...new Set(deckCommands.filter(c => c.preset).map(c => c.group))]) {
     const commands = deckCommands.filter(c => c.preset && c.group === group && !c.problem);
@@ -38206,6 +38806,15 @@ $('#deck-model')?.addEventListener('change', () => {
   renderDeckPreview();
 });
 $('#deck-source')?.addEventListener('change', loadStreamDeck);
+$('#deck-saved')?.addEventListener('change', async () => {
+  const setup = deckSetups.find((s) => s.id === $('#deck-saved').value);
+  if (!setup) return;
+  const sourceBefore = $('#deck-source')?.value;
+  applyDeckChoice(setup.data);
+  if ($('#deck-source')?.value !== sourceBefore) await loadStreamDeck();
+  else { deckSelection = new Set([...deckSelection].filter(id => deckCommands.some(c => c.id === id && !c.problem))); renderStreamDeck(); }
+});
+$('#deck-save')?.addEventListener('click', () => saveDeckSetup().catch(() => {}));
 $('#deck-refresh')?.addEventListener('click', loadStreamDeck);
 $('#deck-select')?.addEventListener('click', () => { for (const c of deckShown()) if (!c.problem) deckSelection.add(c.id); renderStreamDeck(); });
 $('#deck-clear')?.addEventListener('click', () => { deckSelection.clear(); renderStreamDeck(); });

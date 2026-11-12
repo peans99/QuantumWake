@@ -55,19 +55,4 @@ public class InstallBoxTests
 
         Assert.Equal("as written", page.NodeText("#install-search"));
     }
-
-    /// <summary>
-    /// The French reader gets the same sentence, with the prefixes in it.
-    /// </summary>
-    [Fact]
-    public void The_linux_sentence_is_translated()
-    {
-        var page = new Page("fr");
-        page.Serve("/api/install/path", """{"saved":null,"detected":[],"fromLauncher":[],"windows":false,"prefixes":["/home/pilote/Games/star-citizen"]}""");
-
-        page.Do("await describeInstallSearch();");
-
-        var text = page.NodeText("#install-search");
-        Assert.Contains("préfixes Wine /home/pilote/Games/star-citizen", text);
-    }
 }

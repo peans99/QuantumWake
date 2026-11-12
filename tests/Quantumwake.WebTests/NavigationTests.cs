@@ -18,11 +18,12 @@ public class NavigationTests
         Assert.Contains("data-view=\"map\"", navigation);
         Assert.Contains("data-view=\"log\"", navigation);
 
-        AssertViews(navigation, "Operations", "jobs", "routes", "contracts", "checklists", "blueprints", "wikelo");
+        // Mining is work - refinery orders, radar, the charge - so it moved from Reference (1.2.37).
+        AssertViews(navigation, "Operations", "jobs", "routes", "contracts", "checklists", "blueprints", "wikelo", "mining");
         AssertViews(navigation, "Flight", "logbook", "sessions", "servers", "places", "points", "crew", "casualties");
         AssertViews(navigation, "Hangar", "fleet", "hangar", "loadout", "stash", "garage", "armoury");
         AssertViews(navigation, "Economy", "spending", "ledger", "commodities", "market");
-        AssertViews(navigation, "Reference", "ships", "components", "parts", "loot", "mining", "crafting");
+        AssertViews(navigation, "Reference", "ships", "components", "parts", "loot", "crafting");
         AssertViews(navigation, "Settings", "settings", "overlay", "controls", "streamdeck", "labels", "imports", "about");
     }
 

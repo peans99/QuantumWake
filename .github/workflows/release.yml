@@ -33,15 +33,16 @@ jobs:
 
       # The app is self-contained, so the runtime it ships is the one this SDK
       # carries - a pilot's own .NET install and Windows Update never patch it.
-      # 10.0.403 carries runtime 10.0.14, the 2026-10-25 out-of-band fix for
-      # the Brotli and SocketAsyncEventArgs CVEs; 10.0.402 (10.0.13) did not.
+      # 10.0.404 carries runtime 10.0.15, the 2026-11-10 security release (16
+      # CVEs); 10.0.403 (10.0.14, the 2026-10-25 Brotli and SocketAsyncEventArgs
+      # fix) did not.
       # Pinned rather than '10.0.x' so a release states which runtime it holds,
       # and because on 2026-10-25 aka.ms sent 10.0.403 to a storage account
       # answering 409 and v0.18.29 failed here twice. Raise it with each .NET
       # security release.
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.403'
+          dotnet-version: '10.0.404'
 
       - name: Version from tag
         id: version

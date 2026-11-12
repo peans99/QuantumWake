@@ -74,7 +74,7 @@ models of the patch you are actually playing. Nothing is downloaded for it.
 The dashboard is for planning and history. The optional overlay gives the same
 short answers over the game, and the optional Cougar MFD mode keeps navigation,
 tasks and cargo close to the cockpit. The dashboard, overlay and MFD pages are
-in English or French; choose under **Settings → General**.
+in English.
 
 ## Start here
 
@@ -213,7 +213,7 @@ not what a Linux pilot is missing.
 - **An x86-64 distribution with glibc 2.27 or later**, which is every
   distribution above. The Linux download carries its own copy of .NET, so
   nothing is installed for the dashboard; it needs `libicu` (the dashboard's
-  French and date formats come from it) and `libstdc++` (the screenshot
+  number and date formats come from it) and `libstdc++` (the screenshot
   reader), both present on a desktop install. Microsoft lists Fedora 43 and
   44, Ubuntu 22.04 to 26.04, Debian 13, openSUSE Leap 16 and RHEL 8 to 10 as
   [supported by .NET 10](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md);
@@ -388,7 +388,31 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.26
+### 1.2.37
+
+**The Command deck starts with your work.** It opens on **Continue your work**: your tracked flight plan with its next stop, the shopping list still being filled, an open checklist, refinery orders waiting or still refining, and the event you are playing, each a card that takes you to it. Only what is actually under way gets a card. The workspaces underneath now carry the names the Operations menu uses (Shopping lists, Routes, Contracts and so on), with what each is for beneath. **Mining has moved from Reference to Operations**: its refinery orders, radar and fracture charge are work in progress rather than something you look up.
+
+**Saved setups are kept like kits.** Routes presets lived in the browser, so the overlay never saw one made in a browser and no backup carried them; Stream Deck choices were not kept at all and reset on every reload. Both are now kept by the app, in their own file and in your backup, the way kits and Garage builds always were. Your existing presets move across by themselves the first time the Routes page opens. The Stream Deck page comes back to the model, bindings and commands you last had, and can keep a choice under a name. Backups now use format 3: this version restores older backups, and an older version asks you to update before restoring a new one rather than dropping your setups.
+
+**A plan remembers the ship it was planned for.** Trade runs, circuits and split loads now keep the ship the Routes planner was sizing for and the hold it assumed, with where that figure came from; hauling runs keep the ship the log had you in. The flight plan and the Itinerary show it, and when the log says you are flying something else, the plan says so - loads sized for a Hercules do not go in a Cutlass.
+
+**A suit you design becomes a kit.** The Armoury's suit calculator has **Save as kit**: the pieces worn, the guns holstered and everything carried are kept as a kit on the Loadout page, repeats counted. **Prepare it** then opens that kit's Prepare panel, which says what you already own and where the rest is sold, and from there it becomes a shopping list. Before, a kit could only be saved from what the log last saw you wearing.
+
+**Every planner writes a run sheet you can edit.** A trade circuit and a shopping-list run used to land in the flight plan as notes, so their amounts and prices could not be changed once flown and the profit could not be worked out again. They now write the same priced buy and sell lines a single trade run always did: the circuit's outbound buy and sale, the return load bought where the outbound one is sold, and its sale; the shopping run's one buy per item at the counter chosen for it, with the amount and that counter's price.
+
+**Hauling runs, shared with a group.** Under the hauling run on Jobs there is now **Share the run**: keep a list of the wingmates you haul with and the ship each one brings, tick who is flying, say where each one is, and your open contracts are shared out so the whole run is done soonest, with the longest single ship’s run made as short as it can be. Each ship gets its stops in flying order, the distance of each hop and what is aboard after each stop. Pickups always come before drops, no ship is ever given more than its hold, and a contract stays on one ship unless you tick *split* for a run of party-shared contracts. Your share can be made your flight plan; a wingmate’s copies as lines for party chat. With only you ticked, it orders your own run by distance. Distances are straight lines between planets and moons from the community star map, not the route flown; two stops on one body count as none, and a place with no position on file makes the figure a floor. **Put in order** on the Itinerary page now also takes the nearest stop next when it knows the distance.
+
+**The locked ship as a real 3D model.** The MFD Target page now shows the hull you have locked as the game’s own 3D model, the same one the 3D view draws, turning slowly, with a red glow while it is hostile. The flat picture shows first and stays if your install has no model for that hull. It is kept light because the game is running beside it: no effects or shadows, 24 frames a second, and it is released the moment the lock or the page goes. If you set the Garage to silhouettes, for every ship or for that one, the Target page keeps the silhouette too.
+
+**Callouts no longer hide the Target page.** On Target, Callouts and Charge, a spoken line now appears in a slim strip where the page title was, so the locked ship, its hull and its range stay in sight through a busy fight. Other pages still get the large card. A recorded fight with a line every four or five seconds showed why: the large card stayed up from the lock to the kill, and the Target page underneath was never seen. Also fixed: one lock now reads "1 lock this session", not "1 locks".
+
+**English only.** The French translation is gone. Few people read the app in French, and keeping it complete meant translating every new sentence before a change could ship. If you had French chosen, the app opens in English after this update and there is nothing to change; the language picker in Settings → General is gone with it. Names from the game were always English and are unchanged.
+
+**What the voice says is on the MFD too.** Every line the voice says (a callout, a mission toast, a copilot reply) now comes up over the page on the frame that follows the action, in large type, for six seconds. Then the page underneath is back exactly as it was. Lines that come close together stack, newest on top. Any button clears the card early, and the press still does what it always did on that page.
+
+**Target goes back when the lock does.** The Target page used to stay up for most of a minute after a fight: half a minute for "a hostile was locked lately", then twenty seconds more, and a single button press during the fight cancelled the trip back altogether. Now Target goes back six seconds after the lock is gone. It returns to the page the fight took the frame from, or to the frame’s own default page when there is none. A Target page you opened yourself on either frame does the same once the lock it was showing has gone. Opened onto nothing, it is left alone, because then you are looking rather than fighting.
+
+**Built on the November .NET security release.** Quantum Wake carries its own copy of .NET, so Windows Update and the .NET on your PC never patch it; only a new build does. This one carries .NET 10.0.15, released on 10 November 2026 with fixes for sixteen security issues. Nothing else changes.
 
 **The guide catches up with live reading.** This README said the app never captures your screen, which stopped being true when live reading arrived in 1.1. It now has its own section saying what live reading looks at, what it keeps and where the switch is, and the documentation index lists everything that has been built since it was last written.
 

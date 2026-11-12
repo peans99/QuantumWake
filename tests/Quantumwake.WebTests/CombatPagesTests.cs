@@ -195,6 +195,14 @@ public class CombatPagesTests
             e.Evaluate("JSON.stringify(QwMfd.rows(QwMfd.pageIds.indexOf('target'),{},null,false,{extra:{live:{...live,status:{combat:{...live.status.combat,target:null}}}}}))").AsString());
     }
 
+    /// <summary>One lock is "1 lock" - the recorded fight read "1 locks this session" (1.2.30).</summary>
+    [Fact]
+    public void One_lock_is_counted_in_the_singular()
+    {
+        Assert.Contains("1 lock this session, 1 hostile",
+            Mfd().Evaluate("JSON.stringify(QwMfd.rows(QwMfd.pageIds.indexOf('target'),{},null,false,{extra:{live:{...live,status:{combat:{...live.status.combat,target:null,locks:1,hostileLocks:1}}}}}))").AsString());
+    }
+
     [Fact]
     public void The_callouts_page_lists_what_was_said_newest_first()
     {
@@ -240,6 +248,16 @@ public class CombatPagesTests
         Assert.Equal("""["silhouette","stock","mark"]""", Steps("{style:'paint', paints:{ANVL_Paladin:'silhouette'}}"));
         // Nothing named: the mark, whatever the Garage says.
         Assert.Equal("""["mark"]""", e.Evaluate("JSON.stringify(QwMfd.targetSteps(QwMfd.targetPicture(live), {}))").AsString());
+
+        // The 3D model (1.2.31): for a named hull, unless the Garage says
+        // silhouettes; never for a hull nothing names.
+        string? Model(string target, string garage) => e.Evaluate($"QwMfd.targetModel(QwMfd.targetPicture({target}), {garage})") is var v && v.IsNull() ? null : v.AsString();
+        Assert.Equal("ANVL_Paladin", Model("likely", "{}"));
+        Assert.Equal("ANVL_Paladin", Model("likely", "{style:'paint', paints:{ANVL_Paladin:'Paint_Paladin_Black'}}"));
+        Assert.Null(Model("likely", "{style:'tint'}"));
+        Assert.Null(Model("likely", "{style:'paint', paints:{ANVL_Paladin:'silhouette'}}"));
+        Assert.Null(Model("live", "{}"));
+        Assert.Null(Model("{...live, enabled:false}", "{}"));
 
         // Nothing to draw with reading off or nothing locked.
         Assert.True(e.Evaluate("QwMfd.targetPicture({...live, enabled:false}) === null").AsBoolean());

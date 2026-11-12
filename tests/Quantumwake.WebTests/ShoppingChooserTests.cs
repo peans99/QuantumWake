@@ -193,7 +193,10 @@ public class ShoppingChooserTests
         var body = page.BodyOf("/api/trips");
 
         Assert.Contains("Restock run", body);
-        Assert.Contains("Laranite 10 SCU, Agricium 5 SCU", body);
+        // One priced buy per item at the counter (1.2.33), not a note listing them.
+        Assert.Contains("{\"kind\":\"buy\",\"text\":\"Laranite\",\"quantity\":10,\"unit\":\"SCU\"", body);
+        Assert.Contains("{\"kind\":\"buy\",\"text\":\"Agricium\",\"quantity\":5,\"unit\":\"SCU\"", body);
+        Assert.DoesNotContain("\"note\"", body);
         Assert.Equal(1, page.Count("JSON.parse(__fetch.calls.filter(c => c.url === '/api/trips' && c.body).pop().body).stops.length"));
     }
 
@@ -206,8 +209,9 @@ public class ShoppingChooserTests
 
         var body = page.BodyOf("/api/trips");
 
-        // 500 SCU at ArcCorp 045's 7,400, and the map id the server resolved.
-        Assert.Contains("3,700,000", body);
+        // 500 SCU at ArcCorp 045's 7,400 as a priced line the run sheet totals
+        // (1.2.33; it was a "~3,700,000" note), and the map id the server resolved.
+        Assert.Contains("\"quantity\":500,\"unit\":\"SCU\",\"price\":7400", body);
         Assert.Contains("Stanton3_Area18", body);
     }
 

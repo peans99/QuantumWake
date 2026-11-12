@@ -266,16 +266,4 @@ public class ActivityTests
         Assert.Equal("Reading game files first — logs next", page.NodeText("#setup-scan-label"));
         Assert.Equal("0%", page.Text("__dom.node('#setup-scan-fill').style.width"));
     }
-
-    [Fact]
-    public void The_chip_and_the_notice_are_in_french_on_a_french_page()
-    {
-        var page = On("ledger", "fr");
-
-        page.Do($"paintActivity({Activity(waiting: true, gameData: ColdStart)});");
-
-        Assert.Equal("Lecture des fichiers du jeu +1", page.NodeText("#activity-text"));
-        Assert.Equal("Journaux en attente", page.NodeText("#scan-label"));
-        Assert.Equal("après les fichiers du jeu", page.NodeText("#scan-count"));
-    }
 }

@@ -37,7 +37,8 @@ public sealed class BackupBuilder(
     KitStore kits,
     ScreenReadingStore readings,
     ShardNoteStore shards,
-    BuildStore builds)
+    BuildStore builds,
+    SetupStore? setups = null)
 {
     /// <summary>
     /// The format this build writes and can read back. Raised when a backup
@@ -46,8 +47,9 @@ public sealed class BackupBuilder(
     /// the file and says to update, rather than restoring everything else and
     /// losing the builds silently. Kits, readings and shard notes were added
     /// under 1 and older builds did drop them; this is the rule from here.
+    /// 3 added named setups (1.2.36): Routes presets and Stream Deck choices.
     /// </summary>
-    public const int Version = 2;
+    public const int Version = 3;
 
     public ExportFile Build(ExportProducer producer, DateTimeOffset now, string? handle = null) =>
         new(ExportDocument.Format,
@@ -81,7 +83,8 @@ public sealed class BackupBuilder(
         wipe.Current is not null,
         readings.Pinned().Count,
         shards.All().Count,
-        builds.All().Count);
+        builds.All().Count,
+        setups?.All().Count ?? 0);
 
     private ExportBackup Contents() => new(
         // Pinned and Tracked belong to the machine, not to the work.
@@ -100,7 +103,8 @@ public sealed class BackupBuilder(
         // from the screenshot folder.
         [.. readings.Pinned()],
         [.. shards.All()],
-        [.. builds.All()]);
+        [.. builds.All()],
+        [.. setups?.All() ?? []]);
 }
 
 /// <summary>How much a backup would carry, for saying so before it is taken.</summary>
@@ -116,4 +120,5 @@ public sealed record BackupCounts(
     bool Wipe,
     int Pins = 0,
     int Shards = 0,
-    int Builds = 0);
+    int Builds = 0,
+    int Setups = 0);

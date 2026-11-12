@@ -180,24 +180,6 @@ public class CrossLinkTests
     }
 
     /// <summary>
-    /// A link inside a translated sentence sits where the translation puts the
-    /// word, and the sentence around it is still translated.
-    /// </summary>
-    [Fact]
-    public void A_link_inside_a_sentence_stays_in_the_translation()
-    {
-        var page = new Page("fr");
-        page.Do("""
-            window.__parts = txLinks('rentable {price} at {place}', { price: '5 000 aUEC', place: placeLink('Lorville') });
-            """);
-
-        // "louable 5 000 aUEC à " and the link: the French puts the place last.
-        Assert.Equal(2, page.Count("__parts.length"));
-        Assert.Equal("louable 5 000 aUEC à ", page.Text("__parts[0]"));
-        Assert.Equal("Lorville", page.Text("__parts[1].textContent"));
-    }
-
-    /// <summary>
     /// The mission card's runs: each date opens its session, and the runs
     /// together open on Contracts.
     /// </summary>

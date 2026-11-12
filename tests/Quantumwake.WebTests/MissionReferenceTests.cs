@@ -200,14 +200,4 @@ public class MissionReferenceTests
         Assert.True(page.Truth("!(missionLink('Haul', null, null).className || '').includes('ref-link')"));
         Assert.Equal("Haul", page.Text("missionLink('Haul', null, null).textContent"));
     }
-
-    [Fact]
-    public void The_window_reads_in_french()
-    {
-        var text = Window("fr").NodeText("#ref-modal-body");
-
-        Assert.Contains("Ce qu’il rapporte", text);
-        Assert.Contains("+1,000 de réputation sur Hauling (Red Wind Linehaul), quand terminé", text);
-        Assert.Contains("l’estimation du jeu", text);
-    }
 }

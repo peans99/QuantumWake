@@ -19,6 +19,29 @@ public sealed record TripStop(
     IReadOnlyList<RunAction>? Actions = null);
 
 /// <summary>The contract evidence behind a generated action, retained even after its title changes.</summary>
+/// <summary>
+/// The ship a plan was worked out for (1.2.35), kept with the plan because
+/// its loads were sized to that hold. What the pilot is flying when the plan
+/// is flown is the log's to say, and the page sets the two side by side.
+/// </summary>
+/// <param name="Name">The hull as the planner named it.</param>
+/// <param name="Scu">The hold the plan assumed; null when the planner had none.</param>
+/// <param name="ScuSource">Where that figure came from: <c>community</c> data, a <c>screenshot</c>, the pilot's <c>manual</c> entry, or the <c>log</c>'s ship with the reference's hold.</param>
+public sealed record PlannedShip(string Name, string? Class = null, double? Scu = null, string? ScuSource = null)
+{
+    internal static PlannedShip? Clean(PlannedShip? ship)
+    {
+        if (ship is null || Sanitise.CleanOptional(ship.Name, 80) is not { } name) return null;
+        var scu = ship.Scu is > 0 and < 1_000_000 ? Math.Round(ship.Scu.Value, 2) : (double?)null;
+        var source = ship.ScuSource?.ToLowerInvariant() switch
+        {
+            "community" or "screenshot" or "manual" or "log" => ship.ScuSource.ToLowerInvariant(),
+            _ => null,
+        };
+        return new PlannedShip(name, Sanitise.CleanOptional(ship.Class, 120), scu, scu is null ? null : source);
+    }
+}
+
 public sealed record RunActionLink(string? MissionId, IReadOnlyList<string>? LegIds = null)
 {
     internal static RunActionLink? Clean(RunActionLink? value)
@@ -178,7 +201,8 @@ public sealed record Trip(
     DateTimeOffset? FinishedAt = null,
     Archived Archived = Archived.No,
     DateTimeOffset? ArchivedAt = null,
-    IReadOnlyList<RemovedLine>? Removed = null) : IStamped<Trip>
+    IReadOnlyList<RemovedLine>? Removed = null,
+    PlannedShip? Ship = null) : IStamped<Trip>
 {
     public string StampId => Id;
     /// <remarks>
@@ -262,13 +286,14 @@ public sealed class TripStore
             return _trips.FirstOrDefault(t => t.Tracked);
     }
 
-    public Trip Add(string? title, IEnumerable<TripStop>? stops = null)
+    public Trip Add(string? title, IEnumerable<TripStop>? stops = null, PlannedShip? ship = null)
     {
         var trip = new Trip(
             NewId(),
             string.IsNullOrWhiteSpace(title) ? "Flight plan" : title.Trim(),
             DateTimeOffset.UtcNow,
-            [.. (stops ?? []).Select(Fresh)]);
+            [.. (stops ?? []).Select(Fresh)],
+            Ship: PlannedShip.Clean(ship));
 
         lock (_gate)
         {

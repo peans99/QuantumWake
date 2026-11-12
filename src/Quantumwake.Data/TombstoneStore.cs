@@ -48,6 +48,7 @@ public sealed class TombstoneStore
         public const string Pins = "pins";
         public const string Shards = "shards";
         public const string Builds = "builds";
+        public const string Setups = "setups";
     }
 
     private readonly string _path;

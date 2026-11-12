@@ -648,3 +648,39 @@ public class TripStoreTests : IDisposable
         }
     }
 }
+
+/// <summary>A plan keeps the ship it was sized for (1.2.35), cleaned on the way in, and it survives a restart.</summary>
+public class PlannedShipTests : IDisposable
+{
+    private readonly string _directory = Path.Combine(Path.GetTempPath(), $"qw-trips-ship-{Guid.NewGuid():N}");
+
+    [Fact]
+    public void A_plan_keeps_its_ship_through_a_restart()
+    {
+        var store = new TripStore(_directory);
+        var trip = store.Add("Agricium run", [new TripStop("", "L", "Lorville", null, false, null)],
+            new PlannedShip("  Crusader C2 Hercules ", "CRUS_Starlifter_C2", 696.004, "COMMUNITY"));
+
+        var kept = Assert.Single(new TripStore(_directory).All()).Ship!;
+        Assert.Equal(trip.Id, new TripStore(_directory).All()[0].Id);
+        Assert.Equal("Crusader C2 Hercules", kept.Name);
+        Assert.Equal(696, kept.Scu);
+        Assert.Equal("community", kept.ScuSource);
+    }
+
+    [Fact]
+    public void A_ship_with_no_name_or_a_silly_hold_is_not_kept_as_one()
+    {
+        var store = new TripStore(_directory);
+        Assert.Null(store.Add("A", null, new PlannedShip("   ")).Ship);
+        var odd = store.Add("B", null, new PlannedShip("Cutlass", Scu: -4, ScuSource: "guess")).Ship!;
+        Assert.Null(odd.Scu);
+        Assert.Null(odd.ScuSource);
+        Assert.Null(store.Add("C").Ship);
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_directory)) Directory.Delete(_directory, recursive: true);
+    }
+}

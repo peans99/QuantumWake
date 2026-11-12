@@ -86,7 +86,7 @@ refuses the placeholders, should the file ever be reset to them.
   fourth field to be zero, and each submission must be higher than the last.
 - **Minimum Windows 10.0.19041**, the overlay's own build target.
 - **English only.** Every language a package declares needs a Store listing of
-  its own; `fr-fr` goes in when the French listing does.
+  its own, and the app itself is English only since French was retired in 1.2.29.
 - **Logos are drawn at build time** from the 256-pixel frame of
   `src/Quantumwake.Overlay/app.ico`, so they cannot drift from the icon the exe
   and tray use.

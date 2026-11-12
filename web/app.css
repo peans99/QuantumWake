@@ -3632,6 +3632,28 @@ body.overlay .checklist-attachments, body.overlay .checklist-due { display: none
 .haul-unload::before { content: '▼ '; color: var(--green); }
 .haul-actions { margin: 10px 0 14px; }
 
+/* Sharing the run with a group (1.2.32): who is flying and where, then
+   one card per ship in the order it flies. */
+.haul-share { border-top: 1px solid var(--rule); margin-top: 14px; padding-top: 10px; }
+.haul-crew { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+.haul-crew li { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(120px, 1.2fr) minmax(150px, 1.6fr) auto; gap: 10px; align-items: center; font-size: 12.5px; }
+.haul-crew li:not(.haul-crew-on):not(.haul-crew-me) { opacity: .65; }
+.haul-crew-me { grid-template-columns: minmax(110px, 1fr) minmax(120px, 1.2fr) minmax(150px, 1.6fr) 28px !important; }
+.haul-crew-place { min-width: 0; }
+.haul-crew-remove { padding: 2px 8px; }
+.haul-crew-add { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
+.haul-crew-add .search { flex: 1 1 160px; min-width: 0; }
+.haul-share-split { display: block; font-size: 12.5px; margin: 4px 0; }
+.haul-share-summary { font-size: 13px; color: var(--cyan-hot, #7fe4ff); margin: 6px 0 2px; }
+.haul-share-stops { margin: 6px 0 4px; padding-left: 20px; font-size: 12px; }
+.haul-share-stops li { padding: 4px 0; border-bottom: 1px solid rgba(53, 200, 240, .06); }
+.haul-share-stops li:last-child { border-bottom: 0; }
+.haul-share-leg { margin-left: 8px; font-size: 11px; }
+@media (max-width: 640px) {
+  .haul-crew li, .haul-crew-me { grid-template-columns: 1fr 1fr !important; }
+  .haul-crew-place { grid-column: 1 / -1; }
+}
+
 .job-form {
   display: flex;
   flex-direction: column;
@@ -4573,6 +4595,9 @@ body:has(#view-map.active) .entity-drawer.map-place-open .entity-actions { displ
 /* A plan written for contracts that have since ended says so above its stops,
    and each such line carries the same word, so the stale half of a mixed
    plan can be told from the live half at a glance. */
+/* The ship a plan was sized for, beside the one flown (1.2.35). */
+.trip-ship { font-size: 12px; margin: 6px 0; }
+
 .trip-ended {
   display: flex;
   flex-wrap: wrap;
@@ -8947,3 +8972,17 @@ button.deck-key { width:100%; height:auto; min-width:0; padding:0; letter-spacin
 .deck-category .deck-command-icon { width:19px; height:19px; }
 .deck-category .deck-command-icon svg { width:18px; height:18px; }
 .deck-category small { font:10px var(--mono); }
+
+/* Continue your work (1.2.37): the deck leads with what is under way. */
+.operations-continue { margin-bottom: 18px; }
+.continue-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.continue-card { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 12px 14px; cursor: pointer;
+  border: 1px solid var(--rule); border-left: 2px solid var(--cyan, #35c8f0); color: var(--text);
+  background: linear-gradient(160deg, rgba(10, 20, 32, .6), rgba(6, 12, 20, .4)); font: inherit;
+  /* A card, not a button: the app's buttons are capitals and wide-spaced. */
+  text-transform: none; letter-spacing: normal; }
+.continue-card:hover, .continue-card:focus-visible { border-color: var(--rule-hot, #1e4763); border-left-color: var(--cyan-hot, #7fe4ff); }
+.continue-card b { font-size: 14px; color: var(--cyan-hot, #7fe4ff); }
+.continue-card .muted { font-size: 12px; }
+.continue-card .operation-status { margin-top: auto; font-size: 11px; }
+.continue-card.continue-ready { border-left-color: var(--green); }

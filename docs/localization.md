@@ -1,5 +1,17 @@
 # Languages
 
+> **French was retired in 1.2.29 (2026-11-11).** Few read it, and every change
+> had to be translated before it could ship: 99 of the 226 commits between the
+> catalogue being finished (18 October) and 1.2.28 touched `web/locales/fr.json`,
+> by then 5,819 entries and 607 KB. The catalogue, the French tests and the
+> catalogue tests went; `tx()`/`txn()`, `/api/i18n.js`, `LanguageStore` and
+> the picker stayed, and the picker hides itself while English is the only
+> language. An install that had French saved reads in English with nothing to
+> undo. Bringing a language back is [Adding a language](#adding-a-language),
+> plus restoring the catalogue tests from git history (`LocaleCatalogueTests.cs`
+> before 1.2.29) - without them nothing stops a string shipping untranslated.
+> Everything below is the record of how the French was built, kept as written.
+
 The 0.18 line. Quantum Wake has been English-only since the first build; this is
 the plan for making it readable in other languages, starting with French, and
 the record of what each step actually covers.

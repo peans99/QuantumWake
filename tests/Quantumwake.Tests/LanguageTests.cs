@@ -17,12 +17,18 @@ public class LanguageStoreTests : IDisposable
         Assert.Equal("en", new LanguageStore(_directory).Current);
     }
 
+    /// <summary>
+    /// French was offered from 0.18 to 1.2.28 and retired in 1.2.29. An
+    /// install that chose it has <c>fr</c> saved; it reads as English now,
+    /// with nothing for the pilot to undo.
+    /// </summary>
     [Fact]
-    public void A_choice_survives_a_restart()
+    public void French_chosen_before_it_was_retired_reads_as_english()
     {
-        new LanguageStore(_directory).Save("fr");
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(Path.Combine(_directory, "language.json"), """{"Code":"fr"}""");
 
-        Assert.Equal("fr", new LanguageStore(_directory).Current);
+        Assert.Equal("en", new LanguageStore(_directory).Current);
     }
 
     /// <summary>
@@ -30,6 +36,7 @@ public class LanguageStoreTests : IDisposable
     /// anything not on the list is English rather than trusted.
     /// </summary>
     [Theory]
+    [InlineData("fr")]
     [InlineData("de")]
     [InlineData("../../secrets")]
     [InlineData("")]
@@ -42,19 +49,19 @@ public class LanguageStoreTests : IDisposable
     [Fact]
     public void A_code_is_matched_however_it_is_cased()
     {
-        Assert.Equal("fr", new LanguageStore(_directory).Save(" FR "));
+        Assert.Equal("en", new LanguageStore(_directory).Save(" EN "));
     }
 
     /// <summary>
-    /// A partial language says so. French was partial through 0.18.16 and is
-    /// complete from 0.18.17 - what stays English is game text, on purpose -
-    /// so neither carries a note now; a language added half-done must.
+    /// English is the only language on offer, so Settings has no picker to
+    /// show. A language added later, half-done, must carry a coverage note.
     /// </summary>
     [Fact]
-    public void A_finished_language_carries_no_coverage_note()
+    public void English_is_the_one_language_and_carries_no_coverage_note()
     {
-        Assert.Null(LanguageStore.Available.Single(l => l.Code == "en").Covers);
-        Assert.Null(LanguageStore.Available.Single(l => l.Code == "fr").Covers);
+        var only = Assert.Single(LanguageStore.Available);
+        Assert.Equal("en", only.Code);
+        Assert.Null(only.Covers);
     }
 
     public void Dispose()
@@ -84,33 +91,16 @@ public class LanguageEndpointTests : IClassFixture<ServerUnderTest>
         Assert.DoesNotContain("QW_STRINGS", script);
     }
 
-    /// <summary>
-    /// The whole catalogue inline, so the page's first paint is already French.
-    /// Put back to English after, because the server is shared with every other
-    /// test in the collection.
-    /// </summary>
+    /// <summary>Asking for French now is asking for English: there is no catalogue to hand over.</summary>
     [Fact]
-    public async Task A_french_page_is_handed_the_french_catalogue()
+    public async Task Asking_for_french_is_answered_in_english()
     {
-        try
-        {
-            var saved = await _server.Posted("/api/language?code=fr");
-            Assert.Equal("fr", saved.GetProperty("current").GetString());
+        var saved = await _server.Posted("/api/language?code=fr");
+        Assert.Equal("en", saved.GetProperty("current").GetString());
 
-            var script = await Script();
-
-            Assert.Contains("window.QW_LANG = \"fr\"", script);
-            Assert.Contains("\"Ouvrir la carte\"", script);
-
-            var listed = await _server.Get("/api/language");
-            Assert.Equal("fr", listed.GetProperty("current").GetString());
-            Assert.Contains(listed.GetProperty("available").EnumerateArray(),
-                l => l.GetProperty("name").GetString() == "Français");
-        }
-        finally
-        {
-            await _server.Post("/api/language?code=en");
-        }
+        var script = await Script();
+        Assert.Contains("window.QW_LANG = \"en\"", script);
+        Assert.DoesNotContain("QW_STRINGS", script);
     }
 
     /// <summary>

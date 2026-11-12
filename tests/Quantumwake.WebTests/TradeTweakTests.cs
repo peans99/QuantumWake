@@ -116,4 +116,77 @@ public class TradeTweakTests
         Assert.Equal(0, page.Count("__dom.node('#cargo-body').byClass('trade-run-money').length"));
         Assert.Equal(0, page.Count("__dom.node('#cargo-body').byClass('run-action-tweak').length"));
     }
+
+    /// <summary>A circuit keeps its four trades as priced lines, the return load bought where the outbound one is sold (1.2.33).</summary>
+    [Fact]
+    public void A_circuit_is_saved_as_priced_trades_rather_than_notes()
+    {
+        var page = new Page();
+        var stops = page.Text("""
+            JSON.stringify(circuitStops({ commodity: 'Agricium', buyAt: 'Lorville', buyAtId: 'L', buyPrice: 1234, units: 96.7,
+              sellAt: 'Area18', sellAtId: 'A', sellPrice: 1656, returnCommodity: 'Waste', returnBuyAt: 'Area18', returnBuyPrice: 10,
+              returnUnits: 96, returnSellAt: 'Lorville', returnSellAtId: 'L', returnSellPrice: 40 }))
+            """);
+
+        Assert.Equal("""[{"placeId":"L","place":"Lorville","actions":[{"kind":"buy","text":"Agricium","quantity":96,"unit":"SCU","price":1234}]},{"placeId":"A","place":"Area18","actions":[{"kind":"sell","text":"Agricium","quantity":96,"unit":"SCU","price":1656},{"kind":"buy","text":"Waste","quantity":96,"unit":"SCU","price":10}]},{"placeId":"L","place":"Lorville","actions":[{"kind":"sell","text":"Waste","quantity":96,"unit":"SCU","price":40}]}]""", stops);
+        Assert.DoesNotContain("note", stops);
+    }
+
+    [Fact]
+    public void A_circuit_whose_return_load_is_elsewhere_gets_its_own_stop()
+    {
+        var page = new Page();
+        Assert.Equal(4, page.Count("""
+            circuitStops({ commodity: 'A', buyAt: 'X', buyPrice: 1, units: 1, sellAt: 'Y', sellPrice: 2,
+              returnCommodity: 'B', returnBuyAt: 'Z', returnBuyPrice: 1, returnUnits: 1, returnSellAt: 'X', returnSellPrice: 2 }).length
+            """));
+    }
+
+    /// <summary>A shopping run is one priced buy per item at its counter, not a note listing them (1.2.33).</summary>
+    [Fact]
+    public void A_shopping_run_is_saved_as_priced_buys_per_counter()
+    {
+        var page = new Page();
+        var stops = page.Text("""
+            JSON.stringify(shoppingRunStops([
+              { item: { name: 'Quantanium', needed: 12, unit: 'SCU' }, sellers: [{ terminal: 'Shubin', placeId: 'S', price: 88 }] },
+              { item: { name: 'Medpen', needed: 4 }, sellers: [{ terminal: 'Shubin', placeId: 'S', price: 1500 }] },
+              { item: { name: 'Ore pod', needed: 2, unit: 'cSCU' }, sellers: [{ terminal: 'Area18', placeId: 'A', price: 0 }] },
+              { item: { name: 'Not chosen', needed: 1 }, sellers: [] },
+            ], new Map([['Quantanium', 'Shubin'], ['Medpen', 'Shubin'], ['Ore pod', 'Area18']])))
+            """);
+
+        Assert.Equal("""[{"placeId":"S","place":"Shubin","actions":[{"kind":"buy","text":"Quantanium","quantity":12,"unit":"SCU","price":88},{"kind":"buy","text":"Medpen","quantity":4,"unit":"units","price":1500}]},{"placeId":"A","place":"Area18","actions":[{"kind":"buy","text":"Ore pod (cSCU)","quantity":2,"unit":null,"price":null}]}]""", stops);
+    }
+
+    /// <summary>A trade run keeps the ship it was planned for, with the hold it assumed (1.2.35).</summary>
+    [Fact]
+    public void A_trade_run_keeps_the_ship_it_was_planned_for()
+    {
+        var page = new Page();
+        page.Serve("/api/trips", "[]");
+        page.Do("""
+            libraryStats = { ships: [{ name: 'Crusader C2 Hercules', className: 'CRUS_Starlifter_C2', reference: { cargoScu: 696 } }] };
+            await saveTradeRoute({ commodity: 'Agricium', buyAt: 'Lorville', units: 96, buyPrice: 1234 }, 'Area18', 'A', 1656);
+            """);
+
+        const string sent = "JSON.parse(__fetch.calls.filter(c => c.url === '/api/trips' && c.body).pop().body).ship";
+        Assert.Equal("Crusader C2 Hercules", page.Text($"{sent}.name"));
+        Assert.Equal(696, page.Count($"{sent}.scu"));
+        Assert.Equal("community", page.Text($"{sent}.scuSource"));
+    }
+
+    [Fact]
+    public void The_plan_says_when_the_ship_flown_is_not_the_one_planned()
+    {
+        var page = new Page();
+        page.Do("nowState = { inGame: true, ship: 'Drake Cutlass Black' };");
+        var other = page.Text("tripShipNotice({ ship: { name: 'Crusader C2 Hercules', scu: 696, scuSource: 'community' } }).textContent");
+        Assert.Contains("Planned for Crusader C2 Hercules · 696 SCU (reference data)", other);
+        Assert.Contains("you are flying the Drake Cutlass Black now", other);
+
+        page.Do("nowState = { inGame: true, ship: 'Crusader C2 Hercules' };");
+        Assert.Contains("flying it now", page.Text("tripShipNotice({ ship: { name: 'Crusader C2 Hercules', scu: 696 } }).textContent"));
+        Assert.True(page.Truth("tripShipNotice({ stops: [] }) === null"));
+    }
 }

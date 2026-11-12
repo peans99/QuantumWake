@@ -51,8 +51,6 @@ public class StreamDeckPageTests
         Assert.Contains("Shift", list);
         Assert.Contains("Hold the button", list);
 
-        var french = new Page("fr");
-        Assert.Contains("Maintenez", french.Text("deckTiming({holdFor:0.5})"));
     }
 
     [Theory]

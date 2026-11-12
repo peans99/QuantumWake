@@ -144,14 +144,4 @@ public class RepRunTests
 
         Assert.Contains("Take a Rep app screenshot of the organisation you are working for", page.NodeText("#rep-run-body"));
     }
-
-    [Fact]
-    public void The_run_reads_in_french()
-    {
-        var page = Loaded(lang: "fr");
-        var text = page.NodeText("#rep-run-body");
-
-        Assert.Contains("21 livraisons à 500 de réputation atteignent Experienced.", text);
-        Assert.Contains("une recherche de StarStrings, pas une donnée du jeu", text);
-    }
 }
