@@ -3622,6 +3622,19 @@ body.overlay .checklist-attachments, body.overlay .checklist-due { display: none
 .job-items tr:not(.have) td { color: var(--muted); }
 .job-items .job-mark { width: 20px; text-align: center; color: var(--dim); }
 .job-items tr.have .job-mark { color: var(--green); }
+/* The pilot's own tick (1.2.45): a box that reads as one, not a stray dot. */
+.job-items button.ghost.job-got { width: 18px; height: 18px; min-width: 0; padding: 0; line-height: 16px; font-size: 12px; border: 1px solid rgba(53, 200, 240, .45); border-radius: 3px; clip-path: none; }
+.job-items button.ghost.job-got.on { color: var(--green); border-color: var(--green); }
+.job-cost { font-size: 11.5px; margin: 0 0 2px; }
+.job-edit { margin-top: 8px; }
+.jobs-pinned-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 8px 12px; margin-bottom: 10px;
+  border: 1px solid rgba(53, 200, 240, .18); border-radius: 6px;
+  font-size: 12.5px; color: var(--cyan-hot, #7fe4ff);
+}
+.jobs-pinned-bar .trip-chooser { flex-basis: 100%; }
+.track-box { display: inline-flex; align-items: center; gap: 4px; }
 
 /* The hauling run on Jobs: one card per contract with its legs, then the
    stops. A leg with an end missing is muted rather than hidden - the gap

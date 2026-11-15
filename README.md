@@ -422,7 +422,37 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.44
+### 1.2.45
+
+- **Shopping lists can be edited.** "Edit" on a list opens its title and
+  lines in the same one-line-per-thing box it was written in: rename it,
+  change an amount, add or remove a line. A line that keeps its name keeps
+  its tick.
+- **Tick a line in hand yourself.** The logs only prove a line when one of
+  the thing is seen in a stash or worn. Something bought and left in the
+  hold, a Garage part, or a line asking for several now gets a box to tick,
+  and the list, Now and the briefing all count it.
+- **A stash sighting no longer closes a line for many.** A stash records
+  that a thing was there, never how many, so "23 Hadanite" with one seen
+  used to show as in hand. Lines asking for more than one, or for SCU, now
+  say "seen in inventory, not counted" until you tick them.
+- **Fewer wrong matches against your stash.** A line used to count as found
+  when any stash item merely contained its name: "Oza" was found in
+  "MedPen (Hemozal)". Now only the same name matches, or the same name with
+  a bracketed note ("Hadanite (Raw)"), or a variant that adds words to a
+  name of two words or more ("ORC-mkV Arms Red").
+- **Each list says what the rest should cost.** An estimate at the cheapest
+  known counters, called "at least" when some lines have no price or amount,
+  with how many.
+- **Several pinned lists, finished off.** "+ list" on Market, Parts and
+  Mining asks which list when you have several, pinned ones first, and the
+  button then names the list. Shopping offers "Plan one trip for them" when
+  two or more lists are pinned, adding the same items together. Marking a
+  list done takes it off Now.
+- **Delete asks first, and a change that does not save says so.** Deleting
+  a list now asks for confirmation. Pin, done, delete, destination, edit and
+  tick report a failure instead of looking as if they worked, and a new list
+  that does not save keeps what you typed.
 
 - **Shopping lists keep the whole name you typed.** A line whose name ends in
   digits lost them: "JS-400" was saved as 400 of "JS-", "FR-86" as 86 of

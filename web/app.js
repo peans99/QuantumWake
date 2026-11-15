@@ -25161,33 +25161,59 @@ function renderHaulShareResult(box, plan, share) {
 }
 
 /**
- * A "track this" button for any catalogue row: one click puts the thing on
- * the list the player is filling - the pinned job, else the newest open list,
- * else a new one - and says where it went.
+ * A "track this" button for any catalogue row: puts the thing on a shopping
+ * list and says which.
+ *
+ * With one open list or none, one click does it - the open list, or a new one.
+ * With several (1.2.45, once several could be pinned), the click asks which,
+ * offering the pinned lists first, because the server's own guess - the top
+ * pinned list - is right only when the pilot happens to want that one.
  */
 function trackButton(name, needed = 1, unit = '') {
+  const box = el('span', 'track-box');
   const button = el('button', 'ghost track', tx('+ list'));
   button.title = tx('Add {item} to your shopping list', { item: name });
+  box.append(button);
 
-  button.addEventListener('click', async () => {
+  const add = async (jobId) => {
     button.disabled = true;
-
     try {
-      const result = await fetch('/api/jobs/collect', {
+      const response = await fetch('/api/jobs/collect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, needed, unit }),
-      }).then((r) => r.json());
+        body: JSON.stringify({ name, needed, unit, jobId: jobId || null }),
+      });
+      if (!response?.ok) throw new Error(`collect -> ${response?.status}`);
+      const result = await response.json();
 
-      button.textContent = tx('✓ added');
-      button.title = tx('On "{list}"', { list: result.title });
+      box.replaceChildren(button);
+      button.textContent = tx('✓ on {list}', { list: result.title });
+      button.title = tx('Added to "{list}"', { list: result.title });
+      if (typeof loadJobList === 'function') loadJobList().catch(() => {});
     } catch {
       button.textContent = tx('failed');
       button.disabled = false;
     }
+  };
+
+  button.addEventListener('click', async () => {
+    if (box.querySelector('select')) return;
+
+    const jobs = await getJson('/api/jobs').catch(() => []);
+    const open = jobs.filter((j) => j.kind !== 'craft' && !j.done && !j.imported)
+      .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)));
+    if (open.length < 2) { await add(open[0]?.id); return; }
+
+    const pick = el('select', 'select tiny');
+    pick.setAttribute('aria-label', tx('Which list to add it to'));
+    for (const job of open) pick.append(new Option(job.pinned ? `★ ${job.title}` : job.title, job.id));
+    const go = el('button', 'ghost tiny', tx('Add'));
+    go.type = 'button';
+    go.addEventListener('click', () => add(pick.value));
+    box.append(pick, go);
   });
 
-  return button;
+  return box;
 }
 
 /** The shared progress bar: done over total, with its own wording. */
@@ -25199,7 +25225,7 @@ function trackButton(name, needed = 1, unit = '') {
  * somebody else's list: "Bob needs four Agricium" reads very differently beside
  * "and you have some at Port Tressler".
  */
-function jobLines(job) {
+function jobLines(job, onGot = null) {
   const table = el('table', 'job-items');
   const body = el('tbody');
 
@@ -25209,7 +25235,23 @@ function jobLines(job) {
     const need = item.needed > 0
       ? `${item.needed}${item.unit ? ` ${item.unit}` : ''}`
       : '';
-    tr.append(el('td', 'job-mark', item.have ? '✓' : '·'));
+
+    // The pilot's own tick (1.2.45). The logs prove a line only when one of it
+    // was seen; bought and left in the hold, several of it, or a Garage part
+    // stayed open until the whole list was marked done. A line the logs already
+    // prove needs no tick, so it gets none.
+    const mark = el('td', 'job-mark');
+    if (onGot && (!item.have || item.got)) {
+      const tick = el('button', item.got ? 'ghost tiny job-got on' : 'ghost tiny job-got', item.got ? '✓' : '');
+      tick.type = 'button';
+      tick.title = item.got ? tx('You marked this in hand. Click to undo.') : tx('Mark this in hand');
+      tick.setAttribute('aria-label', tick.title);
+      tick.addEventListener('click', () => onGot(item, tick));
+      mark.append(tick);
+    } else {
+      mark.textContent = item.have ? '✓' : '·';
+    }
+    tr.append(mark);
     const itemName = el('td');
     itemName.append(goodsLink(item.name));
     if (item.note) itemName.append(' ', el('span', 'note-inline', item.note));
@@ -25219,7 +25261,9 @@ function jobLines(job) {
     // Where it is, or where to buy what is missing.
     const whereCell = el('td', 'muted');
 
-    if (item.inventoryUnconfirmed) {
+    if (item.got) {
+      whereCell.textContent = tx('marked in hand');
+    } else if (item.inventoryUnconfirmed) {
       whereCell.append(el('span', 'note-inline', tx('seen in inventory — not counted')));
       if (item.where.length) {
         whereCell.append(document.createTextNode(' · '));
@@ -25318,6 +25362,143 @@ function jobProgress(done, total, label) {
   return wrap;
 }
 
+/**
+ * One change to a shopping list, answered. Until 1.2.45 the card fired its
+ * request and redrew whatever came back, so a change the server refused or
+ * never received looked exactly like one that had worked.
+ *
+ * @returns Whether the server took it; on false the page has said so.
+ */
+async function jobCall(url, { method = 'POST', body = null, failed = tx('That change did not save. Is the app still running?') } = {}) {
+  let ok = false;
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    ok = Boolean(response?.ok);
+  } catch { ok = false; }
+
+  if (!ok) alertLine($('#jobs-alerts') || $('#jobs-list'), failed);
+  return ok;
+}
+
+/**
+ * What the rest of a list should cost, from the prices its own lines show.
+ *
+ * An estimate and labelled as one: each price is the cheapest counter the
+ * price feed knows, not the one the run will use. A line with no price, or no
+ * amount to multiply it by, cannot be added in, so the total is then a floor
+ * and says how many lines it leaves out.
+ */
+function jobCost(job) {
+  const line = el('div', 'muted job-cost');
+  const missing = job.items.filter((i) => !i.have);
+  if (!missing.length) { line.hidden = true; return line; }
+
+  const priced = missing.filter((i) => i.buyPrice > 0 && i.needed > 0);
+  const total = priced.reduce((sum, i) => sum + i.buyPrice * i.needed, 0);
+  const left = missing.length - priced.length;
+
+  if (!priced.length) {
+    line.textContent = tx('No price known for what is still missing.');
+    return line;
+  }
+
+  line.textContent = left
+    ? `${tx('Still to buy: at least {amount} at the cheapest known counters', { amount: money(total) })} · ${txn(left, '{count} line has no price or amount', '{count} lines have no price or amount')}`
+    : tx('Still to buy: about {amount} at the cheapest known counters', { amount: money(total) });
+  return line;
+}
+
+/**
+ * Several pinned lists as the one list a run buys for: what each still lacks,
+ * the same thing in the same unit added together. The destination is kept only
+ * when every list names the same one - two lists for two places say nothing
+ * about which to land at first.
+ */
+function pinnedRunJob(pinned) {
+  const items = [];
+  for (const job of pinned)
+    for (const item of job.items) {
+      if (item.have) continue;
+      const same = items.find((i) => i.name.toLowerCase() === item.name.toLowerCase() && (i.unit || '') === (item.unit || ''));
+      if (same) same.needed += item.needed;
+      else items.push({ ...item });
+    }
+
+  const places = new Set(pinned.map((j) => j.destinationId || j.destination || ''));
+  const shared = places.size === 1 ? pinned[0] : null;
+  return {
+    id: 'pinned',
+    title: pinned.map((j) => j.title).join(' + '),
+    destination: shared?.destination || null,
+    destinationId: shared?.destinationId || null,
+    items,
+  };
+}
+
+/** A line as the list box writes it, so an edit reads back the way it was typed. */
+function jobLineText(item) {
+  const amount = item.needed > 0 ? ` ${item.needed}${item.unit ? ` ${item.unit}` : ''}` : '';
+  // A note only parses after an amount, so a line with none writes nothing
+  // rather than a "0" the pilot never typed - and the note is then lost, which
+  // is the honest outcome of a line that never had an amount.
+  return `${item.name}${amount}${amount && item.note ? ` (${item.note})` : ''}`;
+}
+
+/**
+ * Rewrites a saved list in place: the title and the same one-line-per-thing
+ * box it was written in. Ticks survive on any line whose name is unchanged.
+ */
+async function editJob(job, card, lines) {
+  if (card.querySelector('.job-edit')) return;
+
+  // The catalogue keeps "Ship Ammunition - Size 3" whole; the list's own names
+  // keep whatever this list already holds whole as well.
+  catalogue ??= await getJson('/api/shopping/catalogue').catch(() => ({ commodities: [], items: [] }));
+  const known = [...catalogue.commodities, ...catalogue.items, ...job.items.map((i) => i.name)];
+
+  const form = el('form', 'job-form job-edit');
+  const title = document.createElement('input');
+  title.type = 'text';
+  title.value = job.title;
+  title.setAttribute('aria-label', tx('List title'));
+  const box = document.createElement('textarea');
+  box.rows = Math.max(3, job.items.length + 1);
+  box.value = `${job.items.map(jobLineText).join('\n')}\n`;
+  box.setAttribute('aria-label', tx('One line per thing, with an amount after it if there is one'));
+
+  const actions = el('div', 'job-form-actions');
+  const save = el('button', 'ghost', tx('Save changes'));
+  save.type = 'submit';
+  const cancel = el('button', 'ghost', tx('Cancel'));
+  cancel.type = 'button';
+  actions.append(save, cancel);
+  form.append(title, box, actions);
+
+  const close = () => { form.remove(); lines.hidden = false; };
+  cancel.addEventListener('click', close);
+  form.addEventListener('submit', async (e) => {
+    e?.preventDefault?.();
+    const items = parseJobItems(box.value, known);
+    if (!items.length) {
+      alertLine($('#jobs-alerts') || $('#jobs-list'), tx('A list needs at least one line. To get rid of it, use Delete.'));
+      return;
+    }
+
+    save.disabled = true;
+    const saved = await jobCall(`/api/jobs/${job.id}/edit`, { body: { title: title.value, items } });
+    save.disabled = false;
+    if (saved) loadJobList();
+  });
+
+  lines.hidden = true;
+  lines.after(form);
+  box.focus?.();
+}
+
 async function loadJobList() {
   const host = $('#jobs-list');
   const craftHost = $('#blueprint-jobs');
@@ -25361,6 +25542,19 @@ async function loadJobList() {
       tx('No builds planned. Pick a blueprint above, or hit Plan on Reference → Crafting.')));
   }
 
+  // Several lists pinned is usually one run buying for all of them, and Plan
+  // trip on each card made one flight plan per list.
+  const pinnedOpen = openLists.filter((j) => j.pinned && !j.imported);
+  if (pinnedOpen.length > 1) {
+    const bar = el('div', 'jobs-pinned-bar');
+    bar.append(el('span', null, txn(pinnedOpen.length, '{count} list on Now', '{count} lists on Now')));
+    const plan = el('button', 'ghost', tx('Plan one trip for them'));
+    plan.title = tx('Everything still missing from the pinned lists, as one flight plan');
+    plan.addEventListener('click', () => planShoppingTrip(pinnedRunJob(pinnedOpen), bar));
+    bar.append(plan);
+    host.append(bar);
+  }
+
   for (const job of jobs) {
     const card = el('article', job.done ? 'job-card done' : 'job-card');
     // An id to land on: a job named on Now or in a search opens here, at its card.
@@ -25402,13 +25596,7 @@ async function loadJobList() {
 
     where.addEventListener('change', async () => {
       const picked = pickedPlace(where);
-
-      await fetch(`/api/jobs/${job.id}/destination`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ place: picked.name, placeId: picked.id }),
-      });
-
+      await jobCall(`/api/jobs/${job.id}/destination`, { body: { place: picked.name, placeId: picked.id } });
       loadJobList();
     });
 
@@ -25423,8 +25611,10 @@ async function loadJobList() {
       ? tx('Showing on the Now page and in the overlay')
       : tx('Show this job on the Now page and in the overlay');
 
+    // A done list cannot be on Now, which hides it; marking one done unpins it.
+    pin.hidden = Boolean(job.done);
     pin.addEventListener('click', async () => {
-      await fetch(`/api/jobs/${job.id}/pin`, { method: 'POST' });
+      if (!await jobCall(`/api/jobs/${job.id}/pin`)) return;
       if (!job.pinned) {
         setContextFocus({
           kind: 'shopping',
@@ -25443,10 +25633,15 @@ async function loadJobList() {
 
     const toggle = el('button', 'ghost', job.done ? tx('Reopen') : tx('Mark done'));
     toggle.addEventListener('click', async () => {
-      await fetch(`/api/jobs/${job.id}/toggle`, { method: 'POST' });
+      await jobCall(`/api/jobs/${job.id}/toggle`);
       loadJobList();
     });
     head.append(toggle);
+
+    const edit = el('button', 'ghost', tx('Edit'));
+    edit.title = tx('Rename the list, or change, add and remove its lines');
+    edit.addEventListener('click', () => editJob(job, card, lines));
+    head.append(edit);
 
     // A list knows where its missing things are sold, which is a shopping trip
     // waiting to be flown - once the player has said which seller they meant.
@@ -25455,9 +25650,13 @@ async function loadJobList() {
     shop.addEventListener('click', () => planShoppingTrip(job, card));
     head.append(shop);
 
+    // Asked first, as deleting a flight plan is: a list is the pilot's own
+    // writing, and one stray click used to take all of it.
     const remove = el('button', 'ghost danger', tx('Delete'));
     remove.addEventListener('click', async () => {
-      await fetch(`/api/jobs/${job.id}`, { method: 'DELETE' });
+      if (typeof confirm === 'function'
+        && !confirm(tx('Delete the list “{title}” and its {count} lines?', { title: job.title, count: job.items.length }))) return;
+      await jobCall(`/api/jobs/${job.id}`, { method: 'DELETE' });
       loadJobList();
     });
     head.append(remove);
@@ -25467,8 +25666,14 @@ async function loadJobList() {
 
     card.append(jobProgress(job.haveCount, job.totalCount,
       tx('{done} of {total} in hand', { done: job.haveCount, total: job.totalCount })));
+    card.append(jobCost(job));
 
-    card.append(jobLines(job));
+    const lines = jobLines(job, async (item, tick) => {
+      tick.disabled = true;
+      if (await jobCall(`/api/jobs/${job.id}/got`, { body: { name: item.name } })) loadJobList();
+      else tick.disabled = false;
+    });
+    card.append(lines);
     (job.kind === 'craft' && craftHost ? craftHost : host).append(card);
   }
   landOnJobs();
@@ -25668,10 +25873,10 @@ $('#job-form')?.addEventListener('submit', async (e) => {
 
   const picked = pickedPlace($('#job-place'));
 
-  await fetch('/api/jobs', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  // Cleared only once it is saved: a refused save used to empty the box and
+  // take what was typed with it.
+  const saved = await jobCall('/api/jobs', {
+    body: {
       title: $('#job-title').value,
       kind: 'list',
       items,
@@ -25679,8 +25884,10 @@ $('#job-form')?.addEventListener('submit', async (e) => {
       // The name is what the card shows; the id is what a plan draws with.
       destination: picked.name,
       destinationId: picked.id,
-    }),
+    },
+    failed: tx('The list did not save. What you typed is still here.'),
   });
+  if (!saved) return;
 
   $('#job-title').value = '';
   $('#job-items').value = '';
