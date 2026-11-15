@@ -422,6 +422,19 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
+### 1.2.44
+
+- **Shopping lists keep the whole name you typed.** A line whose name ends in
+  digits lost them: "JS-400" was saved as 400 of "JS-", "FR-86" as 86 of
+  "FR-", and "Phoenix 2" as two "Phoeni". The amount now has to stand after a
+  space ("JS-400 2", "Arrow x2"), and names the catalogue knows, such as
+  "Ship Ammunition - Size 3", are never split. Lists already saved keep what
+  they were saved with: delete and re-enter a mangled line.
+- **A blueprint's quality floor no longer hides its material.** A goal made
+  from a blueprint line like "Hadanite 0.5 SCU (quality 500+)" became one item
+  named after the whole line, with no seller. It is now 0.5 SCU of Hadanite,
+  with "quality 500+" shown beside it.
+
 ### 1.2.43
 
 - **Several shopping lists can be pinned to Now at once.** Pinning a second

@@ -25212,6 +25212,7 @@ function jobLines(job) {
     tr.append(el('td', 'job-mark', item.have ? '✓' : '·'));
     const itemName = el('td');
     itemName.append(goodsLink(item.name));
+    if (item.note) itemName.append(' ', el('span', 'note-inline', item.note));
     tr.append(itemName);
     tr.append(el('td', 'num muted', need));
 
@@ -25475,24 +25476,37 @@ async function loadJobList() {
 
 /**
  * Parses a written list into job items: "Hadanite 23", "Agricium 1.16 SCU",
- * or a bare name. Quantities are optional - a list of names is still a list.
+ * "Arrow x2", or a bare name. Quantities are optional - a list of names is
+ * still a list.
+ *
+ * The amount has to stand apart from the name, after a space. Until 1.2.44 it
+ * did not, so a name that ends in digits lost them: "JS-400" was saved as 400
+ * of "JS-", "FR-86" as 86 of "FR-", and the "x" that may precede an amount was
+ * eaten out of "Phoenix 2" ("Phoeni"). A name the catalogue knows is kept whole
+ * as well, because nine of them end in a spaced number ("Ship Ammunition -
+ * Size 3") and the picker writes exactly those.
+ *
+ * A bracket after the amount is a note on the line, not part of the name: the
+ * game's blueprints write "Hadanite 0.5 SCU (quality 500+)", which used to
+ * become one item named after the whole sentence, with no seller anywhere.
+ *
+ * @param known Names to keep whole whatever they end in; the catalogue's.
  */
-function parseJobItems(text) {
+function parseJobItems(text, known = catalogue ? [...catalogue.commodities, ...catalogue.items] : []) {
+  const whole = new Set(known.map((name) => name.toLowerCase()));
+
   return text.split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const match = line.match(/^(.*?)[\s·x×]*?([\d.]+)\s*(SCU|scu)?$/);
+      if (whole.has(line.toLowerCase())) return { name: line, needed: 0, unit: '' };
 
-      if (match && match[1].trim()) {
-        return {
-          name: match[1].replace(/[\s×x·]+$/, '').trim(),
-          needed: Number(match[2]) || 0,
-          unit: match[3] ? 'SCU' : '',
-        };
-      }
+      const match = line.match(/^(.*?\S)\s+[x×·]?\s*(\d+(?:\.\d+)?)\s*(SCU)?(?:\s*\(([^()]*)\))?$/i);
+      if (!match) return { name: line, needed: 0, unit: '' };
 
-      return { name: line, needed: 0, unit: '' };
+      const item = { name: match[1].trim(), needed: Number(match[2]) || 0, unit: match[3] ? 'SCU' : '' };
+      if (match[4]?.trim()) item.note = match[4].trim();
+      return item;
     });
 }
 

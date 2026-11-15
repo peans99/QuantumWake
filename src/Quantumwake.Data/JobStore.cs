@@ -5,7 +5,11 @@ namespace Quantumwake.Data;
 
 /// <summary>One line of a job: a thing to gather, and how much of it.</summary>
 /// <param name="Unit">"SCU" for bulk materials, empty for counted items.</param>
-public sealed record JobItem(string Name, double Needed, string Unit = "");
+/// <param name="Note">
+/// What the line asks beyond a name and an amount, such as a blueprint's
+/// "quality 500+". Kept apart from the name so the name still finds a seller.
+/// </param>
+public sealed record JobItem(string Name, double Needed, string Unit = "", string? Note = null);
 
 /// <summary>
 /// A plan the player is working towards: a blueprint to craft, or a shopping

@@ -2985,6 +2985,7 @@ public static partial class ServerHost
                         item.Name,
                         item.Needed,
                         item.Unit,
+                        item.Note,
                         have = inventorySighting && !needsLoosePart,
                         where,
                         wornNow = worn.Contains(item.Name) && !needsLoosePart,
