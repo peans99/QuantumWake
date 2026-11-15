@@ -422,6 +422,19 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
+### 1.2.41
+
+- **Live screen reading no longer takes a ship terminal for mining or a
+  target.** Standing at a Fleet Manager (ASOP) terminal, a bar on its screen
+  could be followed as the mining fracture gauge for as long as you stood
+  there, with mining callouts, and once a "Rock cracked" and a rock added to
+  the ones you worked that evening. A bar found on a terminal, a kiosk or a
+  mobiGlas app is now dropped without a word and without a record, and bars
+  are not looked for again until the view out of the ship is back.
+- **A target is only looked for on the flight view**, not on terminals, apps
+  or item tooltips, where their own text could be taken for a target panel.
+- Rocks already recorded this way are not removed.
+
 ### 1.2.40
 
 - **Only if you use, or are waiting for, the Microsoft Store edition.** The

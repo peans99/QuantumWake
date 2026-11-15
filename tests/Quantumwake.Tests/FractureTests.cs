@@ -177,4 +177,68 @@ public sealed class FractureTests
         mining.See(null, T0.AddSeconds(4), mayStart: false);
         Assert.Equal(["Rock cracked"], mining.See(null, T0.AddSeconds(5), mayStart: false).Select(c => c.Text));
     }
+
+    // ---- 1.2.41: a "rock cracked" at a Fleet terminal, 2026-11-14 ----
+
+    /// <summary>
+    /// What 1.1.18 did with the terminal's bar once it was being followed:
+    /// one absence when the whole frame read as a terminal, the bar again on
+    /// the two ticks between. Two absences in a row never came, so the window
+    /// stayed open for as long as the pilot stood there.
+    /// </summary>
+    [Fact]
+    public void One_absence_in_three_never_ends_a_window()
+    {
+        var watch = new MiningWatch();
+        for (var i = 0; i < 3; i++) watch.See(R("in", 0.5), T0.AddSeconds(i));
+
+        for (var i = 3; i < 60; i++)
+            watch.See(i % 3 == 0 ? null : R("in", 0.94), T0.AddSeconds(i));
+
+        Assert.True(watch.Picture().Active);
+    }
+
+    [Fact]
+    public void A_disowned_bar_is_neither_a_crack_nor_a_rock_worked()
+    {
+        var watch = new MiningWatch();
+        for (var i = 0; i < 3; i++) watch.See(R("in", 0.5), T0.AddSeconds(i));
+        watch.See(R("in", 0.94), T0.AddSeconds(3));
+        watch.See(R("in", 0.94), T0.AddSeconds(4));
+
+        // The whole frame reads as a terminal with the bar still on it.
+        watch.Disown();
+        var after = watch.See(null, T0.AddSeconds(6)).Concat(watch.See(null, T0.AddSeconds(8)));
+
+        Assert.Empty(after);
+        Assert.False(watch.Picture().Active);
+        Assert.Equal(0, watch.Picture().Cracked);
+        Assert.Empty(watch.TakeEnded());
+    }
+
+    /// <summary>A terminal's bar seen again after being disowned has to earn its three frames again.</summary>
+    [Fact]
+    public void A_disowned_bar_starts_from_nothing_if_it_is_seen_again()
+    {
+        var watch = new MiningWatch();
+        for (var i = 0; i < 3; i++) watch.See(R("in", 0.5), T0.AddSeconds(i));
+        watch.Disown();
+
+        watch.See(R("in", 0.5), T0.AddSeconds(4));
+        watch.See(R("in", 0.5), T0.AddSeconds(5));
+
+        Assert.False(watch.Picture().Active);
+    }
+
+    /// <summary>mobiGlas opened over a real rock: no bar on the frame, so the window ends and is kept.</summary>
+    [Fact]
+    public void A_window_that_ends_by_absence_is_still_recorded()
+    {
+        var watch = new MiningWatch();
+        for (var i = 0; i < 3; i++) watch.See(R("in", 0.3), T0.AddSeconds(i));
+        watch.See(null, T0.AddSeconds(3));
+        watch.See(null, T0.AddSeconds(4));
+
+        Assert.Single(watch.TakeEnded());
+    }
 }
