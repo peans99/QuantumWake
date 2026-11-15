@@ -241,7 +241,8 @@ public sealed class JobStore
 
     /// <summary>
     /// Adds one thing to the list the player is filling: the pinned job if
-    /// there is one, else the newest open list, else a new "Shopping list".
+    /// there is one - the top one on Shopping when several are, which is the
+    /// newest - else the newest open list, else a new "Shopping list".
     /// Returns the job it landed in, so the page can say where it went.
     /// </summary>
     public Job Collect(JobItem item)
@@ -303,8 +304,10 @@ public sealed class JobStore
     }
 
     /// <summary>
-    /// Pins a job to the Now page. Only one at a time: the overlay is a
-    /// glance, and two jobs there is a list nobody reads mid-flight.
+    /// Pins a job to the Now page, or takes it off. Several can be pinned:
+    /// one run often buys for more than one list, and keeping only the last
+    /// one pinned left the others to be remembered. The Now card keeps the
+    /// glance by showing only what is missing, cut to a share per list.
     /// </summary>
     public bool TogglePin(string id)
     {
@@ -314,13 +317,7 @@ public sealed class JobStore
             if (index < 0)
                 return false;
 
-            var pin = !_jobs[index].Pinned;
-
-            for (var i = 0; i < _jobs.Count; i++)
-                if (_jobs[i].Pinned)
-                    _jobs[i] = _jobs[i] with { Pinned = false };
-
-            _jobs[index] = _jobs[index] with { Pinned = pin };
+            _jobs[index] = _jobs[index] with { Pinned = !_jobs[index].Pinned };
             Save();
             return true;
         }
