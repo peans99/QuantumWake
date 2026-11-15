@@ -51,10 +51,13 @@ const phrases = [
 ];
 
 // Spelled for the ear, not the eye: Mk II is "Mark Two", the C.O. hulls are
-// "C O", and the letter after a dash is a letter of its own.
+// "C O", and the letter after a dash is a letter of its own. 4.10.3 brought
+// Mk IV and Mk V, which would otherwise be read as letters, and the dot in
+// the Xi'an "San'tok.yāi", which would be read out as "dot".
+const MARKS = { I: 'One', II: 'Two', III: 'Three', IV: 'Four', V: 'Five', VI: 'Six' };
 const spoken = (name) => name
-  .replace(/\bMk II\b/g, 'Mark Two').replace(/\bMk I\b/g, 'Mark One').replace(/\bMk\b/g, 'Mark')
-  .replace(/\bC\.O\./g, 'C O').replace(/(\w)-(\w)/g, '$1 $2');
+  .replace(/\bMk (VI|IV|V|I{1,3})\b/g, (_, n) => `Mark ${MARKS[n]}`).replace(/\bMk\b/g, 'Mark')
+  .replace(/\bC\.O\./g, 'C O').replace(/(\w)-(\w)/g, '$1 $2').replace(/(\p{L})\.(\p{L})/gu, '$1 $2');
 
 const slug = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 

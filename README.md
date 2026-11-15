@@ -422,6 +422,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
+### 1.2.42
+
+- **The ships Star Citizen 4.10.3 added are named in the recorded voice.**
+  Identifying an Anvil Liberator, Drake Marauder, RSI Galaxy, RSI Skylark, the
+  Constellation Mk IV and Mk V, the Sabre Raven EX, the Gatac Hyun or the
+  Aopoa San'tok.yāi used to switch to the robotic Windows voice for the whole
+  callout, because none of those names had been recorded yet. All thirteen are
+  in the pack now, the Constellations said as "Mark Four" and "Mark Five".
+
 ### 1.2.41
 
 - **Live screen reading no longer takes a ship terminal for mining or a

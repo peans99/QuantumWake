@@ -177,7 +177,6 @@
     "Anvil Terrapin Medic Wikelo Savior Special": "n_anvil_terrapin_medic_wikelo_savior_special.m4a",
     "Anvil Valkyrie": "n_anvil_valkyrie.m4a",
     "Aopoa Khartu-al": "n_aopoa_khartu_al.m4a",
-    "Aopoa San'tok.yai": "n_aopoa_san_tok_yai.m4a",
     "Argo MOLE": "n_argo_mole.m4a",
     "ARGO MOLE Alliance": "n_argo_mole_alliance.m4a",
     "Argo MOLE Teach's Special": "n_argo_mole_teach_s_special.m4a",
@@ -370,6 +369,20 @@
     "P-type asteroid": "n_p_type_asteroid.m4a",
     "M-type asteroid": "n_m_type_asteroid.m4a",
     "Q-type asteroid": "n_q_type_asteroid.m4a",
-    "E-type asteroid": "n_e_type_asteroid.m4a"
+    "E-type asteroid": "n_e_type_asteroid.m4a",
+    "Aegis Sabre Raven EX": "n_aegis_sabre_raven_ex.m4a",
+    "Anvil Liberator": "n_anvil_liberator.m4a",
+    "Drake Marauder": "n_drake_marauder.m4a",
+    "Gatac Hyun": "n_gatac_hyun.m4a",
+    "RSI Galaxy": "n_rsi_galaxy.m4a",
+    "RSI Skylark": "n_rsi_skylark.m4a",
+    "Aopoa San'tok.yāi": "n_aopoa_san_tok_y_i.m4a",
+    "RSI Constellation Mk IV Andromeda": "n_rsi_constellation_mk_iv_andromeda.m4a",
+    "RSI Constellation Mk IV Aquila": "n_rsi_constellation_mk_iv_aquila.m4a",
+    "RSI Constellation Mk IV Phoenix": "n_rsi_constellation_mk_iv_phoenix.m4a",
+    "RSI Constellation Mk IV Taurus": "n_rsi_constellation_mk_iv_taurus.m4a",
+    "RSI Constellation Mk IV Taurus Wikelo War Special": "n_rsi_constellation_mk_iv_taurus_wikelo_war_special.m4a",
+    "RSI Constellation Mk V Centaurus": "n_rsi_constellation_mk_v_centaurus.m4a",
+    "Aopoa San'tok.yai": "n_aopoa_san_tok_yai.m4a"
   }
 }
