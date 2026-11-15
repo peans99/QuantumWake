@@ -3515,9 +3515,16 @@ td.with-track { display: flex; align-items: center; gap: 9px; }
 }
 .now-job-items li:last-child { border-bottom: 0; }
 .now-job-items .n { color: var(--text); }
+/* With several lists pinned, each one's name heads its own missing items. */
+.now-job-items li.now-job-group { padding-top: 7px; }
+.now-job-items li.now-job-group:first-child { padding-top: 3px; }
+.now-job-items li.now-job-group .cross-link { font-weight: 600; }
+/* Item names are links too, so the indent is what says whose items they are. */
+.now-job-items li.now-job-group ~ li:not(.now-job-group) { padding-left: 12px; }
 
 body.overlay .now-job-title { font-size: 12px; }
 body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
+body.overlay .now-job-items li.now-job-group { padding-top: 5px; }
 
 /* A pinned checklist is a second authored stream beside a pinned shopping
  * list. The card keeps the next few actions useful at a glance, while the

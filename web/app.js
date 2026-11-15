@@ -24447,39 +24447,59 @@ $('#jobs-plan')?.addEventListener('click', async (e) => {
 });
 
 /**
- * The pinned job on the Now page - and so in the overlay, where what is still
+ * The pinned jobs on the Now page - and so in the overlay, where what is still
  * missing is worth having in the corner of the screen while flying.
+ *
+ * Several can be pinned, because one run often buys for more than one list.
+ * The card stays a glance by showing only what is missing, grouped under each
+ * list, and by cutting each list to its share of six lines: two lists of nine
+ * missing items would otherwise be a page nobody reads mid-flight. A list that
+ * is all in hand shrinks to its title and a tick.
  */
 async function renderPinnedJob(jobs) {
   const card = $('#now-job-card');
   if (!card) return;
 
-  const job = (jobs ?? await getJson('/api/jobs').catch(() => [])).find((j) => j.pinned && !j.done);
+  const pinned = (jobs ?? await getJson('/api/jobs').catch(() => [])).filter((j) => j.pinned && !j.done);
 
-  if (!job) {
+  if (!pinned.length) {
     card.hidden = true;
     return;
   }
 
+  const one = pinned.length === 1;
+  const have = pinned.reduce((sum, job) => sum + (job.haveCount || 0), 0);
+  const total = pinned.reduce((sum, job) => sum + (job.totalCount || 0), 0);
+
   const jobTitle = $('#now-job-title');
   jobTitle.textContent = '';
-  jobTitle.append(crossLink(job.title, tx('Open this job on Shopping'), () => openJob(job.id)));
+  if (one) jobTitle.append(crossLink(pinned[0].title, tx('Open this job on Shopping'), () => openJob(pinned[0].id)));
+  else jobTitle.textContent = txn(pinned.length, '{count} pinned list', '{count} pinned lists');
 
   const progress = $('#now-job-progress');
   progress.textContent = '';
-  progress.append(jobProgress(job.haveCount, job.totalCount,
-    tx('{done} of {total} in hand', { done: job.haveCount, total: job.totalCount })));
+  progress.append(jobProgress(have, total, tx('{done} of {total} in hand', { done: have, total })));
 
   // What is still missing, which is the only part worth reading mid-flight.
   const list = $('#now-job-items');
   list.textContent = '';
+  const share = one ? 6 : Math.max(2, Math.floor(6 / pinned.length));
 
-  const missing = job.items.filter((i) => !i.have);
+  for (const job of pinned) {
+    const missing = job.items.filter((i) => !i.have);
 
-  if (!missing.length) {
-    list.append(el('li', 'inward', tx('Everything on this list is in hand.')));
-  } else {
-    for (const item of missing.slice(0, 6)) {
+    if (!one) {
+      const head = el('li', missing.length ? 'now-job-group' : 'now-job-group inward');
+      head.append(crossLink(job.title, tx('Open this job on Shopping'), () => openJob(job.id)));
+      head.append(el('span', 'muted', missing.length
+        ? tx('{done} of {total} in hand', { done: job.haveCount || 0, total: job.totalCount || 0 })
+        : tx('✓ all in hand')));
+      list.append(head);
+    } else if (!missing.length) {
+      list.append(el('li', 'inward', tx('Everything on this list is in hand.')));
+    }
+
+    for (const item of missing.slice(0, share)) {
       const li = el('li');
       const n = el('span', 'n');
       n.append(goodsLink(item.name), item.needed > 0 ? ` ${item.needed}${item.unit ? ` ${item.unit}` : ''}` : '');
@@ -24493,8 +24513,8 @@ async function renderPinnedJob(jobs) {
       list.append(li);
     }
 
-    if (missing.length > 6)
-      list.append(el('li', 'muted', tx('+{count} more', { count: missing.length - 6 })));
+    if (missing.length > share)
+      list.append(el('li', 'muted', tx('+{count} more', { count: missing.length - share })));
   }
 
   card.hidden = false;

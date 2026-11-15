@@ -422,7 +422,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.42
+### 1.2.43
+
+- **Several shopping lists can be pinned to Now at once.** Pinning a second
+  list used to unpin the first; now each list's "Pin to Now" works on its own.
+  Now and the overlay show every pinned list on one card, grouped under each
+  list's name, with only what is still missing and a few lines per list,
+  so it stays readable mid-flight. A pinned list with everything in hand
+  shrinks to its name and a tick. "+ list" adds to the pinned list nearest the
+  top of Shopping and says which one.
 
 - **The ships Star Citizen 4.10.3 added are named in the recorded voice.**
   Identifying an Anvil Liberator, Drake Marauder, RSI Galaxy, RSI Skylark, the

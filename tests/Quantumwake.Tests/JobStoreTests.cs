@@ -81,4 +81,41 @@ public sealed class JobStoreTests : IDisposable
         Assert.Equal(first.Job.Id, store.OpenList("garage:RSI_Hermes", "RSI Hermes fit")!.Id);
         Assert.Null(store.OpenList("garage:RSI_Hermes", "Quiet fit"));
     }
+
+    /// <summary>
+    /// One run often buys for more than one list, so pinning a second keeps
+    /// the first (1.2.43); before, the second silently unpinned it.
+    /// </summary>
+    [Fact]
+    public void Several_lists_can_be_pinned_and_each_unpins_alone()
+    {
+        var store = new JobStore(_root);
+        var first = store.Add("Hermes fit", "list", null, [new JobItem("SolarFlare", 1)]);
+        var second = store.Add("Medical run", "list", null, [new JobItem("MedGel", 2)]);
+
+        Assert.True(store.TogglePin(first.Id));
+        Assert.True(store.TogglePin(second.Id));
+        Assert.All(store.All(), job => Assert.True(job.Pinned));
+
+        Assert.True(store.TogglePin(first.Id));
+        Assert.False(store.All().Single(job => job.Id == first.Id).Pinned);
+        Assert.True(store.All().Single(job => job.Id == second.Id).Pinned);
+    }
+
+    /// <summary>With several pinned, "+ list" lands in the top one on Shopping, the newest.</summary>
+    [Fact]
+    public void Collecting_with_several_pinned_lands_in_the_top_one()
+    {
+        var store = new JobStore(_root);
+        var older = store.Add("Hermes fit", "list", null, [new JobItem("SolarFlare", 1)]);
+        var newer = store.Add("Medical run", "list", null, [new JobItem("MedGel", 2)]);
+        store.Add("Unpinned", "list", null, []);
+        store.TogglePin(older.Id);
+        store.TogglePin(newer.Id);
+
+        var landed = store.Collect(new JobItem("Hemozal", 1));
+
+        Assert.Equal(newer.Id, landed.Id);
+        Assert.Contains(store.All().Single(job => job.Id == newer.Id).Items, item => item.Name == "Hemozal");
+    }
 }
