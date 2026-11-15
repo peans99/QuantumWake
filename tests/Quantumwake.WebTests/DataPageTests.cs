@@ -81,6 +81,19 @@ public class DataPageTests
         Assert.Contains("381 MB", rows);
         Assert.Contains("12 KB", rows);
         Assert.Equal(3, page.Count("__dom.node('#data-folder-table tbody').querySelectorAll('tr').length"));
+        Assert.DoesNotContain("Store app", page.NodeText("#data-folder"));
+    }
+
+    /// <summary>
+    /// A Store copy with a folder of its own loses it on uninstall, which no
+    /// other copy does, so the line that names the folder has to say so.
+    /// </summary>
+    [Fact]
+    public void A_folder_inside_the_store_app_says_uninstalling_deletes_it()
+    {
+        var page = Loaded(Data.Replace("\"relocated\":false,", "\"relocated\":false,\"packaged\":true,"));
+
+        Assert.Contains("uninstalling it deletes this", page.NodeText("#data-folder"));
     }
 
     /// <summary>The signals table lives here now; it still fills from the same answer.</summary>

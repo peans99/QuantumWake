@@ -176,7 +176,11 @@ public static partial class ServerHost
                 // not data, and would dwarf everything else.
                 folder = new
                 {
-                    path = AppPaths.Root,
+                    // A Store copy that never shared a folder with the
+                    // download keeps its data inside its package, where
+                    // Explorer finds it and uninstalling deletes it.
+                    path = StoreInstall.OnDisk(AppPaths.Root),
+                    packaged = StoreInstall.Owns(AppPaths.Root),
                     relocated = AppPaths.IsRelocated,
                     bytes = FolderBytes(AppPaths.Root, "WebView2"),
                     entries = FolderEntries(AppPaths.Root, "WebView2"),

@@ -96,8 +96,14 @@ send nothing about you.
   plans, prices you entered), caches of the game files, and its settings.
   Uninstalling the app does not delete this folder, so your history survives a
   reinstall; delete the folder to remove it.
-  The Microsoft Store edition uses this same folder, and uninstalling it
-  leaves the folder in place too.
+  The Microsoft Store edition uses this same folder when it is already there,
+  which it is if you ran the downloaded app first, and uninstalling leaves it
+  in place too. If the Store edition is the only copy you have had, Windows
+  keeps its folder inside the Store app instead, under
+  `%LOCALAPPDATA%\Packages\Nehkron.QuantumWake_6pqy8hx358xcy\LocalCache\Local\Quantumwake`,
+  and **uninstalling the Store edition deletes it**. Settings → What was read
+  shows which folder is in use; copy it out before uninstalling to keep your
+  history.
 - **One frame of the game's screen**, while live reading is on:
   `live\frame.bmp` in the data folder, replaced every couple of seconds and
   deleted when reading is switched off or the app closes.

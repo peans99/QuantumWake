@@ -365,7 +365,10 @@ restarts the app. Some updates re-read your history; release notes call that out
 To remove Quantum Wake, delete `QuantumWake.exe`, or uninstall it from Apps and
 features if you used the installer, then delete `%LOCALAPPDATA%\Quantumwake`,
 which holds your history and is left in place so a reinstall keeps it. Remove item labels from the app first if you
-installed them. Linux removal is under [Linux](#linux).
+installed them. The Microsoft Store edition is the exception: if it is the only
+copy you have had, its history is kept inside the Store app and uninstalling
+deletes it, so copy the folder **Settings → What was read** names first if you
+want to keep it. Linux removal is under [Linux](#linux).
 
 **Settings → Report a problem** makes a small diagnostic file. It contains
 parser counts, game builds and integration state, but not logs, account
@@ -418,6 +421,21 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 ## Release notes
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
+
+### 1.2.40
+
+- **Only if you use, or are waiting for, the Microsoft Store edition.** The
+  Store would not approve the permission that let a Store copy share one data
+  folder with the download in every case, so it is gone and the package can be
+  resubmitted. If you ran the downloaded app first, nothing changes: the Store
+  copy carries on in `%LOCALAPPDATA%\Quantumwake` with all your history, and
+  uninstalling leaves it there. If the Store copy is the only one you have
+  had, Windows keeps its folder inside the Store app, and **uninstalling the
+  Store edition deletes your history with it**.
+- **Settings → What was read shows the folder really in use**, at the path
+  File Explorer can open, and says so when uninstalling would delete it. A
+  saved controls export gives its real location the same way.
+- The download and the installer are unchanged.
 
 ### 1.2.39
 

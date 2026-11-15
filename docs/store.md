@@ -34,18 +34,35 @@ downloads page, which needs no Store id) and says the Store offers a release
 only after certification, a day or two after GitHub has it. The update check
 itself still runs, so the banner still appears.
 
-**The data folder is the same one.** A packaged app's writes to
-`%LOCALAPPDATA%` are normally diverted into the package's private folder, and
-merged back only for the app itself. Here that would mean Explorer, the CLI and
-the downloaded exe not seeing what the Store copy wrote, and uninstalling the
-Store copy deleting it, against what [privacy.md](privacy.md) promises. The
-manifest turns that off (`desktop6:FileSystemWriteVirtualization` and
-`RegistryWriteVirtualization` disabled), so the Store copy reads and writes
-`%LOCALAPPDATA%\Quantumwake` exactly as the exe does. Moving from the download
-to the Store keeps every session.
+**The data folder depends on what was there first.** A packaged app runs with
+file-system virtualization on, and since 1.2.40 so does this one. What that
+does was measured rather than read (see [Tested](#tested)), and it comes down
+to whether `%LOCALAPPDATA%\Quantumwake` exists when the Store copy first runs:
 
-That needs the **restricted capability `unvirtualizedResources`**, which Partner
-Center asks to have justified at submission. The justification:
+| | someone who ran the download first | someone who only ever had the Store copy |
+|---|---|---|
+| the folder | already exists | does not |
+| where files land | in `%LOCALAPPDATA%\Quantumwake` itself: new files, appends, replacements, deletes, new subfolders | in `%LOCALAPPDATA%\Packages\Nehkron.QuantumWake_6pqy8hx358xcy\LocalCache\Local\Quantumwake` |
+| seen by Explorer, the CLI, the downloaded exe | yes | only at the `Packages` path |
+| uninstalling the Store copy | leaves it | deletes it |
+
+So moving from the download to the Store keeps every session and carries on in
+the same folder. A Store-only history lives inside the package and goes when
+the package does, which [privacy.md](privacy.md) says in as many words.
+
+The app itself is shown the folder at `%LOCALAPPDATA%\Quantumwake` in both
+cases, so a path it printed would point a Store-only user at nothing.
+`StoreInstall.OnDisk` asks the disk which case this is and answers the path
+Explorer can open; Settings → What was read and the controls export use it, and
+the first adds that uninstalling deletes the folder when it is the package's.
+
+### The capability the Store refused
+
+1.0.1 to 1.2.39 turned virtualization off
+(`desktop6:FileSystemWriteVirtualization` and `RegistryWriteVirtualization`
+disabled) so that every copy shared the one folder. That needs the restricted
+capability `unvirtualizedResources`, and certification denied it in November
+2026 under policy 10.6.3, with this justification:
 
 > Quantum Wake keeps its history in %LOCALAPPDATA%\Quantumwake, the folder the
 > same app has used since its first GitHub release. Without this capability a
@@ -56,8 +73,14 @@ Center asks to have justified at submission. The justification:
 > .NET unpacking its native libraries into the temporary folder, the app writes
 > nowhere else in the profile, and nothing in the registry.
 
-`runFullTrust` is the other restricted capability: every desktop (Win32) app
-in an MSIX declares it.
+The denial offered reconsideration with a fuller justification and a support
+contact that is not a GitHub link. Removing the capability was chosen instead,
+and the measurement above is why it costs less than that justification feared:
+its first claim, that existing history would not be seen, turned out to be
+wrong.
+
+`runFullTrust` is now the only restricted capability: every desktop (Win32)
+app in an MSIX declares it.
 
 ## Identity
 
@@ -102,16 +125,39 @@ refuses the placeholders, should the file ever be reset to them.
 2. Tag a release as usual ([releasing.md](releasing.md)). Download the
    `store-package-<version>` artifact from the release run.
 3. In the submission's *Packages* page, upload the `.msix`. Partner Center
-   validates it against the reserved identity.
-4. Answer the restricted-capability question with the justification above.
+   validates it against the reserved identity. With `unvirtualizedResources`
+   gone there is no restricted-capability question to answer.
 
 ## Tested
 
 On this machine, packing the published 1.0.1 exe: MakeAppx accepts the
-manifest (it checks it against the schema while packing). Installing it has not
-been tried: an unsigned package installs only through the Store or, on a
-machine in Developer Mode, by registering the unpacked folder with
-`Add-AppxPackage -Register AppxManifest.xml`. Before the first submission,
-that registration is the check to run: the app starts, the banner offers the
-Store, and new files land in `%LOCALAPPDATA%\Quantumwake` rather than under
-`%LOCALAPPDATA%\Packages`.
+manifest (it checks it against the schema while packing).
+
+An unsigned package installs only through the Store or, on a machine in
+Developer Mode, by registering the unpacked folder with
+`Add-AppxPackage -Register AppxManifest.xml`. For 1.2.40 the manifest was
+registered that way on Windows 11 build 26300, under a test identity
+(`Nehkron.QuantumWake.VirtProbe`) and around a stand-in exe, and commands were
+run inside its container with `Invoke-CommandInDesktopPackage -PreventBreakaway`
+from Windows PowerShell 5.1 (from PowerShell 7 the cmdlet hung):
+
+- **A folder that existed beforehand**, holding three files: a new file, an
+  append, a temp-file-then-move replacement, a delete and a new subfolder all
+  landed in the real folder. Nothing appeared under `Packages`.
+- **A folder that did not exist**: it and two files, one of them two folders
+  deep, were created under `Packages\<family>\LocalCache\Local`, and the real
+  path still did not exist afterwards.
+- **The 1.2.40 server itself**, run inside the container against each kind of
+  folder with `QUANTUMWAKE_DATA`: `/api/data` answered the `Packages` path
+  with `packaged: true` for the new folder, and the real path with
+  `packaged: false` for the existing one. The database, `names.json` and
+  `controls` were where it said in both.
+- **Removing the package** deleted its `Packages` folder and left the
+  pre-existing one.
+
+What that does not cover: the real `QuantumWake.exe` (the tray app and its
+WebView2 cache) inside the package, the real identity, and any Windows older
+than build 26300. Microsoft's description of virtualization for Windows 10 has
+new files in an existing folder diverted too, which would split a download
+user's folder between the two places; `OnDisk` reports each path where it is
+either way, but that case is unmeasured here.
