@@ -26018,31 +26018,59 @@ function checklistItemRow(list, item, compact = false) {
   return row;
 }
 
+/**
+ * The pinned checklists on Now, and so in the overlay.
+ *
+ * Several can be pinned (1.2.46). The card stays a glance the way the shopping
+ * card does: one list reads as it always did; several are grouped under their
+ * names, each cut to its share of five open tasks, and a list with every task
+ * done shrinks to its name and a tick.
+ */
 function renderPinnedChecklist(lists = checklists) {
   const card = $('#now-checklist-card');
 
   // Imported rows arrive with pinned forced false, so this cannot pick one up -
   // but Now is the one card where being wrong would be loudest, so it says so.
-  const list = lists.find((entry) => entry.pinned && !entry.imported);
+  const pinned = lists.filter((entry) => entry.pinned && !entry.imported);
   if (!card) return;
 
-  if (!list) {
+  if (!pinned.length) {
     card.hidden = true;
     return;
   }
 
-  $('#now-checklist-title').textContent = list.title;
-  const done = list.items.filter((item) => item.done).length;
+  const one = pinned.length === 1;
+  $('#now-checklist-title').textContent = one
+    ? pinned[0].title
+    : txn(pinned.length, '{count} pinned checklist', '{count} pinned checklists');
+
+  const total = pinned.reduce((sum, list) => sum + list.items.length, 0);
+  const done = pinned.reduce((sum, list) => sum + list.items.filter((item) => item.done).length, 0);
   const progress = $('#now-checklist-progress');
   progress.textContent = '';
-  progress.append(jobProgress(done, list.items.length, tx('{done} of {total} done', { done, total: list.items.length })));
+  progress.append(jobProgress(done, total, tx('{done} of {total} done', { done, total })));
 
   const host = $('#now-checklist-items');
   host.textContent = '';
-  const open = list.items.filter((item) => !item.done);
-  for (const item of open.slice(0, 5)) host.append(checklistItemRow(list, item, true));
-  if (open.length > 5) host.append(el('li', 'muted', tx('+{count} more', { count: open.length - 5 })));
-  if (!open.length) host.append(el('li', 'inward', tx('Everything is checked off.')));
+  const share = one ? 5 : Math.max(2, Math.floor(5 / pinned.length));
+
+  for (const list of pinned) {
+    const open = list.items.filter((item) => !item.done);
+
+    if (!one) {
+      const head = el('li', open.length ? 'now-checklist-group' : 'now-checklist-group inward');
+      head.append(el('span', 'strong', list.title));
+      head.append(el('span', 'muted', open.length
+        ? tx('{done} of {total} done', { done: list.items.length - open.length, total: list.items.length })
+        : tx('✓ all done')));
+      host.append(head);
+    } else if (!open.length) {
+      host.append(el('li', 'inward', tx('Everything is checked off.')));
+    }
+
+    for (const item of open.slice(0, share)) host.append(checklistItemRow(list, item, true));
+    if (open.length > share) host.append(el('li', 'muted', tx('+{count} more', { count: open.length - share })));
+  }
 
   $('#now-checklist-open').onclick = () => showView('checklists');
   card.hidden = false;
@@ -26180,7 +26208,9 @@ function renderChecklists(lists) {
     head.append(farm);
 
     const pin = el('button', list.pinned ? 'ghost on' : 'ghost', list.pinned ? tx('On Now') : tx('Pin to Now'));
-    pin.title = tx('Only one checklist is shown on Now and in the overlay');
+    pin.title = list.pinned
+      ? tx('Showing on the Now page and in the overlay')
+      : tx('Show this checklist on the Now page and in the overlay');
     pin.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}/pin`));
     head.append(pin);
     const remove = el('button', 'ghost danger', tx('Delete'));

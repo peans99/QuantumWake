@@ -422,7 +422,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.45
+### 1.2.46
+
+- **Several checklists can be pinned to Now at once,** as shopping lists can
+  since 1.2.43. Pinning a second checklist used to unpin the first. Now and
+  the overlay show every pinned checklist on one card, each under its name
+  with a few of its open tasks, and a checklist with everything done shrinks
+  to its name and a tick. Tasks can still be ticked off right on the card.
 
 - **Shopping lists can be edited.** "Edit" on a list opens its title and
   lines in the same one-line-per-thing box it was written in: rename it,

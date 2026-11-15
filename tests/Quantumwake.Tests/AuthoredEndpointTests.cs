@@ -64,7 +64,6 @@ public class AuthoredEndpointTests : IClassFixture<ServerUnderTest>
     }
 
     /// <summary>
-    /// <summary>
     /// A line the pilot ticks reads back in hand, an edit keeps that tick, and
     /// a sighting that cannot be counted does not close a line for 23 (1.2.45).
     /// </summary>
@@ -108,12 +107,13 @@ public class AuthoredEndpointTests : IClassFixture<ServerUnderTest>
         await _server.Delete($"/api/jobs/{second}");
     }
 
-    /// Only one thing is on Now at a time, and the rule lives in the store. This
-    /// says it still holds when the pinning is done through the API, which is
-    /// the only way anybody does it.
+    /// <summary>
+    /// Several checklists can be on Now (1.2.46), and the rule lives in the
+    /// store. This says it holds when the pinning is done through the API,
+    /// which is the only way anybody does it.
     /// </summary>
     [Fact]
-    public async Task Pinning_a_second_checklist_unpins_the_first()
+    public async Task Pinning_a_second_checklist_keeps_the_first()
     {
         var first = Id(await _server.Posted("/api/checklists", new { title = "Pyro departure" }));
         var second = Id(await _server.Posted("/api/checklists", new { title = "Mining run" }));
@@ -127,7 +127,10 @@ public class AuthoredEndpointTests : IClassFixture<ServerUnderTest>
             .Select(Id)
             .ToList();
 
-        Assert.Equal([second], pinned);
+        Assert.Contains(first, pinned);
+        Assert.Contains(second, pinned);
+        await _server.Delete($"/api/checklists/{first}");
+        await _server.Delete($"/api/checklists/{second}");
     }
 
     /// <summary>

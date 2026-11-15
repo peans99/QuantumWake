@@ -28,8 +28,9 @@ public class ChecklistStoreTests : IDisposable
         Assert.Equal("https://example.test/loadout", item.Attachments[2].Target);
     }
 
+    /// <summary>Several checklists can be on Now (1.2.46); each comes off alone.</summary>
     [Fact]
-    public void Pinning_a_list_replaces_the_previous_now_list()
+    public void Several_lists_can_be_pinned_and_each_unpins_alone()
     {
         var store = NewStore();
         var first = store.Add("Cargo run");
@@ -37,7 +38,9 @@ public class ChecklistStoreTests : IDisposable
 
         Assert.True(store.TogglePin(first.Id));
         Assert.True(store.TogglePin(second.Id));
+        Assert.All(store.All(), list => Assert.True(list.Pinned));
 
+        Assert.True(store.TogglePin(first.Id));
         Assert.False(store.All().Single(list => list.Id == first.Id).Pinned);
         Assert.True(store.All().Single(list => list.Id == second.Id).Pinned);
     }
