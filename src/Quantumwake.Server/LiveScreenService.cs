@@ -160,6 +160,16 @@ public sealed class LiveScreenService(
     private CombatWatch? _combat;
     private ScreenPatch? _panel;
     private ScreenPatch? _bar;
+
+    /// <summary>The last whole frame was a terminal, an app or a tooltip rather than the view out of the ship.</summary>
+    private bool _notFlight;
+
+    /// <summary>
+    /// Whether a screen of this kind can have the flight HUD on it: only one
+    /// this app has no reader for, or the mining scan, which is drawn on it.
+    /// </summary>
+    internal static bool FlightView(ScreenKind kind) => kind is ScreenKind.Unknown or ScreenKind.Mining;
+
     private readonly MiningWatch _mining = new();
     private readonly HudWatch _hud = new();
     private int _frameHeight;
@@ -371,6 +381,7 @@ public sealed class LiveScreenService(
                     _log.Stopped();
                     _panel = null;
                     _bar = null;
+                    _notFlight = false;
                     Forget(frame);
                     continue;
                 }
@@ -461,14 +472,24 @@ public sealed class LiveScreenService(
 
         // ---- the fracture HUD: pixels only, so every tick while a bar is held ----
         var charging = System.Diagnostics.Stopwatch.StartNew();
-        var charge = _bar is { } bar
-            ? await insight.ReadChargeAsync(frame, ChargeWindow.Around(bar), taken.Height, token)
-            : null;
-        // Not where it was, or not looked for yet: the whole search area, still pixels only.
-        charge ??= await insight.ReadChargeAsync(frame, ChargeWindow.SearchArea(taken.Width, taken.Height), taken.Height, token);
+        ChargeReading? charge = null;
+        // Not looked for at all while the last whole frame was a terminal or
+        // an app: the bars found there are the screen's own (1.2.41).
+        if (!_notFlight)
+        {
+            charge = _bar is { } bar
+                ? await insight.ReadChargeAsync(frame, ChargeWindow.Around(bar), taken.Height, token)
+                : null;
+            // Not where it was, or not looked for yet: the whole search area, still pixels only.
+            charge ??= await insight.ReadChargeAsync(frame, ChargeWindow.SearchArea(taken.Width, taken.Height), taken.Height, token);
+        }
         charging.Stop();
         _bar = charge?.Bar;
-        Fracture(charge, at, mayStart: !Fighting(at));
+
+        // A tick that reads the whole frame waits for it before the watch
+        // hears of a bar: the frame may say the bar is a terminal's.
+        var whole = _tick % WholeEvery == 0;
+        if (!whole) Fracture(charge, at, mayStart: !Fighting(at));
 
         // ---- the missile band, on the ticks that do not read the whole frame ----
         // A whole-frame read sees the warning in its own lines; the ticks
@@ -528,9 +549,25 @@ public sealed class LiveScreenService(
 
         // A mobiGlas app, a terminal, a kiosk or a tooltip is not the flight
         // view, so no bar on it is the fracture HUD: the Fleet terminal's own
-        // bars were read as one (1.1.18).
-        if (sighting.Kind is not (ScreenKind.Unknown or ScreenKind.Mining))
-            Fracture(null, at);
+        // bars were read as one (1.1.18). A bar found on this very frame is
+        // therefore the screen's, and whatever was being followed is dropped
+        // without a word or a record; with no bar on it, the window ends the
+        // ordinary way, which is a pilot opening mobiGlas over a real rock.
+        var flight = FlightView(sighting.Kind);
+        if (!flight)
+        {
+            if (charge is not null)
+                lock (_gate) _mining.Disown();
+            else
+                Fracture(null, at);
+            _bar = null;
+            charge = null;
+        }
+        else if (whole)
+        {
+            Fracture(charge, at, mayStart: !Fighting(at));
+        }
+        _notFlight = !flight;
 
         // Asked of every frame, a rock's included, so a screen interrupted by
         // something else has to be seen twice again before it is kept.
@@ -547,7 +584,11 @@ public sealed class LiveScreenService(
 
         var panelMs = 0L;
         TargetReading? target = null;
-        if (sighting.Mining is null)
+        // The target panel is part of the flight HUD. Looked for on a
+        // terminal, an app or a tooltip it can only be that screen's own text
+        // taken for one, and the frame log would not show it: such a frame is
+        // logged under the screen's kind, not as Target.
+        if (sighting.Kind == ScreenKind.Unknown)
         {
             var close = System.Diagnostics.Stopwatch.StartNew();
             (target, var stance) = await insight.ReadTargetAsync(frame, lines, _panel, taken.Width, taken.Height, token);
@@ -563,7 +604,7 @@ public sealed class LiveScreenService(
         // The radar's signature readout, when nothing faster is going on: a
         // ping is read while the pilot sweeps across contacts, and a fight or
         // a fracture has the loop's attention.
-        if (target is null && charge is null && sighting.Mining is null)
+        if (target is null && charge is null && sighting.Kind == ScreenKind.Unknown)
         {
             var ping = await insight.ReadPingAsync(frame, taken.Width, taken.Height, token);
             IReadOnlyList<CombatCallout> pinged;

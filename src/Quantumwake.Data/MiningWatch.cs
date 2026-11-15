@@ -220,6 +220,35 @@ public sealed class MiningWatch
         return now;
     }
 
+    /// <summary>
+    /// Lets go of a bar that turned out to belong to a screen, not to a rock:
+    /// nothing is said, and no window is recorded.
+    /// </summary>
+    /// <remarks>
+    /// Telling the watch the bar is absent was not enough (1.2.41). On
+    /// 2026-11-14 a bar on a Fleet Manager terminal was followed from the
+    /// walk up to it, before the screen read as a terminal. From then on the
+    /// whole frame said "terminal" one tick in three and the two between
+    /// found the bar again, so the two absences in a row that end a window
+    /// never came: 66 bar frames between 32 terminal frames over 102 seconds,
+    /// and with the terminal's bar 94% green it was said and recorded as a
+    /// cracked rock. An absence also cannot tell this from a pilot who opens
+    /// mobiGlas over a real rock, whose window should be kept. A bar found on
+    /// the very frame that reads as a terminal can.
+    /// </remarks>
+    public void Disown()
+    {
+        _present = 0;
+        _absent = 0;
+        _startBar = null;
+        _active = false;
+        _state = _pending = null;
+        _agreed = 0;
+        _maxFill = _fill = 0;
+        _belowBy = null;
+        _wasIn = false;
+    }
+
     /// <summary>The windows that have closed since the last ask, oldest first.</summary>
     public IReadOnlyList<FractureRecord> TakeEnded()
     {
