@@ -28038,7 +28038,7 @@ function renderDataFolder(folder) {
   const body = $('#data-folder-table tbody');
   if (!line || !body) return;
   line.textContent = folder.path
-    ? `${folder.path} · ${fileSize(folder.bytes)}${folder.relocated ? ` · ${tx('moved by --data')}` : ''}`
+    ? `${folder.path} · ${fileSize(folder.bytes)}${folder.relocated ? ` · ${tx('moved by --data')}` : ''}${folder.packaged ? ` · ${tx('inside the Store app, so uninstalling it deletes this: copy the folder out first to keep it')}` : ''}`
     : tx('No data folder yet.');
   body.textContent = '';
   for (const entry of folder.entries || []) {

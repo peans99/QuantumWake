@@ -379,7 +379,9 @@ public static class ControlsEndpoints
                 File.Copy(path, mappings, overwrite: true);
                 installed = true;
             }
-            return Results.Ok(new { name, path, installed, mappings, command = $"pp_rebindkeys {ControlsExport.MappingFileName(name)}" });
+            // The path is for the reader to find the file in Explorer, which
+            // for a Store copy may not be where the app wrote it.
+            return Results.Ok(new { name, path = Quantumwake.Core.StoreInstall.OnDisk(path), installed, mappings, command = $"pp_rebindkeys {ControlsExport.MappingFileName(name)}" });
         });
 
         // The template feed: opt-in, like every other.
