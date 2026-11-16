@@ -21,11 +21,68 @@ claude mcp add --transport http quantumwake http://localhost:31337/mcp
 url = "http://localhost:31337/mcp"
 ```
 
+Claude Desktop starts its servers itself and talks to them over stdio, so
+since 1.2.53 the program is one: `QuantumWake.exe --mcp-stdio` relays each
+line to the running app's `/mcp` (`McpStdioBridge.cs`). Settings shows the
+config with this program's real path, from `/api/mcp`'s `stdio` field:
+
+```json
+{
+  "mcpServers": {
+    "quantumwake": {
+      "command": "C:\\Users\\you\\Downloads\\QuantumWake.exe",
+      "args": ["--mcp-stdio"]
+    }
+  }
+}
+```
+
+`--Port <n>` is added when the app is not on 31337. A Store copy is named by
+its App Execution Alias, `%LOCALAPPDATA%\Microsoft\WindowsApps\QuantumWake.exe`,
+because the package folder's name carries the version and a path copied from
+it would break at the next update.
+
 Measured: Claude Code connected to a test copy on 2026-11-15, called
 `find_places` and `where_to_buy`, and answered from the pilot's data; the
 call log recorded it as `claude-code`. Codex was not installed on the machine,
 so its line is the documented `url` form for a Streamable HTTP server and has
 not been run here.
+
+The stdio relay, measured on 2026-11-16 with the published single-file
+`QuantumWake.exe` (a GUI-subsystem exe, so whether it had stdout at all was
+the question): Claude Code 2.1.325 started it as a `stdio` server with
+`--mcp-stdio --Port 31395` against a test copy, called `my_ships` and
+`my_reputation` through it, and answered the Super Hornet Mk II's 12.4 hours
+and 61 completed Head Hunters contracts; the app's call log recorded both
+calls as `claude-code`. No `QuantumWake` process was left when the client
+exited. With nothing on the port, a piped `ping` came back as an error saying
+to start the app, and the exe exited 0 when stdin closed. Claude Desktop
+itself is not installed on the machine, so its config is the documented
+`mcpServers` form and has not been run here; nor has the Store alias, which
+needs the package installed.
+
+## The stdio relay
+
+A relay, not a second server. A copy started by a client would have nothing
+scanned, so it would parse every log again for each conversation and hold a
+view of the pilot's plans that the dashboard does not see. Relayed, there is
+one app, one set of switches and one call log.
+
+- The flag is checked first in both entry points - `App.OnStartup` in the
+  desktop app, before the trace, the tray and the server, and `Program.cs`
+  in the bare server - so the relay never shows a tray icon or the "already
+  running" toast a second copy would.
+- One JSON-RPC message per line in, one per line out, in order; stdout
+  carries nothing else, and the relay's own notes go to stderr, which clients
+  keep as the server's log. A notification gets no line back.
+- It never starts the app: a chat client starts its servers when it opens,
+  and Quantum Wake appearing because Claude did would be something the pilot
+  never asked for. A request while nothing answers gets the error "Quantum
+  Wake is not running on port 31337. Start it, then ask again."; with access
+  off it gets the app's own sentence pointing at Settings.
+- The relay posts to 127.0.0.1 without an Origin, so `LanGuard` and
+  `OriginGuard` see what they see from Claude Code. Tested in
+  `McpStdioBridgeTests`.
 
 ## The transport
 
@@ -220,5 +277,5 @@ names.
 
 - No resources: tools and prompts only.
 - No event stream or server-sent notifications; nothing here needs to push.
-- Claude Desktop needs a local stdio server or a remote connector, and this is
-  neither; Claude Code, Codex and other Streamable HTTP clients work.
+- No remote connector: Claude's web and mobile apps reach servers on the
+  internet, and this one answers only on this PC.

@@ -73,8 +73,8 @@ send nothing about you.
   Stream Deck plugin, below, are each a choice of their own and the only parts
   that press keys.
 - **AI assistants**, only if you turn them on in Settings → AI assistants
-  (1.2.48, off by default). An assistant on this PC - Claude Code, Codex or
-  another MCP client - can then ask about your sessions, ships and their fit,
+  (1.2.48, off by default). An assistant on this PC - Claude Code, Claude
+  Desktop (since 1.2.53), Codex or another MCP client - can then ask about your sessions, ships and their fit,
   items and loadout, plans, purchases and ledger, earnings, contracts,
   reputation, events, Wikelo trades, refinery orders, deaths, the game's
   catalogue, prices and routes (since 1.2.50 the money, Garage, contract and

@@ -4843,7 +4843,7 @@
         <input type="checkbox" id="mcp-enabled">
         <span>
           Let AI assistants use Quantum Wake
-          <em class="muted">An assistant on this PC &mdash; Claude Code, Codex, or anything that speaks MCP &mdash; can ask about your sessions, ships, items and plans, the game&rsquo;s catalogue, missions, prices and trade routes. Only from this PC: other machines are refused, and so are web pages. What it is told goes to the assistant&rsquo;s own service, under its terms. Off until you turn it on.</em>
+          <em class="muted">An assistant on this PC &mdash; Claude Code, Claude Desktop, Codex, or anything that speaks MCP &mdash; can ask about your sessions, ships, items and plans, the game&rsquo;s catalogue, missions, prices and trade routes. Only from this PC: other machines are refused, and so are web pages. What it is told goes to the assistant&rsquo;s own service, under its terms. Off until you turn it on.</em>
         </span>
       </label>
       <fieldset class="mcp-areas" id="mcp-areas" hidden>
@@ -4871,6 +4871,15 @@
           <button type="button" class="ghost tiny" id="mcp-codex-copy">Copy</button>
         </div>
         <pre class="mcp-snippet" id="mcp-codex"></pre>
+        <div class="mcp-desktop" id="mcp-desktop-block" hidden>
+          <div class="mcp-line">
+            <b>Claude Desktop</b>
+            <span class="muted">in <code>claude_desktop_config.json</code>, then restart Claude Desktop</span>
+            <button type="button" class="ghost tiny" id="mcp-desktop-copy">Copy</button>
+          </div>
+          <pre class="mcp-snippet" id="mcp-desktop"></pre>
+          <p class="muted">It starts a small relay to the Quantum Wake that is running, not a second copy, and never starts the app for you. If you move this program, copy the line again.</p>
+        </div>
         <p class="muted">Any other MCP client: Streamable HTTP at <code id="mcp-url"></code>.</p>
       </div>
       <p class="muted" id="mcp-state" aria-live="polite"></p>

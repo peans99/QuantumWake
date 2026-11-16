@@ -21149,6 +21149,16 @@ function renderMcp() {
   $('#mcp-claude').textContent = `claude mcp add --transport http quantumwake ${url}`;
   $('#mcp-codex').textContent = `[mcp_servers.quantumwake]\nurl = "${url}"`;
 
+  // Claude Desktop starts its servers itself (1.2.53): the command is this
+  // program as the server reports it, so the path is the real one rather
+  // than a guess, and a Store copy gets its alias. Hidden when a server
+  // older than the relay sends none.
+  const stdio = state?.stdio;
+  $('#mcp-desktop-block').hidden = !stdio?.command;
+  $('#mcp-desktop').textContent = stdio?.command
+    ? JSON.stringify({ mcpServers: { quantumwake: { command: stdio.command, args: stdio.args || [] } } }, null, 2)
+    : '';
+
   // Counted as offered under the switches, so closing an area is seen to
   // take its tools away. A server before 1.2.51 sends no "open": all count.
   const tools = state?.tools || [];
@@ -21225,6 +21235,7 @@ $('#mcp-enabled')?.addEventListener('change', (event) => postMcp({ enabled: even
 $('#mcp-changes')?.addEventListener('change', (event) => postMcp({ allowChanges: event.target.checked }, event.target));
 $('#mcp-claude-copy')?.addEventListener('click', (event) => copyServerText($('#mcp-claude').textContent, event.currentTarget));
 $('#mcp-codex-copy')?.addEventListener('click', (event) => copyServerText($('#mcp-codex').textContent, event.currentTarget));
+$('#mcp-desktop-copy')?.addEventListener('click', (event) => copyServerText($('#mcp-desktop').textContent, event.currentTarget));
 
 /**
  * Puts text on the clipboard and says so on the button.

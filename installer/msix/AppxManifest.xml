@@ -8,7 +8,8 @@
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap rescap">
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  IgnorableNamespaces="uap rescap uap5">
 
   <!-- Name and Publisher are the ones Partner Center assigned (Product
        identity page); a package that disagrees with them is refused at upload. -->
@@ -48,6 +49,18 @@
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png" />
+      <!-- QuantumWake.exe on the PATH, in %LOCALAPPDATA%\Microsoft\WindowsApps
+           (1.2.53). Claude Desktop starts the app's stdio relay by a command
+           line, and the package folder's own path carries the version, so a
+           path copied into its config would break at the next Store update.
+           An alias is a declared extension, not a capability. -->
+      <Extensions>
+        <uap5:Extension Category="windows.appExecutionAlias" Executable="QuantumWake.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap5:AppExecutionAlias>
+            <uap5:ExecutionAlias Alias="QuantumWake.exe" />
+          </uap5:AppExecutionAlias>
+        </uap5:Extension>
+      </Extensions>
     </Application>
   </Applications>
 

@@ -8,6 +8,7 @@ public sealed class McpSettingsTests
 {
     private const string Off = """
         {"enabled":false,"allowChanges":false,"path":"/mcp","client":null,
+         "stdio":{"command":"C:\\Games\\QuantumWake.exe","args":["--mcp-stdio"],"packaged":false},
          "areas":[{"key":"money","title":"Money","description":"Your ledger.","defaultOn":true,"open":true,"tools":["my_ledger"]},
                   {"key":"crew","title":"People you have played with","description":"Other players.","defaultOn":false,"open":false,"tools":["my_crew"]}],
          "tools":[{"name":"find_places","title":"Find places","writes":false,"area":null,"open":true},
@@ -87,6 +88,31 @@ public sealed class McpSettingsTests
         page.Do("await loadMcp();");
 
         Assert.Contains("Debrief my last session", page.NodeText("#mcp-call-list"));
+    }
+
+    /// <summary>Claude Desktop starts the program itself, so its line is JSON with the real path, backslashes escaped.</summary>
+    [Fact]
+    public void Claude_Desktop_gets_a_config_naming_this_program_with_the_flag()
+    {
+        var page = new Page();
+        page.Serve("/api/mcp", On(changes: false));
+        page.Do("await loadMcp();");
+
+        Assert.False(page.Truth("__dom.node('#mcp-desktop-block').hidden"));
+        var config = page.NodeText("#mcp-desktop");
+        Assert.Contains("\"mcpServers\"", config);
+        Assert.Contains("\"command\": \"C:\\\\Games\\\\QuantumWake.exe\"", config);
+        Assert.Contains("\"--mcp-stdio\"", config);
+    }
+
+    [Fact]
+    public void A_server_without_the_relay_offers_no_Claude_Desktop_line()
+    {
+        var page = new Page();
+        page.Serve("/api/mcp", On(changes: false).Replace("\"stdio\":{\"command\":\"C:\\\\Games\\\\QuantumWake.exe\",\"args\":[\"--mcp-stdio\"],\"packaged\":false},", ""));
+        page.Do("await loadMcp();");
+
+        Assert.True(page.Truth("__dom.node('#mcp-desktop-block').hidden"));
     }
 
     private static string Box(string area) =>

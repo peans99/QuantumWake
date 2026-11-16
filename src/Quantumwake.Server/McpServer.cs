@@ -13,7 +13,9 @@ namespace Quantumwake.Server;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Streamable HTTP at <c>/mcp</c> on the server the dashboard already runs,
+/// Streamable HTTP at <c>/mcp</c> on the server the dashboard already runs
+/// (and, since 1.2.53, stdio through <see cref="McpStdioBridge"/>, which
+/// relays here),
 /// answering each request with one JSON object and opening no event stream:
 /// every tool here answers at once, so there is nothing to stream, and a GET
 /// is refused with 405 as the transport allows. No session id either - the
@@ -70,11 +72,11 @@ public static class McpEndpoints
     {
         // The switches and the call log, for Settings. Reads are allowed from
         // the LAN like every read; the switches are POSTs, which are not.
-        app.MapGet("/api/mcp", (McpSettingsStore store, McpCallLog log) => Results.Ok(Describe(store, log)));
-        app.MapPost("/api/mcp", (McpSwitch body, McpSettingsStore store, McpCallLog log) =>
+        app.MapGet("/api/mcp", (HttpContext ctx, McpSettingsStore store, McpCallLog log) => Results.Ok(Describe(ctx, store, log)));
+        app.MapPost("/api/mcp", (HttpContext ctx, McpSwitch body, McpSettingsStore store, McpCallLog log) =>
         {
             store.Set(body.Enabled, body.AllowChanges, body.Areas);
-            return Results.Ok(Describe(store, log));
+            return Results.Ok(Describe(ctx, store, log));
         });
 
         app.MapPost("/mcp", Handle);
@@ -92,15 +94,18 @@ public static class McpEndpoints
         });
     }
 
-    private static object Describe(McpSettingsStore store, McpCallLog log)
+    private static object Describe(HttpContext ctx, McpSettingsStore store, McpCallLog log)
     {
         var s = store.Current;
+        var (command, args) = McpStdioBridge.Launch(ctx.Connection.LocalPort is > 0 and var p ? p : McpStdioBridge.DefaultPort);
         return new
         {
             s.Enabled,
             s.AllowChanges,
             s.ChangedAt,
             path = "/mcp",
+            // What a stdio-only client such as Claude Desktop starts.
+            stdio = new { command, args, packaged = Core.StoreInstall.Is },
             client = log.Client,
             areas = McpArea.All.Select(a => new
             {

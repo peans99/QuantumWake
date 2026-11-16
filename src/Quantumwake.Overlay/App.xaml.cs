@@ -48,6 +48,17 @@ public partial class App : System.Windows.Application
 
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
+        // Started by Claude Desktop or another MCP client as its stdio server
+        // (1.2.53): only the relay. Before the trace, the tray and the server,
+        // because this copy is not the app - it is a pipe to the one running,
+        // and a tray icon or a "already running" toast from it would be noise
+        // every time the client opened.
+        if (McpStdioBridge.Asked(e.Args))
+        {
+            Shutdown(await McpStdioBridge.RunAsync(e.Args));
+            return;
+        }
+
         // Before Settings.Load, so --data moves the whole app - overlay
         // preferences and WebView2 profile included - and not just the server.
         // Kept for Restart: an update replaces the file and starts it again,

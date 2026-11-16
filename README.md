@@ -422,7 +422,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.52
+### 1.2.53
+
+- **Claude Desktop can connect.** With AI assistants on, Settings now shows
+  the lines to paste into Claude Desktop's `claude_desktop_config.json`,
+  with this program's own path filled in. Claude Desktop then starts a small
+  relay to the Quantum Wake you have running - not a second copy - and asks
+  it the same things Claude Code can, under the same switches, in the same
+  list of what was asked. It never starts Quantum Wake for you: if the app
+  is not running, Claude is told to ask you to start it. If you move the
+  program, copy the lines again.
 
 - **Ready-made requests for your assistant.** Claude and other MCP clients
   now offer three from Quantum Wake by name: **Plan a trade run for my
