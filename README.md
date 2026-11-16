@@ -422,7 +422,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.56
+### 1.2.57
+
+- **Settings → AI assistants suggests what to ask.** Once it is on, a few
+  questions to start with sit under the lines that connect an assistant:
+  plan a trade run, what to fit, a debrief of your last session, where you
+  left something, where to buy something, and, if you allow changes, saving
+  a route as a flight plan. Each has a Copy button, and a question needing a
+  part of your data you keep from assistants is not shown. The parts of
+  your data listed above it also get the space they were missing between
+  name and description.
 
 - **No more rocks worked on evenings you did not mine.** The screen reader
   could follow a yellow box the size of the fracture bar on screens it did
