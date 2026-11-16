@@ -206,6 +206,114 @@ public class McpEndpointTests : IClassFixture<ServerUnderTest>, IAsyncLifetime
     }
 }
 
+/// <summary>
+/// The second set of tools (1.2.50), against the test server's empty install:
+/// every reading tool answers rather than failing on data that is not there,
+/// and the acting ones set a state, so asking twice changes nothing more.
+/// </summary>
+[Collection("server")]
+public class McpPilotToolTests : IClassFixture<ServerUnderTest>, IAsyncLifetime
+{
+    private readonly ServerUnderTest _server;
+
+    public McpPilotToolTests(ServerUnderTest server) => _server = server;
+
+    public async Task InitializeAsync() => await _server.Posted("/api/mcp", new { enabled = true, allowChanges = true });
+
+    public async Task DisposeAsync() => await _server.Posted("/api/mcp", new { enabled = false });
+
+    private async Task<(bool Error, string Text)> Call(string tool, object? args = null)
+    {
+        var body = new { jsonrpc = "2.0", id = 1, method = "tools/call", @params = new { name = tool, arguments = args ?? new { } } };
+        var answer = await _server.Posted("/mcp", body);
+        var result = answer.GetProperty("result");
+        return (result.GetProperty("isError").GetBoolean(), result.GetProperty("content")[0].GetProperty("text").GetString()!);
+    }
+
+    [Theory]
+    [InlineData("my_spending")]
+    [InlineData("my_ledger")]
+    [InlineData("my_earnings")]
+    [InlineData("garage")]
+    [InlineData("my_loadout")]
+    [InlineData("my_contracts")]
+    [InlineData("my_reputation")]
+    [InlineData("events")]
+    [InlineData("wikelo")]
+    [InlineData("logbook")]
+    [InlineData("refinery")]
+    [InlineData("deaths_and_medical")]
+    public async Task A_reading_tool_answers_on_an_install_with_nothing_in_it(string tool)
+    {
+        var (error, text) = await Call(tool);
+
+        Assert.False(error, text);
+        Assert.StartsWith("{", text);
+    }
+
+    [Fact]
+    public async Task Pinning_twice_leaves_it_pinned_and_unpinning_takes_it_off()
+    {
+        var id = (await _server.Posted("/api/checklists", new { title = "Departure" })).GetProperty("id").GetString();
+
+        await Call("pin_to_now", new { what = "checklist", id });
+        await Call("pin_to_now", new { what = "checklist", id });
+        Assert.True(Checklist(await _server.Get("/api/checklists"), id!).GetProperty("pinned").GetBoolean());
+
+        await Call("pin_to_now", new { what = "checklist", id, pinned = false });
+        Assert.False(Checklist(await _server.Get("/api/checklists"), id!).GetProperty("pinned").GetBoolean());
+        await _server.Delete($"/api/checklists/{id}");
+    }
+
+    [Fact]
+    public async Task Ticking_a_line_twice_leaves_it_ticked()
+    {
+        var id = (await _server.Posted("/api/jobs", new
+        {
+            title = "Medical run",
+            kind = "list",
+            items = new[] { new { name = "MedGel", needed = 4.0 } },
+        })).GetProperty("id").GetString();
+
+        var (error, text) = await Call("tick", new { what = "shopping_line", list_id = id, line = "medgel" });
+        Assert.False(error, text);
+        await Call("tick", new { what = "shopping_line", list_id = id, line = "MedGel" });
+
+        var line = (await _server.Get("/api/jobs")).EnumerateArray().Single(j => j.GetProperty("id").GetString() == id)
+            .GetProperty("items")[0];
+        Assert.True(line.GetProperty("got").GetBoolean());
+        await _server.Delete($"/api/jobs/{id}");
+    }
+
+    [Fact]
+    public async Task Tracking_a_plan_twice_does_not_untrack_it()
+    {
+        var plan = await _server.Posted("/api/trips", new { title = "Run", stops = new[] { new { place = "Lorville" } } });
+        var id = plan.GetProperty("id").GetString();
+        await _server.Posted($"/api/trips/{id}/track");   // the app tracks a new plan; take that off first
+
+        await Call("track_flight_plan", new { plan_id = id });
+        await Call("track_flight_plan", new { plan_id = id });
+
+        var trip = (await _server.Get("/api/trips")).EnumerateArray().Single(x => x.GetProperty("id").GetString() == id);
+        Assert.True(trip.GetProperty("tracked").GetBoolean());
+        await _server.Delete($"/api/trips/{id}");
+    }
+
+    /// <summary>The app's own reason, as a sentence: the model passes it on, and raw JSON reads as a fault.</summary>
+    [Fact]
+    public async Task A_refusal_comes_back_as_the_apps_own_sentence()
+    {
+        var (error, text) = await Call("plan_haul_run");
+
+        Assert.True(error);
+        Assert.DoesNotContain("{", text);
+    }
+
+    private static System.Text.Json.JsonElement Checklist(System.Text.Json.JsonElement lists, string id) =>
+        lists.EnumerateArray().Single(l => l.GetProperty("id").GetString() == id);
+}
+
 /// <summary>The switches themselves.</summary>
 public sealed class McpSettingsTests : IDisposable
 {

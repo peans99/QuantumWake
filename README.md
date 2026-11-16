@@ -422,7 +422,19 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.49
+### 1.2.50
+
+- **AI assistants can ask about much more.** With Settings → AI assistants
+  on, Claude Code, Codex or another MCP client can now look at your spending
+  and ledger, earnings, a ship's fit in the Garage and the parts for a slot,
+  what you are carrying, the Armoury, your contracts, reputation and events,
+  Wikelo trades, the logbook, refinery orders and your deaths and med beds.
+  The crew list stays out of it: those are other players' names.
+- **And do a little more, if you allow changes.** Besides making plans and
+  lists, it can now add a stop to a plan, pin a list or checklist to Now,
+  tick a line or a task off, track a flight plan or an event, and turn your
+  open hauling contracts into a flight plan. Asking it twice never undoes
+  the first time. It still never deletes anything or rewrites what you wrote.
 
 - **The Fleet Manager no longer says "Missile inbound".** A ship's loadout on
   the ASOP terminal lists missile racks across the middle of the screen,

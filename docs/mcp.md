@@ -80,6 +80,28 @@ Reading (with access on):
 | `find_places` | `/api/map` nodes, most visited first |
 | `recent_sessions` | `/api/sessions` and `/api/earnings` |
 
+Added in 1.2.50, the rest of the pilot's own pages:
+
+| Tool | From |
+| --- | --- |
+| `my_spending` | `/api/spending`: shop purchases the logs record (71, 2,184,137 aUEC here) |
+| `my_ledger` | `/api/ledger`, by kind and days, newest first |
+| `my_earnings` | `/api/earnings` over a window |
+| `garage` | `/api/garage`: the pilot's ships, or one ship's 35-odd slots cut to what is fitted, its grade and maker, stock or changed, plus the sheet's weapons, shield, power, cooling and quantum (9 KB for a Super Hornet, from 43 KB) |
+| `garage_options` | `/api/garage/{ship}/options` for one slot, by portId or hardpoint |
+| `my_loadout` | `/api/loadout`, slot by slot |
+| `armoury` | `/api/armoury` (1 MB), searched by name, family or maker, pictures and finishes dropped, shops cut to five |
+| `my_contracts` | `/api/contracts` (363 here, 180 KB), by outcome, contractor, system and days, with totals by outcome |
+| `my_reputation` | `/api/reputation` ranks and `/api/standing` per contractor |
+| `events` | `/api/events`: each track's points, tiers reached and points to the next |
+| `wikelo` | `/api/wikelo`, by words in the trade or a needed item, or only trades ready |
+| `logbook` | `/api/logbook`, by kind |
+| `refinery` | `/api/mining/refinery`, each order with whether it is due |
+| `deaths_and_medical` | `/api/casualties` |
+
+The crew list is left out on purpose: it is 131 other players' handles here,
+and a tool's answer leaves this PC with the assistant.
+
 Writing (with changes allowed as well):
 
 | Tool | Does |
@@ -88,11 +110,29 @@ Writing (with changes allowed as well):
 | `create_shopping_list` | A new list, its source "an AI assistant", so Shopping shows where it came from. |
 | `add_to_shopping_list` | One line on a named list, else the list being filled. |
 | `create_checklist` | A new checklist with its tasks. |
+| `pin_to_now` | A shopping list or checklist on Now, or off it (1.2.50). |
+| `tick` | A shopping line in hand or a checklist task done, or undone, by its words (1.2.50). |
+| `add_stop` | One stop with actions at the end of an existing plan (1.2.50). |
+| `track_flight_plan` | The plan the map, Now and overlay follow, or none (1.2.50). |
+| `track_event` | An event kept on Now, or Now following play again (1.2.50). |
+| `plan_haul_run` | The live session's hauling contracts as a plan, as the Contracts button does (1.2.50). |
 
-Nothing deletes and nothing edits what the pilot wrote. A writing tool is
+The app's own routes for pin, tick and track toggle, because a button is
+pressed once; these tools read the state first and change it only when it
+differs, so an assistant asked twice does not undo itself. Tested in
+`McpPilotToolTests`.
+
+Nothing deletes and nothing rewrites what the pilot wrote. A writing tool is
 refused at the call as well as left out of the list, so a client that listed
 the tools before the switch went off still cannot write; the refusal says
-which switch.
+which switch. A refusal from the app reaches the assistant as the app's own
+sentence ("Nothing to plan: no open hauling contract names a place yet."),
+not as JSON.
+
+Measured on 2026-11-15 with Claude Code against a copy of the data: asked
+which shield generator is on the Super Hornet Mk II and how many Head Hunters
+contracts were completed, it called `garage` and `my_contracts` and answered
+three AllStop generators and 61.
 
 ## What the pilot sees
 

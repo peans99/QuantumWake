@@ -50,9 +50,18 @@ public sealed record McpTool(
 /// the right size of thing to let an assistant do on its own.
 /// </para>
 /// </remarks>
-public static class McpTools
+public static partial class McpTools
 {
-    public static readonly IReadOnlyList<McpTool> All =
+    private static IReadOnlyList<McpTool>? _all;
+
+    /// <summary>
+    /// Every tool, reading ones first. Put together on first use rather than
+    /// in a field initializer: the parts live in two files, and the order
+    /// static fields of a partial class initialize across files is undefined.
+    /// </summary>
+    public static IReadOnlyList<McpTool> All => _all ??= [.. Core.Where(t => !t.Writes), .. Pilot, .. Core.Where(t => t.Writes), .. Acting];
+
+    private static readonly IReadOnlyList<McpTool> Core =
     [
         new("whats_happening", "What is happening now",
             "The pilot's game right now, as their log tells it: whether Star Citizen is running, where they are "

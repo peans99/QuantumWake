@@ -258,8 +258,8 @@ public static class McpEndpoints
         if (tool.Writes && !store.Current.Writes)
         {
             log.Add(new McpCall(DateTimeOffset.UtcNow, name, "refused: changes are off", true, log.Client));
-            return ToolResult(id, "The pilot has not allowed changes. Quantum Wake only lets an assistant make plans, "
-                + "lists or checklists when 'Let it make plans and lists' is on in Settings → AI assistants.", isError: true);
+            return ToolResult(id, "The pilot has not allowed changes. Quantum Wake only lets an assistant make, pin, "
+                + "tick or track plans, lists and checklists when 'Let it make plans and lists' is on in Settings → AI assistants.", isError: true);
         }
 
         try
@@ -305,6 +305,21 @@ public sealed class McpToolException(string message) : Exception(message);
 /// <summary>The app's own API, reached over loopback by the tools.</summary>
 public sealed class McpApi(string root)
 {
+    /// <summary>The sentence a refusal carries - the API answers {"message"} or {"trouble"} - else the body as it came.</summary>
+    private static string Refusal(string body)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            foreach (var key in new[] { "message", "trouble", "error", "detail", "title" })
+                if (doc.RootElement.ValueKind == JsonValueKind.Object
+                    && doc.RootElement.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String)
+                    return v.GetString()!;
+        }
+        catch (JsonException) { }
+        return body;
+    }
+
     private static readonly HttpClient Client = new() { Timeout = TimeSpan.FromSeconds(60) };
 
     public async Task<JsonNode> Get(string path, CancellationToken token)
@@ -320,7 +335,7 @@ public sealed class McpApi(string root)
         using var response = await Client.PostAsJsonAsync(root + path, body, token);
         var text = await response.Content.ReadAsStringAsync(token);
         if (!response.IsSuccessStatusCode)
-            throw new McpToolException($"The app refused that ({(int)response.StatusCode}): {McpEndpoints.Clip(text, 200)}");
+            throw new McpToolException($"The app refused that: {McpEndpoints.Clip(Refusal(text), 300)}");
         return text.Length == 0 ? new JsonObject() : JsonNode.Parse(text) ?? new JsonObject();
     }
 }
