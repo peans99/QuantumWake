@@ -38170,6 +38170,20 @@ function renderLiveScreen() {
       fights.hidden = !state.enabled;
       $('#live-fights').checked = Boolean(state.keepFights);
     }
+    // Shown with reading on, or with pictures already kept: a folder of them
+    // should stay findable after reading is switched off.
+    const strays = $('#live-strays-row');
+    if (strays) {
+      const kept = state.strayPictures || 0;
+      strays.hidden = !state.enabled && !kept;
+      $('#live-strays').checked = Boolean(state.catchStrayBars);
+      const line = $('#live-strays-kept');
+      line.hidden = !kept && !state.catchStrayBars;
+      line.textContent = kept
+        ? txn(kept, '{count} window pictured so far, in {folder}', '{count} windows pictured so far, in {folder}', { folder: state.strayFolder || '' })
+          + (kept >= 20 ? ` ${tx('- the most it keeps, so no more are taken.')}` : '')
+        : tx('None kept yet.');
+    }
     const trouble = $('#live-voice-trouble');
     if (trouble) {
       trouble.hidden = !(state.enabled && state.voice && state.voiceTrouble);
@@ -38443,6 +38457,22 @@ async function postLiveTargets(event) {
 }
 $('#live-targets')?.addEventListener('change', postLiveTargets);
 $('#settings-live-targets')?.addEventListener('change', postLiveTargets);
+
+// Pictures of false mining bars (1.2.58): their own agreement, posted on their own.
+$('#live-strays')?.addEventListener('change', async (event) => {
+  try {
+    const response = await fetch('/api/live/strays', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ on: event.target.checked }),
+    });
+    if (!response.ok) throw new Error(`strays ${response.status}`);
+    liveState = await response.json();
+    renderLiveScreen();
+  } catch {
+    event.target.checked = !event.target.checked;
+  }
+});
 
 // The fight record: its own agreement, posted on its own.
 $('#live-fights')?.addEventListener('change', async (event) => {

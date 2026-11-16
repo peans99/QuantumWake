@@ -422,6 +422,17 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
+### 1.2.58
+
+- **Help find what the app mistakes for a mining bar.** A new switch under
+  Read from the game on the Log page, **Keep pictures of false mining
+  bars**, keeps two pictures each time the reader follows something it took
+  for the charge bar and the charge never does anything: the part of the
+  screen around it, with what it followed outlined in pink, and a small
+  copy of the whole screen. Off until you turn it on, at most 20, never of a
+  real rock, and they stay on your PC. They can show whatever was on
+  screen, chat included, so look before you share one.
+
 ### 1.2.57
 
 - **Settings → AI assistants suggests what to ask.** Once it is on, a few

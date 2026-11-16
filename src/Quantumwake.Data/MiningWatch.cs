@@ -80,6 +80,7 @@ public sealed class MiningWatch
 
     // For the record of each window once it goes.
     private readonly List<FractureRecord> _ended = [];
+    private readonly List<FractureRecord> _strays = [];
     private DateTimeOffset _since, _lastAt;
     private double _inFor;
     private int _overcharges;
@@ -139,6 +140,7 @@ public sealed class MiningWatch
             }
             var ended = new FractureRecord(_since, _lastAt, _maxFill >= CrackedAt, _maxFill, _inFor, _overcharges);
             if (RockLog.Worked(ended)) _ended.Add(ended);
+            else _strays.Add(ended);
             _active = false;
             _state = _pending = null;
             _agreed = 0;
@@ -258,6 +260,22 @@ public sealed class MiningWatch
         _ended.Clear();
         return taken;
     }
+
+    /// <summary>
+    /// The windows that closed without the charge doing anything, since the
+    /// last ask (1.2.58): not rocks, and not recorded, but what the live loop
+    /// pictures when the pilot asked it to.
+    /// </summary>
+    public IReadOnlyList<FractureRecord> TakeStrays()
+    {
+        if (_strays.Count == 0) return [];
+        var taken = _strays.ToList();
+        _strays.Clear();
+        return taken;
+    }
+
+    /// <summary>Whether a bar is being followed now.</summary>
+    public bool Active => _active;
 
     public MiningPicture Picture() => new(
         _active, _active ? _state : null, _active ? _fill : 0, _active ? _belowBy : null,

@@ -82,6 +82,12 @@ public sealed record GameCapture(bool Taken, string? Why = null, int Width = 0, 
 /// from 1.1 that the targeted ship was held in memory and never written down,
 /// and a yes to reading the screen was given on that promise.
 /// </param>
+/// <param name="CatchStrayBars">
+/// Whether a fracture bar the charge never did anything to is pictured for
+/// the pilot to look at (1.2.58; see StrayBarCatcher). Off until turned on:
+/// the privacy page has promised since 1.1 that no picture of the screen is
+/// kept, and these are pictures of it.
+/// </param>
 /// <param name="Targets">
 /// Whether the ship the pilot targets is identified: the target panel read,
 /// the "Target identified" callouts, the Now and MFD target cards (1.2.47).
@@ -94,7 +100,7 @@ public sealed record LiveScreenSettings(
     bool Asked = false, bool Enabled = false, DateTimeOffset? AnsweredAt = null, bool Voice = false,
     bool VoiceCombat = true, bool VoiceMining = true, bool VoiceMissions = true, IReadOnlyList<string>? Muted = null,
     string? PingPlace = null, IReadOnlyList<string>? Wanted = null, bool WantedOnly = false, bool KeepFights = false,
-    bool? Targets = null)
+    bool? Targets = null, bool CatchStrayBars = false)
 {
     /// <summary>The <see cref="PingPlace"/> that reads a ping against every rock.</summary>
     public const string Anywhere = "*";
@@ -244,6 +250,17 @@ public sealed class LiveScreenStore
                     : wanted.Count == 0 ? null : [.. wanted.Where(w => !string.IsNullOrWhiteSpace(w)).Distinct(StringComparer.Ordinal)],
                 WantedOnly = wantedOnly ?? _current.WantedOnly,
             };
+            Save();
+            return _current;
+        }
+    }
+
+    /// <summary>Turns the pictures of stray bars on or off; everything else stays as it was.</summary>
+    public LiveScreenSettings SetCatchStrayBars(bool on)
+    {
+        lock (_gate)
+        {
+            _current = _current with { CatchStrayBars = on };
             Save();
             return _current;
         }

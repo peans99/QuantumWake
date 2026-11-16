@@ -37,6 +37,9 @@ public sealed record LiveScreenStatus(
 /// <param name="VoiceMissions">Whether mission callouts are, under it.</param>
 /// <param name="Callouts">Every sound the voice can make and whether it is on, for Settings → Callouts.</param>
 /// <param name="KeepFights">Whether each fight is written to the combat log for the Sessions debrief.</param>
+/// <param name="CatchStrayBars">Whether stray fracture bars are pictured (1.2.58).</param>
+/// <param name="StrayPictures">How many windows have been pictured, of <see cref="StrayBarCatcher.MostKept"/>.</param>
+/// <param name="StrayFolder">Where they are.</param>
 public sealed record LiveScreenState(
     bool Available,
     string? Unavailable,
@@ -55,10 +58,16 @@ public sealed record LiveScreenState(
     PingSettings? Pings = null,
     bool KeepFights = false,
     bool Targets = false,
-    bool TargetsAnswered = false);
+    bool TargetsAnswered = false,
+    bool CatchStrayBars = false,
+    int StrayPictures = 0,
+    string? StrayFolder = null);
 
 /// <summary>The target switch, posted to <c>/api/live/targets</c>.</summary>
 public sealed record LiveTargets(bool On);
+
+/// <summary>The stray bar pictures' switch, posted to <c>/api/live/strays</c>.</summary>
+public sealed record LiveStrays(bool On);
 
 /// <summary>The fight record's switch, posted to <c>/api/live/fights</c>.</summary>
 public sealed record LiveFights(bool On);
@@ -146,7 +155,8 @@ public sealed class LiveScreenService(
     NearbyHulls? nearby = null,
     LiveSessionService? session = null,
     CombatLog? fights = null,
-    RockLog? rocks = null) : BackgroundService
+    RockLog? rocks = null,
+    StrayBarCatcher? strays = null) : BackgroundService
 {
     /// <summary>The tick, at a fight's pace. Out of a fight every other tick is skipped.</summary>
     private static readonly TimeSpan Every = TimeSpan.FromSeconds(1);
@@ -159,6 +169,7 @@ public sealed class LiveScreenService(
 
     private readonly CombatLog _fights = fights ?? new CombatLog(Core.AppPaths.In("combat"));
     private readonly RockLog _worked = rocks ?? new RockLog(Core.AppPaths.In("rocks"));
+    private readonly StrayBarCatcher _strays = strays ?? new StrayBarCatcher(Core.AppPaths.In("live", "stray-bars"));
     private readonly LiveRocks _rocks = new();
     private readonly LiveScreens _screens = new();
     private readonly Lock _gate = new();
@@ -216,7 +227,8 @@ public sealed class LiveScreenService(
             new PingSettings(answer.PingPlace, Here()?.Name,
                 [.. insight.PingPlaces().Select(p => new PingPlaceName(p.Name, p.System, p.Asteroids))],
                 answer.Wanted ?? [], answer.WantedOnly),
-            answer.KeepFights, answer.Targets == true, answer.Targets is not null);
+            answer.KeepFights, answer.Targets == true, answer.Targets is not null,
+            answer.CatchStrayBars, _strays.Count, _strays.Folder);
     }
 
     /// <summary>The place with a deposit table the log puts the pilot at: the body, the place, then where a jump is headed.</summary>
@@ -577,7 +589,10 @@ public sealed class LiveScreenService(
         if (!flight)
         {
             if (charge is not null)
+            {
                 lock (_gate) _mining.Disown();
+                _strays.Drop();
+            }
             else
                 Fracture(null, at);
             _bar = null;
@@ -708,12 +723,41 @@ public sealed class LiveScreenService(
         }
     }
 
-    /// <summary>Hands a frame's charge to the mining watch, and anything it says to the voice.</summary>
+    /// <summary>
+    /// Hands a frame's charge to the mining watch, and anything it says to the
+    /// voice; with stray bars to be pictured, cuts the pictures of a bar as it
+    /// is taken up and keeps them if its window closes unworked.
+    /// </summary>
     private void Fracture(ChargeReading? charge, DateTimeOffset at, bool mayStart = true)
     {
         IReadOnlyList<CombatCallout> said;
-        lock (_gate) said = _mining.See(charge, at, mayStart);
+        IReadOnlyList<FractureRecord> strays;
+        bool was, now;
+        lock (_gate)
+        {
+            was = _mining.Active;
+            said = _mining.See(charge, at, mayStart);
+            now = _mining.Active;
+            strays = _mining.TakeStrays();
+        }
         Speak(said, "Mining");
+
+        if (!settings.Current.CatchStrayBars)
+        {
+            _strays.Drop();
+            return;
+        }
+
+        // The frame it was taken up on is the one with the bar plainly on it;
+        // by the time the window closes the bar is gone.
+        if (!was && now && charge is not null)
+            _strays.Hold(Core.AppPaths.In("live", "frame.bmp"), charge.Bar);
+
+        foreach (var window in strays)
+            if (_strays.Keep(window) is { } name)
+                logger.LogInformation("Stray fracture bar pictured as {Name}", name);
+
+        if (was && !now) _strays.Drop();
     }
 
     /// <summary>

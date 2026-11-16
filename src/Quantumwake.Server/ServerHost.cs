@@ -3939,6 +3939,14 @@ public static partial class ServerHost
             return Results.Ok(service.Describe(live));
         });
 
+        // Pictures of stray fracture bars (1.2.58): its own agreement, off
+        // until turned on, because no picture of the screen was kept before.
+        app.MapPost("/api/live/strays", (LiveStrays body, LiveScreenStore live, LiveScreenService service) =>
+        {
+            live.SetCatchStrayBars(body.On);
+            return Results.Ok(service.Describe(live));
+        });
+
         // The fights kept between two times, for a session's debrief.
         app.MapGet("/api/combat", (DateTimeOffset from, DateTimeOffset to, CombatLog log, LiveScreenStore live) =>
             Results.Ok(new CombatRecord(live.Current.KeepFights, log.Any(), CombatLog.Fights(log.Between(from, to)))));

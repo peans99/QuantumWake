@@ -62,6 +62,21 @@ public sealed class RockLogTests : IDisposable
             R("below", 0.01, 2.1), R("below", 0, 2.1), null, null));
     }
 
+    /// <summary>Not recorded, but handed back for the pictures (1.2.58).</summary>
+    [Fact]
+    public void A_window_that_never_charged_is_handed_back_as_a_stray()
+    {
+        var watch = new MiningWatch();
+        ChargeReading?[] frames = [R("below", 0, 2.1), R("below", 0, 2.1), R("below", 0, 2.1), R("below", 0, 2.1), null, null];
+        for (var i = 0; i < frames.Length; i++) watch.See(frames[i], T0.AddSeconds(i));
+
+        Assert.Empty(watch.TakeEnded());
+        var stray = Assert.Single(watch.TakeStrays());
+        Assert.Equal(T0.AddSeconds(2), stray.Since);
+        Assert.Empty(watch.TakeStrays());
+        Assert.False(watch.Active);
+    }
+
     [Fact]
     public void Windows_kept_before_never_charged_ones_were_dropped_are_passed_over_when_read()
     {
