@@ -38,9 +38,41 @@ public sealed class RockLog(string folder)
 
     private readonly DailyJsonLines<FractureRecord> _days = new(folder, r => r.Since);
 
+    /// <summary>
+    /// The least crack a window has to show, with no time in the window and no
+    /// overcharge, to be a rock worked rather than a yellow box held still.
+    /// </summary>
+    public const double WorkedFill = 0.05;
+
+    /// <summary>
+    /// Whether the charge did anything: cracked, filled some of the bar, sat in
+    /// the window or went over it (1.2.55).
+    /// </summary>
+    /// <remarks>
+    /// Every window this install had kept by 16 November 2026 was a phantom.
+    /// 31 of the 32 never filled more than 1%, never entered the window and
+    /// never went over, and the game's own logs put the pilot in a Hermes, a
+    /// Pisces, a Super Hornet and an Ironclad, or on foot - at 02:51 UTC on
+    /// the 16th in an Area18 elevator two minutes after spawning - and never
+    /// in a mining ship. A yellow box of the bar's size had held still for
+    /// three frames on screens filed Unknown, alternating with them, and each
+    /// was recorded as a rock let go, so the debrief of a hauling evening said
+    /// "rocks worked". (The 32nd, the Fleet Manager's bar from before 1.2.41,
+    /// still reads as a crack: nothing in its record tells it apart.) A real charge that never reached the window is lost with them;
+    /// it did nothing to the rock either.
+    /// </remarks>
+    public static bool Worked(FractureRecord window) =>
+        window.Cracked || window.Filled >= WorkedFill || window.InWindowSeconds > 0 || window.Overcharges > 0;
+
     public void Add(FractureRecord window) => _days.Add(window);
 
-    public IReadOnlyList<FractureRecord> Between(DateTimeOffset from, DateTimeOffset to) => _days.Between(from, to);
+    /// <summary>
+    /// The windows kept between two times, less any that were never worked:
+    /// installs from 1.2.23 to 1.2.54 recorded those, and the files are the
+    /// pilot's, so they are passed over when read rather than rewritten.
+    /// </summary>
+    public IReadOnlyList<FractureRecord> Between(DateTimeOffset from, DateTimeOffset to) =>
+        [.. _days.Between(from, to).Where(Worked)];
 
     public bool Any() => _days.Any();
 

@@ -712,6 +712,23 @@ floor: it is counted between frames that both had the bar, from the frame
 live reading is on, in `rocks\`, because nothing read off the screen is in
 it - only colours turned into times.
 
+**A window that never charged is not a rock (1.2.55).** By 16 November 2026
+every window this install had kept was a phantom: 31 of 32 never got past
+1% filled, never entered the window and never went over, and the game logs
+for those times have the pilot in a Hermes, a Pisces, a Super Hornet and an
+Ironclad, or on foot (02:51 UTC on the 16th, in an Area18 elevator two
+minutes after spawning) - never in a mining ship. The frame log shows the
+pattern: `Fracture` frames read in 4-8 ms alternating with `Unknown/other`
+ones, so a yellow box of the bar's size held still for three frames and was
+followed until it went. Nothing was said, since "below" has no callout, but
+each became a rock let go and the Sessions debrief counted them. What the
+box was is still unseen; no screenshot of it exists. The 32nd is the Fleet
+Manager's bar from 14 November, before 1.2.41, and still reads as a crack. `RockLog.Worked` now
+asks for a crack, 5% of fill, time in the window or an overcharge: windows
+without one are not recorded, and the ones already in `rocks\` are passed
+over when read rather than rewritten. A real charge that never reached the
+window goes too, and it did nothing to the rock either.
+
 A scan of the rock, when the reading log holds one, is joined at reading
 time: the scan read nearest the window's start, from three minutes before it
 to its close, each scan given to one window only.

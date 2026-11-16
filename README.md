@@ -422,7 +422,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.54
+### 1.2.55
+
+- **No more rocks worked on evenings you did not mine.** The screen reader
+  could follow a yellow box the size of the fracture bar on screens it did
+  not recognise and record it as a rock let go - 31 of them over three
+  days of hauling and walking around on the install it was checked
+  against - and the session debrief counted them. A window is now a rock only once the charge
+  does something - fills some of the crack, enters the window or goes over.
+  Ones already recorded are skipped, not deleted.
 
 - **Deleting a checklist asks first, and a change that does not save says
   so,** as shopping lists have since 1.2.45. Delete used to take a checklist
