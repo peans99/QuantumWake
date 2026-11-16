@@ -72,6 +72,15 @@ send nothing about you.
   game's process, reads its memory or sends it input; voice commands and the
   Stream Deck plugin, below, are each a choice of their own and the only parts
   that press keys.
+- **AI assistants**, only if you turn them on in Settings → AI assistants
+  (1.2.48, off by default). An assistant on this PC - Claude Code, Codex or
+  another MCP client - can then ask about your sessions, ships, items, plans,
+  the game's catalogue, prices and routes, and, only with **Let it make plans
+  and lists** on as well, add flight plans, shopping lists and checklists. It
+  never deletes or edits what you wrote. Other machines and web pages are
+  refused. What a tool answers is sent by the assistant to its own service,
+  under that service's terms; Quantum Wake itself sends nothing anywhere. The
+  last calls are listed in Settings, in memory only. See [mcp.md](mcp.md).
 - **Spoken callouts**, only if you turn on the voice on the Log page: the
   app says things like "Target identified" with the speech voice Windows
   already has, on your PC. The sentence is not sent anywhere.

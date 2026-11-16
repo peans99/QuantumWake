@@ -4826,6 +4826,56 @@
     </div>
       </div>
     </details>
+
+    <!-- AI assistants over MCP (1.2.48): off until turned on, and writing is
+         a second yes under the first. Drawn by renderMcp. -->
+    <details class="settings-group" id="settings-mcp-group">
+      <summary>
+        <span class="settings-group-index">05</span>
+        <span class="settings-group-copy"><strong>AI assistants</strong><span>Let Claude, Codex or another MCP client ask about your play, and make plans if you allow it.</span></span>
+      </summary>
+      <div class="settings-group-content">
+    <div class="option-block" id="settings-mcp">
+      <div class="option-head">
+        <h3>Model Context Protocol</h3>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="mcp-enabled">
+        <span>
+          Let AI assistants use Quantum Wake
+          <em class="muted">An assistant on this PC &mdash; Claude Code, Codex, or anything that speaks MCP &mdash; can ask about your sessions, ships, items and plans, the game&rsquo;s catalogue, missions, prices and trade routes. Only from this PC: other machines are refused, and so are web pages. What it is told goes to the assistant&rsquo;s own service, under its terms. Off until you turn it on.</em>
+        </span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="mcp-changes">
+        <span>
+          Let it make plans and lists
+          <em class="muted">Adds new flight plans, shopping lists and checklists, and lines to a list. It never deletes or edits what you wrote. Off until you turn it on.</em>
+        </span>
+      </label>
+      <div class="mcp-setup" id="mcp-setup" hidden>
+        <p class="muted">Connect an assistant while Quantum Wake is running:</p>
+        <div class="mcp-line">
+          <b>Claude Code</b>
+          <code id="mcp-claude"></code>
+          <button type="button" class="ghost tiny" id="mcp-claude-copy">Copy</button>
+        </div>
+        <div class="mcp-line">
+          <b>Codex</b>
+          <span class="muted">in <code>~/.codex/config.toml</code></span>
+          <button type="button" class="ghost tiny" id="mcp-codex-copy">Copy</button>
+        </div>
+        <pre class="mcp-snippet" id="mcp-codex"></pre>
+        <p class="muted">Any other MCP client: Streamable HTTP at <code id="mcp-url"></code>.</p>
+      </div>
+      <p class="muted" id="mcp-state" aria-live="polite"></p>
+      <div class="mcp-calls" id="mcp-calls" hidden>
+        <h4>Last asked</h4>
+        <ul id="mcp-call-list"></ul>
+      </div>
+    </div>
+      </div>
+    </details>
   </section>
 
   <section id="view-about" class="view">

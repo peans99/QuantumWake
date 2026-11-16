@@ -215,6 +215,8 @@ public static partial class ServerHost
         // Voice commands: its own switch, off until turned on, and the only
         // part of the app that presses keys in the game.
         builder.Services.AddSingleton<VoiceCommandStore>();
+        builder.Services.AddSingleton<McpSettingsStore>();
+        builder.Services.AddSingleton<McpCallLog>();
         if (listener is not null) builder.Services.AddSingleton(listener);
         if (keyboard is not null) builder.Services.AddSingleton(keyboard);
         builder.Services.AddSingleton<VoiceCommandService>();
@@ -817,6 +819,7 @@ public static partial class ServerHost
 
         ControlsEndpoints.Map(app, install);
         VoiceCommandEndpoints.Map(app);
+        McpEndpoints.Map(app);
         StreamDeckProfiles.Map(app, install);
         MapDataRead(app, install);
         MapModels(app, install);

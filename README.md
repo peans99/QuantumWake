@@ -422,7 +422,19 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.47
+### 1.2.48
+
+- **AI assistants can use Quantum Wake, if you let them.** Turn it on in
+  Settings → AI assistants and Claude Code, Codex or another MCP client on
+  this PC can ask about your play: where you are, your ships, where your
+  items are, your plans, items and ships in the game's catalogue, missions,
+  where to buy something, and trade routes for your hold and budget. A
+  second switch, **Let it make plans and lists**, lets it add flight plans,
+  shopping lists and checklists; it never deletes or edits what you wrote.
+  Both are off until you turn them on. Settings shows the line to paste into
+  Claude Code or Codex, and lists the last things an assistant asked.
+  Other machines and web pages are refused. What a tool answers is sent by
+  the assistant to its own service, under that service's terms.
 
 - **You choose, once, what the app does while you play.** The start question
   that asked only about reading the screen now offers three choices, each off

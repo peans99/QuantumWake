@@ -494,6 +494,7 @@ function showView(name) {
     renderSettings().catch(() => {});
     loadGameData().catch(() => {});
     loadVoice().catch(() => {});
+    loadMcp().catch(() => {});
   }
 
   // A log is a live reference, not an Overlay setting. Read it when the pilot
@@ -21105,6 +21106,95 @@ function serverReport(row) {
   const stay = row.lastDuration ? ` after ${duration(row.lastDuration)}` : '';
   return `Quantumwake server report: shard ${row.shard}; region ${row.region}; ${when}; ${ending}${stay}.`;
 }
+
+/* ---------- AI assistants (MCP, 1.2.48) ---------- */
+
+let mcpState = null;
+
+/** The address an assistant on this PC uses: this page's own port, on localhost. */
+function mcpUrl(path = '/mcp') {
+  const port = location.port || (location.protocol === 'https:' ? '443' : '80');
+  return `http://localhost:${port}${path}`;
+}
+
+async function loadMcp() {
+  try {
+    mcpState = await getJson('/api/mcp');
+  } catch {
+    mcpState = null;
+  }
+  renderMcp();
+}
+
+/**
+ * The two switches, how to connect, and the last things asked.
+ *
+ * The setup lines are shown only once access is on: a command that connects
+ * to a door that is shut answers 403, which reads like the command is wrong.
+ */
+function renderMcp() {
+  const block = $('#settings-mcp');
+  if (!block) return;
+  const state = mcpState;
+  const on = Boolean(state?.enabled);
+
+  $('#mcp-enabled').checked = on;
+  $('#mcp-changes').checked = Boolean(state?.allowChanges);
+  $('#mcp-changes').disabled = !on;
+  $('#mcp-setup').hidden = !on;
+
+  const url = mcpUrl(state?.path || '/mcp');
+  $('#mcp-url').textContent = url;
+  $('#mcp-claude').textContent = `claude mcp add --transport http quantumwake ${url}`;
+  $('#mcp-codex').textContent = `[mcp_servers.quantumwake]\nurl = "${url}"`;
+
+  const tools = state?.tools || [];
+  const reads = tools.filter((t) => !t.writes).length;
+  const writes = tools.filter((t) => t.writes).length;
+  $('#mcp-state').textContent = !state
+    ? tx('The app did not answer about AI assistants.')
+    : !on
+      ? tx('Off. No assistant can reach Quantum Wake.')
+      : state.allowChanges
+        ? tx('On: {reads} things it can ask and {writes} things it can make.', { reads, writes })
+        : tx('On, read-only: {reads} things it can ask. It cannot change anything.', { reads });
+
+  const calls = state?.calls || [];
+  $('#mcp-calls').hidden = !calls.length;
+  const list = $('#mcp-call-list');
+  list.textContent = '';
+  for (const call of calls.slice(0, 12)) {
+    const tool = tools.find((t) => t.name === call.tool);
+    const li = el('li', call.wrote ? 'mcp-call wrote' : 'mcp-call');
+    li.append(el('span', 'muted', shortTimeOf(call.at)));
+    li.append(el('span', null, call.tool === 'connect' ? tx('connected') : tool?.title || call.tool));
+    if (call.client) li.append(el('span', 'muted', call.client));
+    if (call.outcome !== 'ok') li.append(el('span', 'outward', call.outcome));
+    list.append(li);
+  }
+}
+
+async function postMcp(change, box) {
+  try {
+    const response = await fetch('/api/mcp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(change),
+    });
+    if (!response.ok) throw new Error(`mcp ${response.status}`);
+    mcpState = await response.json();
+  } catch {
+    box.checked = !box.checked;
+    $('#mcp-state').textContent = tx('The change did not save.');
+    return;
+  }
+  renderMcp();
+}
+
+$('#mcp-enabled')?.addEventListener('change', (event) => postMcp({ enabled: event.target.checked }, event.target));
+$('#mcp-changes')?.addEventListener('change', (event) => postMcp({ allowChanges: event.target.checked }, event.target));
+$('#mcp-claude-copy')?.addEventListener('click', (event) => copyServerText($('#mcp-claude').textContent, event.currentTarget));
+$('#mcp-codex-copy')?.addEventListener('click', (event) => copyServerText($('#mcp-codex').textContent, event.currentTarget));
 
 /**
  * Puts text on the clipboard and says so on the button.
