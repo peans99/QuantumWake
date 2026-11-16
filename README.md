@@ -422,7 +422,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.55
+### 1.2.56
 
 - **No more rocks worked on evenings you did not mine.** The screen reader
   could follow a yellow box the size of the fracture bar on screens it did

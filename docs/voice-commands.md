@@ -115,6 +115,14 @@ That is 31 clips, about 0.2 MB, recorded by `tools/voice-pack/make-pack.mjs`
 from the list in `VoiceCommands.Spoken()`. A test fails if a sentence there
 has no clip, so no reply drops to the Windows voice mid-session.
 
+Hull and rock names cannot be held by a test: the ship book is built from the
+community dataset, which only an install has. 4.10.3 added 13 hulls with no
+clip, found by ear (1.2.42). Since 1.2.56 the CLI's report ends with a
+**Voice pack** section that checks every name `--voice-names` prints against
+the pack - 231 hulls and 36 rocks on this install on 16 November 2026, none
+missing - and lists any that would be said in the Windows voice. Run it after
+a patch; `! not recorded` should read 0, like `! unmatched known tags`.
+
 The recordings were checked by recognising each one back against the list of
 replies. 25 of the 31 came back as written. The other six came back empty
 rather than as another reply: "Copilot on", "Combat mode", "Nav mode",

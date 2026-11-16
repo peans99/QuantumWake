@@ -93,6 +93,19 @@ public sealed class VoicePack
         return clips.Count == 0 ? null : clips;
     }
 
+    /// <summary>
+    /// The names not recorded as one clip of their own, in the order given -
+    /// each said in the Windows voice, or stitched from other names' words.
+    /// </summary>
+    /// <remarks>
+    /// 4.10.3 added 13 hulls the pack had no clip for, and nothing noticed
+    /// until a pilot heard the Windows voice name a Galaxy in game (1.2.42).
+    /// The ship book is built from the community dataset, which no test can
+    /// see, so the check runs in the CLI report against the install's own.
+    /// </remarks>
+    public IReadOnlyList<string> Unrecorded(IEnumerable<string> names) =>
+        [.. names.Where(n => Clips(n) is not { Count: 1 })];
+
     /// <summary>Lower case, punctuation gone, single spaces: "Hostile contact, likely" and "hostile contact likely" are one key.</summary>
     private static string Key(string text) =>
         string.Join(' ', new string([.. text.ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : ' ')])
