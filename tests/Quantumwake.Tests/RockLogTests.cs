@@ -51,6 +51,30 @@ public sealed class RockLogTests : IDisposable
         Assert.Equal(0.3, window.Filled);
     }
 
+    /// <summary>
+    /// The shape of all 31 zero-fill windows on this install (1.2.55): a box
+    /// held still, never green, never in the window, then gone.
+    /// </summary>
+    [Fact]
+    public void A_bar_that_never_charged_is_not_a_rock_worked()
+    {
+        Assert.Empty(Run(R("below", 0, 2.1), R("below", 0, 2.1), R("below", 0, 2.1),
+            R("below", 0.01, 2.1), R("below", 0, 2.1), null, null));
+    }
+
+    [Fact]
+    public void Windows_kept_before_never_charged_ones_were_dropped_are_passed_over_when_read()
+    {
+        var log = new RockLog(_folder);
+        log.Add(new FractureRecord(T0, T0.AddSeconds(8), false, 0, 0, 0));
+        log.Add(new FractureRecord(T0.AddMinutes(1), T0.AddMinutes(1).AddSeconds(20), false, 0.2, 0, 0));
+        log.Add(new FractureRecord(T0.AddMinutes(2), T0.AddMinutes(2).AddSeconds(20), false, 0, 0, 1));
+
+        var read = log.Between(T0.AddHours(-1), T0.AddHours(1));
+
+        Assert.Equal([0.2, 0], read.Select(w => w.Filled));
+    }
+
     [Fact]
     public void A_flicker_that_was_never_followed_leaves_nothing()
     {

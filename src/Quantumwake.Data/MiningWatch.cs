@@ -137,7 +137,8 @@ public sealed class MiningWatch
                 _lastCrack = at;
                 now.Add(Say(at, "cracked", "Rock cracked"));
             }
-            _ended.Add(new FractureRecord(_since, _lastAt, _maxFill >= CrackedAt, _maxFill, _inFor, _overcharges));
+            var ended = new FractureRecord(_since, _lastAt, _maxFill >= CrackedAt, _maxFill, _inFor, _overcharges);
+            if (RockLog.Worked(ended)) _ended.Add(ended);
             _active = false;
             _state = _pending = null;
             _agreed = 0;

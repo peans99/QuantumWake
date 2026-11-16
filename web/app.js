@@ -21162,6 +21162,7 @@ function renderMcp() {
   // Counted as offered under the switches, so closing an area is seen to
   // take its tools away. A server before 1.2.51 sends no "open": all count.
   const tools = state?.tools || [];
+  renderMcpTry(tools, on);
   const reads = tools.filter((t) => !t.writes && t.open !== false).length;
   const writes = tools.filter((t) => t.writes && t.open !== false).length;
   $('#mcp-state').textContent = !state
@@ -21188,6 +21189,49 @@ function renderMcp() {
 }
 
 /**
+ * Questions to start with (1.2.57), each needing the tool that answers it.
+ * The first four follow the ready-made prompts' paths - a trade run, a fit, a
+ * debrief - in plain words, since a typed question works in every client and
+ * a prompt menu is the client's own to show. The last is a follow-up, so it
+ * reads as one.
+ */
+const MCP_TRY = [
+  { ask: 'Plan a trade run for my ship with 100,000 aUEC.', tool: 'trade_routes' },
+  { ask: 'What should I fit on my ship for bounty hunting?', tool: 'garage_options' },
+  { ask: 'Debrief my last session.', tool: 'recent_sessions' },
+  { ask: 'Where did I leave my medpens?', tool: 'my_items' },
+  { ask: 'Where can I buy a MaxLift tractor beam?', tool: 'where_to_buy' },
+  { ask: 'Save that route as a flight plan.', tool: 'create_flight_plan', then: true },
+];
+
+/**
+ * The questions whose tool is offered under the switches as they stand, so
+ * closing "Ships and gear" takes the fitting question away with its tools:
+ * an example that is answered "I can't see that" teaches the wrong thing.
+ */
+function renderMcpTry(tools, on) {
+  const block = $('#mcp-try');
+  if (!block) return;
+  const offered = (name) => tools.some((t) => t.name === name && t.open !== false);
+  const shown = MCP_TRY.filter((q) => offered(q.tool));
+  block.hidden = !on || !shown.length;
+
+  const list = $('#mcp-try-list');
+  list.textContent = '';
+  for (const q of shown) {
+    const li = el('li', 'mcp-line mcp-try-line');
+    if (q.then) li.append(el('span', 'muted', tx('then')));
+    const words = el('q', null, tx(q.ask));
+    li.append(words);
+    const copy = el('button', 'ghost tiny', tx('Copy'));
+    copy.type = 'button';
+    copy.addEventListener('click', (event) => copyServerText(words.textContent, event.currentTarget));
+    li.append(copy);
+    list.append(li);
+  }
+}
+
+/**
  * One box per part of the pilot's data (1.2.51), under the access switch.
  * Drawn from the server's own list so a new area appears without a page
  * change, and shown only while access is on: an area of a door that is shut
@@ -21207,8 +21251,10 @@ function renderMcpAreas(state, on) {
     box.checked = Boolean(area.open);
     box.dataset.area = area.key;
     box.addEventListener('change', (event) => postMcp({ areas: { [area.key]: event.target.checked } }, event.target));
+    // The space the static toggles get from their markup's line break: drawn
+    // here, "Money" ran straight into "Your ledger".
     const text = el('span', null, area.title);
-    text.append(el('em', 'muted', area.description));
+    text.append(' ', el('em', 'muted', area.description));
     label.append(box, text);
     list.append(label);
   }
@@ -26038,13 +26084,33 @@ const checklistDue = (dueAt) => dueAt
   ? new Date(dueAt).toLocaleString(QW_DATE_LOCALES, { dateStyle: 'medium', timeStyle: 'short' })
   : '';
 
-async function checklistCall(url, method = 'POST', body = null) {
-  await fetch(url, {
-    method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  await loadChecklists();
+/**
+ * One change to the checklists, said when it fails (1.2.54), as shopping lists
+ * have since 1.2.45: the old call ignored the answer and redrew, so a tick the
+ * server refused looked done until the next visit.
+ *
+ * A refused tick or pin redraws from the server, which puts the box back. A
+ * form the pilot typed into is not redrawn on failure (`keep`), because the
+ * redraw would throw away what they wrote.
+ */
+async function checklistCall(url, method = 'POST', body = null, { keep = false } = {}) {
+  let ok = false;
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    ok = Boolean(response?.ok);
+  } catch { ok = false; }
+
+  if (!ok) {
+    alertLine($('#checklists-alerts') || $('#checklists-list'), keep
+      ? tx('That did not save, and what you typed is still here. Is the app still running?')
+      : tx('That change did not save. Is the app still running?'));
+  }
+  if (ok || !keep) await loadChecklists();
+  return ok;
 }
 
 /**
@@ -26276,7 +26342,7 @@ function checklistComposer(list) {
         dueAt: due.value ? new Date(due.value).toISOString() : null,
         note: note.value,
         attachments,
-      });
+      }, { keep: true });
     } finally {
       // A success re-renders this form away, but a failed request leaves it on
       // screen - and without this, with a button that never comes back.
@@ -26344,8 +26410,14 @@ function renderChecklists(lists) {
       : tx('Show this checklist on the Now page and in the overlay');
     pin.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}/pin`));
     head.append(pin);
+    // Asked first, as a shopping list or a flight plan is: a checklist is the
+    // pilot's own writing, and one stray click used to take all of it.
     const remove = el('button', 'ghost danger', tx('Delete'));
-    remove.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}`, 'DELETE'));
+    remove.addEventListener('click', async () => {
+      if (typeof confirm === 'function'
+        && !confirm(tx('Delete the checklist “{title}” and its {count} tasks?', { title: list.title, count: list.items.length }))) return;
+      await checklistCall(`/api/checklists/${list.id}`, 'DELETE');
+    });
     head.append(remove);
     card.append(head);
 
@@ -26535,8 +26607,7 @@ $('#checklist-create')?.addEventListener('click', async () => {
     title.focus();
     return;
   }
-  await checklistCall('/api/checklists', 'POST', { title: title.value });
-  title.value = '';
+  if (await checklistCall('/api/checklists', 'POST', { title: title.value }, { keep: true })) title.value = '';
 });
 
 /* ---------- StarStrings ---------- */

@@ -9028,6 +9028,9 @@ button.deck-key { width:100%; height:auto; min-width:0; padding:0; letter-spacin
 .mcp-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 6px 0; font-size: 12px; }
 .mcp-line b { min-width: 92px; color: var(--cyan-hot, #7fe4ff); }
 .mcp-line code, .mcp-setup p code { word-break: break-all; }
+.mcp-try { margin-top: 12px; }
+.mcp-try h4 { margin: 0 0 4px; font-size: 12px; }
+.mcp-try ul { list-style: none; margin: 4px 0 0; padding: 0; }
 .mcp-snippet {
   margin: 0 0 8px 100px; padding: 7px 10px; font-size: 11.5px; white-space: pre-wrap;
   border: 1px solid rgba(53, 200, 240, .18); border-radius: 4px; background: rgba(7, 12, 20, .6);

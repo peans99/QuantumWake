@@ -35,6 +35,14 @@ public sealed class VoicePackTests
         Assert.Equal("af_bella", Pack().Voice);
     }
 
+    /// <summary>The CLI's check (1.2.56): a name stitched from other clips is not a recorded name.</summary>
+    [Fact]
+    public void A_name_counts_as_recorded_only_as_one_clip_of_its_own()
+    {
+        Assert.Equal(["Some Future Ship", "Vanduul Blade or RSI Perseus"],
+            Pack().Unrecorded(["Anvil Paladin", "Some Future Ship", "vanduul blade", "Vanduul Blade or RSI Perseus"]));
+    }
+
     [Fact]
     public void No_manifest_or_a_broken_one_is_no_pack()
     {

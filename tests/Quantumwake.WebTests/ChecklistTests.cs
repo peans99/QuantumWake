@@ -127,4 +127,81 @@ public class ChecklistTests
         // The failure leaves this very form on screen, so its button has to work.
         Assert.False(page.Truth("__add.disabled"));
     }
+
+    private static Page Loaded()
+    {
+        var page = new Page();
+        page.Serve("/api/shopping/catalogue", Catalogue);
+        page.Serve("/api/checklists", Lists);
+        page.Do("await loadChecklists();");
+        return page;
+    }
+
+    private const string DeleteButton =
+        "__dom.node('#checklists-list').byClass('checklist-card')[0].byClass('danger')[0]";
+
+    /// <summary>Delete took a whole checklist on one click until 1.2.54.</summary>
+    [Fact]
+    public void Delete_asks_first_and_a_no_deletes_nothing()
+    {
+        var page = Loaded();
+        page.Do($"globalThis.confirm = () => false; await {DeleteButton}.fire('click');");
+
+        Assert.DoesNotContain("DELETE /api/checklists/c1", page.Fetched());
+    }
+
+    [Fact]
+    public void A_confirmed_delete_is_sent()
+    {
+        var page = Loaded();
+        page.Serve("/api/checklists/c1", "{}");
+        page.Do($"globalThis.confirm = (q) => {{ __asked = q; return true; }}; await {DeleteButton}.fire('click');");
+
+        Assert.Contains("DELETE /api/checklists/c1", page.Fetched());
+        Assert.Contains("Pyro departure", page.Text("__asked"));
+        Assert.Contains("2 tasks", page.Text("__asked"));
+    }
+
+    [Fact]
+    public void A_tick_the_server_refuses_is_said_rather_than_swallowed()
+    {
+        var page = Loaded();
+        page.Fail("/api/checklists/c1/items/i1/toggle", 500, "{}");
+
+        page.Do("await __dom.node('#checklists-list').byClass('checklist-item')[0].children[0].fire('change');");
+
+        Assert.Contains("did not save", page.NodeText("#checklists-alerts"));
+    }
+
+    [Fact]
+    public void A_task_that_does_not_save_keeps_what_was_typed()
+    {
+        var page = Loaded();
+        page.Fail("/api/checklists/c1/items", 500, "{}");
+
+        page.Do("""
+            __form = __dom.node('#checklists-list').byClass('checklist-composer')[0];
+            __form.children[0].value = 'Bring medpens';
+            await __form.fire('submit', { preventDefault() {} });
+            """);
+
+        Assert.Contains("still here", page.NodeText("#checklists-alerts"));
+        Assert.Equal("Bring medpens",
+            page.Text("__dom.node('#checklists-list').byClass('checklist-composer')[0].children[0].value"));
+    }
+
+    [Fact]
+    public void A_checklist_that_does_not_save_keeps_its_title()
+    {
+        var page = Loaded();
+        page.Fail("/api/checklists", 500, "{}");
+
+        page.Do("""
+            $('#checklist-title').value = 'Bunker op';
+            await $('#checklist-create').fire('click');
+            """);
+
+        Assert.Equal("Bunker op", page.Text("$('#checklist-title').value"));
+        Assert.Contains("still here", page.NodeText("#checklists-alerts"));
+    }
 }

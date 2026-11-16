@@ -273,6 +273,14 @@ wrote. Turning access off also turns changes and the crew list off, so a
 later yes to access is never silently a yes to writing or to other players'
 names.
 
+Under the connection lines, **Then try asking** (1.2.57) offers up to six
+questions with a Copy button each: a trade run, a fit, a debrief, where an
+item was left, where to buy one, and saving a route as a flight plan. Each
+names the tool that answers it (`MCP_TRY` in `app.js`) and is shown only
+while that tool is offered, so a closed area takes its question away with
+its tools. They are typed questions rather than the prompts' names because
+any client can take a question, while showing prompts is up to the client.
+
 ## Not done
 
 - No resources: tools and prompts only.

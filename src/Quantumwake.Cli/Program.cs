@@ -571,10 +571,8 @@ if (args.Contains("--ship-parts", StringComparer.OrdinalIgnoreCase))
 // ping decodes to - one a line, for tools/voice-pack.
 if (args.Contains("--voice-names"))
 {
-    var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
-    foreach (var name in ShipSignatureBook.From(new CommunityData()).Names())
-        Console.WriteLine(name);
-    foreach (var name in GameRockSignatures.Radar(GameCommodities.Load(install.RootPath, Path.Combine(data, "commodities.json")).Mining.Signatures ?? []).Select(PingReadout.Spoken).Distinct())
+    var (hulls, rocks) = VoiceNames(install.RootPath, GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root);
+    foreach (var name in hulls.Concat(rocks ?? []))
         Console.WriteLine(name);
     return 0;
 }
@@ -1242,9 +1240,70 @@ log.WriteLine($"\rParsed in {stopwatch.Elapsed.TotalSeconds:F1}s\n");
 
 // In --events mode stdout carries events and nothing else, so the report that
 // would otherwise follow them is skipped rather than mixed in.
-if (!asJson) report.Print();
+if (!asJson)
+{
+    report.Print();
+    VoiceCheck(install.RootPath, GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root);
+}
 
 return 0;
+
+// The hulls of the ship book (from the community dataset) and the rocks a
+// ping decodes to (from the game files), as the voice says them; no rocks when
+// the data folder has no commodity cache to read them from.
+//
+// Read from a copy of that cache: Load rewrites a cache older than the game
+// build, and the data folder is usually the pilot's own install, which a
+// health check run after a patch has no business writing to.
+static (IReadOnlyList<string> Hulls, IReadOnlyList<string>? Rocks) VoiceNames(string installRoot, string data)
+{
+    var hulls = ShipSignatureBook.From(new CommunityData()).Names();
+    var cache = Path.Combine(data, "commodities.json");
+    if (!File.Exists(cache)) return (hulls, null);
+
+    var copy = Path.Combine(Path.GetTempPath(), $"qw-voice-{Guid.NewGuid():N}.json");
+    File.Copy(cache, copy);
+    try
+    {
+        return (hulls, [.. GameRockSignatures.Radar(GameCommodities.Load(installRoot, copy).Mining.Signatures ?? [])
+            .Select(PingReadout.Spoken).Distinct()]);
+    }
+    finally { File.Delete(copy); }
+}
+
+// Every name the voice can say against the recorded pack (1.2.56): a hull a
+// patch adds is said in the Windows voice until tools/voice-pack records it,
+// and 4.10.3's 13 were found by ear. Read here because the ship book needs the
+// community dataset, which only an install has.
+static void VoiceCheck(string installRoot, string data)
+{
+    using var manifest = typeof(Report).Assembly.GetManifestResourceStream("voice-manifest.json");
+    var pack = VoicePack.Load(manifest);
+    var (hulls, rocks) = VoiceNames(installRoot, data);
+
+    Console.WriteLine();
+    Console.WriteLine("Voice pack");
+    Console.WriteLine("----------");
+    if (pack is null)
+    {
+        Console.WriteLine("  no recorded pack in this build");
+        return;
+    }
+    if (hulls.Count == 0)
+        Console.WriteLine("  hulls: not checked - no community dataset on this install");
+    else
+        Console.WriteLine($"  {"hulls",-24} {hulls.Count,8}");
+    if (rocks is null)
+        Console.WriteLine("  rocks: not checked - no commodities.json in the data folder");
+    else
+        Console.WriteLine($"  {"rocks",-24} {rocks.Count,8}");
+
+    var missing = pack.Unrecorded(hulls.Concat(rocks ?? []));
+    Console.WriteLine($"  {"! not recorded",-24} {missing.Count,8}");
+    foreach (var name in missing) Console.WriteLine($"      {name}");
+    if (missing.Count > 0)
+        Console.WriteLine("  -> record them with tools/voice-pack/make-pack.mjs, fed the output of --voice-names.");
+}
 
 static string? GetOption(string[] args, string name)
 {

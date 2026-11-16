@@ -115,6 +115,71 @@ public sealed class McpSettingsTests
         Assert.True(page.Truth("__dom.node('#mcp-desktop-block').hidden"));
     }
 
+    private static string Asking(bool enabled, bool changes, bool ships) => $$"""
+        {"enabled":{{(enabled ? "true" : "false")}},"allowChanges":{{(changes ? "true" : "false")}},"path":"/mcp","client":null,"areas":[],"calls":[],
+         "tools":[{"name":"trade_routes","title":"Trade routes","writes":false,"area":null,"open":true},
+                  {"name":"where_to_buy","title":"Where to buy","writes":false,"area":null,"open":true},
+                  {"name":"recent_sessions","title":"Recent sessions","writes":false,"area":"sessions","open":true},
+                  {"name":"garage_options","title":"Parts for a slot","writes":false,"area":"ships","open":{{(ships ? "true" : "false")}}},
+                  {"name":"my_items","title":"My items","writes":false,"area":"ships","open":{{(ships ? "true" : "false")}}},
+                  {"name":"create_flight_plan","title":"Make a flight plan","writes":true,"area":"plans","open":{{(changes ? "true" : "false")}}}]}
+        """;
+
+    /// <summary>A guide to what to ask (1.2.57): only questions a tool on offer can answer.</summary>
+    [Fact]
+    public void Try_asking_offers_only_questions_whose_tool_is_on_offer()
+    {
+        var page = new Page();
+        page.Serve("/api/mcp", Asking(enabled: true, changes: false, ships: false));
+        page.Do("await loadMcp();");
+
+        Assert.False(page.Truth("__dom.node('#mcp-try').hidden"));
+        var asked = page.NodeText("#mcp-try-list");
+        Assert.Contains("Plan a trade run", asked);
+        Assert.Contains("Debrief my last session", asked);
+        Assert.Contains("Where can I buy", asked);
+        Assert.DoesNotContain("fit on my ship", asked);
+        Assert.DoesNotContain("medpens", asked);
+        Assert.DoesNotContain("flight plan", asked);
+
+        page.Serve("/api/mcp", Asking(enabled: true, changes: true, ships: true));
+        page.Do("await loadMcp();");
+        asked = page.NodeText("#mcp-try-list");
+        Assert.Contains("fit on my ship", asked);
+        Assert.Contains("medpens", asked);
+        Assert.Contains("then", asked);
+        Assert.Contains("Save that route as a flight plan.", asked);
+    }
+
+    [Fact]
+    public void Try_asking_is_hidden_while_access_is_off_and_copies_the_question()
+    {
+        var page = new Page();
+        page.Serve("/api/mcp", Asking(enabled: false, changes: false, ships: true));
+        page.Do("await loadMcp();");
+        Assert.True(page.Truth("__dom.node('#mcp-try').hidden"));
+
+        page.Serve("/api/mcp", Asking(enabled: true, changes: false, ships: true));
+        page.Do("""
+            await loadMcp();
+            globalThis.__copied = null;
+            navigator.clipboard = { writeText: async (t) => { __copied = t; } };
+            const row = __dom.node('#mcp-try-list').children[0];
+            await row.children[row.children.length - 1].fire('click');
+            """);
+        Assert.Equal("Plan a trade run for my ship with 100,000 aUEC.", page.Text("__copied"));
+    }
+
+    [Fact]
+    public void An_area_title_and_its_description_are_apart()
+    {
+        var page = new Page();
+        page.Serve("/api/mcp", On(changes: false));
+        page.Do("await loadMcp();");
+
+        Assert.Contains("Money Your ledger.", page.NodeText("#mcp-area-list"));
+    }
+
     private static string Box(string area) =>
         $"__dom.node('#mcp-area-list').descendants().find(n => n.tagName === 'input' && n.dataset.area === '{area}')";
 
