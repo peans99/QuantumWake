@@ -78,7 +78,9 @@ send nothing about you.
   items and loadout, plans, purchases and ledger, earnings, contracts,
   reputation, events, Wikelo trades, refinery orders, deaths, the game's
   catalogue, prices and routes (since 1.2.50 the money, Garage, contract and
-  history pages too; never the crew list, which is other players' names).
+  history pages too). Since 1.2.51 each part of your own data has its own box
+  and can be kept from it; the people you have played with - other players'
+  names - start unticked and are unticked again whenever access goes off.
   Only with **Let it make plans and lists** on as well can it add flight
   plans, shopping lists, checklists and stops, pin a list to Now, tick a line
   off, or track a plan or an event. It never deletes anything or rewrites

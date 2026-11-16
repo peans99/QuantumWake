@@ -13,6 +13,17 @@ public sealed record McpTool(
     bool Writes,
     Func<JsonElement, McpApi, CancellationToken, Task<JsonNode>> Run)
 {
+    /// <summary>
+    /// The part of the pilot's data it reads (1.2.51), a <see cref="Data.McpArea"/>
+    /// key; null for the game's own catalogue, which every assistant with
+    /// access may read. Set from <see cref="McpTools"/>' table, not here.
+    /// </summary>
+    public string? Area { get; init; }
+
+    /// <summary>Whether these settings offer and run it.</summary>
+    public bool OpenUnder(Data.McpSettings settings) =>
+        (Area is null || settings.Allows(Area)) && (!Writes || settings.Writes);
+
     public JsonObject Describe() => new()
     {
         ["name"] = Name,
@@ -59,7 +70,70 @@ public static partial class McpTools
     /// in a field initializer: the parts live in two files, and the order
     /// static fields of a partial class initialize across files is undefined.
     /// </summary>
-    public static IReadOnlyList<McpTool> All => _all ??= [.. Core.Where(t => !t.Writes), .. Pilot, .. Core.Where(t => t.Writes), .. Acting];
+    public static IReadOnlyList<McpTool> All => _all ??=
+        [.. new[] { Core.Where(t => !t.Writes), Pilot, Core.Where(t => t.Writes), Acting }
+            .SelectMany(x => x)
+            .Select(t => t with { Area = AreaOf(t) })];
+
+    /// <summary>
+    /// Which part of the pilot's data each reading tool answers from (1.2.51),
+    /// in one table so the whole of what a switch in Settings covers can be
+    /// read at once. Null is the game's catalogue. A tool missing here throws
+    /// on first use, which every MCP test reaches, so one cannot ship unsorted.
+    /// </summary>
+    /// <remarks>
+    /// The catalogue tools carry a few of the pilot's own facts - visits on a
+    /// place, "have" on a Wikelo need, a taken contract. Those are cut from the
+    /// answer when their area is off (<see cref="McpApi.Allows"/>), rather than
+    /// the tool going with them: planning a route needs place names whether or
+    /// not the assistant may know how often the pilot has been.
+    /// </remarks>
+    private static readonly Dictionary<string, string?> Areas = new()
+    {
+        ["whats_happening"] = Data.McpArea.Sessions,
+        ["recent_sessions"] = Data.McpArea.Sessions,
+        ["logbook"] = Data.McpArea.Sessions,
+        ["deaths_and_medical"] = Data.McpArea.Sessions,
+
+        ["my_spending"] = Data.McpArea.Money,
+        ["my_ledger"] = Data.McpArea.Money,
+        ["my_earnings"] = Data.McpArea.Money,
+
+        ["my_ships"] = Data.McpArea.Ships,
+        ["my_items"] = Data.McpArea.Ships,
+        ["garage"] = Data.McpArea.Ships,
+        ["garage_options"] = Data.McpArea.Ships,
+        ["my_loadout"] = Data.McpArea.Ships,
+
+        ["my_contracts"] = Data.McpArea.Work,
+        ["my_reputation"] = Data.McpArea.Work,
+        ["events"] = Data.McpArea.Work,
+        ["refinery"] = Data.McpArea.Work,
+
+        ["my_plans"] = Data.McpArea.Plans,
+
+        ["my_crew"] = Data.McpArea.Crew,
+
+        ["search"] = null,
+        ["item_details"] = null,
+        ["ship_details"] = null,
+        ["where_to_buy"] = null,
+        ["trade_routes"] = null,
+        ["trade_here"] = null,
+        ["find_missions"] = null,
+        ["find_places"] = null,
+        ["armoury"] = null,
+        ["wikelo"] = null,
+    };
+
+    /// <summary>Every writing tool is plans: it adds to, pins or ticks the pilot's own plans and lists.</summary>
+    private static string? AreaOf(McpTool tool) =>
+        tool.Writes ? Data.McpArea.Plans
+        : Areas.TryGetValue(tool.Name, out var area) ? area
+        : throw new InvalidOperationException($"MCP tool '{tool.Name}' has no area in McpTools.Areas.");
+
+    /// <summary>The tools these settings offer, in listing order.</summary>
+    public static IEnumerable<McpTool> OpenUnder(Data.McpSettings settings) => All.Where(t => t.OpenUnder(settings));
 
     private static readonly IReadOnlyList<McpTool> Core =
     [
@@ -72,7 +146,7 @@ public static partial class McpTools
             "Searches the pilot's logs, what they wrote in the app (plans, lists, checklists) and the game's "
             + "catalogue of ships, items and places. Use it to find the exact name or id of something first.",
             Schema(("query", Text("What to look for, e.g. 'Arrow', 'Laranite', 'Port Tressler'."), true)), false,
-            async (a, api, t) => await api.Get($"/api/search?q={Q(Need(a, "query"))}", t)),
+            SearchAll),
 
         new("item_details", "Item details",
             "What an item is (type, size, grade, maker), where it is sold and for how much, and where it can be "
@@ -262,6 +336,13 @@ public static partial class McpTools
         var now = (JsonObject)await api.Get("/api/now", t);
         // The screen's own checks and older events are the dashboard's detail.
         now.Remove("screen");
+        if (!api.Allows(Data.McpArea.Crew))
+        {
+            now.Remove("party");
+            now.Remove("partyDisbanded");
+        }
+        if (!api.Allows(Data.McpArea.Work))
+            now.Remove("contracts");
         if (now["recentEvents"] is JsonArray events)
             now["recentEvents"] = Take(events, 10);
         return now;
@@ -280,6 +361,12 @@ public static partial class McpTools
         if (item["card"] is null)
             throw new McpToolException($"The catalogue has no item called '{wanted}'. Try search first.");
 
+        // Where the pilot's stashes have shown it, and whether they hold its blueprint.
+        if (!api.Allows(Data.McpArea.Ships) && item["card"] is JsonObject card)
+            card.Remove("holding");
+        if (!api.Allows(Data.McpArea.Work) && item["craft"] is JsonObject craft)
+            craft.Remove("owned");
+
         foreach (var list in new[] { "shops", "stockOn" })
             if (item[list] is JsonArray rows) item[list] = Take(rows, 15);
         if (item["where"] is JsonObject where)
@@ -294,6 +381,8 @@ public static partial class McpTools
         var ship = (JsonObject)await api.Get($"/api/reference/ship?id={Q(wanted)}", t);
         if (ship["name"] is null)
             throw new McpToolException($"The catalogue has no ship called '{wanted}'. Try search first.");
+        if (!api.Allows(Data.McpArea.Ships))
+            ship.Remove("flown");
         foreach (var list in new[] { "shops", "rentals" })
             if (ship[list] is JsonArray rows) ship[list] = Take(rows, 10);
         if (ship["parts"] is JsonArray parts) ship["parts"] = Take(parts, 40);
@@ -473,7 +562,9 @@ public static partial class McpTools
         var all = (JsonObject)await api.Get("/api/reference/missions", t);
         var query = Str(a, "query");
         var system = Str(a, "system");
-        var keep = new[] { "id", "title", "contractor", "type", "systems", "rep", "rank", "illegal", "taken", "completed" };
+        string[] keep = api.Allows(Data.McpArea.Work)
+            ? ["id", "title", "contractor", "type", "systems", "rep", "rank", "illegal", "taken", "completed"]
+            : ["id", "title", "contractor", "type", "systems", "rep", "rank", "illegal"];
 
         var found = (all["missions"] as JsonArray ?? []).OfType<JsonObject>()
             .Where(m => m["unreleased"]?.GetValue<bool>() != true)
@@ -493,25 +584,88 @@ public static partial class McpTools
     {
         var query = Need(a, "query");
         var nodes = await Places(api, t);
-        var found = nodes.Where(n => n["name"]?.GetValue<string>() is { } name && name.Contains(query, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(n => n["visits"]?.GetValue<int>() ?? 0)
+        var visits = api.Allows(Data.McpArea.Sessions);
+        var matching = nodes.Where(n => n["name"]?.GetValue<string>() is { } name && name.Contains(query, StringComparison.OrdinalIgnoreCase));
+        // Ordered by visits only when visits may be told: the order would
+        // otherwise say what the field was cut to keep quiet.
+        var found = (visits
+                ? matching.OrderByDescending(n => n["visits"]?.GetValue<int>() ?? 0)
+                : matching.OrderBy(n => n["name"]?.GetValue<string>(), StringComparer.OrdinalIgnoreCase))
             .ToList();
+        string[] keep = visits
+            ? ["name", "system", "body", "kind", "visits", "lastVisit"]
+            : ["name", "system", "body", "kind"];
         return new JsonObject
         {
             ["found"] = found.Count,
-            ["places"] = new JsonArray([.. found.Take(Limit(a, 15))
-                .Select(n => (JsonNode)Pick(n, ["name", "system", "body", "kind", "visits", "lastVisit"]))]),
+            ["places"] = new JsonArray([.. found.Take(Limit(a, 15)).Select(n => (JsonNode)Pick(n, keep))]),
         };
     }
 
     private static async Task<JsonNode> RecentSessions(JsonElement a, McpApi api, CancellationToken t)
     {
-        var sessions = await api.Get("/api/sessions", t) as JsonArray ?? [];
-        var earnings = await api.Get("/api/earnings?days=7", t);
+        var sessions = Take(await api.Get("/api/sessions", t) as JsonArray ?? [], Math.Min(Limit(a, 5), 10));
+
+        // Each session row names everyone the party channel did - other
+        // players' handles, which only the crew switch hands over. Before
+        // 1.2.51 they went out with every answer.
+        if (!api.Allows(Data.McpArea.Crew))
+            foreach (var session in sessions.OfType<JsonObject>())
+                session.Remove("crew");
+
+        var answer = new JsonObject { ["sessions"] = sessions };
+        if (api.Allows(Data.McpArea.Money))
+            answer["lastWeek"] = (await api.Get("/api/earnings?days=7", t))["window"]?.DeepClone();
+        return answer;
+    }
+
+    private static async Task<JsonNode> SearchAll(JsonElement a, McpApi api, CancellationToken t)
+    {
+        var found = (JsonObject)await api.Get($"/api/search?q={Q(Need(a, "query"))}", t);
+        if (found["groups"] is not JsonArray groups) return found;
+
+        // "Your logs" crosses places visited, ships flown and items seen, so it
+        // goes out only when both areas it draws on are open.
+        var yours = api.Allows(Data.McpArea.Sessions) && api.Allows(Data.McpArea.Ships);
+        var authored = api.Allows(Data.McpArea.Plans);
+        found["groups"] = new JsonArray([.. groups.OfType<JsonObject>()
+            .Where(g => g["source"]?.GetValue<string>() switch
+            {
+                Data.Search.Sources.Yours => yours,
+                Data.Search.Sources.Authored => authored,
+                _ => true,
+            })
+            .Select(g => g.DeepClone())]);
+        found["nothing"] = ((JsonArray)found["groups"]!).OfType<JsonObject>().All(g => (g["hits"] as JsonArray)?.Count is null or 0);
+        return found;
+    }
+
+    // ---- crew: other players, behind their own switch ----
+
+    private static async Task<JsonNode> MyCrew(JsonElement a, McpApi api, CancellationToken t)
+    {
+        var days = (int)(Num(a, "days") ?? 0);
+        var crew = await api.Get($"/api/crew?days={days}", t) as JsonArray ?? [];
+        var ships = await api.Get($"/api/crew/ships?days={days}", t) as JsonArray ?? [];
+        var wanted = Str(a, "handle");
+
+        var rows = crew.OfType<JsonObject>()
+            .Where(c => wanted is null || (c["handle"]?.GetValue<string>() ?? "").Contains(wanted, StringComparison.OrdinalIgnoreCase))
+            .ToList();
         return new JsonObject
         {
-            ["sessions"] = Take(sessions, Math.Min(Limit(a, 5), 10)),
-            ["lastWeek"] = earnings["window"]?.DeepClone(),
+            ["people"] = rows.Count,
+            ["crew"] = new JsonArray([.. rows.Take(Limit(a, 20)).Select(c =>
+            {
+                var row = Pick(c, ["handle", "sessions", "first", "last", "joined", "ledParty"]);
+                var handle = c["handle"]?.GetValue<string>();
+                row["sharedShips"] = new JsonArray([.. ships.OfType<JsonObject>()
+                    .Where(s => string.Equals(s["handle"]?.GetValue<string>(), handle, StringComparison.OrdinalIgnoreCase))
+                    .Select(s => (JsonNode)Pick(s, ["ship", "owner", "times"]))]);
+                return (JsonNode)row;
+            })]),
+            ["note"] = "A floor, not a roster: the party channel only names someone when they join, connect, drop or lead, "
+                + "so anyone who was already there and never did is missing.",
         };
     }
 

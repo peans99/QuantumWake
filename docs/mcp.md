@@ -4,6 +4,7 @@ Since 1.2.48 Quantum Wake can be used by an AI assistant - Claude Code, Codex,
 or any client of the [Model Context Protocol](https://modelcontextprotocol.io) -
 on the same PC. It is **off until the pilot turns it on** in Settings → AI
 assistants, and writing is a second switch under the first, also off.
+Between them, since 1.2.51, a box for each part of the pilot's own data.
 
 ## Connecting
 
@@ -99,8 +100,46 @@ Added in 1.2.50, the rest of the pilot's own pages:
 | `refinery` | `/api/mining/refinery`, each order with whether it is due |
 | `deaths_and_medical` | `/api/casualties` |
 
-The crew list is left out on purpose: it is 131 other players' handles here,
-and a tool's answer leaves this PC with the assistant.
+Added in 1.2.51, behind a switch of its own that starts off:
+
+| Tool | From |
+| --- | --- |
+| `my_crew` | `/api/crew` and `/api/crew/ships`: handles, sessions together, first and last seen, ships shared - a floor, as the Crew page says |
+
+## Areas
+
+What the pilot owns is split into parts, each a box in Settings under the
+access switch (`McpArea` in `McpSettings.cs`; which tool reads which is one
+table, `McpTools.Areas`):
+
+| Area | Tools | Also cut from other answers when off |
+| --- | --- | --- |
+| Sessions and history | `whats_happening`, `recent_sessions`, `logbook`, `deaths_and_medical` | visits and last visit on `find_places` (which then sorts by name, since visit order would tell what the field was cut to hide); "your logs" in `search` |
+| Money | `my_spending`, `my_ledger`, `my_earnings` | the week's earnings on `recent_sessions`; bought and sold lines in `logbook` |
+| Ships, gear and stashes | `my_ships`, `my_items`, `garage`, `garage_options`, `my_loadout` | `holding` on `item_details`; `flown` on `ship_details`; "have" and where on `wikelo`; loot in `logbook`; "your logs" in `search` |
+| Contracts, reputation and events | `my_contracts`, `my_reputation`, `events`, `refinery` | open contracts on `whats_happening`; taken and completed on `find_missions`; a blueprint held on `item_details` |
+| Plans and lists | `my_plans`, and every writing tool | "things you wrote" in `search`; a Wikelo trade's tracked list |
+| People you have played with | `my_crew` | the party on `whats_happening`; the `crew` handles on each `recent_sessions` row |
+
+The game's catalogue - `search`'s catalogue group, `item_details`,
+`ship_details`, `where_to_buy`, `trade_routes`, `trade_here`, `find_missions`,
+`find_places`, `armoury`, `wikelo` - is in no area: it is not the pilot's.
+
+A closed area's tools leave the list and are refused at the call with the
+area's name, the same double check as writing. Writing needs Plans open as
+well as changes allowed: an assistant should not add to lists it may not see.
+
+The setting is stored as the areas that are open, not the ones that are
+closed, and null until the pilot first changes one. That way a part added in
+a later version starts closed for anyone who has already chosen, while a new
+install gets the defaults.
+
+The crew list starts closed: on this install it is 131 other players'
+handles, and a tool's answer leaves this PC with the assistant. Like changes,
+it is a grant for an occasion, so turning access off closes it again; a part
+the pilot closed stays closed, since keeping a "no" is never the risk. Before
+1.2.51 the `crew` field on each `recent_sessions` row went out regardless.
+Tested in `McpEndpointTests` and `McpSettingsTests`.
 
 Writing (with changes allowed as well):
 
@@ -138,8 +177,9 @@ three AllStop generators and 61.
 
 Settings → AI assistants lists the last calls - in memory only, 40 kept, 12
 shown - with the client's name from `initialize`, and marks the ones that
-wrote. Turning access off also turns changes off, so a later yes to access is
-never silently a yes to writing.
+wrote. Turning access off also turns changes and the crew list off, so a
+later yes to access is never silently a yes to writing or to other players'
+names.
 
 ## Not done
 

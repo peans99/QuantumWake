@@ -17,8 +17,11 @@ public class McpEndpointTests : IClassFixture<ServerUnderTest>, IAsyncLifetime
 
     public McpEndpointTests(ServerUnderTest server) => _server = server;
 
-    // Every test starts from the default: off, and no changes.
-    public async Task InitializeAsync() => await _server.Posted("/api/mcp", new { enabled = false });
+    /// <summary>The areas a new install opens, posted to put back whatever a test narrowed.</summary>
+    internal static readonly Dictionary<string, bool> DefaultAreas = McpArea.All.ToDictionary(a => a.Key, a => a.DefaultOn);
+
+    // Every test starts from the default: off, no changes, the default areas.
+    public async Task InitializeAsync() => await _server.Posted("/api/mcp", new { enabled = false, areas = DefaultAreas });
 
     public Task DisposeAsync() => Task.CompletedTask;
 
@@ -192,6 +195,99 @@ public class McpEndpointTests : IClassFixture<ServerUnderTest>, IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    private async Task<List<string>> ToolNames() =>
+        [.. (await Result("""{"jsonrpc":"2.0","id":2,"method":"tools/list"}"""))
+            .GetProperty("result").GetProperty("tools").EnumerateArray().Select(t => t.GetProperty("name").GetString()!)];
+
+    /// <summary>
+    /// The table that sorts tools into areas is complete: a tool missing from
+    /// it throws when the list is first built, and this builds it.
+    /// </summary>
+    [Fact]
+    public void Every_tool_belongs_to_an_area_or_to_the_catalogue()
+    {
+        var tools = Quantumwake.Server.McpTools.All;
+
+        Assert.All(tools.Where(t => t.Area is not null), t => Assert.Contains(McpArea.All, a => a.Key == t.Area));
+        Assert.All(tools.Where(t => t.Writes), t => Assert.Equal(McpArea.Plans, t.Area));
+        Assert.Contains(tools, t => t.Area is null);
+    }
+
+    [Fact]
+    public async Task Closing_an_area_takes_its_tools_out_of_the_list_and_refuses_a_call()
+    {
+        await _server.Posted("/api/mcp", new { enabled = true, areas = new Dictionary<string, bool> { ["money"] = false } });
+
+        var names = await ToolNames();
+        Assert.DoesNotContain("my_ledger", names);
+        Assert.DoesNotContain("my_spending", names);
+        Assert.Contains("garage", names);
+        Assert.Contains("find_places", names);
+
+        var answer = await Result(Call("my_ledger"));
+        Assert.True(IsError(answer));
+        Assert.Contains("Money", Text(answer));
+    }
+
+    /// <summary>Other players' handles are not the pilot's to give: a yes to access does not include them.</summary>
+    [Fact]
+    public async Task The_crew_list_is_offered_only_once_its_own_switch_is_on()
+    {
+        await _server.Posted("/api/mcp", new { enabled = true });
+        Assert.DoesNotContain("my_crew", await ToolNames());
+
+        await _server.Posted("/api/mcp", new { areas = new Dictionary<string, bool> { ["crew"] = true } });
+        Assert.Contains("my_crew", await ToolNames());
+        var answer = await Result(Call("my_crew"));
+        Assert.False(IsError(answer), Text(answer));
+        Assert.Contains("floor", Text(answer));
+    }
+
+    [Fact]
+    public async Task Closing_plans_closes_the_writing_tools_even_with_changes_allowed()
+    {
+        await _server.Posted("/api/mcp", new { enabled = true, allowChanges = true, areas = new Dictionary<string, bool> { ["plans"] = false } });
+
+        var names = await ToolNames();
+        Assert.DoesNotContain("my_plans", names);
+        Assert.DoesNotContain("create_checklist", names);
+
+        var answer = await Result(Call("create_checklist", """{"title":"Through a closed area","tasks":["x"]}"""));
+        Assert.True(IsError(answer));
+    }
+
+    /// <summary>Search crosses every source; what the pilot wrote goes out only with plans open.</summary>
+    [Fact]
+    public async Task Search_leaves_out_what_the_pilot_wrote_when_plans_are_closed()
+    {
+        var id = (await _server.Posted("/api/checklists", new { title = "Qzvx departure" })).GetProperty("id").GetString();
+        try
+        {
+            await _server.Posted("/api/mcp", new { enabled = true });
+            Assert.Contains("Qzvx departure", Text(await Result(Call("search", """{"query":"Qzvx"}"""))));
+
+            await _server.Posted("/api/mcp", new { areas = new Dictionary<string, bool> { ["plans"] = false } });
+            var text = Text(await Result(Call("search", """{"query":"Qzvx"}""")));
+            Assert.DoesNotContain("Qzvx departure", text);
+            Assert.DoesNotContain("things you wrote", text);
+        }
+        finally
+        {
+            await _server.Delete($"/api/checklists/{id}");
+        }
+    }
+
+    [Fact]
+    public async Task Settings_are_told_each_area_with_whether_it_is_open()
+    {
+        await _server.Posted("/api/mcp", new { enabled = true });
+
+        var areas = (await _server.Get("/api/mcp")).GetProperty("areas").EnumerateArray().ToList();
+        Assert.Equal(McpArea.All.Select(a => a.Key), areas.Select(a => a.GetProperty("key").GetString()));
+        Assert.False(areas.Single(a => a.GetProperty("key").GetString() == "crew").GetProperty("open").GetBoolean());
+        Assert.True(areas.Single(a => a.GetProperty("key").GetString() == "money").GetProperty("open").GetBoolean());
+    }
+
     [Fact]
     public async Task Each_call_is_shown_in_the_log_with_whether_it_wrote()
     {
@@ -218,7 +314,8 @@ public class McpPilotToolTests : IClassFixture<ServerUnderTest>, IAsyncLifetime
 
     public McpPilotToolTests(ServerUnderTest server) => _server = server;
 
-    public async Task InitializeAsync() => await _server.Posted("/api/mcp", new { enabled = true, allowChanges = true });
+    public async Task InitializeAsync() =>
+        await _server.Posted("/api/mcp", new { enabled = true, allowChanges = true, areas = McpEndpointTests.DefaultAreas });
 
     public async Task DisposeAsync() => await _server.Posted("/api/mcp", new { enabled = false });
 
@@ -356,5 +453,56 @@ public sealed class McpSettingsTests : IDisposable
 
         File.WriteAllText(Path.Combine(_root, "mcp.json"), """{"Enabled":false,"AllowChanges":true}""");
         Assert.False(new McpSettingsStore(_root).Current.AllowChanges);
+    }
+
+    [Fact]
+    public void A_new_install_opens_every_area_but_the_crew_list()
+    {
+        var s = new McpSettingsStore(_root).Current;
+
+        Assert.Null(s.Areas);
+        Assert.Equal(["sessions", "money", "ships", "work", "plans"], s.OpenAreas);
+        Assert.False(s.Allows(McpArea.Crew));
+    }
+
+    /// <summary>
+    /// The crew list is a grant like changes: it does not outlive access.
+    /// A narrowing is kept, because keeping a no is never the risk.
+    /// </summary>
+    [Fact]
+    public void Turning_access_off_closes_the_crew_list_but_keeps_what_was_narrowed()
+    {
+        var store = new McpSettingsStore(_root);
+        store.Set(enabled: true, areas: new Dictionary<string, bool> { ["crew"] = true, ["money"] = false });
+        Assert.True(store.Current.Allows(McpArea.Crew));
+
+        store.Set(enabled: false);
+        store.Set(enabled: true);
+
+        var s = new McpSettingsStore(_root).Current;
+        Assert.False(s.Allows(McpArea.Crew));
+        Assert.False(s.Allows(McpArea.Money));
+        Assert.True(s.Allows(McpArea.Ships));
+    }
+
+    /// <summary>Stored as the list that is open, so an area a later version adds starts closed for anyone who chose.</summary>
+    [Fact]
+    public void An_area_the_pilot_never_saw_is_closed_once_they_have_chosen()
+    {
+        var store = new McpSettingsStore(_root);
+        store.Set(enabled: true, areas: new Dictionary<string, bool> { ["money"] = false });
+
+        Assert.False(store.Current.Allows("from-a-later-version"));
+        Assert.DoesNotContain("money", store.Current.Areas!);
+    }
+
+    [Fact]
+    public void Writes_need_plans_open()
+    {
+        var store = new McpSettingsStore(_root);
+        store.Set(enabled: true, allowChanges: true, areas: new Dictionary<string, bool> { ["plans"] = false });
+
+        Assert.True(store.Current.AllowChanges);
+        Assert.False(store.Current.Writes);
     }
 }

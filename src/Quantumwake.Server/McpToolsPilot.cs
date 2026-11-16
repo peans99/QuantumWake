@@ -105,6 +105,15 @@ public static partial class McpTools
         new("deaths_and_medical", "Deaths and med beds",
             "How often the pilot has died, where they woke, the med beds used, and an estimate of the fees.",
             Schema(), false, Casualties),
+
+        // Behind its own switch, off until turned on (1.2.51): see McpArea.Crew.
+        new("my_crew", "People I've played with",
+            "Other players the party channel has named while grouped with the pilot: sessions together, first "
+            + "and last seen, party lead, and the ships shared. A floor - someone who never joined, dropped or led "
+            + "while the pilot watched is not in it.",
+            Schema(("handle", Text("Only handles containing this."), false),
+                   ("days", Number("Only the last this many days; all when left out."), false),
+                   ("limit", Count("How many people, 1-25.", 20), false)), false, MyCrew),
     ];
 
     private static readonly IReadOnlyList<McpTool> Acting =
@@ -439,6 +448,12 @@ public static partial class McpTools
         var query = Str(a, "query");
         var ready = a.ValueKind == JsonValueKind.Object && a.TryGetProperty("ready_only", out var r) && r.ValueKind == JsonValueKind.True;
 
+        // What the pilot holds is the stashes' business; the trades are the game's.
+        var holdings = api.Allows(Data.McpArea.Ships);
+        if (ready && !holdings)
+            throw new McpToolException("The pilot keeps their ships, gear and stashes from assistants, so which trades are ready cannot be told.");
+        string[] needKeys = holdings ? ["name", "count", "unit", "have", "where"] : ["name", "count", "unit"];
+
         var found = (data["trades"] as JsonArray ?? []).OfType<JsonObject>()
             .Where(x => x["retired"]?.GetValue<bool>() != true)
             .Where(x => query is null
@@ -457,10 +472,10 @@ public static partial class McpTools
                 ["title"] = x["title"]?.DeepClone(),
                 ["reputation"] = x["reputation"]?.DeepClone(),
                 ["gives"] = new JsonArray([.. (x["rewards"] as JsonArray ?? []).OfType<JsonObject>().Select(q => (JsonNode)Pick(q, ["name", "count", "unit"]))]),
-                ["needs"] = new JsonArray([.. (x["requirements"] as JsonArray ?? []).OfType<JsonObject>().Select(q => (JsonNode)Pick(q, ["name", "count", "unit", "have", "where"]))]),
-                ["trackedAsList"] = x["trackedJobId"]?.DeepClone(),
+                ["needs"] = new JsonArray([.. (x["requirements"] as JsonArray ?? []).OfType<JsonObject>().Select(q => (JsonNode)Pick(q, needKeys))]),
+                ["trackedAsList"] = api.Allows(Data.McpArea.Plans) ? x["trackedJobId"]?.DeepClone() : null,
             })]),
-            ["note"] = "'have' means seen in a stash, never how many.",
+            ["note"] = holdings ? "'have' means seen in a stash, never how many." : "What the pilot holds is not shared.",
         };
     }
 
@@ -468,7 +483,18 @@ public static partial class McpTools
 
     private static async Task<JsonNode> Logbook(JsonElement a, McpApi api, CancellationToken t)
     {
-        var all = (await api.Get("/api/logbook", t) as JsonArray ?? []).OfType<JsonObject>().ToList();
+        // The logbook threads money and pickups through the sessions; each goes
+        // out only with its own area, so closing Money closes it here too.
+        var money = api.Allows(Data.McpArea.Money);
+        var gear = api.Allows(Data.McpArea.Ships);
+        var all = (await api.Get("/api/logbook", t) as JsonArray ?? []).OfType<JsonObject>()
+            .Where(e => e["kind"]?.GetValue<string>() switch
+            {
+                "bought" or "sold" => money,
+                "loot" => gear,
+                _ => true,
+            })
+            .ToList();
         var kind = Str(a, "kind");
         var found = all.Where(e => kind is null || string.Equals(e["kind"]?.GetValue<string>(), kind, StringComparison.OrdinalIgnoreCase)).ToList();
         return new JsonObject

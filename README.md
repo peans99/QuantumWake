@@ -422,14 +422,24 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.50
+### 1.2.51
+
+- **Choose what an assistant may read.** Under Settings → AI assistants,
+  your own data is now split into parts, each with its own box: sessions and
+  history, money, ships and gear, contracts and reputation, plans and lists,
+  and the people you have played with. Untick one and an assistant can no
+  longer see it anywhere - its tools go, and the bits of it that other
+  answers carried (visits on a place, what a stash holds, a contract taken)
+  are cut out of them too. The game's own catalogue stays open. The people
+  you have played with start unticked, because those are other players'
+  names, and turning assistants off unticks them again.
 
 - **AI assistants can ask about much more.** With Settings → AI assistants
   on, Claude Code, Codex or another MCP client can now look at your spending
   and ledger, earnings, a ship's fit in the Garage and the parts for a slot,
   what you are carrying, the Armoury, your contracts, reputation and events,
   Wikelo trades, the logbook, refinery orders and your deaths and med beds.
-  The crew list stays out of it: those are other players' names.
+  The people you have played with are not included unless you tick them.
 - **And do a little more, if you allow changes.** Besides making plans and
   lists, it can now add a stop to a plan, pin a list or checklist to Now,
   tick a line or a task off, track a flight plan or an event, and turn your

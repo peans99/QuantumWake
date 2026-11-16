@@ -72,7 +72,7 @@ public static class McpEndpoints
         app.MapGet("/api/mcp", (McpSettingsStore store, McpCallLog log) => Results.Ok(Describe(store, log)));
         app.MapPost("/api/mcp", (McpSwitch body, McpSettingsStore store, McpCallLog log) =>
         {
-            store.Set(body.Enabled, body.AllowChanges);
+            store.Set(body.Enabled, body.AllowChanges, body.Areas);
             return Results.Ok(Describe(store, log));
         });
 
@@ -101,7 +101,16 @@ public static class McpEndpoints
             s.ChangedAt,
             path = "/mcp",
             client = log.Client,
-            tools = McpTools.All.Select(t => new { t.Name, t.Title, t.Writes }),
+            areas = McpArea.All.Select(a => new
+            {
+                a.Key,
+                a.Title,
+                a.Description,
+                a.DefaultOn,
+                open = s.Allows(a.Key),
+                tools = McpTools.All.Where(t => t.Area == a.Key && !t.Writes).Select(t => t.Name),
+            }),
+            tools = McpTools.All.Select(t => new { t.Name, t.Title, t.Writes, t.Area, open = t.OpenUnder(s) }),
             calls = log.Recent(),
         };
     }
@@ -132,7 +141,9 @@ public static class McpEndpoints
 
         using (document)
         {
-            var api = new McpApi(BaseOf(ctx));
+            // One reading of the switches per request, so a batch is answered
+            // under the same agreement from its first message to its last.
+            var api = new McpApi(BaseOf(ctx), store.Current);
             var root = document.RootElement;
 
             // A batch, from a client on the 2025-03-26 revision: answered as
@@ -225,9 +236,8 @@ public static class McpEndpoints
 
             case "tools/list":
             {
-                var writes = store.Current.Writes;
                 var tools = new JsonArray();
-                foreach (var tool in McpTools.All.Where(t => writes || !t.Writes))
+                foreach (var tool in McpTools.OpenUnder(api.Settings))
                     tools.Add(tool.Describe());
                 return Result(id, new JsonObject { ["tools"] = tools });
             }
@@ -255,7 +265,15 @@ public static class McpEndpoints
 
         // Checked at the call, not only at the listing: a client that cached
         // the list from before the switch went off still cannot write.
-        if (tool.Writes && !store.Current.Writes)
+        if (tool.Area is { } area && !api.Settings.Allows(area))
+        {
+            var title = McpArea.All.FirstOrDefault(a => a.Key == area)?.Title ?? area;
+            log.Add(new McpCall(DateTimeOffset.UtcNow, name, $"refused: {title.ToLowerInvariant()} is off", tool.Writes, log.Client));
+            return ToolResult(id, $"The pilot keeps '{title}' from assistants in Quantum Wake (Settings → AI assistants), "
+                + "so this tool is not available. Say so rather than guessing the answer.", isError: true);
+        }
+
+        if (tool.Writes && !api.Settings.Writes)
         {
             log.Add(new McpCall(DateTimeOffset.UtcNow, name, "refused: changes are off", true, log.Client));
             return ToolResult(id, "The pilot has not allowed changes. Quantum Wake only lets an assistant make, pin, "
@@ -297,14 +315,20 @@ public static class McpEndpoints
 }
 
 /// <summary>Body of POST /api/mcp; a switch left out stays as it was.</summary>
-public sealed record McpSwitch(bool? Enabled = null, bool? AllowChanges = null);
+public sealed record McpSwitch(bool? Enabled = null, bool? AllowChanges = null, Dictionary<string, bool>? Areas = null);
 
 /// <summary>A tool's answer the assistant should read as a refusal or a miss, in words it can pass on.</summary>
 public sealed class McpToolException(string message) : Exception(message);
 
 /// <summary>The app's own API, reached over loopback by the tools.</summary>
-public sealed class McpApi(string root)
+public sealed class McpApi(string root, McpSettings settings)
 {
+    /// <summary>The switches as they stood when the request came in.</summary>
+    public McpSettings Settings { get; } = settings;
+
+    /// <summary>Whether an area of the pilot's data may go into an answer.</summary>
+    public bool Allows(string area) => Settings.Allows(area);
+
     /// <summary>The sentence a refusal carries - the API answers {"message"} or {"trouble"} - else the body as it came.</summary>
     private static string Refusal(string body)
     {

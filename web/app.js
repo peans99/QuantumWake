@@ -21142,15 +21142,18 @@ function renderMcp() {
   $('#mcp-changes').checked = Boolean(state?.allowChanges);
   $('#mcp-changes').disabled = !on;
   $('#mcp-setup').hidden = !on;
+  renderMcpAreas(state, on);
 
   const url = mcpUrl(state?.path || '/mcp');
   $('#mcp-url').textContent = url;
   $('#mcp-claude').textContent = `claude mcp add --transport http quantumwake ${url}`;
   $('#mcp-codex').textContent = `[mcp_servers.quantumwake]\nurl = "${url}"`;
 
+  // Counted as offered under the switches, so closing an area is seen to
+  // take its tools away. A server before 1.2.51 sends no "open": all count.
   const tools = state?.tools || [];
-  const reads = tools.filter((t) => !t.writes).length;
-  const writes = tools.filter((t) => t.writes).length;
+  const reads = tools.filter((t) => !t.writes && t.open !== false).length;
+  const writes = tools.filter((t) => t.writes && t.open !== false).length;
   $('#mcp-state').textContent = !state
     ? tx('The app did not answer about AI assistants.')
     : !on
@@ -21171,6 +21174,33 @@ function renderMcp() {
     if (call.client) li.append(el('span', 'muted', call.client));
     if (call.outcome !== 'ok') li.append(el('span', 'outward', call.outcome));
     list.append(li);
+  }
+}
+
+/**
+ * One box per part of the pilot's data (1.2.51), under the access switch.
+ * Drawn from the server's own list so a new area appears without a page
+ * change, and shown only while access is on: an area of a door that is shut
+ * is a question with no meaning.
+ */
+function renderMcpAreas(state, on) {
+  const block = $('#mcp-areas');
+  if (!block) return;
+  const areas = state?.areas || [];
+  block.hidden = !on || !areas.length;
+  const list = $('#mcp-area-list');
+  list.textContent = '';
+  for (const area of areas) {
+    const label = el('label', 'toggle mcp-area');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = Boolean(area.open);
+    box.dataset.area = area.key;
+    box.addEventListener('change', (event) => postMcp({ areas: { [area.key]: event.target.checked } }, event.target));
+    const text = el('span', null, area.title);
+    text.append(el('em', 'muted', area.description));
+    label.append(box, text);
+    list.append(label);
   }
 }
 

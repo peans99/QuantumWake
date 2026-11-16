@@ -8,7 +8,12 @@ public sealed class McpSettingsTests
 {
     private const string Off = """
         {"enabled":false,"allowChanges":false,"path":"/mcp","client":null,
-         "tools":[{"name":"find_places","title":"Find places","writes":false},{"name":"create_checklist","title":"Make a checklist","writes":true}],
+         "areas":[{"key":"money","title":"Money","description":"Your ledger.","defaultOn":true,"open":true,"tools":["my_ledger"]},
+                  {"key":"crew","title":"People you have played with","description":"Other players.","defaultOn":false,"open":false,"tools":["my_crew"]}],
+         "tools":[{"name":"find_places","title":"Find places","writes":false,"area":null,"open":true},
+                  {"name":"my_ledger","title":"My ledger","writes":false,"area":"money","open":true},
+                  {"name":"my_crew","title":"People I've played with","writes":false,"area":"crew","open":false},
+                  {"name":"create_checklist","title":"Make a checklist","writes":true,"area":"plans","open":false}],
          "calls":[]}
         """;
 
@@ -40,8 +45,40 @@ public sealed class McpSettingsTests
         Assert.Contains("claude mcp add --transport http quantumwake http://localhost:", page.NodeText("#mcp-claude"));
         Assert.Contains("/mcp", page.NodeText("#mcp-claude"));
         Assert.Contains("[mcp_servers.quantumwake]", page.NodeText("#mcp-codex"));
-        Assert.Contains("read-only: 1 things it can ask", page.NodeText("#mcp-state"));
+        Assert.Contains("read-only: 2 things it can ask", page.NodeText("#mcp-state"));
     }
+
+    [Fact]
+    public void The_areas_are_offered_only_with_access_on_and_crew_starts_unticked()
+    {
+        var page = new Page();
+        page.Serve("/api/mcp", Off);
+        page.Do("await loadMcp();");
+        Assert.True(page.Truth("__dom.node('#mcp-areas').hidden"));
+
+        page.Serve("/api/mcp", On(changes: false));
+        page.Do("await loadMcp();");
+
+        Assert.False(page.Truth("__dom.node('#mcp-areas').hidden"));
+        Assert.Contains("People you have played with", page.NodeText("#mcp-area-list"));
+        Assert.True(page.Truth(Box("money") + ".checked"));
+        Assert.False(page.Truth(Box("crew") + ".checked"));
+    }
+
+    [Fact]
+    public void Ticking_an_area_posts_that_area_alone()
+    {
+        var page = new Page();
+        page.Serve("/api/mcp", On(changes: false));
+        page.Do("await loadMcp();");
+
+        page.Do("const box = " + Box("money") + "; box.checked = false; await box.fire('change', { target: box });");
+
+        Assert.Equal("""{"areas":{"money":false}}""", page.BodyOf("/api/mcp"));
+    }
+
+    private static string Box(string area) =>
+        $"__dom.node('#mcp-area-list').descendants().find(n => n.tagName === 'input' && n.dataset.area === '{area}')";
 
     [Fact]
     public void The_switches_post_on_their_own()

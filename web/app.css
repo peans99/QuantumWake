@@ -9021,6 +9021,10 @@ button.deck-key { width:100%; height:auto; min-width:0; padding:0; letter-spacin
 /* The setup lines are for copying, so the command shows whole and wraps
    rather than being cut at the card's edge. */
 .mcp-setup { margin-top: 10px; }
+.mcp-areas { margin: 8px 0 4px 26px; padding: 6px 12px 8px; border: 1px solid rgba(53, 200, 240, .14); border-radius: 4px; }
+.mcp-areas legend { padding: 0 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.mcp-areas > p { margin: 2px 0 4px; font-size: 12px; }
+@media (max-width: 700px) { .mcp-areas { margin-left: 0; } }
 .mcp-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 6px 0; font-size: 12px; }
 .mcp-line b { min-width: 92px; color: var(--cyan-hot, #7fe4ff); }
 .mcp-line code, .mcp-setup p code { word-break: break-all; }
