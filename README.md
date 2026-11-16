@@ -424,32 +424,17 @@ Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
 ### 1.2.53
 
-- **Claude Desktop can connect.** With AI assistants on, Settings now shows
-  the lines to paste into Claude Desktop's `claude_desktop_config.json`,
-  with this program's own path filled in. Claude Desktop then starts a small
-  relay to the Quantum Wake you have running - not a second copy - and asks
-  it the same things Claude Code can, under the same switches, in the same
-  list of what was asked. It never starts Quantum Wake for you: if the app
-  is not running, Claude is told to ask you to start it. If you move the
-  program, copy the lines again.
-
-- **Ready-made requests for your assistant.** Claude and other MCP clients
-  now offer three from Quantum Wake by name: **Plan a trade run for my
-  ship**, **What should I fit on this ship** and **Debrief my last session**.
-  Each walks the assistant through the right lookups and asks it to say what
-  it could not find rather than guess. They follow your settings: one that
-  needs a part of your data you keep from assistants is not offered, and
-  saving a plan or a list is only suggested when you allow changes.
-
-- **Choose what an assistant may read.** Under Settings → AI assistants,
-  your own data is now split into parts, each with its own box: sessions and
-  history, money, ships and gear, contracts and reputation, plans and lists,
-  and the people you have played with. Untick one and an assistant can no
-  longer see it anywhere - its tools go, and the bits of it that other
-  answers carried (visits on a place, what a stash holds, a contract taken)
-  are cut out of them too. The game's own catalogue stays open. The people
-  you have played with start unticked, because those are other players'
-  names, and turning assistants off unticks them again.
+- **AI assistants can use Quantum Wake, if you let them.** Turn it on in
+  Settings → AI assistants and Claude Code, Codex or another MCP client on
+  this PC can ask about your play: where you are, your ships, where your
+  items are, your plans, items and ships in the game's catalogue, missions,
+  where to buy something, and trade routes for your hold and budget. A
+  second switch, **Let it make plans and lists**, lets it add flight plans,
+  shopping lists and checklists; it never deletes or edits what you wrote.
+  Both are off until you turn them on. Settings shows the line to paste into
+  Claude Code or Codex, and lists the last things an assistant asked.
+  Other machines and web pages are refused. What a tool answers is sent by
+  the assistant to its own service, under that service's terms.
 
 - **AI assistants can ask about much more.** With Settings → AI assistants
   on, Claude Code, Codex or another MCP client can now look at your spending
@@ -463,24 +448,39 @@ Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
   open hauling contracts into a flight plan. Asking it twice never undoes
   the first time. It still never deletes anything or rewrites what you wrote.
 
+- **Choose what an assistant may read.** Under Settings → AI assistants,
+  your own data is now split into parts, each with its own box: sessions and
+  history, money, ships and gear, contracts and reputation, plans and lists,
+  and the people you have played with. Untick one and an assistant can no
+  longer see it anywhere - its tools go, and the bits of it that other
+  answers carried (visits on a place, what a stash holds, a contract taken)
+  are cut out of them too. The game's own catalogue stays open. The people
+  you have played with start unticked, because those are other players'
+  names, and turning assistants off unticks them again.
+
+- **Ready-made requests for your assistant.** Claude and other MCP clients
+  now offer three from Quantum Wake by name: **Plan a trade run for my
+  ship**, **What should I fit on this ship** and **Debrief my last session**.
+  Each walks the assistant through the right lookups and asks it to say what
+  it could not find rather than guess. They follow your settings: one that
+  needs a part of your data you keep from assistants is not offered, and
+  saving a plan or a list is only suggested when you allow changes.
+
+- **Claude Desktop can connect.** With AI assistants on, Settings now shows
+  the lines to paste into Claude Desktop's `claude_desktop_config.json`,
+  with this program's own path filled in. Claude Desktop then starts a small
+  relay to the Quantum Wake you have running - not a second copy - and asks
+  it the same things Claude Code can, under the same switches, in the same
+  list of what was asked. It never starts Quantum Wake for you: if the app
+  is not running, Claude is told to ask you to start it. If you move the
+  program, copy the lines again.
+
 - **The Fleet Manager no longer says "Missile inbound".** A ship's loadout on
   the ASOP terminal lists missile racks across the middle of the screen,
   where the real warning is drawn, and reading it set off the callout. The
   missile warning, hostile territory and objective health are now only read
   from the view out of the ship, and a rack or a missile count is never
   taken for the warning.
-
-- **AI assistants can use Quantum Wake, if you let them.** Turn it on in
-  Settings → AI assistants and Claude Code, Codex or another MCP client on
-  this PC can ask about your play: where you are, your ships, where your
-  items are, your plans, items and ships in the game's catalogue, missions,
-  where to buy something, and trade routes for your hold and budget. A
-  second switch, **Let it make plans and lists**, lets it add flight plans,
-  shopping lists and checklists; it never deletes or edits what you wrote.
-  Both are off until you turn them on. Settings shows the line to paste into
-  Claude Code or Codex, and lists the last things an assistant asked.
-  Other machines and web pages are refused. What a tool answers is sent by
-  the assistant to its own service, under that service's terms.
 
 - **You choose, once, what the app does while you play.** The start question
   that asked only about reading the screen now offers three choices, each off
