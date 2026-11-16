@@ -26038,13 +26038,33 @@ const checklistDue = (dueAt) => dueAt
   ? new Date(dueAt).toLocaleString(QW_DATE_LOCALES, { dateStyle: 'medium', timeStyle: 'short' })
   : '';
 
-async function checklistCall(url, method = 'POST', body = null) {
-  await fetch(url, {
-    method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  await loadChecklists();
+/**
+ * One change to the checklists, said when it fails (1.2.54), as shopping lists
+ * have since 1.2.45: the old call ignored the answer and redrew, so a tick the
+ * server refused looked done until the next visit.
+ *
+ * A refused tick or pin redraws from the server, which puts the box back. A
+ * form the pilot typed into is not redrawn on failure (`keep`), because the
+ * redraw would throw away what they wrote.
+ */
+async function checklistCall(url, method = 'POST', body = null, { keep = false } = {}) {
+  let ok = false;
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    ok = Boolean(response?.ok);
+  } catch { ok = false; }
+
+  if (!ok) {
+    alertLine($('#checklists-alerts') || $('#checklists-list'), keep
+      ? tx('That did not save, and what you typed is still here. Is the app still running?')
+      : tx('That change did not save. Is the app still running?'));
+  }
+  if (ok || !keep) await loadChecklists();
+  return ok;
 }
 
 /**
@@ -26276,7 +26296,7 @@ function checklistComposer(list) {
         dueAt: due.value ? new Date(due.value).toISOString() : null,
         note: note.value,
         attachments,
-      });
+      }, { keep: true });
     } finally {
       // A success re-renders this form away, but a failed request leaves it on
       // screen - and without this, with a button that never comes back.
@@ -26344,8 +26364,14 @@ function renderChecklists(lists) {
       : tx('Show this checklist on the Now page and in the overlay');
     pin.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}/pin`));
     head.append(pin);
+    // Asked first, as a shopping list or a flight plan is: a checklist is the
+    // pilot's own writing, and one stray click used to take all of it.
     const remove = el('button', 'ghost danger', tx('Delete'));
-    remove.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}`, 'DELETE'));
+    remove.addEventListener('click', async () => {
+      if (typeof confirm === 'function'
+        && !confirm(tx('Delete the checklist “{title}” and its {count} tasks?', { title: list.title, count: list.items.length }))) return;
+      await checklistCall(`/api/checklists/${list.id}`, 'DELETE');
+    });
     head.append(remove);
     card.append(head);
 
@@ -26535,8 +26561,7 @@ $('#checklist-create')?.addEventListener('click', async () => {
     title.focus();
     return;
   }
-  await checklistCall('/api/checklists', 'POST', { title: title.value });
-  title.value = '';
+  if (await checklistCall('/api/checklists', 'POST', { title: title.value }, { keep: true })) title.value = '';
 });
 
 /* ---------- StarStrings ---------- */

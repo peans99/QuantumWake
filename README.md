@@ -422,6 +422,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
+### 1.2.54
+
+- **Deleting a checklist asks first, and a change that does not save says
+  so,** as shopping lists have since 1.2.45. Delete used to take a checklist
+  and all its tasks on one click. Ticking, pinning, adding and removing a
+  task now report a failure instead of looking as if they worked, and a new
+  checklist or task that does not save keeps what you typed.
+
 ### 1.2.53
 
 - **AI assistants can use Quantum Wake, if you let them.** Turn it on in
