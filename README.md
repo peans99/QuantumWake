@@ -422,7 +422,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.48
+### 1.2.49
+
+- **The Fleet Manager no longer says "Missile inbound".** A ship's loadout on
+  the ASOP terminal lists missile racks across the middle of the screen,
+  where the real warning is drawn, and reading it set off the callout. The
+  missile warning, hostile territory and objective health are now only read
+  from the view out of the ship, and a rack or a missile count is never
+  taken for the warning.
 
 - **AI assistants can use Quantum Wake, if you let them.** Turn it on in
   Settings → AI assistants and Claude Code, Codex or another MCP client on

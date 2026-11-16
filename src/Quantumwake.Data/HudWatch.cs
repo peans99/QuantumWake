@@ -133,7 +133,11 @@ public static partial class HudText
 
     // "INBOUND MISSILE", and how the engine bent it on the recording -
     // INBOUND MISILE, INBLNDISILE - or might: MISSLE, M1SSILE, INB0UND.
-    [GeneratedRegex("INB[A-Z0]{1,3}ND|M[I1L]S{1,2}[I1L]?LE|[I1L]S{1,2}[I1L]LE$", RegexOptions.CultureInvariant)]
+    // Without INBOUND, the missile word has to end the line, bar the range
+    // the warning carries ("INBOUND MISSILE 62"): a ship's loadout says
+    // "MSD-212 Missile Rack" and "Missiles: IXS2", and both read as the
+    // warning before 1.2.49.
+    [GeneratedRegex("INB[A-Z0]{1,3}ND|M[I1L]S{1,2}[I1L]?LE[0-9]*$|[I1L]S{1,2}[I1L]LE[0-9]*$", RegexOptions.CultureInvariant)]
     private static partial Regex MissileWords();
 
     // Words split on anything but letters, digits and the fuel gauges' hyphen.

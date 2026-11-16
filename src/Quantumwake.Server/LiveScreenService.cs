@@ -407,7 +407,9 @@ public sealed class LiveScreenService(
                 // whole-frame read every other second misses half of those.
                 if (_panel is null && _bar is null && _tick % 2 != 0)
                 {
-                    if (InAFight(DateTimeOffset.UtcNow)) await Tick(frame, stoppingToken, bandOnly: true);
+                    // Not while the last whole frame was a terminal or an
+                    // app: the band would be read on that screen's own text.
+                    if (!_notFlight && InAFight(DateTimeOffset.UtcNow)) await Tick(frame, stoppingToken, bandOnly: true);
                     Record();
                     continue;
                 }
@@ -556,7 +558,14 @@ public sealed class LiveScreenService(
             return;
         }
 
-        Hud(lines, taken.Width, taken.Height, at);
+        // The HUD's warnings are the flight view's (1.2.49). The Fleet
+        // Manager's loadout lists "MSD-212 Missile Rack" and "Missiles: IXS2"
+        // across the middle of the screen, where the missile warning is drawn,
+        // and on 2026-11-15 opening it said "Missile inbound". On any other
+        // screen the warning is put down unsaid, so it is said again the
+        // moment a real one shows.
+        if (FlightView(sighting.Kind)) Hud(lines, taken.Width, taken.Height, at);
+        else lock (_gate) _hud.SeeMissile(false, at);
 
         // A mobiGlas app, a terminal, a kiosk or a tooltip is not the flight
         // view, so no bar on it is the fracture HUD: the Fleet terminal's own
