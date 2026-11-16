@@ -1,6 +1,6 @@
 namespace Quantumwake.WebTests;
 
-/// <summary>The one pinned authored list must remain useful in the Now card.</summary>
+/// <summary>The pinned authored lists must remain useful in the Now card.</summary>
 public class ChecklistTests
 {
     private const string Lists = """
@@ -24,6 +24,41 @@ public class ChecklistTests
 
         page.Do("__dom.node('#now-checklist-items').byClass('checklist-item')[0].children[0].fire('change');");
         Assert.Contains("POST /api/checklists/c1/items/i1/toggle", page.Fetched());
+    }
+
+    /// <summary>
+    /// Two pinned checklists share the card (1.2.46): each under its own name,
+    /// a finished one as a tick, and ticking still reaches the right list.
+    /// </summary>
+    [Fact]
+    public void Pinned_lists_share_the_now_card_under_their_names()
+    {
+        var page = new Page();
+        page.Serve("/api/checklists", """
+            [{"id":"c1","title":"Pyro departure","pinned":true,"items":[
+               {"id":"i1","text":"Refuel","attachments":[],"done":false},
+               {"id":"i2","text":"Bring tractor beam","attachments":[],"done":false}]},
+             {"id":"c2","title":"Bunker op","pinned":true,"items":[
+               {"id":"i3","text":"Medpens","attachments":[],"done":false}]},
+             {"id":"c3","title":"Hangar tidy","pinned":true,"items":[
+               {"id":"i4","text":"Sell junk","attachments":[],"done":true}]},
+             {"id":"c4","title":"Not pinned","pinned":false,"items":[
+               {"id":"i5","text":"Hidden task","attachments":[],"done":false}]}]
+            """);
+        page.Do("await loadChecklists();");
+
+        var items = page.NodeText("#now-checklist-items");
+        Assert.Equal("3 pinned checklists", page.NodeText("#now-checklist-title"));
+        Assert.Contains("Pyro departure", items);
+        Assert.Contains("Refuel", items);
+        Assert.Contains("Bunker op", items);
+        Assert.Contains("Medpens", items);
+        Assert.Contains("all done", items);
+        Assert.DoesNotContain("Sell junk", items);
+        Assert.DoesNotContain("Hidden task", items);
+
+        page.Do("__dom.node('#now-checklist-items').byClass('checklist-item').find(r => r.textContent.includes('Medpens')).children[0].fire('change');");
+        Assert.Contains("POST /api/checklists/c2/items/i3/toggle", page.Fetched());
     }
 
     [Fact]

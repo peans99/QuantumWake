@@ -82,13 +82,32 @@ public sealed record GameCapture(bool Taken, string? Why = null, int Width = 0, 
 /// from 1.1 that the targeted ship was held in memory and never written down,
 /// and a yes to reading the screen was given on that promise.
 /// </param>
+/// <param name="Targets">
+/// Whether the ship the pilot targets is identified: the target panel read,
+/// the "Target identified" callouts, the Now and MFD target cards (1.2.47).
+/// Null until answered. Until then a yes to reading the screen covered it
+/// without saying so - the question described only the mining scan panel - so
+/// an answer saved before this existed reads as not asked, and is asked at the
+/// next start rather than assumed either way.
+/// </param>
 public sealed record LiveScreenSettings(
     bool Asked = false, bool Enabled = false, DateTimeOffset? AnsweredAt = null, bool Voice = false,
     bool VoiceCombat = true, bool VoiceMining = true, bool VoiceMissions = true, IReadOnlyList<string>? Muted = null,
-    string? PingPlace = null, IReadOnlyList<string>? Wanted = null, bool WantedOnly = false, bool KeepFights = false)
+    string? PingPlace = null, IReadOnlyList<string>? Wanted = null, bool WantedOnly = false, bool KeepFights = false,
+    bool? Targets = null)
 {
     /// <summary>The <see cref="PingPlace"/> that reads a ping against every rock.</summary>
     public const string Anywhere = "*";
+
+    /// <summary>Whether target panels are read now: reading on, and a yes to targets.</summary>
+    public bool ReadsTargets => Enabled && Targets == true;
+
+    /// <summary>
+    /// Whether the start question is due: never answered, or reading said yes
+    /// before the target question existed. A no to reading is not asked again
+    /// about targets - there is nothing to identify them with.
+    /// </summary>
+    public bool NeedsAsking => !Asked || (Enabled && Targets is null);
 
     /// <summary>Whether a combat callout is said now.</summary>
     public bool SpeaksCombat => Voice && VoiceCombat;
@@ -158,12 +177,31 @@ public sealed class LiveScreenStore
         get { lock (_gate) return _current; }
     }
 
-    /// <summary>Records an answer: asked, and on or off.</summary>
-    public LiveScreenSettings Answer(bool enabled)
+    /// <summary>
+    /// Records an answer: asked, on or off, and - when the question offered it
+    /// - whether targets are identified. Left unnamed, the target answer stays
+    /// as it was, so the Log page's reading switch never decides it.
+    /// </summary>
+    public LiveScreenSettings Answer(bool enabled, bool? targets = null)
     {
         lock (_gate)
         {
-            _current = _current with { Asked = true, Enabled = enabled, AnsweredAt = DateTimeOffset.UtcNow };
+            _current = _current with
+            {
+                Asked = true, Enabled = enabled, AnsweredAt = DateTimeOffset.UtcNow,
+                Targets = targets ?? _current.Targets,
+            };
+            Save();
+            return _current;
+        }
+    }
+
+    /// <summary>Turns identifying targets on or off; reading itself stays as it was.</summary>
+    public LiveScreenSettings SetTargets(bool on)
+    {
+        lock (_gate)
+        {
+            _current = _current with { Targets = on };
             Save();
             return _current;
         }

@@ -422,6 +422,127 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
+### 1.2.53
+
+- **AI assistants can use Quantum Wake, if you let them.** Turn it on in
+  Settings → AI assistants and Claude Code, Codex or another MCP client on
+  this PC can ask about your play: where you are, your ships, where your
+  items are, your plans, items and ships in the game's catalogue, missions,
+  where to buy something, and trade routes for your hold and budget. A
+  second switch, **Let it make plans and lists**, lets it add flight plans,
+  shopping lists and checklists; it never deletes or edits what you wrote.
+  Both are off until you turn them on. Settings shows the line to paste into
+  Claude Code or Codex, and lists the last things an assistant asked.
+  Other machines and web pages are refused. What a tool answers is sent by
+  the assistant to its own service, under that service's terms.
+
+- **AI assistants can ask about much more.** With Settings → AI assistants
+  on, Claude Code, Codex or another MCP client can now look at your spending
+  and ledger, earnings, a ship's fit in the Garage and the parts for a slot,
+  what you are carrying, the Armoury, your contracts, reputation and events,
+  Wikelo trades, the logbook, refinery orders and your deaths and med beds.
+  The people you have played with are not included unless you tick them.
+- **And do a little more, if you allow changes.** Besides making plans and
+  lists, it can now add a stop to a plan, pin a list or checklist to Now,
+  tick a line or a task off, track a flight plan or an event, and turn your
+  open hauling contracts into a flight plan. Asking it twice never undoes
+  the first time. It still never deletes anything or rewrites what you wrote.
+
+- **Choose what an assistant may read.** Under Settings → AI assistants,
+  your own data is now split into parts, each with its own box: sessions and
+  history, money, ships and gear, contracts and reputation, plans and lists,
+  and the people you have played with. Untick one and an assistant can no
+  longer see it anywhere - its tools go, and the bits of it that other
+  answers carried (visits on a place, what a stash holds, a contract taken)
+  are cut out of them too. The game's own catalogue stays open. The people
+  you have played with start unticked, because those are other players'
+  names, and turning assistants off unticks them again.
+
+- **Ready-made requests for your assistant.** Claude and other MCP clients
+  now offer three from Quantum Wake by name: **Plan a trade run for my
+  ship**, **What should I fit on this ship** and **Debrief my last session**.
+  Each walks the assistant through the right lookups and asks it to say what
+  it could not find rather than guess. They follow your settings: one that
+  needs a part of your data you keep from assistants is not offered, and
+  saving a plan or a list is only suggested when you allow changes.
+
+- **Claude Desktop can connect.** With AI assistants on, Settings now shows
+  the lines to paste into Claude Desktop's `claude_desktop_config.json`,
+  with this program's own path filled in. Claude Desktop then starts a small
+  relay to the Quantum Wake you have running - not a second copy - and asks
+  it the same things Claude Code can, under the same switches, in the same
+  list of what was asked. It never starts Quantum Wake for you: if the app
+  is not running, Claude is told to ask you to start it. If you move the
+  program, copy the lines again.
+
+- **The Fleet Manager no longer says "Missile inbound".** A ship's loadout on
+  the ASOP terminal lists missile racks across the middle of the screen,
+  where the real warning is drawn, and reading it set off the callout. The
+  missile warning, hostile territory and objective health are now only read
+  from the view out of the ship, and a rack or a missile count is never
+  taken for the warning.
+
+- **You choose, once, what the app does while you play.** The start question
+  that asked only about reading the screen now offers three choices, each off
+  unless you tick it: reading the game's screen, identifying the ship you
+  target, and listening for voice commands. "Leave them all off" is kept as
+  an answer and not asked again. Each can be changed later in Settings →
+  Voice & callouts.
+- **Identifying targets is its own choice.** A yes to reading the screen used
+  to identify targets too, although the question only mentioned the mining
+  scan panel. If you said yes before, the app asks about targets at the next
+  start and reads none until you answer. There is also a switch for it under
+  Read from the game on the Log page.
+- **Voice commands are offered at start** instead of waiting to be found in
+  Settings. If you already turned them on, you are not asked.
+
+- **Several checklists can be pinned to Now at once,** as shopping lists can
+  since 1.2.43. Pinning a second checklist used to unpin the first. Now and
+  the overlay show every pinned checklist on one card, each under its name
+  with a few of its open tasks, and a checklist with everything done shrinks
+  to its name and a tick. Tasks can still be ticked off right on the card.
+
+- **Shopping lists can be edited.** "Edit" on a list opens its title and
+  lines in the same one-line-per-thing box it was written in: rename it,
+  change an amount, add or remove a line. A line that keeps its name keeps
+  its tick.
+- **Tick a line in hand yourself.** The logs only prove a line when one of
+  the thing is seen in a stash or worn. Something bought and left in the
+  hold, a Garage part, or a line asking for several now gets a box to tick,
+  and the list, Now and the briefing all count it.
+- **A stash sighting no longer closes a line for many.** A stash records
+  that a thing was there, never how many, so "23 Hadanite" with one seen
+  used to show as in hand. Lines asking for more than one, or for SCU, now
+  say "seen in inventory, not counted" until you tick them.
+- **Fewer wrong matches against your stash.** A line used to count as found
+  when any stash item merely contained its name: "Oza" was found in
+  "MedPen (Hemozal)". Now only the same name matches, or the same name with
+  a bracketed note ("Hadanite (Raw)"), or a variant that adds words to a
+  name of two words or more ("ORC-mkV Arms Red").
+- **Each list says what the rest should cost.** An estimate at the cheapest
+  known counters, called "at least" when some lines have no price or amount,
+  with how many.
+- **Several pinned lists, finished off.** "+ list" on Market, Parts and
+  Mining asks which list when you have several, pinned ones first, and the
+  button then names the list. Shopping offers "Plan one trip for them" when
+  two or more lists are pinned, adding the same items together. Marking a
+  list done takes it off Now.
+- **Delete asks first, and a change that does not save says so.** Deleting
+  a list now asks for confirmation. Pin, done, delete, destination, edit and
+  tick report a failure instead of looking as if they worked, and a new list
+  that does not save keeps what you typed.
+
+- **Shopping lists keep the whole name you typed.** A line whose name ends in
+  digits lost them: "JS-400" was saved as 400 of "JS-", "FR-86" as 86 of
+  "FR-", and "Phoenix 2" as two "Phoeni". The amount now has to stand after a
+  space ("JS-400 2", "Arrow x2"), and names the catalogue knows, such as
+  "Ship Ammunition - Size 3", are never split. Lists already saved keep what
+  they were saved with: delete and re-enter a mangled line.
+- **A blueprint's quality floor no longer hides its material.** A goal made
+  from a blueprint line like "Hadanite 0.5 SCU (quality 500+)" became one item
+  named after the whole line, with no seller. It is now 0.5 SCU of Hadanite,
+  with "quality 500+" shown beside it.
+
 ### 1.2.43
 
 - **Several shopping lists can be pinned to Now at once.** Pinning a second

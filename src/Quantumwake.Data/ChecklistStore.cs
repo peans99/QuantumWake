@@ -117,6 +117,12 @@ public sealed class ChecklistStore
         }
     }
 
+    /// <summary>
+    /// Pins a checklist to the Now page, or takes it off. Several can be pinned
+    /// (1.2.46), as shopping lists can since 1.2.43: a departure check and an
+    /// operation's tasks are often both live at once, and pinning one used to
+    /// unpin the other. The Now card keeps the glance with a share per list.
+    /// </summary>
     public bool TogglePin(string id)
     {
         lock (_gate)
@@ -124,11 +130,7 @@ public sealed class ChecklistStore
             var index = _lists.FindIndex(list => list.Id == id);
             if (index < 0) return false;
 
-            var pin = !_lists[index].Pinned;
-            for (var i = 0; i < _lists.Count; i++)
-                if (_lists[i].Pinned) _lists[i] = _lists[i] with { Pinned = false };
-
-            _lists[index] = _lists[index] with { Pinned = pin };
+            _lists[index] = _lists[index] with { Pinned = !_lists[index].Pinned };
             Save();
             return true;
         }

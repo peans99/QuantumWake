@@ -52,8 +52,12 @@ send nothing about you.
   commodity kiosk, a refinery and the Contracts and Rep apps, one reading per
   screen while it stays up, in the same reading log screenshots go to, and
   since 1.1.22 your balance from the bar of any other mobiGlas screen. Item
-  tooltips and screens the app cannot read are not kept. The ship you have targeted - its name, signatures, speed and whether
-  it is marked hostile - is held in memory for the combat page and not
+  tooltips and screens the app cannot read are not kept. The ship you have
+  targeted is read only if you also said yes to **Identify the ship you
+  target** (1.2.47), asked at start beside reading and a switch of its own
+  under the live reading one; a yes to reading given before 1.2.47 does not
+  count for it, and the question is put again. Its name, signatures, speed
+  and whether it is marked hostile are held in memory for the combat page and not
   written down, unless you turn on **Keep a record of fights** under the
   live reading switch (1.2.21, off by default). With it on, each lock is
   written down when it ends, for the debrief on the Sessions page: the hull's
@@ -68,11 +72,28 @@ send nothing about you.
   game's process, reads its memory or sends it input; voice commands and the
   Stream Deck plugin, below, are each a choice of their own and the only parts
   that press keys.
+- **AI assistants**, only if you turn them on in Settings → AI assistants
+  (1.2.48, off by default). An assistant on this PC - Claude Code, Claude
+  Desktop (since 1.2.53), Codex or another MCP client - can then ask about your sessions, ships and their fit,
+  items and loadout, plans, purchases and ledger, earnings, contracts,
+  reputation, events, Wikelo trades, refinery orders, deaths, the game's
+  catalogue, prices and routes (since 1.2.50 the money, Garage, contract and
+  history pages too). Since 1.2.51 each part of your own data has its own box
+  and can be kept from it; the people you have played with - other players'
+  names - start unticked and are unticked again whenever access goes off.
+  Only with **Let it make plans and lists** on as well can it add flight
+  plans, shopping lists, checklists and stops, pin a list to Now, tick a line
+  off, or track a plan or an event. It never deletes anything or rewrites
+  what you wrote. Other machines and web pages are
+  refused. What a tool answers is sent by the assistant to its own service,
+  under that service's terms; Quantum Wake itself sends nothing anywhere. The
+  last calls are listed in Settings, in memory only. See [mcp.md](mcp.md).
 - **Spoken callouts**, only if you turn on the voice on the Log page: the
   app says things like "Target identified" with the speech voice Windows
   already has, on your PC. The sentence is not sent anywhere.
-- **Your microphone**, only if you turn on Voice commands in Settings →
-  Voice & callouts. It is heard by the speech recogniser Windows carries, on
+- **Your microphone**, only if you ticked Listen for voice commands when the
+  app asked at start (1.2.47; it asks once, and a no is kept) or turned on
+  Voice commands in Settings → Voice & callouts. It is heard by the speech recogniser Windows carries, on
   your PC, told only the copilot's few dozen phrases. The app never gets the
   audio: it sees the phrase matched and how sure the recogniser was, keeps the
   last 40 in memory for the page, and writes none of them down. A command

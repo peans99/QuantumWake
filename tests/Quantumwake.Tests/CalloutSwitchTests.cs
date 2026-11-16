@@ -121,6 +121,29 @@ public sealed class CalloutSwitchTests : IDisposable
         Assert.False(HudText.Missile([Line("SCM", 1080, 544), Line("GUN", 1078, 574)], 3440, 1440));
     }
 
+    /// <summary>
+    /// The Fleet Manager's loadout on 2026-11-15 (kept screen readings), in the
+    /// band: a rack and a missile count are not the warning (1.2.49).
+    /// </summary>
+    [Fact]
+    public void A_loadouts_missile_rack_is_not_a_warning()
+    {
+        Assert.False(HudText.Missile([Line("MSD-212 Missile Rack", 1500, 420, 30)], 3440, 1440));
+        Assert.False(HudText.Missile([Line("Item Type: Missile Rack", 1500, 420, 30)], 3440, 1440));
+        Assert.False(HudText.Missile([Line("Missiles: IXS2", 1500, 420, 30)], 3440, 1440));
+        Assert.True(HudText.Missile([Line("MISSILE 62", 1500, 420, 40)], 3440, 1440));
+    }
+
+    /// <summary>The live loop reads the HUD's warnings only on a frame that can be the flight view.</summary>
+    [Theory]
+    [InlineData(ScreenKind.Unknown, true)]
+    [InlineData(ScreenKind.Mining, true)]
+    [InlineData(ScreenKind.Fleet, false)]
+    [InlineData(ScreenKind.Loadout, false)]
+    [InlineData(ScreenKind.Tooltip, false)]
+    public void Only_the_flight_view_has_a_hud(ScreenKind kind, bool flight) =>
+        Assert.Equal(flight, Quantumwake.Server.LiveScreenService.FlightView(kind));
+
     [Fact]
     public void The_territory_banner_is_read_at_the_top_and_nowhere_else()
     {

@@ -50,6 +50,7 @@ public class AuthoredEndpointTests : IClassFixture<ServerUnderTest>
     [InlineData("DELETE", "/api/jobs/nosuchid")]
     [InlineData("POST", "/api/jobs/nosuchid/toggle")]
     [InlineData("POST", "/api/jobs/nosuchid/pin")]
+    [InlineData("POST", "/api/jobs/nosuchid/got")]
     [InlineData("DELETE", "/api/checklists/nosuchid")]
     [InlineData("POST", "/api/checklists/nosuchid/pin")]
     [InlineData("DELETE", "/api/trips/nosuchid")]
@@ -63,12 +64,56 @@ public class AuthoredEndpointTests : IClassFixture<ServerUnderTest>
     }
 
     /// <summary>
-    /// Only one thing is on Now at a time, and the rule lives in the store. This
-    /// says it still holds when the pinning is done through the API, which is
-    /// the only way anybody does it.
+    /// A line the pilot ticks reads back in hand, an edit keeps that tick, and
+    /// a sighting that cannot be counted does not close a line for 23 (1.2.45).
     /// </summary>
     [Fact]
-    public async Task Pinning_a_second_checklist_unpins_the_first()
+    public async Task A_job_line_can_be_ticked_and_the_list_edited_over_http()
+    {
+        var id = Id(await _server.Posted("/api/jobs", new
+        {
+            title = "Hermes fit",
+            kind = "list",
+            items = new[] { new { name = "JS-400", needed = 1.0, unit = "" }, new { name = "Hadanite", needed = 23.0, unit = "" } },
+        }));
+
+        Assert.Equal(HttpStatusCode.OK, (await _server.Post($"/api/jobs/{id}/got", new { name = "JS-400" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _server.Post($"/api/jobs/{id}/edit", new
+        {
+            title = "Hermes refit",
+            items = new[] { new { name = "JS-400", needed = 2.0, unit = "" } },
+        })).StatusCode);
+
+        var job = (await _server.Get("/api/jobs")).EnumerateArray().Single(j => Id(j) == id);
+        var line = job.GetProperty("items").EnumerateArray().Single();
+        Assert.Equal("Hermes refit", job.GetProperty("title").GetString());
+        Assert.True(line.GetProperty("got").GetBoolean());
+        Assert.True(line.GetProperty("have").GetBoolean());
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await _server.Post($"/api/jobs/{id}/edit", new { title = "x", items = Array.Empty<object>() })).StatusCode);
+        await _server.Delete($"/api/jobs/{id}");
+    }
+
+    [Fact]
+    public async Task Collect_puts_a_thing_on_the_list_it_names()
+    {
+        var first = Id(await _server.Posted("/api/jobs", new { title = "First", kind = "list", items = new[] { new { name = "A", needed = 1.0 } } }));
+        var second = Id(await _server.Posted("/api/jobs", new { title = "Second", kind = "list", items = new[] { new { name = "B", needed = 1.0 } } }));
+
+        var landed = await _server.Posted("/api/jobs/collect", new { name = "MedGel", needed = 1.0, jobId = first });
+
+        Assert.Equal(first, Id(landed));
+        await _server.Delete($"/api/jobs/{first}");
+        await _server.Delete($"/api/jobs/{second}");
+    }
+
+    /// <summary>
+    /// Several checklists can be on Now (1.2.46), and the rule lives in the
+    /// store. This says it holds when the pinning is done through the API,
+    /// which is the only way anybody does it.
+    /// </summary>
+    [Fact]
+    public async Task Pinning_a_second_checklist_keeps_the_first()
     {
         var first = Id(await _server.Posted("/api/checklists", new { title = "Pyro departure" }));
         var second = Id(await _server.Posted("/api/checklists", new { title = "Mining run" }));
@@ -82,7 +127,10 @@ public class AuthoredEndpointTests : IClassFixture<ServerUnderTest>
             .Select(Id)
             .ToList();
 
-        Assert.Equal([second], pinned);
+        Assert.Contains(first, pinned);
+        Assert.Contains(second, pinned);
+        await _server.Delete($"/api/checklists/{first}");
+        await _server.Delete($"/api/checklists/{second}");
     }
 
     /// <summary>

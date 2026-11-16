@@ -5,7 +5,18 @@ namespace Quantumwake.Data;
 
 /// <summary>One line of a job: a thing to gather, and how much of it.</summary>
 /// <param name="Unit">"SCU" for bulk materials, empty for counted items.</param>
-public sealed record JobItem(string Name, double Needed, string Unit = "");
+/// <param name="Note">
+/// What the line asks beyond a name and an amount, such as a blueprint's
+/// "quality 500+". Kept apart from the name so the name still finds a seller.
+/// </param>
+/// <param name="Got">
+/// The pilot's own word that this line is in hand. The logs can only say a
+/// thing was seen in a stash or is worn: nothing records a purchase left in a
+/// ship's hold, how many of something a stash holds, or that a Garage part was
+/// bought for this fit and not an older one. Without this a line the logs
+/// cannot prove stayed open until the whole list was marked done.
+/// </param>
+public sealed record JobItem(string Name, double Needed, string Unit = "", string? Note = null, bool Got = false);
 
 /// <summary>
 /// A plan the player is working towards: a blueprint to craft, or a shopping
@@ -240,16 +251,24 @@ public sealed class JobStore
     }
 
     /// <summary>
-    /// Adds one thing to the list the player is filling: the pinned job if
-    /// there is one - the top one on Shopping when several are, which is the
-    /// newest - else the newest open list, else a new "Shopping list".
-    /// Returns the job it landed in, so the page can say where it went.
+    /// Adds one thing to a list: the open one named, when the page asked the
+    /// pilot which; else the list the player is filling - a pinned shopping
+    /// list, the top one on Shopping when several are, which is the newest -
+    /// else the newest open list, else a new "Shopping list". A pinned build is
+    /// the last pinned choice: a part from the Market is rarely a material for
+    /// a blueprint. Returns the job it landed in, so the page can say where.
     /// </summary>
-    public Job Collect(JobItem item)
+    public Job Collect(JobItem item, string? jobId = null)
     {
         lock (_gate)
         {
-            var index = _jobs.FindIndex(j => j.Pinned && !j.Done);
+            var index = jobId is { Length: > 0 } ? _jobs.FindIndex(j => j.Id == jobId && !j.Done) : -1;
+
+            if (index < 0)
+                index = _jobs.FindIndex(j => j.Pinned && !j.Done && j.Kind == "list");
+
+            if (index < 0)
+                index = _jobs.FindIndex(j => j.Pinned && !j.Done);
 
             if (index < 0)
                 index = _jobs.FindIndex(j => j.Kind == "list" && !j.Done);
@@ -277,8 +296,9 @@ public sealed class JobStore
             var existing = items.FindIndex(i =>
                 string.Equals(i.Name, item.Name, StringComparison.OrdinalIgnoreCase));
 
+            // Wanting more of a thing reopens a line ticked for the smaller amount.
             if (existing >= 0)
-                items[existing] = items[existing] with { Needed = items[existing].Needed + item.Needed };
+                items[existing] = items[existing] with { Needed = items[existing].Needed + item.Needed, Got = false };
             else
                 items.Add(item);
 
@@ -288,7 +308,11 @@ public sealed class JobStore
         }
     }
 
-    /// <summary>Flips a job between open and done. False when the id is unknown.</summary>
+    /// <summary>
+    /// Flips a job between open and done. False when the id is unknown.
+    /// Finishing a list also takes it off Now: the card hides a done list, so a
+    /// pin left on it showed "On Now" on Shopping for a list Now never drew.
+    /// </summary>
     public bool Toggle(string id)
     {
         lock (_gate)
@@ -297,7 +321,60 @@ public sealed class JobStore
             if (index < 0)
                 return false;
 
-            _jobs[index] = _jobs[index] with { Done = !_jobs[index].Done };
+            var done = !_jobs[index].Done;
+            _jobs[index] = _jobs[index] with { Done = done, Pinned = !done && _jobs[index].Pinned };
+            Save();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Rewrites a list the pilot is editing: its title and every line. A line
+    /// that keeps its name keeps its tick, so correcting an amount does not
+    /// quietly reopen something already bought. False when the id is unknown.
+    /// </summary>
+    public bool Edit(string id, string? title, IReadOnlyList<JobItem> items)
+    {
+        lock (_gate)
+        {
+            var index = _jobs.FindIndex(j => j.Id == id);
+            if (index < 0)
+                return false;
+
+            var job = _jobs[index];
+            var got = job.Items.Where(i => i.Got).Select(i => i.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            _jobs[index] = job with
+            {
+                Title = string.IsNullOrWhiteSpace(title) ? job.Title : title.Trim(),
+                Items = [.. items
+                    .Where(i => !string.IsNullOrWhiteSpace(i.Name))
+                    .Select(i => i with { Name = i.Name.Trim(), Got = i.Got || got.Contains(i.Name.Trim()) })],
+            };
+            Save();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Ticks one line in hand, or unticks it, by its name. False when the job
+    /// or the line is unknown.
+    /// </summary>
+    public bool ToggleGot(string id, string name)
+    {
+        lock (_gate)
+        {
+            var index = _jobs.FindIndex(j => j.Id == id);
+            if (index < 0)
+                return false;
+
+            var items = _jobs[index].Items.ToList();
+            var line = items.FindIndex(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (line < 0)
+                return false;
+
+            items[line] = items[line] with { Got = !items[line].Got };
+            _jobs[index] = _jobs[index] with { Items = items };
             Save();
             return true;
         }

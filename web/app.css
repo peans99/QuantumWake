@@ -3532,6 +3532,16 @@ body.overlay .now-job-items li.now-job-group { padding-top: 5px; }
 .now-checklist-head { display: flex; gap: 8px; align-items: baseline; }
 .now-checklist-head .now-job-title { flex: 1; }
 .now-checklist-items, .checklist-items { list-style: none; margin: 7px 0 0; padding: 0; }
+/* Several checklists pinned (1.2.46): each list's name heads its own open
+   tasks, which are indented under it because they read alike otherwise. */
+.now-checklist-items li.now-checklist-group {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 7px 0 3px; font-size: 12px; color: var(--cyan-hot, #7fe4ff);
+}
+.now-checklist-items li.now-checklist-group:first-child { padding-top: 0; }
+.now-checklist-items li.now-checklist-group .strong { font-weight: 600; }
+.now-checklist-items li.now-checklist-group ~ li:not(.now-checklist-group) { padding-left: 12px; }
+body.overlay .now-checklist-items li.now-checklist-group { font-size: 10.5px; padding-top: 5px; }
 .checklist-item {
   display: flex; align-items: flex-start; gap: 8px; padding: 6px 0;
   border-bottom: 1px solid rgba(53, 200, 240, .08);
@@ -3622,6 +3632,19 @@ body.overlay .checklist-attachments, body.overlay .checklist-due { display: none
 .job-items tr:not(.have) td { color: var(--muted); }
 .job-items .job-mark { width: 20px; text-align: center; color: var(--dim); }
 .job-items tr.have .job-mark { color: var(--green); }
+/* The pilot's own tick (1.2.45): a box that reads as one, not a stray dot. */
+.job-items button.ghost.job-got { width: 18px; height: 18px; min-width: 0; padding: 0; line-height: 16px; font-size: 12px; border: 1px solid rgba(53, 200, 240, .45); border-radius: 3px; clip-path: none; }
+.job-items button.ghost.job-got.on { color: var(--green); border-color: var(--green); }
+.job-cost { font-size: 11.5px; margin: 0 0 2px; }
+.job-edit { margin-top: 8px; }
+.jobs-pinned-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 8px 12px; margin-bottom: 10px;
+  border: 1px solid rgba(53, 200, 240, .18); border-radius: 6px;
+  font-size: 12.5px; color: var(--cyan-hot, #7fe4ff);
+}
+.jobs-pinned-bar .trip-chooser { flex-basis: 100%; }
+.track-box { display: inline-flex; align-items: center; gap: 4px; }
 
 /* The hauling run on Jobs: one card per contract with its legs, then the
    stops. A leg with an end missing is muted rather than hidden - the gap
@@ -8993,3 +9016,28 @@ button.deck-key { width:100%; height:auto; min-width:0; padding:0; letter-spacin
 .continue-card .muted { font-size: 12px; }
 .continue-card .operation-status { margin-top: auto; font-size: 11px; }
 .continue-card.continue-ready { border-left-color: var(--green); }
+
+/* ---------- AI assistants (MCP, 1.2.48) ---------- */
+/* The setup lines are for copying, so the command shows whole and wraps
+   rather than being cut at the card's edge. */
+.mcp-setup { margin-top: 10px; }
+.mcp-areas { margin: 8px 0 4px 26px; padding: 6px 12px 8px; border: 1px solid rgba(53, 200, 240, .14); border-radius: 4px; }
+.mcp-areas legend { padding: 0 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.mcp-areas > p { margin: 2px 0 4px; font-size: 12px; }
+@media (max-width: 700px) { .mcp-areas { margin-left: 0; } }
+.mcp-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 6px 0; font-size: 12px; }
+.mcp-line b { min-width: 92px; color: var(--cyan-hot, #7fe4ff); }
+.mcp-line code, .mcp-setup p code { word-break: break-all; }
+.mcp-snippet {
+  margin: 0 0 8px 100px; padding: 7px 10px; font-size: 11.5px; white-space: pre-wrap;
+  border: 1px solid rgba(53, 200, 240, .18); border-radius: 4px; background: rgba(7, 12, 20, .6);
+}
+.mcp-calls h4 { margin: 12px 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.mcp-calls ul { list-style: none; margin: 0; padding: 0; }
+.mcp-call { display: flex; gap: 10px; padding: 3px 0; font-size: 12px; border-bottom: 1px solid rgba(53, 200, 240, .06); }
+.mcp-call:last-child { border-bottom: 0; }
+.mcp-call.wrote span:nth-child(2) { color: var(--green); }
+@media (max-width: 700px) { .mcp-snippet { margin-left: 0; } }
+/* .toggle does not wrap on its own, and these notes are sentences. */
+#settings-mcp .toggle { white-space: normal; align-items: flex-start; line-height: 1.5; margin-top: 6px; }
+#settings-mcp .toggle input { margin-top: 3px; }

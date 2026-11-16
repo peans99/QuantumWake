@@ -494,6 +494,7 @@ function showView(name) {
     renderSettings().catch(() => {});
     loadGameData().catch(() => {});
     loadVoice().catch(() => {});
+    loadMcp().catch(() => {});
   }
 
   // A log is a live reference, not an Overlay setting. Read it when the pilot
@@ -21106,6 +21107,136 @@ function serverReport(row) {
   return `Quantumwake server report: shard ${row.shard}; region ${row.region}; ${when}; ${ending}${stay}.`;
 }
 
+/* ---------- AI assistants (MCP, 1.2.48) ---------- */
+
+let mcpState = null;
+
+/** The address an assistant on this PC uses: this page's own port, on localhost. */
+function mcpUrl(path = '/mcp') {
+  const port = location.port || (location.protocol === 'https:' ? '443' : '80');
+  return `http://localhost:${port}${path}`;
+}
+
+async function loadMcp() {
+  try {
+    mcpState = await getJson('/api/mcp');
+  } catch {
+    mcpState = null;
+  }
+  renderMcp();
+}
+
+/**
+ * The two switches, how to connect, and the last things asked.
+ *
+ * The setup lines are shown only once access is on: a command that connects
+ * to a door that is shut answers 403, which reads like the command is wrong.
+ */
+function renderMcp() {
+  const block = $('#settings-mcp');
+  if (!block) return;
+  const state = mcpState;
+  const on = Boolean(state?.enabled);
+
+  $('#mcp-enabled').checked = on;
+  $('#mcp-changes').checked = Boolean(state?.allowChanges);
+  $('#mcp-changes').disabled = !on;
+  $('#mcp-setup').hidden = !on;
+  renderMcpAreas(state, on);
+
+  const url = mcpUrl(state?.path || '/mcp');
+  $('#mcp-url').textContent = url;
+  $('#mcp-claude').textContent = `claude mcp add --transport http quantumwake ${url}`;
+  $('#mcp-codex').textContent = `[mcp_servers.quantumwake]\nurl = "${url}"`;
+
+  // Claude Desktop starts its servers itself (1.2.53): the command is this
+  // program as the server reports it, so the path is the real one rather
+  // than a guess, and a Store copy gets its alias. Hidden when a server
+  // older than the relay sends none.
+  const stdio = state?.stdio;
+  $('#mcp-desktop-block').hidden = !stdio?.command;
+  $('#mcp-desktop').textContent = stdio?.command
+    ? JSON.stringify({ mcpServers: { quantumwake: { command: stdio.command, args: stdio.args || [] } } }, null, 2)
+    : '';
+
+  // Counted as offered under the switches, so closing an area is seen to
+  // take its tools away. A server before 1.2.51 sends no "open": all count.
+  const tools = state?.tools || [];
+  const reads = tools.filter((t) => !t.writes && t.open !== false).length;
+  const writes = tools.filter((t) => t.writes && t.open !== false).length;
+  $('#mcp-state').textContent = !state
+    ? tx('The app did not answer about AI assistants.')
+    : !on
+      ? tx('Off. No assistant can reach Quantum Wake.')
+      : state.allowChanges
+        ? tx('On: {reads} things it can ask and {writes} things it can make.', { reads, writes })
+        : tx('On, read-only: {reads} things it can ask. It cannot change anything.', { reads });
+
+  const calls = state?.calls || [];
+  $('#mcp-calls').hidden = !calls.length;
+  const list = $('#mcp-call-list');
+  list.textContent = '';
+  for (const call of calls.slice(0, 12)) {
+    const tool = tools.find((t) => t.name === call.tool) || (state?.prompts || []).find((p) => p.name === call.tool);
+    const li = el('li', call.wrote ? 'mcp-call wrote' : 'mcp-call');
+    li.append(el('span', 'muted', shortTimeOf(call.at)));
+    li.append(el('span', null, call.tool === 'connect' ? tx('connected') : tool?.title || call.tool));
+    if (call.client) li.append(el('span', 'muted', call.client));
+    if (call.outcome !== 'ok') li.append(el('span', 'outward', call.outcome));
+    list.append(li);
+  }
+}
+
+/**
+ * One box per part of the pilot's data (1.2.51), under the access switch.
+ * Drawn from the server's own list so a new area appears without a page
+ * change, and shown only while access is on: an area of a door that is shut
+ * is a question with no meaning.
+ */
+function renderMcpAreas(state, on) {
+  const block = $('#mcp-areas');
+  if (!block) return;
+  const areas = state?.areas || [];
+  block.hidden = !on || !areas.length;
+  const list = $('#mcp-area-list');
+  list.textContent = '';
+  for (const area of areas) {
+    const label = el('label', 'toggle mcp-area');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = Boolean(area.open);
+    box.dataset.area = area.key;
+    box.addEventListener('change', (event) => postMcp({ areas: { [area.key]: event.target.checked } }, event.target));
+    const text = el('span', null, area.title);
+    text.append(el('em', 'muted', area.description));
+    label.append(box, text);
+    list.append(label);
+  }
+}
+
+async function postMcp(change, box) {
+  try {
+    const response = await fetch('/api/mcp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(change),
+    });
+    if (!response.ok) throw new Error(`mcp ${response.status}`);
+    mcpState = await response.json();
+  } catch {
+    box.checked = !box.checked;
+    $('#mcp-state').textContent = tx('The change did not save.');
+    return;
+  }
+  renderMcp();
+}
+
+$('#mcp-enabled')?.addEventListener('change', (event) => postMcp({ enabled: event.target.checked }, event.target));
+$('#mcp-changes')?.addEventListener('change', (event) => postMcp({ allowChanges: event.target.checked }, event.target));
+$('#mcp-claude-copy')?.addEventListener('click', (event) => copyServerText($('#mcp-claude').textContent, event.currentTarget));
+$('#mcp-codex-copy')?.addEventListener('click', (event) => copyServerText($('#mcp-codex').textContent, event.currentTarget));
+$('#mcp-desktop-copy')?.addEventListener('click', (event) => copyServerText($('#mcp-desktop').textContent, event.currentTarget));
+
 /**
  * Puts text on the clipboard and says so on the button.
  *
@@ -25161,33 +25292,59 @@ function renderHaulShareResult(box, plan, share) {
 }
 
 /**
- * A "track this" button for any catalogue row: one click puts the thing on
- * the list the player is filling - the pinned job, else the newest open list,
- * else a new one - and says where it went.
+ * A "track this" button for any catalogue row: puts the thing on a shopping
+ * list and says which.
+ *
+ * With one open list or none, one click does it - the open list, or a new one.
+ * With several (1.2.45, once several could be pinned), the click asks which,
+ * offering the pinned lists first, because the server's own guess - the top
+ * pinned list - is right only when the pilot happens to want that one.
  */
 function trackButton(name, needed = 1, unit = '') {
+  const box = el('span', 'track-box');
   const button = el('button', 'ghost track', tx('+ list'));
   button.title = tx('Add {item} to your shopping list', { item: name });
+  box.append(button);
 
-  button.addEventListener('click', async () => {
+  const add = async (jobId) => {
     button.disabled = true;
-
     try {
-      const result = await fetch('/api/jobs/collect', {
+      const response = await fetch('/api/jobs/collect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, needed, unit }),
-      }).then((r) => r.json());
+        body: JSON.stringify({ name, needed, unit, jobId: jobId || null }),
+      });
+      if (!response?.ok) throw new Error(`collect -> ${response?.status}`);
+      const result = await response.json();
 
-      button.textContent = tx('✓ added');
-      button.title = tx('On "{list}"', { list: result.title });
+      box.replaceChildren(button);
+      button.textContent = tx('✓ on {list}', { list: result.title });
+      button.title = tx('Added to "{list}"', { list: result.title });
+      if (typeof loadJobList === 'function') loadJobList().catch(() => {});
     } catch {
       button.textContent = tx('failed');
       button.disabled = false;
     }
+  };
+
+  button.addEventListener('click', async () => {
+    if (box.querySelector('select')) return;
+
+    const jobs = await getJson('/api/jobs').catch(() => []);
+    const open = jobs.filter((j) => j.kind !== 'craft' && !j.done && !j.imported)
+      .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)));
+    if (open.length < 2) { await add(open[0]?.id); return; }
+
+    const pick = el('select', 'select tiny');
+    pick.setAttribute('aria-label', tx('Which list to add it to'));
+    for (const job of open) pick.append(new Option(job.pinned ? `★ ${job.title}` : job.title, job.id));
+    const go = el('button', 'ghost tiny', tx('Add'));
+    go.type = 'button';
+    go.addEventListener('click', () => add(pick.value));
+    box.append(pick, go);
   });
 
-  return button;
+  return box;
 }
 
 /** The shared progress bar: done over total, with its own wording. */
@@ -25199,7 +25356,7 @@ function trackButton(name, needed = 1, unit = '') {
  * somebody else's list: "Bob needs four Agricium" reads very differently beside
  * "and you have some at Port Tressler".
  */
-function jobLines(job) {
+function jobLines(job, onGot = null) {
   const table = el('table', 'job-items');
   const body = el('tbody');
 
@@ -25209,16 +25366,35 @@ function jobLines(job) {
     const need = item.needed > 0
       ? `${item.needed}${item.unit ? ` ${item.unit}` : ''}`
       : '';
-    tr.append(el('td', 'job-mark', item.have ? '✓' : '·'));
+
+    // The pilot's own tick (1.2.45). The logs prove a line only when one of it
+    // was seen; bought and left in the hold, several of it, or a Garage part
+    // stayed open until the whole list was marked done. A line the logs already
+    // prove needs no tick, so it gets none.
+    const mark = el('td', 'job-mark');
+    if (onGot && (!item.have || item.got)) {
+      const tick = el('button', item.got ? 'ghost tiny job-got on' : 'ghost tiny job-got', item.got ? '✓' : '');
+      tick.type = 'button';
+      tick.title = item.got ? tx('You marked this in hand. Click to undo.') : tx('Mark this in hand');
+      tick.setAttribute('aria-label', tick.title);
+      tick.addEventListener('click', () => onGot(item, tick));
+      mark.append(tick);
+    } else {
+      mark.textContent = item.have ? '✓' : '·';
+    }
+    tr.append(mark);
     const itemName = el('td');
     itemName.append(goodsLink(item.name));
+    if (item.note) itemName.append(' ', el('span', 'note-inline', item.note));
     tr.append(itemName);
     tr.append(el('td', 'num muted', need));
 
     // Where it is, or where to buy what is missing.
     const whereCell = el('td', 'muted');
 
-    if (item.inventoryUnconfirmed) {
+    if (item.got) {
+      whereCell.textContent = tx('marked in hand');
+    } else if (item.inventoryUnconfirmed) {
       whereCell.append(el('span', 'note-inline', tx('seen in inventory — not counted')));
       if (item.where.length) {
         whereCell.append(document.createTextNode(' · '));
@@ -25317,6 +25493,143 @@ function jobProgress(done, total, label) {
   return wrap;
 }
 
+/**
+ * One change to a shopping list, answered. Until 1.2.45 the card fired its
+ * request and redrew whatever came back, so a change the server refused or
+ * never received looked exactly like one that had worked.
+ *
+ * @returns Whether the server took it; on false the page has said so.
+ */
+async function jobCall(url, { method = 'POST', body = null, failed = tx('That change did not save. Is the app still running?') } = {}) {
+  let ok = false;
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    ok = Boolean(response?.ok);
+  } catch { ok = false; }
+
+  if (!ok) alertLine($('#jobs-alerts') || $('#jobs-list'), failed);
+  return ok;
+}
+
+/**
+ * What the rest of a list should cost, from the prices its own lines show.
+ *
+ * An estimate and labelled as one: each price is the cheapest counter the
+ * price feed knows, not the one the run will use. A line with no price, or no
+ * amount to multiply it by, cannot be added in, so the total is then a floor
+ * and says how many lines it leaves out.
+ */
+function jobCost(job) {
+  const line = el('div', 'muted job-cost');
+  const missing = job.items.filter((i) => !i.have);
+  if (!missing.length) { line.hidden = true; return line; }
+
+  const priced = missing.filter((i) => i.buyPrice > 0 && i.needed > 0);
+  const total = priced.reduce((sum, i) => sum + i.buyPrice * i.needed, 0);
+  const left = missing.length - priced.length;
+
+  if (!priced.length) {
+    line.textContent = tx('No price known for what is still missing.');
+    return line;
+  }
+
+  line.textContent = left
+    ? `${tx('Still to buy: at least {amount} at the cheapest known counters', { amount: money(total) })} · ${txn(left, '{count} line has no price or amount', '{count} lines have no price or amount')}`
+    : tx('Still to buy: about {amount} at the cheapest known counters', { amount: money(total) });
+  return line;
+}
+
+/**
+ * Several pinned lists as the one list a run buys for: what each still lacks,
+ * the same thing in the same unit added together. The destination is kept only
+ * when every list names the same one - two lists for two places say nothing
+ * about which to land at first.
+ */
+function pinnedRunJob(pinned) {
+  const items = [];
+  for (const job of pinned)
+    for (const item of job.items) {
+      if (item.have) continue;
+      const same = items.find((i) => i.name.toLowerCase() === item.name.toLowerCase() && (i.unit || '') === (item.unit || ''));
+      if (same) same.needed += item.needed;
+      else items.push({ ...item });
+    }
+
+  const places = new Set(pinned.map((j) => j.destinationId || j.destination || ''));
+  const shared = places.size === 1 ? pinned[0] : null;
+  return {
+    id: 'pinned',
+    title: pinned.map((j) => j.title).join(' + '),
+    destination: shared?.destination || null,
+    destinationId: shared?.destinationId || null,
+    items,
+  };
+}
+
+/** A line as the list box writes it, so an edit reads back the way it was typed. */
+function jobLineText(item) {
+  const amount = item.needed > 0 ? ` ${item.needed}${item.unit ? ` ${item.unit}` : ''}` : '';
+  // A note only parses after an amount, so a line with none writes nothing
+  // rather than a "0" the pilot never typed - and the note is then lost, which
+  // is the honest outcome of a line that never had an amount.
+  return `${item.name}${amount}${amount && item.note ? ` (${item.note})` : ''}`;
+}
+
+/**
+ * Rewrites a saved list in place: the title and the same one-line-per-thing
+ * box it was written in. Ticks survive on any line whose name is unchanged.
+ */
+async function editJob(job, card, lines) {
+  if (card.querySelector('.job-edit')) return;
+
+  // The catalogue keeps "Ship Ammunition - Size 3" whole; the list's own names
+  // keep whatever this list already holds whole as well.
+  catalogue ??= await getJson('/api/shopping/catalogue').catch(() => ({ commodities: [], items: [] }));
+  const known = [...catalogue.commodities, ...catalogue.items, ...job.items.map((i) => i.name)];
+
+  const form = el('form', 'job-form job-edit');
+  const title = document.createElement('input');
+  title.type = 'text';
+  title.value = job.title;
+  title.setAttribute('aria-label', tx('List title'));
+  const box = document.createElement('textarea');
+  box.rows = Math.max(3, job.items.length + 1);
+  box.value = `${job.items.map(jobLineText).join('\n')}\n`;
+  box.setAttribute('aria-label', tx('One line per thing, with an amount after it if there is one'));
+
+  const actions = el('div', 'job-form-actions');
+  const save = el('button', 'ghost', tx('Save changes'));
+  save.type = 'submit';
+  const cancel = el('button', 'ghost', tx('Cancel'));
+  cancel.type = 'button';
+  actions.append(save, cancel);
+  form.append(title, box, actions);
+
+  const close = () => { form.remove(); lines.hidden = false; };
+  cancel.addEventListener('click', close);
+  form.addEventListener('submit', async (e) => {
+    e?.preventDefault?.();
+    const items = parseJobItems(box.value, known);
+    if (!items.length) {
+      alertLine($('#jobs-alerts') || $('#jobs-list'), tx('A list needs at least one line. To get rid of it, use Delete.'));
+      return;
+    }
+
+    save.disabled = true;
+    const saved = await jobCall(`/api/jobs/${job.id}/edit`, { body: { title: title.value, items } });
+    save.disabled = false;
+    if (saved) loadJobList();
+  });
+
+  lines.hidden = true;
+  lines.after(form);
+  box.focus?.();
+}
+
 async function loadJobList() {
   const host = $('#jobs-list');
   const craftHost = $('#blueprint-jobs');
@@ -25360,6 +25673,19 @@ async function loadJobList() {
       tx('No builds planned. Pick a blueprint above, or hit Plan on Reference → Crafting.')));
   }
 
+  // Several lists pinned is usually one run buying for all of them, and Plan
+  // trip on each card made one flight plan per list.
+  const pinnedOpen = openLists.filter((j) => j.pinned && !j.imported);
+  if (pinnedOpen.length > 1) {
+    const bar = el('div', 'jobs-pinned-bar');
+    bar.append(el('span', null, txn(pinnedOpen.length, '{count} list on Now', '{count} lists on Now')));
+    const plan = el('button', 'ghost', tx('Plan one trip for them'));
+    plan.title = tx('Everything still missing from the pinned lists, as one flight plan');
+    plan.addEventListener('click', () => planShoppingTrip(pinnedRunJob(pinnedOpen), bar));
+    bar.append(plan);
+    host.append(bar);
+  }
+
   for (const job of jobs) {
     const card = el('article', job.done ? 'job-card done' : 'job-card');
     // An id to land on: a job named on Now or in a search opens here, at its card.
@@ -25401,13 +25727,7 @@ async function loadJobList() {
 
     where.addEventListener('change', async () => {
       const picked = pickedPlace(where);
-
-      await fetch(`/api/jobs/${job.id}/destination`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ place: picked.name, placeId: picked.id }),
-      });
-
+      await jobCall(`/api/jobs/${job.id}/destination`, { body: { place: picked.name, placeId: picked.id } });
       loadJobList();
     });
 
@@ -25422,8 +25742,10 @@ async function loadJobList() {
       ? tx('Showing on the Now page and in the overlay')
       : tx('Show this job on the Now page and in the overlay');
 
+    // A done list cannot be on Now, which hides it; marking one done unpins it.
+    pin.hidden = Boolean(job.done);
     pin.addEventListener('click', async () => {
-      await fetch(`/api/jobs/${job.id}/pin`, { method: 'POST' });
+      if (!await jobCall(`/api/jobs/${job.id}/pin`)) return;
       if (!job.pinned) {
         setContextFocus({
           kind: 'shopping',
@@ -25442,10 +25764,15 @@ async function loadJobList() {
 
     const toggle = el('button', 'ghost', job.done ? tx('Reopen') : tx('Mark done'));
     toggle.addEventListener('click', async () => {
-      await fetch(`/api/jobs/${job.id}/toggle`, { method: 'POST' });
+      await jobCall(`/api/jobs/${job.id}/toggle`);
       loadJobList();
     });
     head.append(toggle);
+
+    const edit = el('button', 'ghost', tx('Edit'));
+    edit.title = tx('Rename the list, or change, add and remove its lines');
+    edit.addEventListener('click', () => editJob(job, card, lines));
+    head.append(edit);
 
     // A list knows where its missing things are sold, which is a shopping trip
     // waiting to be flown - once the player has said which seller they meant.
@@ -25454,9 +25781,13 @@ async function loadJobList() {
     shop.addEventListener('click', () => planShoppingTrip(job, card));
     head.append(shop);
 
+    // Asked first, as deleting a flight plan is: a list is the pilot's own
+    // writing, and one stray click used to take all of it.
     const remove = el('button', 'ghost danger', tx('Delete'));
     remove.addEventListener('click', async () => {
-      await fetch(`/api/jobs/${job.id}`, { method: 'DELETE' });
+      if (typeof confirm === 'function'
+        && !confirm(tx('Delete the list “{title}” and its {count} lines?', { title: job.title, count: job.items.length }))) return;
+      await jobCall(`/api/jobs/${job.id}`, { method: 'DELETE' });
       loadJobList();
     });
     head.append(remove);
@@ -25466,8 +25797,14 @@ async function loadJobList() {
 
     card.append(jobProgress(job.haveCount, job.totalCount,
       tx('{done} of {total} in hand', { done: job.haveCount, total: job.totalCount })));
+    card.append(jobCost(job));
 
-    card.append(jobLines(job));
+    const lines = jobLines(job, async (item, tick) => {
+      tick.disabled = true;
+      if (await jobCall(`/api/jobs/${job.id}/got`, { body: { name: item.name } })) loadJobList();
+      else tick.disabled = false;
+    });
+    card.append(lines);
     (job.kind === 'craft' && craftHost ? craftHost : host).append(card);
   }
   landOnJobs();
@@ -25475,24 +25812,37 @@ async function loadJobList() {
 
 /**
  * Parses a written list into job items: "Hadanite 23", "Agricium 1.16 SCU",
- * or a bare name. Quantities are optional - a list of names is still a list.
+ * "Arrow x2", or a bare name. Quantities are optional - a list of names is
+ * still a list.
+ *
+ * The amount has to stand apart from the name, after a space. Until 1.2.44 it
+ * did not, so a name that ends in digits lost them: "JS-400" was saved as 400
+ * of "JS-", "FR-86" as 86 of "FR-", and the "x" that may precede an amount was
+ * eaten out of "Phoenix 2" ("Phoeni"). A name the catalogue knows is kept whole
+ * as well, because nine of them end in a spaced number ("Ship Ammunition -
+ * Size 3") and the picker writes exactly those.
+ *
+ * A bracket after the amount is a note on the line, not part of the name: the
+ * game's blueprints write "Hadanite 0.5 SCU (quality 500+)", which used to
+ * become one item named after the whole sentence, with no seller anywhere.
+ *
+ * @param known Names to keep whole whatever they end in; the catalogue's.
  */
-function parseJobItems(text) {
+function parseJobItems(text, known = catalogue ? [...catalogue.commodities, ...catalogue.items] : []) {
+  const whole = new Set(known.map((name) => name.toLowerCase()));
+
   return text.split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const match = line.match(/^(.*?)[\s·x×]*?([\d.]+)\s*(SCU|scu)?$/);
+      if (whole.has(line.toLowerCase())) return { name: line, needed: 0, unit: '' };
 
-      if (match && match[1].trim()) {
-        return {
-          name: match[1].replace(/[\s×x·]+$/, '').trim(),
-          needed: Number(match[2]) || 0,
-          unit: match[3] ? 'SCU' : '',
-        };
-      }
+      const match = line.match(/^(.*?\S)\s+[x×·]?\s*(\d+(?:\.\d+)?)\s*(SCU)?(?:\s*\(([^()]*)\))?$/i);
+      if (!match) return { name: line, needed: 0, unit: '' };
 
-      return { name: line, needed: 0, unit: '' };
+      const item = { name: match[1].trim(), needed: Number(match[2]) || 0, unit: match[3] ? 'SCU' : '' };
+      if (match[4]?.trim()) item.note = match[4].trim();
+      return item;
     });
 }
 
@@ -25654,10 +26004,10 @@ $('#job-form')?.addEventListener('submit', async (e) => {
 
   const picked = pickedPlace($('#job-place'));
 
-  await fetch('/api/jobs', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  // Cleared only once it is saved: a refused save used to empty the box and
+  // take what was typed with it.
+  const saved = await jobCall('/api/jobs', {
+    body: {
       title: $('#job-title').value,
       kind: 'list',
       items,
@@ -25665,8 +26015,10 @@ $('#job-form')?.addEventListener('submit', async (e) => {
       // The name is what the card shows; the id is what a plan draws with.
       destination: picked.name,
       destinationId: picked.id,
-    }),
+    },
+    failed: tx('The list did not save. What you typed is still here.'),
   });
+  if (!saved) return;
 
   $('#job-title').value = '';
   $('#job-items').value = '';
@@ -25797,31 +26149,59 @@ function checklistItemRow(list, item, compact = false) {
   return row;
 }
 
+/**
+ * The pinned checklists on Now, and so in the overlay.
+ *
+ * Several can be pinned (1.2.46). The card stays a glance the way the shopping
+ * card does: one list reads as it always did; several are grouped under their
+ * names, each cut to its share of five open tasks, and a list with every task
+ * done shrinks to its name and a tick.
+ */
 function renderPinnedChecklist(lists = checklists) {
   const card = $('#now-checklist-card');
 
   // Imported rows arrive with pinned forced false, so this cannot pick one up -
   // but Now is the one card where being wrong would be loudest, so it says so.
-  const list = lists.find((entry) => entry.pinned && !entry.imported);
+  const pinned = lists.filter((entry) => entry.pinned && !entry.imported);
   if (!card) return;
 
-  if (!list) {
+  if (!pinned.length) {
     card.hidden = true;
     return;
   }
 
-  $('#now-checklist-title').textContent = list.title;
-  const done = list.items.filter((item) => item.done).length;
+  const one = pinned.length === 1;
+  $('#now-checklist-title').textContent = one
+    ? pinned[0].title
+    : txn(pinned.length, '{count} pinned checklist', '{count} pinned checklists');
+
+  const total = pinned.reduce((sum, list) => sum + list.items.length, 0);
+  const done = pinned.reduce((sum, list) => sum + list.items.filter((item) => item.done).length, 0);
   const progress = $('#now-checklist-progress');
   progress.textContent = '';
-  progress.append(jobProgress(done, list.items.length, tx('{done} of {total} done', { done, total: list.items.length })));
+  progress.append(jobProgress(done, total, tx('{done} of {total} done', { done, total })));
 
   const host = $('#now-checklist-items');
   host.textContent = '';
-  const open = list.items.filter((item) => !item.done);
-  for (const item of open.slice(0, 5)) host.append(checklistItemRow(list, item, true));
-  if (open.length > 5) host.append(el('li', 'muted', tx('+{count} more', { count: open.length - 5 })));
-  if (!open.length) host.append(el('li', 'inward', tx('Everything is checked off.')));
+  const share = one ? 5 : Math.max(2, Math.floor(5 / pinned.length));
+
+  for (const list of pinned) {
+    const open = list.items.filter((item) => !item.done);
+
+    if (!one) {
+      const head = el('li', open.length ? 'now-checklist-group' : 'now-checklist-group inward');
+      head.append(el('span', 'strong', list.title));
+      head.append(el('span', 'muted', open.length
+        ? tx('{done} of {total} done', { done: list.items.length - open.length, total: list.items.length })
+        : tx('✓ all done')));
+      host.append(head);
+    } else if (!open.length) {
+      host.append(el('li', 'inward', tx('Everything is checked off.')));
+    }
+
+    for (const item of open.slice(0, share)) host.append(checklistItemRow(list, item, true));
+    if (open.length > share) host.append(el('li', 'muted', tx('+{count} more', { count: open.length - share })));
+  }
 
   $('#now-checklist-open').onclick = () => showView('checklists');
   card.hidden = false;
@@ -25959,7 +26339,9 @@ function renderChecklists(lists) {
     head.append(farm);
 
     const pin = el('button', list.pinned ? 'ghost on' : 'ghost', list.pinned ? tx('On Now') : tx('Pin to Now'));
-    pin.title = tx('Only one checklist is shown on Now and in the overlay');
+    pin.title = list.pinned
+      ? tx('Showing on the Now page and in the overlay')
+      : tx('Show this checklist on the Now page and in the overlay');
     pin.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}/pin`));
     head.append(pin);
     const remove = el('button', 'ghost danger', tx('Delete'));
@@ -37590,33 +37972,57 @@ async function maybeShowSetup() {
 let liveState = null;
 
 /**
- * Asks once whether the screen may be read live, when the server says it can
- * be and nobody has answered. "Not now" is an answer: it is kept, and the
- * question does not come back on the next start - the switch on the Log page
- * is where it is changed after that.
+ * Asks once, at start, what the app may do while the game runs: read the
+ * screen, identify the ship being targeted, listen for voice commands. Each
+ * is off unless ticked, and each part is shown only where it can work and
+ * has not been answered - a copy with no recogniser is never offered
+ * listening, and a pilot who answered about reading before targets were a
+ * question of their own (1.2.47) is asked about targets alone.
+ *
+ * "Leave them all off" is an answer: it is kept, and the question does not
+ * come back on the next start; Settings is where it is changed after that.
  */
 async function maybeAskLive() {
   if (isOverlay || isSnapshot) return;
-  let state;
-  try {
-    state = await getJson('/api/live');
-  } catch {
-    return;
-  }
-  if (!state.ask) return;
+  const [live, voice] = await Promise.all([
+    getJson('/api/live').catch(() => null),
+    getJson('/api/voice').catch(() => null),
+  ]);
+  const askLive = Boolean(live?.ask);
+  const askVoice = Boolean(voice?.ask);
+  if (!askLive && !askVoice) return;
 
   const panel = $('#live-ask');
   if (!panel) return;
+
+  const read = $('#live-ask-read');
+  const targets = $('#live-ask-targets');
+  const listen = $('#live-ask-voice');
+  $('#live-ask-reading').hidden = !askLive;
+  $('#live-ask-voice-row').hidden = !askVoice;
+
+  // A pilot who already said yes to reading sees it ticked: this asks about
+  // targets, it does not take the reading back.
+  read.checked = Boolean(live?.enabled);
+  targets.checked = false;
+  listen.checked = false;
+  const tie = () => {
+    targets.disabled = !read.checked;
+    if (!read.checked) targets.checked = false;
+  };
+  read.onchange = tie;
+  tie();
   panel.hidden = false;
 
-  const answer = async (enabled) => {
+  const answer = async (keep) => {
     $('#live-ask-yes').disabled = true;
     $('#live-ask-no').disabled = true;
     try {
-      await postLiveAnswer(enabled);
+      if (askLive) await postLiveAnswer(keep && read.checked, keep && read.checked && targets.checked);
+      if (askVoice) await postVoiceAnswer(keep && listen.checked);
       panel.hidden = true;
     } catch {
-      $('#live-ask-status').textContent = tx('The answer did not save. It is asked again next start, and the Log page has the switch.');
+      $('#live-ask-status').textContent = tx('The answer did not save. It is asked again next start, and Settings has the switches.');
       $('#live-ask-yes').disabled = false;
       $('#live-ask-no').disabled = false;
     }
@@ -37626,15 +38032,26 @@ async function maybeAskLive() {
   $('#live-ask-no').onclick = () => answer(false);
 }
 
-async function postLiveAnswer(enabled) {
+/** The reading answer, and the target one when the question offered it. */
+async function postLiveAnswer(enabled, targets = undefined) {
   const response = await fetch('/api/live', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled }),
+    body: JSON.stringify(targets === undefined ? { enabled } : { enabled, targets }),
   });
   if (!response.ok) throw new Error(`live answer ${response.status}`);
   liveState = await response.json();
   renderLiveScreen();
+}
+
+/** Listening on or off, which also records that the question was put. */
+async function postVoiceAnswer(enabled) {
+  const response = await fetch('/api/voice', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+  if (!response.ok) throw new Error(`voice answer ${response.status}`);
 }
 
 /** The switch and its status line on the Log page; hidden where the screen cannot be read. */
@@ -37671,6 +38088,11 @@ function renderLiveScreen() {
       $('#live-voice-mining').checked = state.voiceMining !== false;
       const missions = $('#live-voice-missions');
       if (missions) missions.checked = state.voiceMissions !== false;
+    }
+    const targetsRow = $('#live-targets-row');
+    if (targetsRow) {
+      targetsRow.hidden = !state.enabled;
+      $('#live-targets').checked = Boolean(state.targets);
     }
     const fights = $('#live-fights-row');
     if (fights) {
@@ -37928,6 +38350,29 @@ async function postLiveVoice(event, body) {
 
 $('#live-voice')?.addEventListener('change', (event) => postLiveVoice(event, { enabled: event.target.checked }));
 
+/**
+ * Identifying targets: its own agreement (1.2.47), posted on its own from the
+ * Log page or Settings, and never switched by the reading answer.
+ */
+async function postLiveTargets(event) {
+  try {
+    const response = await fetch('/api/live/targets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ on: event.target.checked }),
+    });
+    if (!response.ok) throw new Error(`targets ${response.status}`);
+    liveState = await response.json();
+    renderLiveScreen();
+  } catch {
+    event.target.checked = !event.target.checked;
+    const line = $('#live-status');
+    if (line) line.textContent = tx('The change did not save.');
+  }
+}
+$('#live-targets')?.addEventListener('change', postLiveTargets);
+$('#settings-live-targets')?.addEventListener('change', postLiveTargets);
+
 // The fight record: its own agreement, posted on its own.
 $('#live-fights')?.addEventListener('change', async (event) => {
   try {
@@ -38060,6 +38505,11 @@ function renderSettingsVoice() {
   if (voice) {
     voice.checked = Boolean(state.voice);
     voice.disabled = !state.enabled;
+  }
+  const targets = $('#settings-live-targets');
+  if (targets) {
+    targets.checked = Boolean(state.targets);
+    targets.disabled = !state.enabled;
   }
   const test = $('#settings-live-voice-test');
   if (test) test.disabled = !state.canSpeak;

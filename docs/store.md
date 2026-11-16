@@ -113,6 +113,13 @@ refuses the placeholders, should the file ever be reset to them.
 - **Logos are drawn at build time** from the 256-pixel frame of
   `src/Quantumwake.Overlay/app.ico`, so they cannot drift from the icon the exe
   and tray use.
+- **An App Execution Alias**, `QuantumWake.exe` (1.2.53). Claude Desktop
+  starts the app's MCP relay by command line (see [mcp.md](mcp.md)), and the
+  package folder's name carries the version, so a path copied into its config
+  would break at the next Store update; the alias in
+  `%LOCALAPPDATA%\Microsoft\WindowsApps` does not move. It is a declared
+  extension (`uap5:AppExecutionAlias`), not a capability. Not yet run from an
+  installed package.
 - **MakeAppx** comes from Microsoft's `Microsoft.Windows.SDK.BuildTools` NuGet
   package, pinned to 10.0.28000.2705 by version and by the SHA-512 NuGet's
   catalog publishes for it, so neither a developer machine nor the runner needs

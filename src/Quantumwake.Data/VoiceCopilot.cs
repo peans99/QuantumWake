@@ -80,6 +80,12 @@ public static class VoiceTrigger
 /// </param>
 /// <param name="Off">The commands switched off, by id; a list of what is off so a command added later is on.</param>
 /// <param name="Replies">Whether the copilot answers out loud.</param>
+/// <param name="Asked">
+/// Whether the pilot has answered, either way (1.2.47). Listening was only ever
+/// a switch on the Settings page, so most pilots never learned it was there;
+/// now the start question offers it once, and an answer of no is kept so it is
+/// not offered again. A pilot who had already turned it on counts as asked.
+/// </param>
 public sealed record VoiceCommandSettings(
     bool Enabled = false,
     string Trigger = VoiceTrigger.Phrase,
@@ -88,8 +94,12 @@ public sealed record VoiceCommandSettings(
     string? Key = null,
     double MinConfidence = 0.7,
     IReadOnlyList<string>? Off = null,
-    bool Replies = true)
+    bool Replies = true,
+    bool Asked = false)
 {
+    /// <summary>Whether the start question should offer listening: never answered, and never turned on.</summary>
+    public bool NeedsAsking => !Asked && !Enabled;
+
     public bool IsOff(string id) => Off?.Contains(id) == true;
 
     public bool UsesPhrase => Trigger is VoiceTrigger.Phrase or VoiceTrigger.Both;

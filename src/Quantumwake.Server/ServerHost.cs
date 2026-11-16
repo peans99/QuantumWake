@@ -215,6 +215,8 @@ public static partial class ServerHost
         // Voice commands: its own switch, off until turned on, and the only
         // part of the app that presses keys in the game.
         builder.Services.AddSingleton<VoiceCommandStore>();
+        builder.Services.AddSingleton<McpSettingsStore>();
+        builder.Services.AddSingleton<McpCallLog>();
         if (listener is not null) builder.Services.AddSingleton(listener);
         if (keyboard is not null) builder.Services.AddSingleton(keyboard);
         builder.Services.AddSingleton<VoiceCommandService>();
@@ -817,6 +819,7 @@ public static partial class ServerHost
 
         ControlsEndpoints.Map(app, install);
         VoiceCommandEndpoints.Map(app);
+        McpEndpoints.Map(app);
         StreamDeckProfiles.Map(app, install);
         MapDataRead(app, install);
         MapModels(app, install);
@@ -2962,6 +2965,14 @@ public static partial class ServerHost
                     // Garage line open until the pilot resolves it instead.
                     var needsLoosePart = !ShoppingAvailability.CountsInventorySighting(job.Source);
 
+                    // A sighting is presence, never a count - stash listings
+                    // record that a thing was there, and removals are never
+                    // logged - so it can close a line for one of something and
+                    // nothing more. "23 Hadanite" with one stone seen used to
+                    // read as in hand.
+                    var countable = item.Needed <= 1 && !string.Equals(item.Unit, "SCU", StringComparison.OrdinalIgnoreCase);
+                    var proven = inventorySighting && !needsLoosePart && countable;
+
                     // Where to get what is missing: a commodity has a cheapest
                     // terminal, an item has a shop.
                     var commodity = uex.Best(item.Name);
@@ -2985,10 +2996,13 @@ public static partial class ServerHost
                         item.Name,
                         item.Needed,
                         item.Unit,
-                        have = inventorySighting && !needsLoosePart,
+                        item.Note,
+                        // The pilot's tick, or what the logs can prove.
+                        have = item.Got || proven,
+                        got = item.Got,
                         where,
                         wornNow = worn.Contains(item.Name) && !needsLoosePart,
-                        inventoryUnconfirmed = inventorySighting && needsLoosePart,
+                        inventoryUnconfirmed = inventorySighting && !item.Got && !proven,
                         buyPrice,
                         buyAt
                     };
@@ -3241,14 +3255,30 @@ public static partial class ServerHost
 
         // One thing added from a catalogue page, into whichever list the
         // player is currently filling.
-        app.MapPost("/api/jobs/collect", (JobStore jobs, JobItem body) =>
+        app.MapPost("/api/jobs/collect", (JobStore jobs, CollectRequest body) =>
         {
-            var job = jobs.Collect(body);
+            if (string.IsNullOrWhiteSpace(body.Name))
+                return Results.BadRequest(new { trouble = "nothing named to add" });
+
+            var job = jobs.Collect(new JobItem(body.Name.Trim(), body.Needed, body.Unit ?? ""), body.JobId);
             return Results.Ok(new { job.Id, job.Title });
         });
 
         app.MapPost("/api/jobs/{id}/toggle", (string id, JobStore jobs) =>
             jobs.Toggle(id) ? Results.Ok(new { id }) : Results.NotFound());
+
+        // A saved list rewritten from its card: title and lines together, the
+        // way it was first written. Nothing left means delete it instead.
+        app.MapPost("/api/jobs/{id}/edit", (string id, JobStore jobs, JobEditRequest body) =>
+            body.Items is not { Count: > 0 }
+                ? Results.BadRequest(new { trouble = "a list needs at least one line" })
+                : jobs.Edit(id, body.Title, body.Items) ? Results.Ok(new { id }) : Results.NotFound());
+
+        // The pilot saying one line is in hand, which the logs often cannot.
+        app.MapPost("/api/jobs/{id}/got", (string id, JobStore jobs, JobLineRequest? body) =>
+            body?.Name is { Length: > 0 } name && jobs.ToggleGot(id, name)
+                ? Results.Ok(new { id, name })
+                : Results.NotFound());
 
         app.MapPost("/api/jobs/{id}/pin", (string id, JobStore jobs) =>
             jobs.TogglePin(id) ? Results.Ok(new { id }) : Results.NotFound());
@@ -3871,7 +3901,16 @@ public static partial class ServerHost
         {
             // A yes on a copy that cannot read the screen is kept as a no:
             // nothing should come on later, on another machine, unasked.
-            live.Answer(answer.Enabled && service.Available);
+            var on = answer.Enabled && service.Available;
+            live.Answer(on, answer.Targets is { } targets ? targets && on : null);
+            return Results.Ok(service.Describe(live));
+        });
+
+        // Identifying targets, from Settings and the Log page: its own yes
+        // (1.2.47), never turned on by the reading switch or anything else.
+        app.MapPost("/api/live/targets", (LiveTargets body, LiveScreenStore live, LiveScreenService service) =>
+        {
+            live.SetTargets(body.On);
             return Results.Ok(service.Describe(live));
         });
 
@@ -5617,11 +5656,11 @@ static Dictionary<string, List<string>> HeldPlaces(LibraryStats stats)
     return held;
 }
 
-/// <summary>An exact stash name, else anything containing it - "Hadanite" should find "Hadanite (Raw)".</summary>
+/// <summary>An exact stash name, else one <see cref="HeldNames.Matches"/> accepts - "Hadanite" finds "Hadanite (Raw)".</summary>
 static List<string> HeldWhere(Dictionary<string, List<string>> held, string name) =>
     held.TryGetValue(name, out var exact)
         ? exact
-        : held.Where(h => h.Key.Contains(name, StringComparison.OrdinalIgnoreCase))
+        : held.Where(h => HeldNames.Matches(h.Key, name))
             .SelectMany(h => h.Value)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -6350,9 +6389,13 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
             .Select(i => i.Name)
             .ToList();
 
+        // The same matching as the Shopping card, so the briefing and the list
+        // never disagree about whether a line is still to buy.
         bool InHand(string name) => worn.Contains(name, StringComparer.OrdinalIgnoreCase)
-            || held.Any(h => h.Equals(name, StringComparison.OrdinalIgnoreCase)
-                || h.Contains(name, StringComparison.OrdinalIgnoreCase));
+            || held.Any(h => HeldNames.Matches(h, name));
+
+        // A sighting proves one of a thing, never how many - as on the card.
+        static bool Countable(JobItem i) => i.Needed <= 1 && !string.Equals(i.Unit, "SCU", StringComparison.OrdinalIgnoreCase);
 
         bool AtHere(string terminal)
         {
@@ -6365,7 +6408,8 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
         var shopping = new List<BriefingShopping>();
 
         foreach (var job in jobs.All().Where(j => !j.Done))
-        foreach (var item in job.Items.Where(i => !InHand(i.Name)))
+        foreach (var item in job.Items.Where(i => !i.Got && !(Countable(i)
+            && ShoppingAvailability.CountsInventorySighting(job.Source) && InHand(i.Name))))
         {
             var commodity = uex.Market(item.Name)
                 .Where(row => row.Buy > 0 && AtHere(row.Terminal))
@@ -6791,6 +6835,18 @@ public sealed record JobRequest(
     List<JobItem>? Items,
     string? Destination = null,
     string? DestinationId = null);
+
+/// <summary>Body of POST /api/jobs/{id}/edit: the title and every line, as rewritten.</summary>
+public sealed record JobEditRequest(string? Title, List<JobItem>? Items);
+
+/// <summary>Body of POST /api/jobs/{id}/got: the line, by name.</summary>
+public sealed record JobLineRequest(string? Name);
+
+/// <summary>
+/// Body of POST /api/jobs/collect: one thing, and optionally the list to put
+/// it on. With no list named it goes where <see cref="JobStore.Collect"/> says.
+/// </summary>
+public sealed record CollectRequest(string Name, double Needed, string? Unit = null, string? JobId = null);
 
 /// <summary>Body of POST /api/jobs/{id}/destination. Both null clears it.</summary>
 public sealed record DestinationRequest(string? Place, string? PlaceId);

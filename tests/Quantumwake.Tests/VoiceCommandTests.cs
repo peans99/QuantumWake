@@ -493,4 +493,28 @@ public class VoiceCommandTests
             Directory.Delete(folder, recursive: true);
         }
     }
+
+    /// <summary>
+    /// Listening is offered once at start (1.2.47): a new install is asked, an
+    /// answer of no is kept so it is not asked again, and a pilot who had
+    /// already turned it on is never asked.
+    /// </summary>
+    [Fact]
+    public void Listening_is_asked_once_and_never_of_a_pilot_who_turned_it_on()
+    {
+        Assert.True(new VoiceCommandSettings().NeedsAsking);
+        Assert.False(new VoiceCommandSettings(Asked: true).NeedsAsking);
+        Assert.False(new VoiceCommandSettings(Enabled: true).NeedsAsking);
+
+        var folder = Directory.CreateTempSubdirectory("qw-voice-").FullName;
+        try
+        {
+            new VoiceCommandStore(folder).Change(s => s with { Asked = true });
+            Assert.False(new VoiceCommandStore(folder).Current.NeedsAsking);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
 }
