@@ -422,7 +422,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.51
+### 1.2.52
+
+- **Ready-made requests for your assistant.** Claude and other MCP clients
+  now offer three from Quantum Wake by name: **Plan a trade run for my
+  ship**, **What should I fit on this ship** and **Debrief my last session**.
+  Each walks the assistant through the right lookups and asks it to say what
+  it could not find rather than guess. They follow your settings: one that
+  needs a part of your data you keep from assistants is not offered, and
+  saving a plan or a list is only suggested when you allow changes.
 
 - **Choose what an assistant may read.** Under Settings → AI assistants,
   your own data is now split into parts, each with its own box: sessions and

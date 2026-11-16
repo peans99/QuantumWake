@@ -106,6 +106,41 @@ Added in 1.2.51, behind a switch of its own that starts off:
 | --- | --- |
 | `my_crew` | `/api/crew` and `/api/crew/ships`: handles, sessions together, first and last seen, ships shared - a floor, as the Crew page says |
 
+## Prompts
+
+Since 1.2.52 the server offers prompts as well as tools: ready-made requests
+a client shows by name. `McpPrompts.cs`:
+
+| Prompt | Arguments | Needs |
+| --- | --- | --- |
+| `plan_trade_run` - Plan a trade run for my ship | ship, budget, from | nothing: without Ships it asks the pilot which ship, then reads `ship_details` |
+| `fit_my_ship` - What should I fit on this ship | ship, goal | Ships |
+| `debrief_last_session` - Debrief my last session | none | Sessions; contracts and ledger steps only with their areas open |
+
+A prompt is instructions, not data: it tells the assistant which tools to call
+and in what order, and the reads go through `tools/call`, where they are
+checked against the switches and logged like any other. Pasting tool answers
+into the prompt would have failed silently inside `prompts/get` when an area
+was closed or a feed slow, and left no trace in the call log.
+
+Each message is written against the switches as they stand. A prompt whose
+areas are closed is not listed, and asked for anyway it is a protocol error
+naming the area. A step needing a closed area is dropped or becomes a
+question for the pilot. Saving (`create_flight_plan`, `create_shopping_list`)
+is offered only with changes allowed, and then only on the pilot's yes. A
+test builds every prompt under all 128 ways the six areas and the changes
+switch can stand, and fails if a message names a tool those switches do not
+offer: a model sent to a tool it was not given tries the call regardless.
+
+Measured on 2026-11-16 against a copy of the data: `prompts/get` for
+`plan_trade_run` with ship "Drake Cutter", handed to Claude Code (Haiku) as
+the user's message, led to `ship_details` (4 SCU), `trade_routes` and
+`find_places`. It answered with two routes, said the prices were UEX's
+reports, flagged a sell price 29 hours old and, with changes off, listed the
+stops rather than saving them. What was not checked: a client's own prompt
+menu. Claude Code's `-p` mode does not expand `/mcp__quantumwake__...` (2.1.325
+sent it to the model as text), and the interactive menu was not driven here.
+
 ## Areas
 
 What the pilot owns is split into parts, each a box in Settings under the
@@ -183,7 +218,7 @@ names.
 
 ## Not done
 
-- No resources or prompts: tools only.
+- No resources: tools and prompts only.
 - No event stream or server-sent notifications; nothing here needs to push.
 - Claude Desktop needs a local stdio server or a remote connector, and this is
   neither; Claude Code, Codex and other Streamable HTTP clients work.

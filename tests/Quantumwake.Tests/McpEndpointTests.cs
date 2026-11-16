@@ -411,6 +411,128 @@ public class McpPilotToolTests : IClassFixture<ServerUnderTest>, IAsyncLifetime
         lists.EnumerateArray().Single(l => l.GetProperty("id").GetString() == id);
 }
 
+/// <summary>
+/// The ready-made prompts (1.2.52): offered only where the areas they need are
+/// open, and never naming a tool the assistant was not given.
+/// </summary>
+[Collection("server")]
+public class McpPromptTests : IClassFixture<ServerUnderTest>, IAsyncLifetime
+{
+    private readonly ServerUnderTest _server;
+
+    public McpPromptTests(ServerUnderTest server) => _server = server;
+
+    public async Task InitializeAsync() =>
+        await _server.Posted("/api/mcp", new { enabled = true, allowChanges = false, areas = McpEndpointTests.DefaultAreas });
+
+    public async Task DisposeAsync() => await _server.Posted("/api/mcp", new { enabled = false, areas = McpEndpointTests.DefaultAreas });
+
+    private async Task<System.Text.Json.JsonElement> Rpc(string method, object? parameters = null) =>
+        await _server.Posted("/mcp", new { jsonrpc = "2.0", id = 4, method, @params = parameters ?? new { } });
+
+    private async Task<List<string>> PromptNames() =>
+        [.. (await Rpc("prompts/list")).GetProperty("result").GetProperty("prompts").EnumerateArray()
+            .Select(p => p.GetProperty("name").GetString()!)];
+
+    private async Task<string> Message(string name, object? arguments = null) =>
+        (await Rpc("prompts/get", new { name, arguments = arguments ?? new { } }))
+            .GetProperty("result").GetProperty("messages")[0].GetProperty("content").GetProperty("text").GetString()!;
+
+    [Fact]
+    public async Task Initialize_says_there_are_prompts()
+    {
+        var result = (await Rpc("initialize", new { protocolVersion = "2025-06-18", capabilities = new { }, clientInfo = new { name = "t", version = "1" } }))
+            .GetProperty("result");
+
+        Assert.True(result.GetProperty("capabilities").TryGetProperty("prompts", out _));
+    }
+
+    [Fact]
+    public async Task All_three_are_offered_with_the_default_areas()
+    {
+        Assert.Equal(["plan_trade_run", "fit_my_ship", "debrief_last_session"], await PromptNames());
+    }
+
+    [Fact]
+    public async Task A_prompt_whose_area_is_closed_is_not_offered_and_says_why_if_asked()
+    {
+        await _server.Posted("/api/mcp", new { areas = new Dictionary<string, bool> { ["ships"] = false } });
+
+        Assert.DoesNotContain("fit_my_ship", await PromptNames());
+        var error = (await Rpc("prompts/get", new { name = "fit_my_ship" })).GetProperty("error");
+        Assert.Equal(-32602, error.GetProperty("code").GetInt32());
+        Assert.Contains("Ships, gear and stashes", error.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task The_trade_run_takes_the_ship_and_budget_and_offers_to_save_only_with_changes_allowed()
+    {
+        var readOnly = await Message("plan_trade_run", new { ship = "Drake Caterpillar", budget = "250000" });
+        Assert.Contains("Drake Caterpillar", readOnly);
+        Assert.Contains("250000 aUEC", readOnly);
+        Assert.DoesNotContain("create_flight_plan", readOnly);
+        Assert.Contains("Changes are not allowed", readOnly);
+
+        await _server.Posted("/api/mcp", new { allowChanges = true });
+        Assert.Contains("create_flight_plan", await Message("plan_trade_run"));
+    }
+
+    [Fact]
+    public async Task The_debrief_leaves_out_money_when_money_is_closed()
+    {
+        Assert.Contains("my_ledger", await Message("debrief_last_session"));
+
+        await _server.Posted("/api/mcp", new { areas = new Dictionary<string, bool> { ["money"] = false } });
+        var text = await Message("debrief_last_session");
+        Assert.DoesNotContain("my_ledger", text);
+        Assert.Contains("recent_sessions", text);
+    }
+
+    [Fact]
+    public async Task Getting_a_prompt_is_in_the_call_log()
+    {
+        await Message("debrief_last_session");
+
+        Assert.Equal("debrief_last_session", (await _server.Get("/api/mcp")).GetProperty("calls")[0].GetProperty("tool").GetString());
+    }
+
+    /// <summary>
+    /// Every way the switches can stand, every prompt, with and without its
+    /// arguments: a tool named in the message is one these switches offer.
+    /// A prompt that sends the model to a tool it was not given reads as a
+    /// fault, and the model tries the call regardless.
+    /// </summary>
+    [Fact]
+    public void No_prompt_names_a_tool_the_switches_do_not_offer()
+    {
+        var keys = McpArea.All.Select(a => a.Key).ToArray();
+        var names = Quantumwake.Server.McpTools.All.Select(t => t.Name).ToList();
+        var checkedCount = 0;
+
+        for (var mask = 0; mask < 1 << keys.Length; mask++)
+            foreach (var changes in new[] { false, true })
+            {
+                var settings = new McpSettings(true, changes, null, [.. keys.Where((_, i) => (mask & (1 << i)) != 0)]);
+                var open = Quantumwake.Server.McpTools.OpenUnder(settings).Select(t => t.Name).ToHashSet();
+
+                foreach (var prompt in Quantumwake.Server.McpPrompts.OpenUnder(settings))
+                    foreach (var args in new[]
+                    {
+                        new Dictionary<string, string>(),
+                        prompt.Arguments.ToDictionary(a => a.Name, a => "Avenger Titan"),
+                    })
+                    {
+                        var text = prompt.Build(args, settings);
+                        foreach (var name in names.Where(n => System.Text.RegularExpressions.Regex.IsMatch(text, $@"{n}")))
+                            Assert.True(open.Contains(name), $"{prompt.Name} names {name}, which is not offered under mask {mask}, changes {changes}");
+                        checkedCount++;
+                    }
+            }
+
+        Assert.True(checkedCount > 300);
+    }
+}
+
 /// <summary>The switches themselves.</summary>
 public sealed class McpSettingsTests : IDisposable
 {

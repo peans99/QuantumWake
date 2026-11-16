@@ -21,8 +21,9 @@ namespace Quantumwake.Server;
 /// the call log.
 /// </para>
 /// <para>
-/// Written by hand rather than on an SDK. The protocol surface used is four
-/// methods - initialize, ping, tools/list, tools/call - and the app's rule
+/// Written by hand rather than on an SDK. The protocol surface used is six
+/// methods - initialize, ping, tools/list, tools/call, and since 1.2.52
+/// prompts/list and prompts/get - and the app's rule
 /// for a dependency is that it earns its place; the SDK's is a moving target
 /// still in preview when this was written, and this is a page of code.
 /// </para>
@@ -111,6 +112,7 @@ public static class McpEndpoints
                 tools = McpTools.All.Where(t => t.Area == a.Key && !t.Writes).Select(t => t.Name),
             }),
             tools = McpTools.All.Select(t => new { t.Name, t.Title, t.Writes, t.Area, open = t.OpenUnder(s) }),
+            prompts = McpPrompts.All.Select(p => new { p.Name, p.Title, open = p.OpenUnder(s) }),
             calls = log.Recent(),
         };
     }
@@ -220,7 +222,11 @@ public static class McpEndpoints
                 return Result(id, new JsonObject
                 {
                     ["protocolVersion"] = asked is not null && Supported.Contains(asked) ? asked : Latest,
-                    ["capabilities"] = new JsonObject { ["tools"] = new JsonObject { ["listChanged"] = false } },
+                    ["capabilities"] = new JsonObject
+                    {
+                        ["tools"] = new JsonObject { ["listChanged"] = false },
+                        ["prompts"] = new JsonObject { ["listChanged"] = false },
+                    },
                     ["serverInfo"] = new JsonObject
                     {
                         ["name"] = "quantum-wake",
@@ -244,6 +250,17 @@ public static class McpEndpoints
 
             case "tools/call":
                 return await Call(id, parameters, store, log, api, token);
+
+            case "prompts/list":
+            {
+                var prompts = new JsonArray();
+                foreach (var prompt in McpPrompts.OpenUnder(api.Settings))
+                    prompts.Add(prompt.Describe());
+                return Result(id, new JsonObject { ["prompts"] = prompts });
+            }
+
+            case "prompts/get":
+                return Prompt(id, parameters, log, api);
 
             default:
                 return Error(id, -32601, $"Quantum Wake does not answer '{Clip(method, 60)}'.");
@@ -296,6 +313,51 @@ public static class McpEndpoints
             log.Add(new McpCall(DateTimeOffset.UtcNow, name, "failed", tool.Writes, log.Client));
             return ToolResult(id, $"Quantum Wake could not answer that just now: {e.Message}", isError: true);
         }
+    }
+
+    /// <summary>
+    /// A prompt's message, written against the switches as they are now. A
+    /// closed or unknown one is a protocol error, as the specification has it,
+    /// worded so a client that shows the message shows the reason.
+    /// </summary>
+    private static JsonNode Prompt(JsonNode? id, JsonElement parameters, McpCallLog log, McpApi api)
+    {
+        if (parameters.ValueKind != JsonValueKind.Object
+            || !parameters.TryGetProperty("name", out var nameElement) || nameElement.ValueKind != JsonValueKind.String)
+            return Error(id, -32602, "prompts/get needs a prompt name.");
+
+        var name = nameElement.GetString()!;
+        var prompt = McpPrompts.All.FirstOrDefault(p => p.Name == name);
+        if (prompt is null)
+            return Error(id, -32602, $"There is no prompt called '{Clip(name, 60)}'.");
+        if (!prompt.OpenUnder(api.Settings))
+        {
+            var closed = McpArea.All.Where(a => prompt.Needs.Contains(a.Key) && !api.Settings.Allows(a.Key)).Select(a => a.Title);
+            log.Add(new McpCall(DateTimeOffset.UtcNow, name, "refused: area off", false, log.Client));
+            return Error(id, -32602, $"'{prompt.Title}' needs {string.Join(" and ", closed)}, which the pilot keeps from assistants.");
+        }
+
+        // Arguments are text by the specification; anything else, or blank, is left out.
+        var args = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (parameters.TryGetProperty("arguments", out var given) && given.ValueKind == JsonValueKind.Object)
+            foreach (var arg in prompt.Arguments)
+                if (given.TryGetProperty(arg.Name, out var v) && v.ValueKind == JsonValueKind.String
+                    && v.GetString() is { } s && !string.IsNullOrWhiteSpace(s))
+                    args[arg.Name] = Clip(s.Trim(), 120)!;
+
+        if (prompt.Arguments.FirstOrDefault(x => x.Required && !args.ContainsKey(x.Name)) is { } missing)
+            return Error(id, -32602, $"'{prompt.Title}' needs '{missing.Name}'.");
+
+        log.Add(new McpCall(DateTimeOffset.UtcNow, name, "ok", false, log.Client));
+        return Result(id, new JsonObject
+        {
+            ["description"] = prompt.Description,
+            ["messages"] = new JsonArray(new JsonObject
+            {
+                ["role"] = "user",
+                ["content"] = new JsonObject { ["type"] = "text", ["text"] = prompt.Build(args, api.Settings) },
+            }),
+        });
     }
 
     private static JsonObject ToolResult(JsonNode? id, string text, bool isError) => Result(id, new JsonObject

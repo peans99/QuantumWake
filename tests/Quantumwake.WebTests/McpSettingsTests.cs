@@ -77,6 +77,18 @@ public sealed class McpSettingsTests
         Assert.Equal("""{"areas":{"money":false}}""", page.BodyOf("/api/mcp"));
     }
 
+    [Fact]
+    public void A_prompt_in_the_log_is_named_by_its_title()
+    {
+        var page = new Page();
+        page.Serve("/api/mcp", On(changes: false)
+            .Replace("\"calls\":[]", "\"prompts\":[{\"name\":\"debrief_last_session\",\"title\":\"Debrief my last session\",\"open\":true}],"
+                + "\"calls\":[{\"at\":\"2026-11-16T10:00:00Z\",\"tool\":\"debrief_last_session\",\"outcome\":\"ok\",\"wrote\":false}]"));
+        page.Do("await loadMcp();");
+
+        Assert.Contains("Debrief my last session", page.NodeText("#mcp-call-list"));
+    }
+
     private static string Box(string area) =>
         $"__dom.node('#mcp-area-list').descendants().find(n => n.tagName === 'input' && n.dataset.area === '{area}')";
 

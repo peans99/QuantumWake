@@ -21167,7 +21167,7 @@ function renderMcp() {
   const list = $('#mcp-call-list');
   list.textContent = '';
   for (const call of calls.slice(0, 12)) {
-    const tool = tools.find((t) => t.name === call.tool);
+    const tool = tools.find((t) => t.name === call.tool) || (state?.prompts || []).find((p) => p.name === call.tool);
     const li = el('li', call.wrote ? 'mcp-call wrote' : 'mcp-call');
     li.append(el('span', 'muted', shortTimeOf(call.at)));
     li.append(el('span', null, call.tool === 'connect' ? tx('connected') : tool?.title || call.tool));
