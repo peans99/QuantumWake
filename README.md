@@ -422,7 +422,21 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.46
+### 1.2.47
+
+- **You choose, once, what the app does while you play.** The start question
+  that asked only about reading the screen now offers three choices, each off
+  unless you tick it: reading the game's screen, identifying the ship you
+  target, and listening for voice commands. "Leave them all off" is kept as
+  an answer and not asked again. Each can be changed later in Settings →
+  Voice & callouts.
+- **Identifying targets is its own choice.** A yes to reading the screen used
+  to identify targets too, although the question only mentioned the mining
+  scan panel. If you said yes before, the app asks about targets at the next
+  start and reads none until you answer. There is also a switch for it under
+  Read from the game on the Log page.
+- **Voice commands are offered at start** instead of waiting to be found in
+  Settings. If you already turned them on, you are not asked.
 
 - **Several checklists can be pinned to Now at once,** as shopping lists can
   since 1.2.43. Pinning a second checklist used to unpin the first. Now and

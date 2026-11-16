@@ -37841,33 +37841,57 @@ async function maybeShowSetup() {
 let liveState = null;
 
 /**
- * Asks once whether the screen may be read live, when the server says it can
- * be and nobody has answered. "Not now" is an answer: it is kept, and the
- * question does not come back on the next start - the switch on the Log page
- * is where it is changed after that.
+ * Asks once, at start, what the app may do while the game runs: read the
+ * screen, identify the ship being targeted, listen for voice commands. Each
+ * is off unless ticked, and each part is shown only where it can work and
+ * has not been answered - a copy with no recogniser is never offered
+ * listening, and a pilot who answered about reading before targets were a
+ * question of their own (1.2.47) is asked about targets alone.
+ *
+ * "Leave them all off" is an answer: it is kept, and the question does not
+ * come back on the next start; Settings is where it is changed after that.
  */
 async function maybeAskLive() {
   if (isOverlay || isSnapshot) return;
-  let state;
-  try {
-    state = await getJson('/api/live');
-  } catch {
-    return;
-  }
-  if (!state.ask) return;
+  const [live, voice] = await Promise.all([
+    getJson('/api/live').catch(() => null),
+    getJson('/api/voice').catch(() => null),
+  ]);
+  const askLive = Boolean(live?.ask);
+  const askVoice = Boolean(voice?.ask);
+  if (!askLive && !askVoice) return;
 
   const panel = $('#live-ask');
   if (!panel) return;
+
+  const read = $('#live-ask-read');
+  const targets = $('#live-ask-targets');
+  const listen = $('#live-ask-voice');
+  $('#live-ask-reading').hidden = !askLive;
+  $('#live-ask-voice-row').hidden = !askVoice;
+
+  // A pilot who already said yes to reading sees it ticked: this asks about
+  // targets, it does not take the reading back.
+  read.checked = Boolean(live?.enabled);
+  targets.checked = false;
+  listen.checked = false;
+  const tie = () => {
+    targets.disabled = !read.checked;
+    if (!read.checked) targets.checked = false;
+  };
+  read.onchange = tie;
+  tie();
   panel.hidden = false;
 
-  const answer = async (enabled) => {
+  const answer = async (keep) => {
     $('#live-ask-yes').disabled = true;
     $('#live-ask-no').disabled = true;
     try {
-      await postLiveAnswer(enabled);
+      if (askLive) await postLiveAnswer(keep && read.checked, keep && read.checked && targets.checked);
+      if (askVoice) await postVoiceAnswer(keep && listen.checked);
       panel.hidden = true;
     } catch {
-      $('#live-ask-status').textContent = tx('The answer did not save. It is asked again next start, and the Log page has the switch.');
+      $('#live-ask-status').textContent = tx('The answer did not save. It is asked again next start, and Settings has the switches.');
       $('#live-ask-yes').disabled = false;
       $('#live-ask-no').disabled = false;
     }
@@ -37877,15 +37901,26 @@ async function maybeAskLive() {
   $('#live-ask-no').onclick = () => answer(false);
 }
 
-async function postLiveAnswer(enabled) {
+/** The reading answer, and the target one when the question offered it. */
+async function postLiveAnswer(enabled, targets = undefined) {
   const response = await fetch('/api/live', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled }),
+    body: JSON.stringify(targets === undefined ? { enabled } : { enabled, targets }),
   });
   if (!response.ok) throw new Error(`live answer ${response.status}`);
   liveState = await response.json();
   renderLiveScreen();
+}
+
+/** Listening on or off, which also records that the question was put. */
+async function postVoiceAnswer(enabled) {
+  const response = await fetch('/api/voice', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+  if (!response.ok) throw new Error(`voice answer ${response.status}`);
 }
 
 /** The switch and its status line on the Log page; hidden where the screen cannot be read. */
@@ -37922,6 +37957,11 @@ function renderLiveScreen() {
       $('#live-voice-mining').checked = state.voiceMining !== false;
       const missions = $('#live-voice-missions');
       if (missions) missions.checked = state.voiceMissions !== false;
+    }
+    const targetsRow = $('#live-targets-row');
+    if (targetsRow) {
+      targetsRow.hidden = !state.enabled;
+      $('#live-targets').checked = Boolean(state.targets);
     }
     const fights = $('#live-fights-row');
     if (fights) {
@@ -38179,6 +38219,29 @@ async function postLiveVoice(event, body) {
 
 $('#live-voice')?.addEventListener('change', (event) => postLiveVoice(event, { enabled: event.target.checked }));
 
+/**
+ * Identifying targets: its own agreement (1.2.47), posted on its own from the
+ * Log page or Settings, and never switched by the reading answer.
+ */
+async function postLiveTargets(event) {
+  try {
+    const response = await fetch('/api/live/targets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ on: event.target.checked }),
+    });
+    if (!response.ok) throw new Error(`targets ${response.status}`);
+    liveState = await response.json();
+    renderLiveScreen();
+  } catch {
+    event.target.checked = !event.target.checked;
+    const line = $('#live-status');
+    if (line) line.textContent = tx('The change did not save.');
+  }
+}
+$('#live-targets')?.addEventListener('change', postLiveTargets);
+$('#settings-live-targets')?.addEventListener('change', postLiveTargets);
+
 // The fight record: its own agreement, posted on its own.
 $('#live-fights')?.addEventListener('change', async (event) => {
   try {
@@ -38311,6 +38374,11 @@ function renderSettingsVoice() {
   if (voice) {
     voice.checked = Boolean(state.voice);
     voice.disabled = !state.enabled;
+  }
+  const targets = $('#settings-live-targets');
+  if (targets) {
+    targets.checked = Boolean(state.targets);
+    targets.disabled = !state.enabled;
   }
   const test = $('#settings-live-voice-test');
   if (test) test.disabled = !state.canSpeak;

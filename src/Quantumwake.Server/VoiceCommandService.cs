@@ -291,6 +291,9 @@ public sealed class VoiceCommandService(
             state,
             learning,
             settings.Enabled,
+            // The start question's cue (1.2.47): a copy that could listen and
+            // has never been told whether to.
+            ask = Available && settings.NeedsAsking,
             settings.Trigger,
             settings.Button,
             settings.Key,
@@ -367,6 +370,9 @@ public static class VoiceCommandEndpoints
                     // A yes on a copy that cannot listen or press is kept as a no,
                     // so nothing comes on later, on another machine, unasked.
                     Enabled = body.Enabled is { } e ? e && service.Available : s.Enabled,
+                    // Any answer about listening, from the start question or
+                    // Settings, means the question has been put.
+                    Asked = s.Asked || body.Enabled is not null,
                     Trigger = body.Trigger ?? s.Trigger,
                     Key = body.Key is null ? s.Key : body.Key.Length == 0 ? null : body.Key,
                     ButtonDevice = body.ClearButton == true ? null : body.Key is { Length: > 0 } ? null : s.ButtonDevice,

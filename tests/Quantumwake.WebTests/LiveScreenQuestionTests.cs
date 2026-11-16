@@ -41,16 +41,105 @@ public class LiveScreenQuestionTests
         Assert.True(page.Truth("__dom.node('#live-ask').hidden"));
     }
 
+    /// <summary>Every choice is off unless ticked (1.2.47): saving with nothing ticked is a no.</summary>
     [Fact]
-    public void Turning_it_on_posts_a_yes()
+    public void Saving_with_nothing_ticked_posts_a_no()
+    {
+        var page = Asked();
+        page.Serve("/api/live", Answered(false));
+        page.Do("await __dom.node('#live-ask-yes').onclick();");
+
+        Assert.Equal("""{"enabled":false,"targets":false}""", page.BodyOf("/api/live"));
+        Assert.True(page.Truth("__dom.node('#live-ask').hidden"));
+    }
+
+    [Fact]
+    public void Ticking_reading_posts_a_yes()
     {
         var page = Asked();
         page.Serve("/api/live", Answered(true));
-        page.Do("await __dom.node('#live-ask-yes').onclick();");
+        page.Do("""
+            __dom.node('#live-ask-read').checked = true;
+            __dom.node('#live-ask-read').onchange();
+            await __dom.node('#live-ask-yes').onclick();
+            """);
 
-        Assert.Contains("\"enabled\":true", page.BodyOf("/api/live"));
+        Assert.Equal("""{"enabled":true,"targets":false}""", page.BodyOf("/api/live"));
         Assert.True(page.Truth("__dom.node('#live-ask').hidden"));
         Assert.True(page.Truth("__dom.node('#live-enabled').checked"));
+    }
+
+    /// <summary>Identifying targets is its own yes, and only under a yes to reading.</summary>
+    [Fact]
+    public void Targets_are_a_choice_of_their_own_that_needs_reading()
+    {
+        var page = Asked();
+        Assert.True(page.Truth("__dom.node('#live-ask-targets').disabled"));
+
+        page.Serve("/api/live", Answered(true));
+        page.Do("""
+            __dom.node('#live-ask-read').checked = true;
+            __dom.node('#live-ask-read').onchange();
+            __dom.node('#live-ask-targets').checked = true;
+            await __dom.node('#live-ask-yes').onclick();
+            """);
+
+        Assert.Equal("""{"enabled":true,"targets":true}""", page.BodyOf("/api/live"));
+    }
+
+    /// <summary>
+    /// A pilot who said yes to reading before targets were a question sees it
+    /// ticked: the question asks about targets, it does not take reading back.
+    /// </summary>
+    [Fact]
+    public void An_earlier_yes_to_reading_is_shown_ticked()
+    {
+        var page = new Page();
+        page.Serve("/api/live", Unasked.Replace("\"asked\":false,\"enabled\":false", "\"asked\":true,\"enabled\":true"));
+        page.Do("await maybeAskLive();");
+
+        Assert.False(page.Truth("__dom.node('#live-ask').hidden"));
+        Assert.True(page.Truth("__dom.node('#live-ask-read').checked"));
+        Assert.False(page.Truth("__dom.node('#live-ask-targets').disabled"));
+    }
+
+    /// <summary>Listening is offered where the copy can listen and nobody has answered.</summary>
+    [Fact]
+    public void Listening_is_offered_and_its_answer_posted_on_its_own()
+    {
+        var page = new Page();
+        page.Serve("/api/live", Answered(false));
+        page.Serve("/api/voice", """{"available":true,"enabled":false,"ask":true}""");
+        page.Do("await maybeAskLive();");
+
+        Assert.False(page.Truth("__dom.node('#live-ask').hidden"));
+        Assert.True(page.Truth("__dom.node('#live-ask-reading').hidden"));
+        Assert.False(page.Truth("__dom.node('#live-ask-voice-row').hidden"));
+
+        page.Do("""
+            __dom.node('#live-ask-voice').checked = true;
+            await __dom.node('#live-ask-yes').onclick();
+            """);
+
+        Assert.Equal("""{"enabled":true}""", page.BodyOf("/api/voice"));
+        Assert.DoesNotContain("POST /api/live", page.Fetched());
+    }
+
+    [Fact]
+    public void Leaving_them_all_off_answers_listening_no_as_well()
+    {
+        var page = Asked();
+        page.Serve("/api/voice", """{"available":true,"enabled":false,"ask":true}""");
+        page.Do("await maybeAskLive();");
+        page.Serve("/api/live", Answered(false));
+
+        page.Do("""
+            __dom.node('#live-ask-voice').checked = true;
+            await __dom.node('#live-ask-no').onclick();
+            """);
+
+        Assert.Equal("""{"enabled":false}""", page.BodyOf("/api/voice"));
+        Assert.Contains("\"enabled\":false", page.BodyOf("/api/live"));
     }
 
     [Fact]

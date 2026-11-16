@@ -53,7 +53,12 @@ public sealed record LiveScreenState(
     bool VoiceMissions = true,
     IReadOnlyList<CalloutSwitch>? Callouts = null,
     PingSettings? Pings = null,
-    bool KeepFights = false);
+    bool KeepFights = false,
+    bool Targets = false,
+    bool TargetsAnswered = false);
+
+/// <summary>The target switch, posted to <c>/api/live/targets</c>.</summary>
+public sealed record LiveTargets(bool On);
 
 /// <summary>The fight record's switch, posted to <c>/api/live/fights</c>.</summary>
 public sealed record LiveFights(bool On);
@@ -85,7 +90,8 @@ public sealed record LivePing(string? Place = null, IReadOnlyList<string>? Wante
 public sealed record CalloutSwitch(string Kind, string Group, string Name, string Sample, bool On, string? Voice);
 
 /// <summary>The pilot's answer, posted to <c>/api/live</c>.</summary>
-public sealed record LiveAnswer(bool Enabled);
+/// <param name="Targets">Whether targets are identified, when the question offered it; null leaves it as it was.</param>
+public sealed record LiveAnswer(bool Enabled, bool? Targets = null);
 
 /// <summary>The voice switch, posted to <c>/api/live/voice</c>.</summary>
 /// <param name="Combat">The combat callouts' own switch; left as it was when not sent.</param>
@@ -204,13 +210,13 @@ public sealed class LiveScreenService(
         lock (_gate) status = status with { Fracture = _mining.Picture() };
 
         return new LiveScreenState(Available, Unavailable, answer.Asked, answer.Enabled, answer.AnsweredAt,
-            Available && !answer.Asked, status, answer.Voice, voice is not null, voice?.Trouble,
+            Available && answer.NeedsAsking, status, answer.Voice, voice is not null, voice?.Trouble,
             answer.VoiceCombat, answer.VoiceMining, answer.VoiceMissions,
             [.. Callouts.All.Select(k => new CalloutSwitch(k.Kind, k.Group, k.Name, k.Sample, !answer.IsMuted(k.Kind), voice?.VoiceFor(k.Sample)))],
             new PingSettings(answer.PingPlace, Here()?.Name,
                 [.. insight.PingPlaces().Select(p => new PingPlaceName(p.Name, p.System, p.Asteroids))],
                 answer.Wanted ?? [], answer.WantedOnly),
-            answer.KeepFights);
+            answer.KeepFights, answer.Targets == true, answer.Targets is not null);
     }
 
     /// <summary>The place with a deposit table the log puts the pilot at: the body, the place, then where a jump is headed.</summary>
@@ -508,6 +514,11 @@ public sealed class LiveScreenService(
             return;
         }
 
+        // Identifying targets is its own yes (1.2.47): turned off mid-follow,
+        // the panel is dropped rather than read one more time.
+        var targets = settings.Current.ReadsTargets;
+        if (!targets) _panel = null;
+
         // ---- the panel alone, while there is one to follow ----
         if (_panel is { } known && _tick % WholeEvery != 0)
         {
@@ -587,8 +598,9 @@ public sealed class LiveScreenService(
         // The target panel is part of the flight HUD. Looked for on a
         // terminal, an app or a tooltip it can only be that screen's own text
         // taken for one, and the frame log would not show it: such a frame is
-        // logged under the screen's kind, not as Target.
-        if (sighting.Kind == ScreenKind.Unknown)
+        // logged under the screen's kind, not as Target. Nor is it looked for
+        // at all unless the pilot said yes to identifying targets.
+        if (sighting.Kind == ScreenKind.Unknown && targets)
         {
             var close = System.Diagnostics.Stopwatch.StartNew();
             (target, var stance) = await insight.ReadTargetAsync(frame, lines, _panel, taken.Width, taken.Height, token);

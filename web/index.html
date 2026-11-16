@@ -1376,7 +1376,7 @@
             <input type="checkbox" id="live-enabled">
             <span>
               Read the game&rsquo;s screen live
-              <em class="muted">While Star Citizen is the window in front, a frame every two seconds is read like a screenshot and thrown away, every second while a ship is targeted. What a screenshot would be taken of is kept without one, a reading per screen: the Fleet Manager, the map, a loadout, a kiosk, a refinery, the hangar’s freight terminal, the Contracts and Rep apps, the balance on any mobiGlas screen, and each rock scanned. The target is only shown, unless you keep a record of fights below. Nothing touches the game itself.</em>
+              <em class="muted">While Star Citizen is the window in front, a frame every two seconds is read like a screenshot and thrown away, every second while a ship is targeted. What a screenshot would be taken of is kept without one, a reading per screen: the Fleet Manager, the map, a loadout, a kiosk, a refinery, the hangar’s freight terminal, the Contracts and Rep apps, the balance on any mobiGlas screen, and each rock scanned. The ship you target is identified only if you turn that on below. Nothing touches the game itself.</em>
             </span>
           </label>
           <p class="muted" id="live-status" aria-live="polite"></p>
@@ -1406,6 +1406,15 @@
             <label class="toggle"><input type="checkbox" id="live-voice-mining"><span>Mining</span></label>
           </div>
           <p class="muted" id="live-voice-trouble" hidden></p>
+          <!-- Its own agreement (1.2.47): a yes to reading was given when the
+               question named only the mining scan panel. -->
+          <label class="toggle live-targets" id="live-targets-row" hidden>
+            <input type="checkbox" id="live-targets">
+            <span>
+              Identify the ship you target
+              <em class="muted">Reads the target panel when you lock on, a frame every second while one is held: the ship&rsquo;s name and picture on Now, the MFD and the overlay, and the &ldquo;Target identified&rdquo; callouts. Off until you turn it on.</em>
+            </span>
+          </label>
           <!-- Its own agreement: from 1.1 the privacy page promised the locked
                ship was held in memory and never written down. -->
           <label class="toggle live-fights" id="live-fights-row" hidden>
@@ -4750,6 +4759,13 @@
           <em class="muted">Needed for every callout: the voice only says what the screen shows. While Star Citizen is the window in front, a frame is read like a screenshot and thrown away. Nothing touches the game itself.</em>
         </span>
       </label>
+      <label class="toggle">
+        <input type="checkbox" id="settings-live-targets">
+        <span>
+          Identify the ship you target
+          <em class="muted" id="settings-live-targets-note">The target panel, read when you lock on: the ship on Now, the MFD and the overlay, and &ldquo;Target identified&rdquo;.</em>
+        </span>
+      </label>
       <div class="live-voice">
         <label class="toggle">
           <input type="checkbox" id="settings-live-voice">
@@ -5211,29 +5227,45 @@
     </div>
   </div>
   <!-- Asked once, at start, until answered either way: whether the screen may
-       be read live. After first flight on a new install, on the next start on
-       an existing one. Never shown where the screen cannot be read. -->
+       be read live, whether targets are identified, and whether the microphone
+       is listened to (1.2.47). After first flight on a new install, on the next
+       start on an existing one. Each part shows only where it can work and has
+       not been answered. -->
   <div class="setup" id="live-ask" hidden role="dialog" aria-modal="true" aria-labelledby="live-ask-title">
     <div class="setup-card">
       <div class="setup-brand">
         <img src="assets/mark.svg" width="30" height="30" alt="">
         <div>
-          <b id="live-ask-title">Read the game&rsquo;s screen?</b>
-          <span>a question, once</span>
+          <b id="live-ask-title">Reading the game and listening</b>
+          <span>your choice, asked once</span>
         </div>
       </div>
-      <p>Quantum Wake can read Star Citizen&rsquo;s screen while you play. For now that is the mining scan panel: the rock you select lands on the Mining page without a screenshot.</p>
-      <ul class="muted live-ask-list">
-        <li>Only while Star Citizen is the window in front, about once every two seconds.</li>
-        <li>It copies the pixels a screenshot would and reads them on this PC. Nothing is sent anywhere, and each frame is thrown away once read.</li>
-        <li>It never opens the game&rsquo;s process, reads its memory or sends it input.</li>
-        <li>It works in borderless or windowed mode, not exclusive fullscreen.</li>
-        <li>CIG&rsquo;s terms neither allow nor forbid reading the screen in so many words; other community tools do it.</li>
-      </ul>
-      <p class="muted">You can change this at any time in Settings &rarr; Voice &amp; callouts, or on the Log page under Read from the game.</p>
+      <p>Quantum Wake can do more while you play. Each of these is off unless you tick it, and each can be changed later on its own.</p>
+      <div id="live-ask-reading">
+        <label class="setup-feed">
+          <input type="checkbox" id="live-ask-read">
+          <div><b>Read the game&rsquo;s screen</b><span>The mining scan panel, the fracture charge and radar pings, mission messages and the screens you open: they land in the app without a screenshot.</span></div>
+        </label>
+        <label class="setup-feed" id="live-ask-targets-row">
+          <input type="checkbox" id="live-ask-targets">
+          <div><b>Identify the ship you target</b><span>Reads the target panel when you lock on: the ship&rsquo;s name and picture on Now, the MFD and the overlay, and &ldquo;Target identified&rdquo; when callouts are spoken. Needs reading the screen.</span></div>
+        </label>
+        <ul class="muted live-ask-list">
+          <li>Only while Star Citizen is the window in front, about once every two seconds.</li>
+          <li>It copies the pixels a screenshot would and reads them on this PC. Nothing is sent anywhere, and each frame is thrown away once read.</li>
+          <li>It never opens the game&rsquo;s process or reads its memory.</li>
+          <li>It works in borderless or windowed mode, not exclusive fullscreen.</li>
+          <li>CIG&rsquo;s terms neither allow nor forbid reading the screen in so many words; other community tools do it.</li>
+        </ul>
+      </div>
+      <label class="setup-feed" id="live-ask-voice-row">
+        <input type="checkbox" id="live-ask-voice">
+        <div><b>Listen for voice commands</b><span>Say &ldquo;Quantum Wake copilot on&rdquo;, then a command such as &ldquo;gear down&rdquo;, and the app presses that key in the game for you. Windows&rsquo; own speech recogniser listens on this PC with no network; nothing is recorded or kept. Choose which commands, and push-to-talk, in Settings.</span></div>
+      </label>
+      <p class="muted">Change any of these at any time in Settings &rarr; Voice &amp; callouts.</p>
       <div class="setup-actions">
-        <button id="live-ask-yes" class="primary">Turn it on</button>
-        <button id="live-ask-no" class="ghost">Not now</button>
+        <button id="live-ask-yes" class="primary">Save my choices</button>
+        <button id="live-ask-no" class="ghost">Leave them all off</button>
         <span class="muted" id="live-ask-status"></span>
       </div>
     </div>

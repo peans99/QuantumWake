@@ -51,6 +51,60 @@ public sealed class LiveScreenTests : IDisposable
         Assert.NotNull(again.AnsweredAt);
     }
 
+    // ---- identifying targets (1.2.47) ----
+
+    /// <summary>
+    /// A yes to reading given when the question named only the mining scan
+    /// panel is not a yes to targets: none are read, and the question is due.
+    /// </summary>
+    [Fact]
+    public void A_yes_to_reading_saved_before_targets_were_asked_reads_none_and_asks()
+    {
+        File.WriteAllText(Path.Combine(_root, "live-screen.json"), """{"Asked":true,"Enabled":true}""");
+        var live = new LiveScreenStore(_root).Current;
+
+        Assert.False(live.ReadsTargets);
+        Assert.True(live.NeedsAsking);
+    }
+
+    /// <summary>A no to reading is not asked again about targets: there is nothing to read them with.</summary>
+    [Fact]
+    public void A_no_to_reading_is_not_asked_again_about_targets()
+    {
+        var store = new LiveScreenStore(_root);
+        store.Answer(false);
+
+        Assert.False(store.Current.NeedsAsking);
+    }
+
+    [Fact]
+    public void Targets_are_read_only_with_reading_on_and_a_yes_to_targets()
+    {
+        var store = new LiveScreenStore(_root);
+        store.Answer(true, targets: false);
+        Assert.False(store.Current.ReadsTargets);
+        Assert.False(store.Current.NeedsAsking);
+
+        store.SetTargets(true);
+        Assert.True(new LiveScreenStore(_root).Current.ReadsTargets);
+
+        store.Answer(false);
+        Assert.False(store.Current.ReadsTargets);
+    }
+
+    /// <summary>The reading switch on the Log page posts no target answer, and must not decide one.</summary>
+    [Fact]
+    public void Answering_about_reading_alone_leaves_the_target_answer_as_it_was()
+    {
+        var store = new LiveScreenStore(_root);
+        store.Answer(true, targets: true);
+
+        store.Answer(false);
+        store.Answer(true);
+
+        Assert.True(store.Current.ReadsTargets);
+    }
+
     [Fact]
     public void An_answer_saved_before_the_kinds_existed_speaks_both()
     {

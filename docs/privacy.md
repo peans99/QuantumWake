@@ -52,8 +52,12 @@ send nothing about you.
   commodity kiosk, a refinery and the Contracts and Rep apps, one reading per
   screen while it stays up, in the same reading log screenshots go to, and
   since 1.1.22 your balance from the bar of any other mobiGlas screen. Item
-  tooltips and screens the app cannot read are not kept. The ship you have targeted - its name, signatures, speed and whether
-  it is marked hostile - is held in memory for the combat page and not
+  tooltips and screens the app cannot read are not kept. The ship you have
+  targeted is read only if you also said yes to **Identify the ship you
+  target** (1.2.47), asked at start beside reading and a switch of its own
+  under the live reading one; a yes to reading given before 1.2.47 does not
+  count for it, and the question is put again. Its name, signatures, speed
+  and whether it is marked hostile are held in memory for the combat page and not
   written down, unless you turn on **Keep a record of fights** under the
   live reading switch (1.2.21, off by default). With it on, each lock is
   written down when it ends, for the debrief on the Sessions page: the hull's
@@ -71,8 +75,9 @@ send nothing about you.
 - **Spoken callouts**, only if you turn on the voice on the Log page: the
   app says things like "Target identified" with the speech voice Windows
   already has, on your PC. The sentence is not sent anywhere.
-- **Your microphone**, only if you turn on Voice commands in Settings →
-  Voice & callouts. It is heard by the speech recogniser Windows carries, on
+- **Your microphone**, only if you ticked Listen for voice commands when the
+  app asked at start (1.2.47; it asks once, and a no is kept) or turned on
+  Voice commands in Settings → Voice & callouts. It is heard by the speech recogniser Windows carries, on
   your PC, told only the copilot's few dozen phrases. The app never gets the
   audio: it sees the phrase matched and how sure the recogniser was, keeps the
   last 40 in memory for the page, and writes none of them down. A command

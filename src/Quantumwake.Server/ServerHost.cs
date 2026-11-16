@@ -3898,7 +3898,16 @@ public static partial class ServerHost
         {
             // A yes on a copy that cannot read the screen is kept as a no:
             // nothing should come on later, on another machine, unasked.
-            live.Answer(answer.Enabled && service.Available);
+            var on = answer.Enabled && service.Available;
+            live.Answer(on, answer.Targets is { } targets ? targets && on : null);
+            return Results.Ok(service.Describe(live));
+        });
+
+        // Identifying targets, from Settings and the Log page: its own yes
+        // (1.2.47), never turned on by the reading switch or anything else.
+        app.MapPost("/api/live/targets", (LiveTargets body, LiveScreenStore live, LiveScreenService service) =>
+        {
+            live.SetTargets(body.On);
             return Results.Ok(service.Describe(live));
         });
 
