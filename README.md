@@ -422,7 +422,30 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.60
+### 1.2.61
+
+- **Plan trip on a shopping list picks nearest, cheapest or fewest stops.**
+  The run used to send every line to its cheapest counter wherever it was;
+  a uniform list wanted seven counters from Seraphim to Everus Harbor. A
+  switch over the chooser now picks **Nearest** (each line at the counter
+  closest to you), **Cheapest**, or **Fewest stops** (the default: the
+  same list fits in two). Every counter shows how far it is, measured from
+  where you are in game, or where your last session ended when you are not
+  in game, and every counter that sells a line is considered rather than
+  the twelve cheapest.
+- **Finding something to add is a search, nearest first.** The dropdown of
+  2,565 names on the new-list form is a search box: type part of a name and
+  each match says where it is sold, how far away and for how much, with the
+  same Nearest / Cheapest / Fewest stops switch. Typed nothing, it shows
+  what is sold where you are.
+- **A list says when you probably have a line already.** When your stash
+  holds the same item in another colour or version - ORC-mkV armour in Red
+  when the list says Grey - the line says so and where, without ticking it.
+- **More shops are on the map.** Counters the price feed names after a
+  station's short name - "FPS Armor Tressler", "Pharmacy Everus", "Platinum
+  Baijini" - now land at Port Tressler, Everus Harbor, Baijini Point,
+  Seraphim Station and three Pyro rest stops: 61 counters that had no place,
+  and so no distance.
 
 - **Mining callouts wait for mining.** "Rock cracked" was still said with
   no rock about - twice in a Pisces at Lorville. The callouts now only

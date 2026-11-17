@@ -45,6 +45,46 @@ public static partial class HeldNames
             && h[w.Length] == ' ';
     }
 
+    /// <summary>
+    /// Whether a stash name is probably the line's thing in another colour or
+    /// version (1.2.60): never counted as in hand, only said beside the line.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The name less its last word - the colour, "ORC-mkV Core" of "ORC-mkV
+    /// Core Grey" - has to open the stash name, and be two words or more; and
+    /// both names have to be in the reference data as the same type of item
+    /// from the same maker. The names alone would call a "Tailwind Flight
+    /// Helmet" a version of the "Tailwind Flight Suit"; the type tells a
+    /// helmet from a suit. A name the reference data does not hold gets no
+    /// hint, since there is then nothing to tell the two apart by.
+    /// </para>
+    /// <para>
+    /// On 2026-11-16 a list for a group's uniforms wanted the ORC-mkV Core,
+    /// Arms and Legs in Grey, and the stash at Terminus LEO held all three in
+    /// Red; the list said nothing, since Red is not Grey.
+    /// </para>
+    /// </remarks>
+    public static bool Alike(string held, string wanted, Func<string, ItemInfo?> reference)
+    {
+        if (string.IsNullOrWhiteSpace(held) || string.IsNullOrWhiteSpace(wanted) || Matches(held, wanted))
+            return false;
+
+        var words = wanted.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length < 3)
+            return false;
+
+        var stem = string.Join(' ', words[..^1]);
+        var h = held.Trim();
+        if (!h.StartsWith(stem, StringComparison.OrdinalIgnoreCase) || (h.Length > stem.Length && h[stem.Length] != ' '))
+            return false;
+
+        return reference(h) is { } a && reference(wanted.Trim()) is { } b
+            && a.Type is { Length: > 0 } && string.Equals(a.Type, b.Type, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(a.SubType ?? "", b.SubType ?? "", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(a.Manufacturer ?? "", b.Manufacturer ?? "", StringComparison.OrdinalIgnoreCase);
+    }
+
     [GeneratedRegex(@"\s*[\(\[][^\)\]]*[\)\]]")]
     private static partial Regex Brackets();
 

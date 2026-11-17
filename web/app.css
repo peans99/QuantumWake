@@ -1113,6 +1113,47 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
 }
 .job-form-row .select { flex: 1 1 22ch; min-width: 0; }
 
+/* Finding something to add (1.2.60): a search, which counter to name, and the matches. */
+.job-find { display: flex; flex-direction: column; gap: 6px; }
+.job-find-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.job-find-bar input { flex: 1 1 24ch; min-width: 0; }
+.job-find .seg { display: inline-flex; border: 1px solid var(--rule); }
+.job-find .seg button {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 5px 9px;
+  cursor: pointer;
+}
+.job-find .seg button + button { border-left: 1px solid var(--rule); }
+.job-find .seg button:hover { color: var(--text); }
+.job-find .seg button.active { background: rgba(53, 200, 240, .13); color: var(--cyan-hot); }
+.job-find-from { margin: 0; }
+.job-find-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.job-find-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  align-items: baseline;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 5px 8px;
+  cursor: pointer;
+  color: var(--text);
+}
+.job-find-row:hover, .job-find-row:focus-visible { border-color: var(--rule-hot); background: rgba(53, 200, 240, .06); }
+.job-find-row b { font-weight: 600; }
+.job-find-row span { font-size: 11.5px; min-width: 0; overflow-wrap: anywhere; }
+.job-find-more { font-size: 11.5px; padding: 4px 8px; }
+
+/* A look-alike in the stash, or a sighting not counted: a hint, in amber. */
+.held-alike { color: var(--amber, #f0b429); font-size: 11px; }
+.chooser-from { font-size: 11px; margin: 2px 0 6px; }
+.chooser-prefer button { font-size: 10px; padding: 4px 9px; }
+
 /* The destination on a list card: a control, not a label, because it is a
 
    decision the player revises. */

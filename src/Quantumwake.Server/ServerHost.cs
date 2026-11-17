@@ -2951,11 +2951,31 @@ public static partial class ServerHost
                 .Select(i => i.Name)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+            // The reference by exact name, for telling a recolour from another
+            // piece of the same range - see HeldNames.Alike.
+            Dictionary<string, ItemInfo>? reference = null;
+            ItemInfo? Reference(string name)
+            {
+                reference ??= lib.Community.Items.Values
+                    .Where(i => i.Name is { Length: > 0 })
+                    .GroupBy(i => i.Name!, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+                return reference.GetValueOrDefault(name);
+            }
+
             object Project(Job job, ImportBatch? from)
             {
                 var lines = job.Items.Select(item =>
                 {
                     var where = HeldWhere(held, item.Name);
+
+                    // Held in another colour or version (1.2.60): said, never
+                    // counted - the pilot knows whether Red will do for Grey.
+                    var alike = where.Count > 0 || item.Got
+                        ? []
+                        : held.Where(h => HeldNames.Alike(h.Key, item.Name, Reference))
+                            .Select(h => new { name = h.Key, places = h.Value })
+                            .ToList();
                     var inventorySighting = where.Count > 0 || worn.Contains(item.Name);
 
                     // A stash log says only that this part was once visible in
@@ -3003,6 +3023,7 @@ public static partial class ServerHost
                         where,
                         wornNow = worn.Contains(item.Name) && !needsLoosePart,
                         inventoryUnconfirmed = inventorySighting && !item.Got && !proven,
+                        alike,
                         buyPrice,
                         buyAt
                     };
@@ -5181,6 +5202,60 @@ public static partial class ServerHost
         });
 
         /*
+         * The same things, each with the one counter worth naming beside it
+         * (1.2.59): the nearest, the cheapest, or the one that is also a stop
+         * for most of the list - see NearestSellers.
+         *
+         * Measured from where the pilot is while a session runs, else from
+         * where the last session ended, else from nowhere, and the answer says
+         * which: a list is often written between sessions, and "nearest"
+         * without saying to what would be a ranking nobody could check.
+         * "with" is the lines already on the list, joined by "|", for fewest
+         * stops.
+         */
+        app.MapGet("/api/shopping/near", (LogLibrary lib, UexData uex, LiveSessionService live,
+            string? sort, string? with) =>
+        {
+            var order = sort?.ToLowerInvariant() switch
+            {
+                "cheapest" => SellerOrder.Cheapest,
+                "stops" => SellerOrder.FewestStops,
+                _ => SellerOrder.Nearest,
+            };
+
+            var things = new List<BuyableThing>();
+
+            foreach (var name in lib.Community.All.Values
+                         .Select(c => c.Name)
+                         .Where(n => !string.IsNullOrWhiteSpace(n))
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
+                things.Add(new BuyableThing(name!, "commodity",
+                    [.. uex.Market(name!).Where(r => r.Buy > 0).Select(r => new SellerCounter(r.Terminal, r.Buy))]));
+
+            foreach (var item in lib.Community.Items.Values.Where(i => i.Name is { Length: > 0 } && uex.ItemPrice(i.Uuid) is > 0))
+                things.Add(new BuyableThing(item.Name!, "item",
+                    [.. uex.ItemMarket(item.Uuid).Where(r => r.Buy > 0).Select(r => new SellerCounter(r.Terminal, r.Buy))]));
+
+            var (from, source) = ShoppingFrom(lib, live);
+
+            var rows = NearestSellers.Rank(
+                things,
+                from,
+                terminal => lib.Terminals.Resolve(terminal) is { } p ? new SellerPlace(p.RawId, p.Name, p.Body, p.System) : null,
+                (a, b) => HaulShare.BodyGm(a, b, s => lib.Community.BodyPositions(s)),
+                order,
+                with?.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
+            return new
+            {
+                from = from is null ? null : new { from.Name, from.Id, from.Body, from.System, source },
+                sort = order switch { SellerOrder.Cheapest => "cheapest", SellerOrder.FewestStops => "stops", _ => "nearest" },
+                pricesKnown = uex.IsEnabled,
+                rows,
+            };
+        });
+
+        /*
          * Where to buy one named thing - whatever kind of thing it is.
          *
          * A shopping list is written by hand, so a line on it can be a
@@ -5190,11 +5265,18 @@ public static partial class ServerHost
          * which one its line belongs to - so both are tried here and the
          * answer says which one replied.
          */
-        app.MapGet("/api/shopping/sellers", (LogLibrary lib, UexData uex, string name) =>
+        app.MapGet("/api/shopping/sellers", (LogLibrary lib, UexData uex, LiveSessionService live, string name) =>
         {
+            // How far each counter is from the pilot (1.2.60), so a list's
+            // run can be planned nearest-first as well as cheapest-first.
+            var (from, source) = ShoppingFrom(lib, live);
+
             object Row(string kind, string terminal, decimal price, decimal scu, DateTimeOffset? seen)
             {
                 var place = lib.Terminals.Resolve(terminal);
+                var here = from is not null && place is not null &&
+                    (from.Id.Length > 0 ? string.Equals(from.Id, place.RawId, StringComparison.OrdinalIgnoreCase)
+                        : string.Equals(from.Name, place.Name, StringComparison.OrdinalIgnoreCase));
 
                 return new
                 {
@@ -5202,13 +5284,21 @@ public static partial class ServerHost
                     terminal,
                     placeId = place?.RawId ?? string.Empty,
                     place = place?.Name,
+                    body = place?.Body,
                     system = place?.System,
                     security = TerminalPlaces.SecurityOfSystem(place?.System),
                     price,
                     scu,
-                    seenAt = seen
+                    seenAt = seen,
+                    here,
+                    gm = here ? 0
+                        : from is null || place is null ? null
+                        : HaulShare.BodyGm(new StopWhere(from.Body, from.System), new StopWhere(place.Body, place.System),
+                            s => lib.Community.BodyPositions(s)),
                 };
             }
+
+            var measured = from is null ? null : new { from.Name, from.Id, from.Body, from.System, source };
 
             var traded = uex.Market(name)
                 .Where(r => r.Buy > 0)
@@ -5218,14 +5308,14 @@ public static partial class ServerHost
                 .ToList();
 
             if (traded.Count > 0)
-                return new { name, kind = "commodity", sellers = (IReadOnlyList<object>)traded };
+                return new { name, kind = "commodity", sellers = (IReadOnlyList<object>)traded, from = measured };
 
             // Items join on the game's entity uuid, which only the reference
             // data knows, so the written name has to find the item first.
             var item = MatchItem(lib, name);
 
             if (item is null)
-                return new { name, kind = "unknown", sellers = (IReadOnlyList<object>)Array.Empty<object>() };
+                return new { name, kind = "unknown", sellers = (IReadOnlyList<object>)Array.Empty<object>(), from = measured };
 
             var stocked = uex.ItemMarket(item.Uuid)
                 .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
@@ -5234,7 +5324,7 @@ public static partial class ServerHost
                 .Select(r => Row("item", r.Terminal, r.Buy, 0, null))
                 .ToList();
 
-            return new { name = item.Name ?? name, kind = "item", sellers = (IReadOnlyList<object>)stocked };
+            return new { name = item.Name ?? name, kind = "item", sellers = (IReadOnlyList<object>)stocked, from = measured };
         });
 
         // Every counter that trades one commodity, with where it is and how
@@ -5599,6 +5689,24 @@ static PlannedShip? LoggedShip(NowState now, LogLibrary lib)
 
 static string HaulLine(HaulAction action) =>
     $"{action.Commodity ?? "cargo"} — {action.ContractTitle}{(action.Note is null ? "" : $" ({action.Note})")}";
+
+/// <summary>
+/// Where shopping distances are measured from (1.2.60): where the pilot is,
+/// else where they were last seen, else where the newest session ended - and
+/// which of those it is, since "nearest" means nothing without saying to what.
+/// A list is often written between sessions, when the live feed has nothing.
+/// </summary>
+static (ResolvedPlace? From, string Source) ShoppingFrom(LogLibrary lib, LiveSessionService live)
+{
+    var now = live.Current;
+    if (HaulStart(now) is { } start)
+        return (start, now.InGame ? "live" : "last-seen");
+
+    if (lib.Sessions().Where(s => s.LastLocation is { Length: > 0 }).MaxBy(s => s.StartedAt) is { } last)
+        return (ResolvePlace(lib, last.LastLocation!) ?? new ResolvedPlace("", last.LastLocation!, null, null), "last-session");
+
+    return (null, "none");
+}
 
 /// <summary>The last known location is an origin, not evidence that cargo was loaded there.</summary>
 static ResolvedPlace? HaulStart(NowState now) =>

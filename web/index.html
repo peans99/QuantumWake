@@ -1261,9 +1261,24 @@
       <input type="text" id="job-title" placeholder="What is this for? e.g. Restock after Pyro" autocomplete="off">
       <textarea id="job-items" rows="5"
                 placeholder="One per line — &quot;Hadanite 23&quot;, &quot;Agricium 1.16 SCU&quot;, or just a name"></textarea>
+      <!-- Found by name, nearest first (1.2.60): this was one dropdown of
+           2,565 names in alphabetical order, with nothing to say which of
+           them the station you stood in sold. -->
+      <div class="job-find" id="job-find">
+        <div class="job-find-bar">
+          <input type="search" id="job-find-text" placeholder="Find something to buy…" autocomplete="off"
+                 aria-label="Find something to buy" aria-controls="job-find-list">
+          <div class="seg" id="job-find-sort" role="group" aria-label="Which counter to name">
+            <button type="button" data-sort="nearest" class="active" aria-pressed="true">Nearest</button>
+            <button type="button" data-sort="cheapest" aria-pressed="false">Cheapest</button>
+            <button type="button" data-sort="stops" aria-pressed="false">Fewest stops</button>
+          </div>
+        </div>
+        <p class="muted caption job-find-from" id="job-find-from" aria-live="polite"></p>
+        <ul class="job-find-list" id="job-find-list"></ul>
+      </div>
       <div class="job-form-row">
-        <select id="job-add" class="select"></select>
-        <select id="job-place" class="select"></select>
+        <select id="job-place" class="select" aria-label="Where the list is for"></select>
       </div>
       <div class="job-form-actions">
         <button type="submit" class="ghost">Save list</button>
