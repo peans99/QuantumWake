@@ -167,4 +167,30 @@ public class TerminalPlacesTests
         Assert.Equal("unknown", TerminalPlaces.SecurityOfSystem(null));
         Assert.Equal("unknown", Atlas.SecurityOf("Ashland"));
     }
+
+    // 1.2.61: the chains shorten the station, so neither name contains the other.
+    private static readonly TerminalPlaces Stations = new([
+        Place("Stanton4_PortTressler", "Port Tressler"),
+        Place("Stanton1_EverusHarbor", "Everus Harbor"),
+        Place("Stanton2_Seraphim", "Seraphim Station"),
+        Place("Pyro_RodsFuel", "Rod's Fuel 'N Supplies"),
+        Place("Stanton1_HUR_L1", "HUR-L1 Green Glade Station"),
+        Place("Pyro_FallowField", "Fallow Field"),
+    ]);
+
+    [Theory]
+    [InlineData("FPS Armor Tressler", "Port Tressler")]
+    [InlineData("FPS Armor Everus", "Everus Harbor")]
+    [InlineData("Burrito Bar Seraphim", "Seraphim Station")]
+    public void A_counter_named_for_its_station_by_one_word_finds_it(string terminal, string place) =>
+        Assert.Equal(place, Stations.Resolve(terminal)?.Name);
+
+    [Theory]
+    // A word only one place has, but not the station's name: each of these
+    // matched wrongly before the rule was held to the last word.
+    [InlineData("Tools & Supplies Levski")]
+    [InlineData("Ellroy's Green Circle")]
+    [InlineData("Pickers Field")]
+    public void Any_other_word_finds_nothing(string terminal) =>
+        Assert.Null(Stations.Resolve(terminal));
 }

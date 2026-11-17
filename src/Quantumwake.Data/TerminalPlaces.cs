@@ -19,7 +19,7 @@ namespace Quantumwake.Data;
 /// still a stop, with its name and its notes intact.
 /// </para>
 /// </remarks>
-public sealed class TerminalPlaces
+public sealed partial class TerminalPlaces
 {
     /// <summary>Shorter than this and a name matches half the system.</summary>
     private const int MinimumMatch = 5;
@@ -39,6 +39,21 @@ public sealed class TerminalPlaces
     /// "Port Tressler" from claiming every terminal with "port" in its name.
     /// </remarks>
     private readonly Dictionary<string, PlaceTotal?> _codes;
+
+    /// <summary>
+    /// Each word of five letters or more that belongs to one place's name and
+    /// no other's, by that word (1.2.61).
+    /// </summary>
+    /// <remarks>
+    /// The shop counters shorten the station: "FPS Armor Tressler" is at Port
+    /// Tressler, "FPS Armor Everus" at Everus Harbor, "Gear Up Orbituary" at
+    /// Orbituary. Neither name contains the other, so 249 of the 589 counters
+    /// in this install's price data stood nowhere, and a list sorted nearest
+    /// first sent the pilot past Everus Harbor to New Babbage, 38 Gm away. A
+    /// word only counts when no other place uses it, so "Station", "Harbor"
+    /// and "Outpost" never match anything.
+    /// </remarks>
+    private readonly Dictionary<string, PlaceTotal> _words;
     private readonly Dictionary<string, PlaceTotal?> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly Lock _gate = new();
 
@@ -63,7 +78,41 @@ public sealed class TerminalPlaces
 
             _codes[code] = _codes.ContainsKey(code) ? null : place;
         }
+
+        var owners = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        var byId = new Dictionary<string, PlaceTotal>(StringComparer.OrdinalIgnoreCase);
+        foreach (var place in atlas)
+        {
+            byId.TryAdd(place.RawId, place);
+            foreach (var word in Words(place.Name))
+            {
+                if (!owners.TryGetValue(word, out var ids))
+                    owners[word] = ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                ids.Add(place.RawId);
+            }
+        }
+
+        _words = owners
+            .Where(o => o.Value.Count == 1)
+            .ToDictionary(o => o.Key, o => byId[o.Value.First()], StringComparer.OrdinalIgnoreCase);
     }
+
+    /// <summary>Words that say what kind of place it is, not which.</summary>
+    private static readonly HashSet<string> Generic = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Field", "Fields", "Supplies", "Station", "Point", "Harbor", "Outpost", "Gateway",
+        "Depot", "Plaza", "Market", "Store", "Center", "Centre", "Circle", "Discovery",
+    };
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\([^)]*\)")]
+    private static partial System.Text.RegularExpressions.Regex Brackets();
+
+    /// <summary>The words of a name worth matching on: five letters or more, no digits.</summary>
+    private static IEnumerable<string> Words(string name) =>
+        name.Split([' ', ',', '-', '(', ')', '/', '\'', '.'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(Compact)
+            .Where(w => w.Length >= MinimumMatch && !w.Any(char.IsDigit))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The station code a place name opens with, or null.</summary>
     private static string? LeadingCode(string name)
@@ -166,7 +215,16 @@ public sealed class TerminalPlaces
             if (place is not null && haystack.Contains(code, StringComparison.OrdinalIgnoreCase))
                 return place;
 
-        return null;
+        // Then the terminal's last word, when only one place's name has it:
+        // the chains name a counter "<shop> <station>". Any word at all also
+        // matched "Tools & Supplies Levski" to Rod's Fuel 'N Supplies and
+        // "Ellroy's Green Circle" to Green Glade Station; the last word, less
+        // a bracketed system and a few words that name a kind of place,
+        // matched 61 more counters on this install, every one right.
+        var last = Words(Brackets().Replace(terminal, " ")).LastOrDefault();
+        return last is not null && !Generic.Contains(last) && terminal.Trim().Contains(' ')
+            ? _words.GetValueOrDefault(last)
+            : null;
     }
 
     private static string Compact(string value) =>

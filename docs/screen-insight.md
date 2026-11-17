@@ -723,11 +723,52 @@ ones, so a yellow box of the bar's size held still for three frames and was
 followed until it went. Nothing was said, since "below" has no callout, but
 each became a rock let go and the Sessions debrief counted them. What the
 box was is still unseen; no screenshot of it exists. The 32nd is the Fleet
-Manager's bar from 14 November, before 1.2.41, and still reads as a crack. `RockLog.Worked` now
-asks for a crack, 5% of fill, time in the window or an overcharge: windows
+Manager's bar from 14 November, before 1.2.41, and still reads as a crack.
+`RockLog.Worked` now asks for a crack, 5% of fill, time in the window or an overcharge: windows
 without one are not recorded, and the ones already in `rocks\` are passed
 over when read rather than rewritten. A real charge that never reached the
 window goes too, and it did nothing to the rock either.
+
+**An overcharge has to come through the window (1.2.59).** On 16 November
+at 22:17 local the pilot was on foot in New Babbage, the logs naming no
+ship, when 17 `Fracture` frames came in over a minute between `Unknown`
+ones and the voice said "Overcharge, back off". The window it kept was 0%
+filled, never in the window, with one overcharge - the only overcharge in
+33 recorded windows, and the reason 1.2.55's rule had kept it as a rock.
+A charge rises through the window to get over it and fills the bar as it
+passes, so `MiningWatch` now counts and says "above" only after an "in" or
+5% of fill, and `RockLog.Worked` no longer counts an overcharge on its own.
+A laser that jumps the whole window between two frames, a second or two
+apart, goes unsaid. No real overcharge has been seen by this reader yet,
+so that cost is a guess and this one false alarm is not.
+
+**Only in a mining hull, and only through the window (1.2.60).** On 16
+November at 22:56 and 22:57 local, in a Pisces at Lorville, "Rock cracked"
+was said twice: two windows 100% filled from their first frame and never a
+second in the window. With those, 35 windows were kept, and the only three
+that counted as worked - those two and the Fleet Manager's bar of the 14th
+- had no time in the window; the bar fills only while the charge is in it.
+So `MiningWatch` calls a crack only after an "in", and `RockLog.Worked`
+asks for time in the window and nothing else.
+
+The live loop also takes a bar up only while the logs put the pilot in a
+hull with a mining head (`MiningHulls.CanMine`). The changeable ports in
+`digest-ship-slots.json` name 11 such hulls of 323 but miss the ROC, whose
+arm is not marked changeable, so the Garage's loadout is asked too. On this
+install that gives yes for the Prospector, MOLE, Golem, ROC, ROC-DS, ATLS
+GEO and Hyun, no for the Pisces, Golem OX, Hornet, Fortune and Ironclad,
+and unknown for the Hermes and Arrastra, which are newer than the data and
+are let through. On foot is no, at the cost of hand mining's callouts.
+
+**Catching the box (1.2.58).** A switch on the Log page, off by default,
+pictures it: `StrayBarCatcher` cuts two PNGs from the frame a bar is taken
+up on - a third of the screen each way around it with the bar outlined in
+magenta, and the whole frame 640 wide - holds them in memory, and writes
+them to `live\stray-bars\` only when `MiningWatch.TakeStrays()` hands the
+window back as never worked. A rock's are dropped when its window ends, a
+terminal's when `Disown()` lets it go. At most 20 windows. Cut from the
+first frame because by the time a window closes the bar has gone, and a
+whole frame kept on every take-up would be a screenshot of every rock.
 
 A scan of the rock, when the reading log holds one, is joined at reading
 time: the scan read nearest the window's start, from three minutes before it

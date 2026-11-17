@@ -461,8 +461,10 @@ public static partial class GameScenarios
     /// <summary>The game's <c>~mission(Ship)</c> becomes "Ship"; the title is still the game's.</summary>
     private static string Placeholders(string title) => MissionToken().Replace(title, "$1");
 
+    // "AtoB" is the game's own shorthand for a point-to-point haul; split at
+    // the case change it came out "Ato B".
     private static string Readable(string id) =>
-        WordBoundary().Replace(id.Replace('_', ' '), " ").Trim();
+        WordBoundary().Replace(id.Replace("AtoB", "A_to_B", StringComparison.Ordinal).Replace('_', ' '), " ").Trim();
 
     [GeneratedRegex(@"_(?<track>[A-Za-z]+)_(?<tier>\d+)$")]
     private static partial Regex BadgeShape();

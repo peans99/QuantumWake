@@ -114,8 +114,28 @@ public sealed class FractureTests
     public void Leaving_the_window_and_going_over_it_are_said()
     {
         Assert.Equal(["In the window", "Out of the window"], Run(R("in"), R("in"), R("in"), R("below", 0, 1), R("below", 0, 1.2)));
-        Assert.Equal(["Overcharge, back off"], Run(R("above"), R("above"), R("above")));
+        Assert.Equal(["In the window", "Overcharge, back off"], Run(R("in"), R("in"), R("in"), R("above"), R("above")));
     }
+
+    [Fact]
+    public void An_overcharge_the_charge_never_rose_through_the_window_for_is_not_said()
+    {
+        // 2026-11-16 22:17, on foot in New Babbage: a yellow box read as over
+        // the window with the bar 0% filled, and "Overcharge, back off" was said.
+        var watch = new MiningWatch();
+        var said = new List<string>();
+        var i = 0;
+        foreach (var f in new ChargeReading?[] { R("above"), R("above"), R("above"), R("above"), null, null })
+            said.AddRange(watch.See(f, T0.AddSeconds(i++)).Select(c => c.Text));
+
+        Assert.Empty(said);
+        var window = Assert.Single(watch.TakeStrays());
+        Assert.Equal(0, window.Overcharges);
+    }
+
+    [Fact]
+    public void Going_over_a_bar_already_filling_is_said_even_without_a_frame_in_the_window() =>
+        Assert.Equal(["Overcharge, back off"], Run(R("below", 0.1, 0.5), R("below", 0.1, 0.5), R("below", 0.1, 0.5), R("above", 0.2), R("above", 0.2)));
 
     [Fact]
     public void The_picture_counts_cracks_and_shows_the_charge()
@@ -235,10 +255,26 @@ public sealed class FractureTests
     public void A_window_that_ends_by_absence_is_still_recorded()
     {
         var watch = new MiningWatch();
-        for (var i = 0; i < 3; i++) watch.See(R("in", 0.3), T0.AddSeconds(i));
-        watch.See(null, T0.AddSeconds(3));
-        watch.See(null, T0.AddSeconds(4));
+        for (var i = 0; i < 5; i++) watch.See(R("in", 0.3), T0.AddSeconds(i));
+        watch.See(null, T0.AddSeconds(5));
+        watch.See(null, T0.AddSeconds(6));
 
         Assert.Single(watch.TakeEnded());
+    }
+
+    [Fact]
+    public void A_bar_full_from_the_start_and_never_in_the_window_is_no_crack()
+    {
+        // 2026-11-16 22:56, in a Pisces at Lorville: a bar 100% green from the
+        // first frame went away and "Rock cracked" was said.
+        var watch = new MiningWatch();
+        var said = new List<string>();
+        var i = 0;
+        foreach (var f in new ChargeReading?[] { R("below", 0, 1), R("below", 0, 1), R("below", 1, 1), R("below", 1, 1), null, null })
+            said.AddRange(watch.See(f, T0.AddSeconds(i++)).Select(c => c.Text));
+
+        Assert.Empty(said);
+        Assert.Empty(watch.TakeEnded());
+        Assert.False(Assert.Single(watch.TakeStrays()).Cracked);
     }
 }

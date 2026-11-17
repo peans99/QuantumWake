@@ -80,6 +80,7 @@ public sealed class MiningWatch
 
     // For the record of each window once it goes.
     private readonly List<FractureRecord> _ended = [];
+    private readonly List<FractureRecord> _strays = [];
     private DateTimeOffset _since, _lastAt;
     private double _inFor;
     private int _overcharges;
@@ -130,15 +131,24 @@ public sealed class MiningWatch
             if (!_active) return now;
             if (++_absent < 2) return now;
 
-            // The bar has gone: cracked if it had filled, let go if not.
-            if (_maxFill >= CrackedAt)
+            // The bar has gone: cracked if it had filled while the charge sat
+            // in the window, let go if not. The window is required since
+            // 1.2.60: on 2026-11-16 at 22:56 and 22:57 local, in a Pisces at
+            // Lorville, a bar read 100% green from the first frame and never
+            // in the window was said and recorded as "Rock cracked", as the
+            // Fleet Manager's bar had been on the 14th. Those three were the
+            // only windows of 35 kept that counted as worked, and none of them
+            // spent a second in the window; a real crack fills only there.
+            var cracked = _maxFill >= CrackedAt && _wasIn;
+            if (cracked)
             {
                 _cracked++;
                 _lastCrack = at;
                 now.Add(Say(at, "cracked", "Rock cracked"));
             }
-            var ended = new FractureRecord(_since, _lastAt, _maxFill >= CrackedAt, _maxFill, _inFor, _overcharges);
+            var ended = new FractureRecord(_since, _lastAt, cracked, _maxFill, _inFor, _overcharges);
             if (RockLog.Worked(ended)) _ended.Add(ended);
+            else _strays.Add(ended);
             _active = false;
             _state = _pending = null;
             _agreed = 0;
@@ -209,7 +219,17 @@ public sealed class MiningWatch
                 _wasIn = true;
                 now.Add(Say(at, "window", "In the window"));
                 break;
-            case "above":
+            // Only once the charge has been in the window or the bar has begun
+            // to fill (1.2.59): a charge rises through the window to get over
+            // it, and it fills as it passes. On 2026-11-16 at 22:17 local the
+            // pilot was on foot in New Babbage, no ship in the logs, and a
+            // yellow box held still long enough to be followed, read as
+            // "above" and said "Overcharge, back off" with the bar 0% filled
+            // and never in the window. No real overcharge has been seen by
+            // this reader yet; that one was the only overcharge in 33
+            // recorded windows. A laser fast enough to jump the window
+            // between two frames goes unsaid, which is the cost.
+            case "above" when _wasIn || _maxFill >= RockLog.WorkedFill:
                 _overcharges++;
                 now.Add(Say(at, "overcharge", "Overcharge, back off"));
                 break;
@@ -258,6 +278,22 @@ public sealed class MiningWatch
         _ended.Clear();
         return taken;
     }
+
+    /// <summary>
+    /// The windows that closed without the charge doing anything, since the
+    /// last ask (1.2.58): not rocks, and not recorded, but what the live loop
+    /// pictures when the pilot asked it to.
+    /// </summary>
+    public IReadOnlyList<FractureRecord> TakeStrays()
+    {
+        if (_strays.Count == 0) return [];
+        var taken = _strays.ToList();
+        _strays.Clear();
+        return taken;
+    }
+
+    /// <summary>Whether a bar is being followed now.</summary>
+    public bool Active => _active;
 
     public MiningPicture Picture() => new(
         _active, _active ? _state : null, _active ? _fill : 0, _active ? _belowBy : null,

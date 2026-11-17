@@ -1261,9 +1261,24 @@
       <input type="text" id="job-title" placeholder="What is this for? e.g. Restock after Pyro" autocomplete="off">
       <textarea id="job-items" rows="5"
                 placeholder="One per line — &quot;Hadanite 23&quot;, &quot;Agricium 1.16 SCU&quot;, or just a name"></textarea>
+      <!-- Found by name, nearest first (1.2.60): this was one dropdown of
+           2,565 names in alphabetical order, with nothing to say which of
+           them the station you stood in sold. -->
+      <div class="job-find" id="job-find">
+        <div class="job-find-bar">
+          <input type="search" id="job-find-text" placeholder="Find something to buy…" autocomplete="off"
+                 aria-label="Find something to buy" aria-controls="job-find-list">
+          <div class="seg" id="job-find-sort" role="group" aria-label="Which counter to name">
+            <button type="button" data-sort="nearest" class="active" aria-pressed="true">Nearest</button>
+            <button type="button" data-sort="cheapest" aria-pressed="false">Cheapest</button>
+            <button type="button" data-sort="stops" aria-pressed="false">Fewest stops</button>
+          </div>
+        </div>
+        <p class="muted caption job-find-from" id="job-find-from" aria-live="polite"></p>
+        <ul class="job-find-list" id="job-find-list"></ul>
+      </div>
       <div class="job-form-row">
-        <select id="job-add" class="select"></select>
-        <select id="job-place" class="select"></select>
+        <select id="job-place" class="select" aria-label="Where the list is for"></select>
       </div>
       <div class="job-form-actions">
         <button type="submit" class="ghost">Save list</button>
@@ -1423,6 +1438,16 @@
             <span>
               Keep a record of fights
               <em class="muted">Each ship locked and each fight callout, written down for the debrief on the Sessions page: the hull when the panel printed one, the likely hull when it did not, range, speed, whether it was hostile, missile warnings and an objective&rsquo;s health. A player&rsquo;s name is never written, nor any picture. Off until you turn it on.</em>
+            </span>
+          </label>
+          <!-- Its own agreement too (1.2.58): the one switch that keeps pictures
+               of the screen, so it says what they can show. -->
+          <label class="toggle live-strays" id="live-strays-row" hidden>
+            <input type="checkbox" id="live-strays">
+            <span>
+              Keep pictures of false mining bars
+              <em class="muted">When the reader follows something it took for the mining charge bar and the charge never does anything, it keeps two pictures: the part of the screen around it, with what it followed outlined in pink, and a small copy of the whole screen. They are for finding out what it keeps mistaking for a rock, and can show whatever was on screen, chat included. A real rock is never pictured. At most 20, then it stops. Off until you turn it on.</em>
+              <em class="muted live-strays-kept" id="live-strays-kept" hidden></em>
             </span>
           </label>
         </div>
@@ -4942,7 +4967,7 @@
         <dl class="about-facts">
           <div><dt>Version</dt><dd id="about-version">—</dd></div>
           <div><dt>Game install</dt><dd id="about-install">—</dd></div>
-          <div><dt>Dashboard</dt><dd>127.0.0.1:31337</dd></div>
+          <div><dt>Dashboard</dt><dd id="about-dashboard">127.0.0.1:31337</dd></div>
           <div><dt>Licence</dt><dd>Apache 2.0</dd></div>
           <div><dt>Built by</dt><dd>nekron</dd></div>
           <div><dt>Privacy</dt><dd><a href="https://github.com/peans99/QuantumWake/blob/main/docs/privacy.md" target="_blank" rel="noopener noreferrer">docs/privacy.md</a></dd></div>

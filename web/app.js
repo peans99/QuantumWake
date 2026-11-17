@@ -10912,7 +10912,7 @@ function armouryEffectWords(e) {
 function armouryWhereCell(market) {
   // The cheapest terminal is a link to it on the map; the rest stay on the hover.
   const best = market?.shops?.[0];
-  const td = el('td', 'muted', best ? undefined : armouryWhere(market));
+  const td = el('td', 'muted armoury-where', best ? undefined : armouryWhere(market));
   if (best) {
     const place = best.place && !best.terminal.toLowerCase().includes(best.place.toLowerCase()) ? `, ${best.place}` : '';
     td.append(terminalLink(best.terminal), `${place}${market.shops.length > 1 ? ` +${market.shops.length - 1}` : ''}`);
@@ -11403,8 +11403,8 @@ function renderArmouryGuns() {
     }
     modes.append(list);
     tr.append(modes);
-    tr.append(el('td', 'num', best ? fmtInt(best.damagePerSecond) : '—'));
-    tr.append(el('td', 'num', w.magazine > 0 ? String(w.magazine) : '—'));
+    tr.append(el('td', 'num', best?.damagePerSecond > 0 ? fmtInt(best.damagePerSecond) : '—'));
+    tr.append(el('td', 'num', w.magazine > 0 ? fmtInt(w.magazine) : '—'));
     tr.append(el('td', 'num', best && w.magazine > 0 ? fmtInt(best.damagePerMagazine) : '—'));
     tr.append(el('td', 'num', w.dropStart > 0 ? `${fmtInt(w.dropStart)} m → ${fmtDamage(w.dropFloor)}` : tx('none')));
     tr.append(el('td', 'num', armouryPrice(w.market)));
@@ -14711,7 +14711,9 @@ function reputationChange(org) {
   // A floor: the logs hold what the backups kept and what put up a marker.
   // On this install Red Wind went from Junior to Member before the first
   // Red Wind contract the logs hold, so the count is never the whole story.
-  if (change.work) {
+  // A floor of nothing says nothing: "at least 0 contracts" was printed on
+  // both Headhunters cards.
+  if (change.work?.completed > 0) {
     parts.push(txn(change.work.completed,
       'at least {count} {issuer} contract finished in between',
       'at least {count} {issuer} contracts finished in between',
@@ -15235,7 +15237,9 @@ function renderEvents() {
     button.type = 'button';
     button.title = event.firstSeen ? tx('In your logs since {date}', { date: dateOf(event.firstSeen) }) : tx('Not in your logs yet');
     if (event.firstSeen) button.append(el('span', 'event-seen', '●'));
-    if (state) button.append(el('span', 'muted', ` · ${tx(state)}`));
+    // The dot already parts the title from the state; a middot after it read
+    // "●· tracked".
+    if (state) button.append(el('span', 'muted', `${event.firstSeen ? ' ' : ' · '}${tx(state)}`));
     button.addEventListener('click', () => { rememberEvent(event.id); renderEvents(); });
     picker.append(button);
   }
@@ -20393,10 +20397,10 @@ async function loadRoutes() {
     const level = (value) => ({ enough: tx('enough'), limited: tx('limited'), unknown: tx('unknown') }[value] || value);
     const capacity = [];
     capacity.push(route.buyStockScu > 0
-      ? tx('buy stock {units} SCU ({level})', { units: Math.floor(route.buyStockScu), level: level(route.buyAvailability) })
+      ? tx('buy stock {units} SCU ({level})', { units: fmtInt(Math.floor(route.buyStockScu)), level: level(route.buyAvailability) })
       : tx('buy stock unknown'));
     capacity.push(route.sellDemandScu > 0
-      ? tx('sell demand {units} SCU ({level})', { units: Math.floor(route.sellDemandScu), level: level(route.sellAvailability) })
+      ? tx('sell demand {units} SCU ({level})', { units: fmtInt(Math.floor(route.sellDemandScu)), level: level(route.sellAvailability) })
       : tx('sell demand unknown'));
     report.append(el('div', 'muted route-capacity', capacity.join(' · ')));
 
@@ -21335,7 +21339,11 @@ function endingCell(row) {
   const bad = SHARD_ENDINGS[row.lastEnding]?.[1] ?? false;
   td.append(el('span', bad ? 'bad' : null, endingLabel(row.lastEnding)));
 
-  if (row.visits > 1) {
+  // The breakdown is news unless it only repeats the label beside it: every
+  // visit ended as the last one did, "you left · 2× you left".
+  const kinds = Object.keys(row.endings || {}).filter((kind) => kind !== 'Open');
+  const repeats = kinds.length === 1 && kinds[0] === row.lastEnding;
+  if (row.visits > 1 && !repeats) {
     const rest = Object.entries(row.endings || {})
       .filter(([kind]) => kind !== 'Open')
       .sort((a, b) => b[1] - a[1])
@@ -25461,6 +25469,8 @@ function jobLines(job, onGot = null) {
     } else {
       whereCell.textContent = '—';
     }
+    const alike = heldAlikeLine(item);
+    if (alike) whereCell.append(alike);
     tr.append(whereCell);
 
     tr.append(el('td', item.buyPrice ? 'num' : 'num muted',
@@ -25964,50 +25974,181 @@ const pickedPlace = (select) => {
 };
 
 /**
- * The things this install knows how to buy, fetched once.
- *
- * Offered as a picker beside the free-text box rather than instead of it: the
- * box is still the list, and this is a way to put a correctly spelled line in
- * it. Only what can actually be bought is listed, because a line nothing sells
- * is a line no plan can route.
+ * The things this install knows how to buy, fetched once: the names a typed
+ * line is matched against, and the checklist composer's suggestions. Only what
+ * can actually be bought is listed, because a line nothing sells is a line no
+ * plan can route.
  */
 let catalogue = null;
 
-async function fillItemOptions(select) {
-  if (!select || select.childElementCount) return;
+/**
+ * Finding something to put on a list (1.2.60), each with the one counter worth
+ * naming beside it: the nearest, the cheapest, or the one that is also a stop
+ * for most of the list. The box is still the list; this spells a line into it.
+ *
+ * `answer` is undefined while asked, null when the ask failed.
+ */
+const JOB_FIND_SHOWN = 12;
+const jobFind = { sort: 'nearest', answer: undefined, asked: 0 };
 
-  const placeholder = document.createElement('option');
-  placeholder.value = '';
-  placeholder.textContent = tx('Add something we know…');
-  select.append(placeholder);
+/** The names already in the box, for fewest stops. */
+function jobFindListed() {
+  const box = $('#job-items');
+  return box ? parseJobItems(box.value).map((item) => item.name) : [];
+}
 
-  catalogue ??= await getJson('/api/shopping/catalogue').catch(() => ({ commodities: [], items: [] }));
+async function loadJobFind() {
+  const ask = ++jobFind.asked;
+  let url = `/api/shopping/near?sort=${jobFind.sort}`;
+  const listed = jobFindListed();
+  if (jobFind.sort === 'stops' && listed.length)
+    url += `&with=${encodeURIComponent(listed.join('|'))}`;
 
-  const add = (label, names) => {
-    if (!names?.length) return;
+  const answer = await getJson(url).catch(() => null);
+  // Switching twice quickly asks twice; only the last answer is drawn.
+  if (ask !== jobFind.asked) return;
+  jobFind.answer = answer;
+  renderJobFind();
+}
 
-    const group = document.createElement('optgroup');
-    group.label = tx(label);
+/** What the distances are measured from, said, since "nearest" means nothing without it. */
+function jobFindFromLine(answer) {
+  if (answer.pricesKnown === false)
+    return tx('Prices are off, so nothing says where anything is sold. Turn on UEX prices in Settings to see the nearest counters.');
 
-    for (const name of names) {
-      const option = document.createElement('option');
-      option.value = name;
-      option.textContent = name;
-      group.append(option);
-    }
+  const from = answer.from;
+  if (!from)
+    return answer.sort === 'cheapest'
+      ? tx('Cheapest counter for each.')
+      : tx('No place to measure from yet, so these are in name order. In game, the nearest counters come first.');
 
-    select.append(group);
-  };
+  const place = from.system ? `${from.name} (${from.system})` : from.name;
+  const said = from.source === 'live'
+    ? tx('Measured from where you are: {place}.', { place })
+    : from.source === 'last-seen'
+      ? tx('Measured from where you were last seen: {place}.', { place })
+      : tx('Measured from {place}, where your last session ended.', { place });
+  const lead = {
+    nearest: tx('Nearest counter for each.'),
+    cheapest: tx('Cheapest counter for each.'),
+    stops: tx('Things sold where the rest of your list is come first.'),
+  }[answer.sort] || '';
+  return `${lead} ${said} ${tx('Distances are straight lines between planets and moons; another system comes last.')}`;
+}
 
-  add('Cargo', catalogue.commodities);
-  add('Ship parts and gear', catalogue.items);
+/** Where one thing can be had, as its row says it. */
+function jobFindWhere(row, sort) {
+  if (!row.counters) return tx('No counter on file sells it');
+
+  const place = row.place || row.terminal || '';
+  let where;
+  if (row.here) where = tx('Here, at {place}', { place });
+  else if (row.gm === 0) where = row.body ? tx('{place}, also on {body}', { place, body: row.body }) : place;
+  else if (typeof row.gm === 'number') where = `${place} · ${shareGm(row.gm)} Gm`;
+  else where = row.system ? `${place} · ${row.system}` : place;
+
+  const parts = [where, `${money(row.price)}${row.kind === 'commodity' ? '/SCU' : ''}`];
+  if (sort === 'stops' && row.alsoSells)
+    parts.push(txn(row.alsoSells, 'sells 1 other thing on your list', 'sells {count} other things on your list'));
+  else if (row.counters > 1)
+    parts.push(sort === 'cheapest'
+      ? tx('cheapest of {count} places', { count: row.counters })
+      : tx('nearest of {count} places', { count: row.counters }));
+  return parts.join(' · ');
+}
+
+function renderJobFind() {
+  const list = $('#job-find-list');
+  const from = $('#job-find-from');
+  if (!list || !from) return;
+  list.textContent = '';
+
+  for (const button of $$('#job-find-sort button')) {
+    const on = button.dataset.sort === jobFind.sort;
+    button.classList.toggle('active', on);
+    button.setAttribute('aria-pressed', String(on));
+  }
+
+  const answer = jobFind.answer;
+  if (answer === undefined) {
+    from.textContent = tx('Looking up where things are sold…');
+    return;
+  }
+  if (!answer) {
+    from.textContent = tx('Could not look up what can be bought. Type the name in the box instead.');
+    return;
+  }
+  from.textContent = jobFindFromLine(answer);
+
+  const query = ($('#job-find-text')?.value || '').trim().toLowerCase();
+  const words = query.split(/\s+/).filter(Boolean);
+  const rows = answer.rows || [];
+
+  // Nothing typed: what is closest (or shares the most stops) heads the list,
+  // which is only worth showing when there is somewhere to measure from.
+  let matches;
+  if (words.length) {
+    matches = rows.filter((row) => {
+      const name = row.name.toLowerCase();
+      return words.every((word) => name.includes(word));
+    });
+    // The exact name first, then the server's order.
+    matches = [...matches.filter((row) => row.name.toLowerCase() === query),
+      ...matches.filter((row) => row.name.toLowerCase() !== query)];
+  } else if (answer.sort === 'stops') {
+    matches = rows.filter((row) => row.alsoSells > 0);
+  } else {
+    matches = answer.from ? rows.filter((row) => row.counters > 0) : [];
+  }
+
+  for (const row of matches.slice(0, JOB_FIND_SHOWN)) {
+    const li = el('li');
+    const pick = el('button', 'job-find-row');
+    pick.type = 'button';
+    pick.append(el('b', null, row.name), el('span', 'muted', jobFindWhere(row, answer.sort)));
+    pick.addEventListener('click', () => addJobLine(row.name));
+    li.append(pick);
+    list.append(li);
+  }
+
+  if (matches.length > JOB_FIND_SHOWN)
+    list.append(el('li', 'muted job-find-more',
+      tx('{count} more. Keep typing to narrow it.', { count: (matches.length - JOB_FIND_SHOWN).toLocaleString() })));
+  else if (words.length && !matches.length)
+    list.append(el('li', 'muted job-find-more', tx('Nothing on file by that name. It can still go in the box as you would write it.')));
+}
+
+/**
+ * Picking a name writes it into the box, where it can be given a quantity like
+ * any other line. The box stays the list; this only spells things.
+ */
+function addJobLine(picked) {
+  if (!picked) return;
+
+  const box = $('#job-items');
+  const lines = box.value.split('\n').filter((l) => l.trim());
+
+  if (!lines.some((l) => l.trim().toLowerCase().startsWith(picked.toLowerCase())))
+    lines.push(picked);
+
+  box.value = `${lines.join('\n')}\n`;
+  const find = $('#job-find-text');
+  if (find) find.value = '';
+
+  // The list just changed, which is what fewest stops is measured against.
+  if (jobFind.sort === 'stops') loadJobFind();
+  else renderJobFind();
+  box.focus();
 }
 
 function openJobForm() {
   const form = $('#job-form');
   form.hidden = false;
   fillPlaceOptions($('#job-place'), '');
-  fillItemOptions($('#job-add'));
+  // Asked again each time: where the pilot is moves between openings.
+  jobFind.answer = undefined;
+  renderJobFind();
+  loadJobFind();
   if (!form.hidden) $('#job-title').focus();
 }
 
@@ -26023,21 +26164,27 @@ function toggleJobForm() {
 $('#jobs-new')?.addEventListener('click', toggleJobForm);
 $('#operations-new-list')?.addEventListener('click', openJobForm);
 
-// Picking a name writes it into the box, where it can be given a quantity like
-// any other line. The box stays the list; this only spells things.
-$('#job-add')?.addEventListener('change', () => {
-  const picked = $('#job-add').value;
-  if (!picked) return;
+$('#job-find-text')?.addEventListener('input', renderJobFind);
 
-  const box = $('#job-items');
-  const lines = box.value.split('\n').filter((l) => l.trim());
+// Enter takes the first match rather than submitting a half-written list.
+$('#job-find-text')?.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  $('#job-find-list')?.querySelector('.job-find-row')?.click();
+});
 
-  if (!lines.some((l) => l.trim().toLowerCase().startsWith(picked.toLowerCase())))
-    lines.push(picked);
+$('#job-find-sort')?.addEventListener('click', (event) => {
+  const sort = (event.target?.closest?.('[data-sort]') || event.target)?.dataset?.sort;
+  if (!sort || sort === jobFind.sort) return;
+  jobFind.sort = sort;
+  jobFind.answer = undefined;
+  renderJobFind();
+  loadJobFind();
+});
 
-  box.value = `${lines.join('\n')}\n`;
-  $('#job-add').value = '';
-  box.focus();
+// Lines typed by hand count for fewest stops too, once the box is left.
+$('#job-items')?.addEventListener('change', () => {
+  if (jobFind.sort === 'stops' && !$('#job-form').hidden) loadJobFind();
 });
 
 $('#job-cancel')?.addEventListener('click', () => { $('#job-form').hidden = true; });
@@ -26610,6 +26757,17 @@ $('#checklist-create')?.addEventListener('click', async () => {
   if (await checklistCall('/api/checklists', 'POST', { title: title.value }, { keep: true })) title.value = '';
 });
 
+/**
+ * A build string cut to the version and seven characters of commit. A packaged
+ * build carries the commit twice ("1.2.41+190a243.190a2435b80b..."): the short
+ * form, then the full hash SourceLink appends. Matching only hex after the plus
+ * missed the dot, so the whole thing ran across the next two columns of the
+ * About facts.
+ */
+function shortBuild(build) {
+  return String(build || '').replace(/\+([0-9a-f]{7})[0-9a-f.]*$/i, '+$1');
+}
+
 /* ---------- StarStrings ---------- */
 
 /**
@@ -26874,11 +27032,15 @@ function renderLabelChanges() {
   body.textContent = '';
 
   for (const line of rows.slice(0, LABELS_CAP)) {
+    // Every kind, not only hauling titles: a contract name filed under
+    // another kind carries the same ~mission() slots, and the blueprint
+    // marks come wrapped in <EM4>, which the game draws as emphasis and this
+    // table printed as tags. The words inside are kept.
+    const shown = (text) => labelTitleText(text).replace(/<\/?EM\d*>/gi, '');
     const tr = el('tr');
-    const title = line.category === 'Hauling title';
-    tr.append(el('td', null, title ? labelTitleText(line.was) : line.was));
+    tr.append(el('td', null, shown(line.was)));
     tr.append(el('td', 'muted', tx(line.category)));
-    tr.append(el('td', null, title ? labelTitleText(line.becomes) : line.becomes));
+    tr.append(el('td', null, shown(line.becomes)));
     body.append(tr);
   }
 
@@ -28385,7 +28547,7 @@ function dataLogsCard(logs) {
   ].filter(Boolean).join(' · ');
 
   const wipe = logs.wipe && logs.wipe.hidden > 0
-    ? tx('{count} before your wipe of {date} are kept but not counted', { count: logs.wipe.hidden, date: dateOf(logs.wipe.at) })
+    ? tx('{count} before your wipe of {date} are kept but not counted', { count: logs.wipe.hidden, date: dayUtc(logs.wipe.at) })
     : null;
 
   return dataCard(tx('Your game logs'), { kind: 'game-log', label: tx('Game log') }, verdict, [
@@ -29792,7 +29954,12 @@ function renderFleetShips() {
 function relative(iso) {
   if (!iso) return tx('unknown');
 
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  // Calendar days on the reader's clock, not elapsed 24-hour stretches: a
+  // server left at 23:21 read "today" all the next day.
+  const then = new Date(iso);
+  const today = new Date();
+  const days = Math.round((Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
+    - Date.UTC(then.getFullYear(), then.getMonth(), then.getDate())) / 86400000);
   if (days <= 0) return tx('today');
   if (days === 1) return tx('yesterday');
   if (days < 30) return tx('{n} days ago', { n: days });
@@ -30447,7 +30614,7 @@ async function renderStash(stats) {
     const measured = place.microScu > 0 ? ` · ${volume(place.microScu)}` : '';
 
     card.append(el('div', 'sub',
-      `${tx('{count} item types', { count: place.itemCount })}${measured} · ${tx('last seen {date}', { date: dateOf(place.lastSeen) })}`));
+      `${txn(place.itemCount, '{count} item type', '{count} item types', { count: place.itemCount })}${measured} · ${tx('last seen {date}', { date: dateOf(place.lastSeen) })}`));
 
     for (const group of place.groups) {
       const head = el('div', 'stash-group');
@@ -34679,6 +34846,9 @@ const placeIdForTerminal = (terminal) =>
  */
 const sellerCache = new Map();
 
+/** Where the sellers' distances were measured from, as the last answer said (1.2.60). */
+let sellerFrom = null;
+
 async function sellersOf(item) {
   if (sellerCache.has(item.name)) return sellerCache.get(item.name);
 
@@ -34689,8 +34859,11 @@ async function sellersOf(item) {
   const found = await getJson(`/api/shopping/sellers?name=${encodeURIComponent(item.name)}`)
     .catch(() => null);
 
+  if (found && 'from' in found) sellerFrom = found.from || null;
+
+  // Every counter, not the twelve cheapest: the nearest one is routinely not
+  // among them, and fewest stops needs to see every place a line is sold.
   const sellers = (found?.sellers ?? [])
-    .slice(0, 12)
     .map((r) => ({
       terminal: r.terminal,
       placeId: r.placeId || placeIdForTerminal(r.terminal),
@@ -34700,6 +34873,9 @@ async function sellersOf(item) {
       price: r.price,
       scu: r.scu || 0,
       kind: r.kind,
+      body: r.body || '',
+      here: Boolean(r.here),
+      gm: typeof r.gm === 'number' ? r.gm : null,
     }));
 
   const answer = sellers.length ? sellers : fallback;
@@ -34743,6 +34919,18 @@ const atSameStop = (seller, destination) => {
     || (!!seller.place && terminalMatchesPlace(seller.place, destination.name)));
 };
 
+/** Smaller is nearer: here, then the same planet or moon, then by Gm; unmeasured last. */
+const sellerNearness = (seller) =>
+  seller.here ? -1 : typeof seller.gm === 'number' ? seller.gm : Number.MAX_VALUE;
+
+/** How far a counter is from the pilot, said; empty when it cannot be measured. */
+function sellerDistance(seller) {
+  if (seller.here) return tx('where you are');
+  if (seller.gm === 0) return seller.body ? tx('on {body}', { body: seller.body }) : tx('same planet or moon');
+  if (typeof seller.gm === 'number') return `${shareGm(seller.gm)} Gm`;
+  return '';
+}
+
 function sellerLabel(seller, item) {
   const stock = seller.scu
     ? ` · ${Math.round(seller.scu).toLocaleString()} SCU${shortStock(seller, item) ? ` — ${tx('short')}` : ''}`
@@ -34750,7 +34938,8 @@ function sellerLabel(seller, item) {
 
   // Where it is and whether the law reaches it: the cheapest counter is
   // routinely the one in Pyro, and that is a decision, not a detail.
-  const where = seller.system ? ` · ${seller.system}` : '';
+  const far = sellerDistance(seller);
+  const where = far ? ` · ${far}` : seller.system ? ` · ${seller.system}` : '';
   const risk = seller.security === 'lawless' ? ` — ${tx('lawless')}` : '';
 
   return seller.price > 0
@@ -34785,21 +34974,51 @@ async function planShoppingTrip(job, card) {
 
   const chooser = el('div', 'trip-chooser');
 
+  // What the run is chosen for (1.2.60): fewest stops as before, or each line
+  // at its nearest counter, or at its cheapest. The cheapest alone used to be
+  // the only answer a list's lines gave, and on 2026-11-16 an 18-line uniform
+  // list wanted seven counters from Seraphim to Everus Harbor.
+  let prefer = 'stops';
+  const title = el('span');
+  const sayTitle = () => {
+    title.textContent = prefer === 'nearest'
+      ? tx('Where to buy — each at the nearest counter')
+      : prefer === 'cheapest'
+        ? tx('Where to buy — each at the cheapest counter')
+        : destination
+          ? tx('Where to buy — {place} first, fewest stops after', { place: destination.name })
+          : tx('Where to buy — optimised for fewer stops');
+  };
+  sayTitle();
+
   const head = el('div', 'chooser-head');
-  head.append(el('span', null, destination
-    ? tx('Where to buy — {place} first, fewest stops after', { place: destination.name })
-    : tx('Where to buy — optimised for fewer stops')));
+  head.append(title);
   chooser.append(head);
+
+  const measuredFrom = el('div', 'muted chooser-from');
+  chooser.append(measuredFrom);
 
   const rows = el('div', 'chooser-rows');
   rows.append(el('div', 'muted', tx('Looking up sellers…')));
   chooser.append(rows);
   card.append(chooser);
 
+  // Asked afresh each time the chooser opens: the distances are from where
+  // the pilot is, and that moves.
+  sellerCache.clear();
   const options = await Promise.all(missing.map(async (item) => ({
     item,
     sellers: await sellersOf(item),
   })));
+
+  const from = sellerFrom;
+  measuredFrom.textContent = !from
+    ? tx('No place to measure from yet, so nearest cannot be worked out. In game, it measures from where you are.')
+    : from.source === 'live'
+      ? tx('Distances from where you are: {place}. Straight lines between planets and moons.', { place: from.name })
+      : from.source === 'last-seen'
+        ? tx('Distances from where you were last seen: {place}. Straight lines between planets and moons.', { place: from.name })
+        : tx('Distances from {place}, where your last session ended. Straight lines between planets and moons.', { place: from.name });
 
   rows.textContent = '';
 
@@ -34856,6 +35075,8 @@ async function planShoppingTrip(job, card) {
         .filter((counter) => counter.covers.length)
         .sort((a, b) => Number(atSameStop(b.seller, destination)) - Number(atSameStop(a.seller, destination))
           || b.covers.length - a.covers.length
+          // Between two landings that cover as much, the nearer (1.2.60).
+          || Math.sign(sellerNearness(a.seller) - sellerNearness(b.seller))
           || a.covers.reduce((sum, { item, sellers }) => {
             const seller = sellers.find((candidate) => candidate.terminal === a.seller.terminal);
             return sum + (seller?.price || 0) * Math.max(1, item.needed);
@@ -34884,6 +35105,11 @@ async function planShoppingTrip(job, card) {
       what.append(el('div', 'sub', item.needed > 0
         ? tx('{amount} needed', { amount: `${item.needed}${item.unit ? ` ${item.unit}` : ''}` })
         : tx('any amount')));
+      // Already somewhere, perhaps: seen but not counted, or another colour.
+      if (item.inventoryUnconfirmed && item.where?.length)
+        what.append(el('div', 'sub held-alike', tx('seen in your stash at {place}', { place: item.where[0] })));
+      const alike = heldAlikeLine(item);
+      if (alike) what.append(alike);
       row.append(what);
 
       if (!sellers.length) {
@@ -34894,7 +35120,12 @@ async function planShoppingTrip(job, card) {
 
       const select = el('select', 'select');
 
-      for (const seller of sellers) {
+      // Nearest first when nearest is what is asked for; cheapest first otherwise.
+      const listed = prefer === 'nearest'
+        ? [...sellers].sort((a, b) => Math.sign(sellerNearness(a) - sellerNearness(b)) || a.price - b.price)
+        : sellers;
+
+      for (const seller of listed) {
         const option = document.createElement('option');
         option.value = seller.terminal;
         option.textContent = sellerLabel(seller, item);
@@ -35023,7 +35254,9 @@ async function planShoppingTrip(job, card) {
       const sum = el('div', 'stop-sum');
       sum.append(el('div', null, tx('{count} of {total}', { count: counter.supplies.length, total: options.length })));
       if (counter.cost > 0) sum.append(el('div', 'muted', money(counter.cost)));
-      if (counter.seller.system) sum.append(el('div', 'muted', counter.seller.system));
+      const far = sellerDistance(counter.seller);
+      if (far) sum.append(el('div', 'muted', far));
+      else if (counter.seller.system) sum.append(el('div', 'muted', counter.seller.system));
       row.append(sum);
 
       rows.append(row);
@@ -35040,6 +35273,64 @@ async function planShoppingTrip(job, card) {
           chosen.set(item.name, terminal);
   };
 
+  /*
+   * Nearest and cheapest are per line, so they choose without stops; fewest
+   * stops is the set cover above. A full seller is preferred in all three, as
+   * a counter short of the quantity is a wasted landing.
+   */
+  const applyPreference = () => {
+    if (prefer === 'stops') {
+      optimiseStops();
+      return;
+    }
+
+    stops.length = 0;
+    for (const { item, sellers } of options) {
+      const full = sellers.filter((seller) => !shortStock(seller, item));
+      const pool = full.length ? full : sellers;
+      const best = prefer === 'nearest'
+        ? [...pool].sort((a, b) => Math.sign(sellerNearness(a) - sellerNearness(b)) || a.price - b.price)[0]
+        : [...pool].sort((a, b) => a.price - b.price || Math.sign(sellerNearness(a) - sellerNearness(b)))[0];
+      chosen.set(item.name, best?.terminal ?? '');
+    }
+  };
+
+  let view = 'item';
+  const redraw = () => (view === 'item' ? renderItems() : renderLocations());
+
+  const prefers = el('div', 'seg chooser-prefer');
+  prefers.setAttribute('role', 'group');
+  prefers.setAttribute('aria-label', tx('What the run is chosen for'));
+  for (const [key, label] of [['nearest', 'Nearest'], ['cheapest', 'Cheapest'], ['stops', 'Fewest stops']]) {
+    const button = el('button', key === prefer ? 'active' : null, tx(label));
+    button.type = 'button';
+    button.dataset.prefer = key;
+    button.setAttribute('aria-pressed', String(key === prefer));
+
+    button.addEventListener('click', () => {
+      prefer = key;
+      prefers.querySelectorAll('button').forEach((b) => {
+        const on = b.dataset.prefer === key;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-pressed', String(on));
+      });
+      sayTitle();
+      applyPreference();
+
+      // By location shows the ticks the choice made.
+      if (view === 'location' && !stops.length)
+        for (const terminal of chosen.values())
+          if (terminal && !stops.includes(terminal)) stops.push(terminal);
+
+      redraw();
+      retally();
+    });
+
+    prefers.append(button);
+  }
+
+  head.append(prefers);
+
   const views = el('div', 'seg chooser-views');
 
   for (const [key, label] of [['item', 'By item'], ['location', 'By location']]) {
@@ -35048,6 +35339,7 @@ async function planShoppingTrip(job, card) {
     button.addEventListener('click', () => {
       views.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
       button.classList.add('active');
+      view = key;
 
       if (key === 'item') {
         renderItems();
@@ -35096,6 +35388,28 @@ async function planShoppingTrip(job, card) {
   foot.append(create);
   foot.append(cancel);
   chooser.append(foot);
+}
+
+/**
+ * What the stash holds that is probably the line's thing in another colour or
+ * version (1.2.60), as one line; null when nothing is. Never a tick: whether
+ * the Red one will do for the Grey is the pilot's call.
+ */
+function heldAlikeLine(item) {
+  if (item.have || !item.alike?.length) return null;
+
+  const line = el('div', 'note-inline held-alike');
+  const first = item.alike[0];
+  line.append(`${tx('You have {name} at', { name: first.name })} `);
+  line.append(placeLink(first.places[0]));
+  if (first.places.length > 1 || item.alike.length > 1) {
+    const more = item.alike.flatMap((a) => a.places.map((p) => `${a.name} · ${p}`)).slice(1);
+    const tail = el('span', null, ` +${more.length}`);
+    tail.title = more.join('\n');
+    line.append(tail);
+  }
+  line.title = tx('Another colour or version of the same item, seen in your stash. Not counted as in hand.');
+  return line;
 }
 
 /** A one-line notice under a section, for when a button cannot do its job. */
@@ -38170,6 +38484,20 @@ function renderLiveScreen() {
       fights.hidden = !state.enabled;
       $('#live-fights').checked = Boolean(state.keepFights);
     }
+    // Shown with reading on, or with pictures already kept: a folder of them
+    // should stay findable after reading is switched off.
+    const strays = $('#live-strays-row');
+    if (strays) {
+      const kept = state.strayPictures || 0;
+      strays.hidden = !state.enabled && !kept;
+      $('#live-strays').checked = Boolean(state.catchStrayBars);
+      const line = $('#live-strays-kept');
+      line.hidden = !kept && !state.catchStrayBars;
+      line.textContent = kept
+        ? txn(kept, '{count} window pictured so far, in {folder}', '{count} windows pictured so far, in {folder}', { folder: state.strayFolder || '' })
+          + (kept >= 20 ? ` ${tx('- the most it keeps, so no more are taken.')}` : '')
+        : tx('None kept yet.');
+    }
     const trouble = $('#live-voice-trouble');
     if (trouble) {
       trouble.hidden = !(state.enabled && state.voice && state.voiceTrouble);
@@ -38443,6 +38771,22 @@ async function postLiveTargets(event) {
 }
 $('#live-targets')?.addEventListener('change', postLiveTargets);
 $('#settings-live-targets')?.addEventListener('change', postLiveTargets);
+
+// Pictures of false mining bars (1.2.58): their own agreement, posted on their own.
+$('#live-strays')?.addEventListener('change', async (event) => {
+  try {
+    const response = await fetch('/api/live/strays', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ on: event.target.checked }),
+    });
+    if (!response.ok) throw new Error(`strays ${response.status}`);
+    liveState = await response.json();
+    renderLiveScreen();
+  } catch {
+    event.target.checked = !event.target.checked;
+  }
+});
 
 // The fight record: its own agreement, posted on its own.
 $('#live-fights')?.addEventListener('change', async (event) => {
@@ -39065,14 +39409,17 @@ async function boot() {
   // After the label, which the switcher hangs off.
   if (!isOverlay && !isSnapshot) startChannelWatch();
 
+  // Where this page was actually served from: the port is a setting, and a
+  // second instance or a Linux install is not on 31337.
+  if (location.host) $('#about-dashboard').textContent = location.host;
+
   try {
     const info = await getJson('/api/version');
 
-    // The build string carries the commit ("0.2.0+9c3cdf7..."); seven hash
-    // characters identify it and forty just wrap the layout.
-    const build = (info.build || info.version).replace(/\+([0-9a-f]{7})[0-9a-f]*$/i, '+$1');
+    const build = shortBuild(info.build || info.version);
 
     $('#about-version').textContent = build;
+    $('#about-version').title = info.build || info.version;
     $('#foot-version').textContent = `v${info.version}`;
     $('#foot-version').title = tx('Build {build}', { build });
   } catch {

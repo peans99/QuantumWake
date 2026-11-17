@@ -39,14 +39,15 @@ public sealed class RockLog(string folder)
     private readonly DailyJsonLines<FractureRecord> _days = new(folder, r => r.Since);
 
     /// <summary>
-    /// The least crack a window has to show, with no time in the window and no
-    /// overcharge, to be a rock worked rather than a yellow box held still.
+    /// The least fill the watch takes as the charge having reached the bar,
+    /// for calling an overcharge (1.2.59). No longer enough on its own to make
+    /// a window a rock: see <see cref="Worked"/>.
     /// </summary>
     public const double WorkedFill = 0.05;
 
     /// <summary>
-    /// Whether the charge did anything: cracked, filled some of the bar, sat in
-    /// the window or went over it (1.2.55).
+    /// Whether the charge sat in the window (1.2.60; 1.2.55 also took a crack
+    /// or 5% of fill).
     /// </summary>
     /// <remarks>
     /// Every window this install had kept by 16 November 2026 was a phantom.
@@ -60,9 +61,24 @@ public sealed class RockLog(string folder)
     /// "rocks worked". (The 32nd, the Fleet Manager's bar from before 1.2.41,
     /// still reads as a crack: nothing in its record tells it apart.) A real charge that never reached the window is lost with them;
     /// it did nothing to the rock either.
+    /// <para>
+    /// An overcharge on its own stopped counting in 1.2.59. The only window
+    /// recorded with one, at 22:17 local on 2026-11-16, was filled 0% and
+    /// never in the window, with the pilot on foot in New Babbage; and a
+    /// charge cannot get over the window without passing through it, which
+    /// fills the bar or counts time in it. The watch now only counts one after
+    /// that, so this filters the record already written.
+    /// </para>
+    /// <para>
+    /// A crack or a fill on its own stopped counting in 1.2.60. By then 35
+    /// windows were kept, and the only three that counted as worked were
+    /// false: the Fleet Manager's bar of the 14th (94% green) and two bars at
+    /// 22:56 and 22:57 local on the 16th, 100% green from the first frame, the
+    /// pilot in a Pisces at Lorville. None had a second in the window, and the
+    /// bar fills only while the charge is in it.
+    /// </para>
     /// </remarks>
-    public static bool Worked(FractureRecord window) =>
-        window.Cracked || window.Filled >= WorkedFill || window.InWindowSeconds > 0 || window.Overcharges > 0;
+    public static bool Worked(FractureRecord window) => window.InWindowSeconds > 0;
 
     public void Add(FractureRecord window) => _days.Add(window);
 

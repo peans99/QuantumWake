@@ -44,7 +44,7 @@ public sealed class RockLogTests : IDisposable
     public void A_bar_let_go_is_kept_as_let_go_with_its_overcharges()
     {
         var window = Assert.Single(Run(R("in", 0.1), R("in", 0.2), R("above", 0.2), R("above", 0.2),
-            R("in", 0.3), R("in", 0.3), null, null));
+            R("in", 0.3), R("in", 0.3), R("in", 0.3), null, null));
 
         Assert.False(window.Cracked);
         Assert.Equal(1, window.Overcharges);
@@ -62,17 +62,38 @@ public sealed class RockLogTests : IDisposable
             R("below", 0.01, 2.1), R("below", 0, 2.1), null, null));
     }
 
+    /// <summary>Not recorded, but handed back for the pictures (1.2.58).</summary>
+    [Fact]
+    public void A_window_that_never_charged_is_handed_back_as_a_stray()
+    {
+        var watch = new MiningWatch();
+        ChargeReading?[] frames = [R("below", 0, 2.1), R("below", 0, 2.1), R("below", 0, 2.1), R("below", 0, 2.1), null, null];
+        for (var i = 0; i < frames.Length; i++) watch.See(frames[i], T0.AddSeconds(i));
+
+        Assert.Empty(watch.TakeEnded());
+        var stray = Assert.Single(watch.TakeStrays());
+        Assert.Equal(T0.AddSeconds(2), stray.Since);
+        Assert.Empty(watch.TakeStrays());
+        Assert.False(watch.Active);
+    }
+
     [Fact]
     public void Windows_kept_before_never_charged_ones_were_dropped_are_passed_over_when_read()
     {
         var log = new RockLog(_folder);
         log.Add(new FractureRecord(T0, T0.AddSeconds(8), false, 0, 0, 0));
         log.Add(new FractureRecord(T0.AddMinutes(1), T0.AddMinutes(1).AddSeconds(20), false, 0.2, 0, 0));
+        // An overcharge with the bar never filled, as kept at 22:17 on
+        // 2026-11-16 on foot in New Babbage: passed over since 1.2.59.
         log.Add(new FractureRecord(T0.AddMinutes(2), T0.AddMinutes(2).AddSeconds(20), false, 0, 0, 1));
+        log.Add(new FractureRecord(T0.AddMinutes(3), T0.AddMinutes(3).AddSeconds(20), false, 0, 4, 0));
+        // A full bar never in the window, as kept at 22:56 on 2026-11-16 in a
+        // Pisces at Lorville: passed over since 1.2.60, like the 20% one above.
+        log.Add(new FractureRecord(T0.AddMinutes(4), T0.AddMinutes(4).AddSeconds(16), true, 1, 0, 0));
 
         var read = log.Between(T0.AddHours(-1), T0.AddHours(1));
 
-        Assert.Equal([0.2, 0], read.Select(w => w.Filled));
+        Assert.Equal([T0.AddMinutes(3)], read.Select(w => w.Since));
     }
 
     [Fact]

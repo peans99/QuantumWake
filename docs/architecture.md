@@ -260,6 +260,24 @@ The chooser then offers the same decision from either end:
 Both views write into one map of line → terminal, so switching never loses a
 choice and the plan is built from a single answer.
 
+Over both views sits what the run is chosen for (1.2.61): **Nearest** puts
+each line at the counter closest to the pilot, **Cheapest** at its cheapest,
+and **Fewest stops** is the grouping above, with the nearer of two equally
+useful counters winning before price. Distances come from
+`/api/shopping/sellers`, which measures each counter from where the pilot
+is, else where they were last seen, else where the newest session ended
+(`ShoppingFrom`), body centre to body centre as the plan's own ordering
+does; the chooser says which. Every seller is kept, not the twelve cheapest,
+because the nearest was routinely not among them. A line the stash probably
+holds in another colour (`HeldNames.Alike`: the name less its last word, and
+the same type and maker in the reference data) says so under its name and
+on the card, and is never ticked by it.
+
+The new-list form finds things by name (`/api/shopping/near`,
+`NearestSellers`) with the same three choices, each match naming its one
+counter: on this install, measured from New Babbage, 425 of the 2,565
+things were sold there and 526 more on microTech.
+
 A list can also say **where it is for**, chosen when it is written and
 changeable afterwards. That is a preference rather than a filter: a line whose
 destination stocks it starts there even when somewhere else is cheaper — which

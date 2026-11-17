@@ -140,6 +140,18 @@ send nothing about you.
   went over, and whether the rock broke. Worked out from the bar's colours;
   no text from the screen is in it. One file a day, kept until you delete
   the folder.
+- **Pictures of false mining bars**, only while Keep pictures of false
+  mining bars is on (1.2.58): `live\stray-bars\` in the data folder. When
+  the live reader followed something as the mining charge bar and the
+  charge never did anything, two PNGs of the frame it was first seen on -
+  a third of the screen each way around it, with the box it followed
+  outlined, and the whole screen 640 pixels wide. These are pictures of the
+  screen and can show whatever was on it, chat included; they are the one
+  exception to "never the picture", made only on that switch. A real rock
+  is never pictured: the pictures are held in memory until the window
+  closes and written only if the charge never filled, entered the window or
+  went over. At most 20 windows, then no more are taken. Kept until you
+  delete the folder; nothing is sent anywhere.
 - **The record of fights**, only while Keep a record of fights is on:
   `combat\<date>.jsonl` in the data folder, one file a day, kept until you
   delete the folder.

@@ -422,6 +422,79 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
+### 1.2.62
+
+- **Plan trip on a shopping list picks nearest, cheapest or fewest stops.**
+  The run used to send every line to its cheapest counter wherever it was;
+  a uniform list wanted seven counters from Seraphim to Everus Harbor. A
+  switch over the chooser now picks **Nearest** (each line at the counter
+  closest to you), **Cheapest**, or **Fewest stops** (the default: the
+  same list fits in two). Every counter shows how far it is, measured from
+  where you are in game, or where your last session ended when you are not
+  in game, and every counter that sells a line is considered rather than
+  the twelve cheapest.
+- **Finding something to add is a search, nearest first.** The dropdown of
+  2,565 names on the new-list form is a search box: type part of a name and
+  each match says where it is sold, how far away and for how much, with the
+  same Nearest / Cheapest / Fewest stops switch. Typed nothing, it shows
+  what is sold where you are.
+- **A list says when you probably have a line already.** When your stash
+  holds the same item in another colour or version - ORC-mkV armour in Red
+  when the list says Grey - the line says so and where, without ticking it.
+- **More shops are on the map.** Counters the price feed names after a
+  station's short name - "FPS Armor Tressler", "Pharmacy Everus", "Platinum
+  Baijini" - now land at Port Tressler, Everus Harbor, Baijini Point,
+  Seraphim Station and three Pyro rest stops: 61 counters that had no place,
+  and so no distance.
+
+- **Mining callouts wait for mining.** "Rock cracked" was still said with
+  no rock about - twice in a Pisces at Lorville. The callouts now only
+  start while the game's logs have you in something that carries a mining
+  head (a Prospector, MOLE, Golem, ROC and the like; a ship too new for the
+  reference data still counts), and a crack is only called once the charge
+  has sat in the window, as it must on a real rock. Every false rock this
+  install had recorded fails that test, so the Sessions debrief stops
+  counting them. Hand mining on foot goes quiet with this.
+
+- **No more "Overcharge, back off" when you are not mining.** The same
+  yellow box behind the phantom rocks could be read as a charge over the
+  window, and the voice said so - on foot in New Babbage, with no ship.
+  An overcharge is now only called once the charge has been in the window
+  or the bar has begun to fill, as it must on a real rock, and the one
+  false overcharge already recorded no longer counts as a rock worked.
+
+- **Help find what the app mistakes for a mining bar.** A new switch under
+  Read from the game on the Log page, **Keep pictures of false mining
+  bars**, keeps two pictures each time the reader follows something it took
+  for the charge bar and the charge never does anything: the part of the
+  screen around it, with what it followed outlined in pink, and a small
+  copy of the whole screen. Off until you turn it on, at most 20, never of a
+  real rock, and they stay on your PC. They can show whatever was on
+  screen, chat included, so look before you share one.
+
+- **The About page reads properly again.** The version ran across the
+  Game install and Dashboard columns beside it on the Store build, the
+  Discord and privacy links were dark blue on the dark panel, and the
+  Dashboard address always said 31337 whatever port it was on.
+- **Links are readable everywhere.** Every plain link in the app - "Settings"
+  on Fleet and Loadout, "Fleet" on Hangar, the StarStrings page on Item
+  labels - was the browser's own blue or purple.
+- **Smaller fixes found going through every page.** Item labels kept two
+  of its three columns off screen behind one long contract title, and
+  showed the game's `<EM4>` and `~mission()` markup instead of the words.
+  The Armoury's Cheapest at column ran off the table; a magazine of 1000
+  had no separator, and a launcher showed 0 DPS rather than a dash. Search
+  boxes on Armoury, Controls and Mining cut their own hint mid-word, and
+  the names under neighbouring stick buttons on Controls ran together.
+  Servers said "today" for one left late last night and "you left · 2×
+  you left"; the wipe on What was read was a day early west of Greenwich;
+  Routes printed stock and demand with no thousands separators; contract
+  types read "Ato B" (now "A to B", after a one-time re-read of the game
+  files); the wallet check on Now gave its time in UTC; a stash with one
+  kind of item said "1 item types"; reputation cards said "at least 0
+  contracts"; and a shopping list's destination was cut to "Anywhere - no
+  particu".
+
 ### 1.2.57
 
 - **Settings → AI assistants suggests what to ask.** Once it is on, a few
