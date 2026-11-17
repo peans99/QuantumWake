@@ -729,6 +729,19 @@ without one are not recorded, and the ones already in `rocks\` are passed
 over when read rather than rewritten. A real charge that never reached the
 window goes too, and it did nothing to the rock either.
 
+**An overcharge has to come through the window (1.2.59).** On 16 November
+at 22:17 local the pilot was on foot in New Babbage, the logs naming no
+ship, when 17 `Fracture` frames came in over a minute between `Unknown`
+ones and the voice said "Overcharge, back off". The window it kept was 0%
+filled, never in the window, with one overcharge - the only overcharge in
+33 recorded windows, and the reason 1.2.55's rule had kept it as a rock.
+A charge rises through the window to get over it and fills the bar as it
+passes, so `MiningWatch` now counts and says "above" only after an "in" or
+5% of fill, and `RockLog.Worked` no longer counts an overcharge on its own.
+A laser that jumps the whole window between two frames, a second or two
+apart, goes unsaid. No real overcharge has been seen by this reader yet,
+so that cost is a guess and this one false alarm is not.
+
 **Catching the box (1.2.58).** A switch on the Log page, off by default,
 pictures it: `StrayBarCatcher` cuts two PNGs from the frame a bar is taken
 up on - a third of the screen each way around it with the bar outlined in

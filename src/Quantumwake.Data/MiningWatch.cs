@@ -211,7 +211,17 @@ public sealed class MiningWatch
                 _wasIn = true;
                 now.Add(Say(at, "window", "In the window"));
                 break;
-            case "above":
+            // Only once the charge has been in the window or the bar has begun
+            // to fill (1.2.59): a charge rises through the window to get over
+            // it, and it fills as it passes. On 2026-11-16 at 22:17 local the
+            // pilot was on foot in New Babbage, no ship in the logs, and a
+            // yellow box held still long enough to be followed, read as
+            // "above" and said "Overcharge, back off" with the bar 0% filled
+            // and never in the window. No real overcharge has been seen by
+            // this reader yet; that one was the only overcharge in 33
+            // recorded windows. A laser fast enough to jump the window
+            // between two frames goes unsaid, which is the cost.
+            case "above" when _wasIn || _maxFill >= RockLog.WorkedFill:
                 _overcharges++;
                 now.Add(Say(at, "overcharge", "Overcharge, back off"));
                 break;

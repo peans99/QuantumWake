@@ -83,11 +83,14 @@ public sealed class RockLogTests : IDisposable
         var log = new RockLog(_folder);
         log.Add(new FractureRecord(T0, T0.AddSeconds(8), false, 0, 0, 0));
         log.Add(new FractureRecord(T0.AddMinutes(1), T0.AddMinutes(1).AddSeconds(20), false, 0.2, 0, 0));
+        // An overcharge with the bar never filled, as kept at 22:17 on
+        // 2026-11-16 on foot in New Babbage: passed over since 1.2.59.
         log.Add(new FractureRecord(T0.AddMinutes(2), T0.AddMinutes(2).AddSeconds(20), false, 0, 0, 1));
+        log.Add(new FractureRecord(T0.AddMinutes(3), T0.AddMinutes(3).AddSeconds(20), false, 0, 4, 0));
 
         var read = log.Between(T0.AddHours(-1), T0.AddHours(1));
 
-        Assert.Equal([0.2, 0], read.Select(w => w.Filled));
+        Assert.Equal([T0.AddMinutes(1), T0.AddMinutes(3)], read.Select(w => w.Since));
     }
 
     [Fact]

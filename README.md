@@ -422,7 +422,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.58
+### 1.2.59
+
+- **No more "Overcharge, back off" when you are not mining.** The same
+  yellow box behind the phantom rocks could be read as a charge over the
+  window, and the voice said so - on foot in New Babbage, with no ship.
+  An overcharge is now only called once the charge has been in the window
+  or the bar has begun to fill, as it must on a real rock, and the one
+  false overcharge already recorded no longer counts as a rock worked.
 
 - **Help find what the app mistakes for a mining bar.** A new switch under
   Read from the game on the Log page, **Keep pictures of false mining

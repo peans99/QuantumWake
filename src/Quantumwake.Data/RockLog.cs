@@ -39,14 +39,14 @@ public sealed class RockLog(string folder)
     private readonly DailyJsonLines<FractureRecord> _days = new(folder, r => r.Since);
 
     /// <summary>
-    /// The least crack a window has to show, with no time in the window and no
-    /// overcharge, to be a rock worked rather than a yellow box held still.
+    /// The least crack a window has to show, with no time in the window, to be
+    /// a rock worked rather than a yellow box held still.
     /// </summary>
     public const double WorkedFill = 0.05;
 
     /// <summary>
-    /// Whether the charge did anything: cracked, filled some of the bar, sat in
-    /// the window or went over it (1.2.55).
+    /// Whether the charge did anything: cracked, filled some of the bar, or sat
+    /// in the window (1.2.55).
     /// </summary>
     /// <remarks>
     /// Every window this install had kept by 16 November 2026 was a phantom.
@@ -60,9 +60,17 @@ public sealed class RockLog(string folder)
     /// "rocks worked". (The 32nd, the Fleet Manager's bar from before 1.2.41,
     /// still reads as a crack: nothing in its record tells it apart.) A real charge that never reached the window is lost with them;
     /// it did nothing to the rock either.
+    /// <para>
+    /// An overcharge on its own stopped counting in 1.2.59. The only window
+    /// recorded with one, at 22:17 local on 2026-11-16, was filled 0% and
+    /// never in the window, with the pilot on foot in New Babbage; and a
+    /// charge cannot get over the window without passing through it, which
+    /// fills the bar or counts time in it. The watch now only counts one after
+    /// that, so this filters the record already written.
+    /// </para>
     /// </remarks>
     public static bool Worked(FractureRecord window) =>
-        window.Cracked || window.Filled >= WorkedFill || window.InWindowSeconds > 0 || window.Overcharges > 0;
+        window.Cracked || window.Filled >= WorkedFill || window.InWindowSeconds > 0;
 
     public void Add(FractureRecord window) => _days.Add(window);
 
