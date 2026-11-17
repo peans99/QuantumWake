@@ -75,6 +75,32 @@ public class TextOverlayPageTests
         Assert.Contains("1 of 2 renames match", page.NodeText("#labels-count"));
     }
 
+    /// <summary>
+    /// The game's markup is drawn, not read: a blueprint mark wrapped in
+    /// &lt;EM4&gt; showed as the tag itself, and a contract filed under a kind
+    /// other than hauling titles kept its raw ~mission() slots.
+    /// </summary>
+    [Fact]
+    public void Rows_show_the_words_rather_than_the_game_markup()
+    {
+        var page = Loaded("""
+            {
+              "installed": false, "installedAt": null, "layered": false,
+              "baseSource": "the game", "marked": 1, "sold": 0, "skipped": 0,
+              "changes": [
+                {"itemClass":"a","was":"Jorrit Dossier <EM4>[BP]*</EM4>","becomes":"Jorrit Dossier <EM4>[BP]*</EM4> *","category":"Mission items"},
+                {"itemClass":"b","was":"~mission(Location|name) run","becomes":"~mission(Location|name) run *","category":"Contracts"}
+              ],
+              "problem": null
+            }
+            """);
+
+        var body = page.NodeText("#textoverlay-table tbody");
+        Assert.Contains("Jorrit Dossier [BP]*", body);
+        Assert.DoesNotContain("EM4", body);
+        Assert.DoesNotContain("~mission(", body);
+    }
+
     [Fact]
     public void A_search_that_matches_nothing_says_so_rather_than_emptying_the_page()
     {

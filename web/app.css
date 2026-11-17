@@ -584,6 +584,14 @@ body.overlay .command-palette { display:none; }
 /* ---------- layout ---------- */
 
 main { padding: var(--gap) 22px 48px; max-width: var(--page); margin: 0 auto; position: relative; z-index: 1; }
+/* A link nobody styled fell back to the browser's blue and purple, which
+   is close to unreadable on these panels - the About page's Discord and
+   privacy links, "Settings" in the Fleet and Loadout captions, "Fleet" on
+   Hangar. Only bare links: a classed one is a button or a card and sets its
+   own colour, or means to inherit one. */
+a:not([class]) { color: var(--cyan); }
+a:not([class]):hover { color: var(--cyan-hot); }
+
 .view { display: none; }
 .view.active { display: block; animation: fade .18s ease-out; }
 @keyframes fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
@@ -1158,7 +1166,9 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
 
    decision the player revises. */
 .job-place-edit {
-  max-width: 26ch;
+  /* Wide enough for its own longest choice, "Anywhere — no particular stop",
+     which at 26ch read "Anywhere — no particu". */
+  max-width: 34ch;
   font-size: 11px;
   padding: 4px 8px;
 }
@@ -1441,6 +1451,12 @@ button.primary:disabled { opacity: .55; cursor: default; }
 /* ---------- tables ---------- */
 
 .table-wrap { overflow-x: auto; border: 1px solid var(--rule); background: var(--deep); }
+/* A contract title is one long run with no break in it, and on its own it
+   pushed Kind and Would become off the right edge of Item labels. */
+#textoverlay-table td { overflow-wrap: anywhere; }
+/* tbody td is nowrap, and the last column of the Armoury tables is a terminal
+   and a place: "FPS Armor Everus, Everus Harbor +3" ran off the table's edge. */
+td.armoury-where { white-space: normal; min-width: 160px; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 
 /* Each data workspace speaks with the same small status line while its own
@@ -2297,6 +2313,10 @@ body.overlay .activity-panel { width: min(300px, calc(100vw - 16px)); }
   transition: border-color .14s, box-shadow .14s;
 }
 .search::placeholder { color: var(--dim); }
+/* A page's own search sits alone at the right of its heading, and at the
+   shared 170px its placeholder was cut mid-word: "Search guns, armour, atta",
+   "Search actions and buttor", "Search resources and plac". */
+.section-bar .controls .search { min-width: 250px; }
 .search:focus, .select:focus {
   border-color: var(--cyan-deep);
   box-shadow: 0 0 0 1px rgba(53, 200, 240, .25);
@@ -7235,7 +7255,9 @@ td.armoury-cost { color: var(--amber); }
 .controls-grid-button { position: relative; aspect-ratio: 1; border-radius: 50%; border: 2px solid #5a2222; background: #2a0d0d; color: #7a5a5a; display: flex; align-items: center; justify-content: center; font: 700 13px var(--mono); }
 .controls-grid-button.bound { background: radial-gradient(circle at 35% 35%, #ff6a6a, #b30000 70%); border-color: #ff8a8a; color: #fff; box-shadow: 0 0 10px rgba(255, 60, 60, .45); }
 .controls-grid-button.lit { outline: 2px solid var(--cyan); outline-offset: 2px; }
-.controls-grid-label { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 3px; width: 120%; font: 10px var(--sans, inherit); line-height: 1.1; color: var(--muted); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* No wider than its own column: at 120% the ellipsised names under
+   neighbouring buttons ran together, "Increase S…Engage Qua…". */
+.controls-grid-label { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 3px; width: 100%; font: 10px var(--sans, inherit); line-height: 1.1; color: var(--muted); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .controls-grid-buttons { row-gap: 22px; }
 .controls-grid-cross { display: grid; grid-template-columns: repeat(3, 34px); grid-template-rows: repeat(3, 34px); gap: 4px; }
 .controls-grid-cross .up { grid-column: 2; grid-row: 1; }

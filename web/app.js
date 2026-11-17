@@ -10912,7 +10912,7 @@ function armouryEffectWords(e) {
 function armouryWhereCell(market) {
   // The cheapest terminal is a link to it on the map; the rest stay on the hover.
   const best = market?.shops?.[0];
-  const td = el('td', 'muted', best ? undefined : armouryWhere(market));
+  const td = el('td', 'muted armoury-where', best ? undefined : armouryWhere(market));
   if (best) {
     const place = best.place && !best.terminal.toLowerCase().includes(best.place.toLowerCase()) ? `, ${best.place}` : '';
     td.append(terminalLink(best.terminal), `${place}${market.shops.length > 1 ? ` +${market.shops.length - 1}` : ''}`);
@@ -11403,8 +11403,8 @@ function renderArmouryGuns() {
     }
     modes.append(list);
     tr.append(modes);
-    tr.append(el('td', 'num', best ? fmtInt(best.damagePerSecond) : '—'));
-    tr.append(el('td', 'num', w.magazine > 0 ? String(w.magazine) : '—'));
+    tr.append(el('td', 'num', best?.damagePerSecond > 0 ? fmtInt(best.damagePerSecond) : '—'));
+    tr.append(el('td', 'num', w.magazine > 0 ? fmtInt(w.magazine) : '—'));
     tr.append(el('td', 'num', best && w.magazine > 0 ? fmtInt(best.damagePerMagazine) : '—'));
     tr.append(el('td', 'num', w.dropStart > 0 ? `${fmtInt(w.dropStart)} m → ${fmtDamage(w.dropFloor)}` : tx('none')));
     tr.append(el('td', 'num', armouryPrice(w.market)));
@@ -14711,7 +14711,9 @@ function reputationChange(org) {
   // A floor: the logs hold what the backups kept and what put up a marker.
   // On this install Red Wind went from Junior to Member before the first
   // Red Wind contract the logs hold, so the count is never the whole story.
-  if (change.work) {
+  // A floor of nothing says nothing: "at least 0 contracts" was printed on
+  // both Headhunters cards.
+  if (change.work?.completed > 0) {
     parts.push(txn(change.work.completed,
       'at least {count} {issuer} contract finished in between',
       'at least {count} {issuer} contracts finished in between',
@@ -15235,7 +15237,9 @@ function renderEvents() {
     button.type = 'button';
     button.title = event.firstSeen ? tx('In your logs since {date}', { date: dateOf(event.firstSeen) }) : tx('Not in your logs yet');
     if (event.firstSeen) button.append(el('span', 'event-seen', '●'));
-    if (state) button.append(el('span', 'muted', ` · ${tx(state)}`));
+    // The dot already parts the title from the state; a middot after it read
+    // "●· tracked".
+    if (state) button.append(el('span', 'muted', `${event.firstSeen ? ' ' : ' · '}${tx(state)}`));
     button.addEventListener('click', () => { rememberEvent(event.id); renderEvents(); });
     picker.append(button);
   }
@@ -20393,10 +20397,10 @@ async function loadRoutes() {
     const level = (value) => ({ enough: tx('enough'), limited: tx('limited'), unknown: tx('unknown') }[value] || value);
     const capacity = [];
     capacity.push(route.buyStockScu > 0
-      ? tx('buy stock {units} SCU ({level})', { units: Math.floor(route.buyStockScu), level: level(route.buyAvailability) })
+      ? tx('buy stock {units} SCU ({level})', { units: fmtInt(Math.floor(route.buyStockScu)), level: level(route.buyAvailability) })
       : tx('buy stock unknown'));
     capacity.push(route.sellDemandScu > 0
-      ? tx('sell demand {units} SCU ({level})', { units: Math.floor(route.sellDemandScu), level: level(route.sellAvailability) })
+      ? tx('sell demand {units} SCU ({level})', { units: fmtInt(Math.floor(route.sellDemandScu)), level: level(route.sellAvailability) })
       : tx('sell demand unknown'));
     report.append(el('div', 'muted route-capacity', capacity.join(' · ')));
 
@@ -21335,7 +21339,11 @@ function endingCell(row) {
   const bad = SHARD_ENDINGS[row.lastEnding]?.[1] ?? false;
   td.append(el('span', bad ? 'bad' : null, endingLabel(row.lastEnding)));
 
-  if (row.visits > 1) {
+  // The breakdown is news unless it only repeats the label beside it: every
+  // visit ended as the last one did, "you left · 2× you left".
+  const kinds = Object.keys(row.endings || {}).filter((kind) => kind !== 'Open');
+  const repeats = kinds.length === 1 && kinds[0] === row.lastEnding;
+  if (row.visits > 1 && !repeats) {
     const rest = Object.entries(row.endings || {})
       .filter(([kind]) => kind !== 'Open')
       .sort((a, b) => b[1] - a[1])
@@ -26749,6 +26757,17 @@ $('#checklist-create')?.addEventListener('click', async () => {
   if (await checklistCall('/api/checklists', 'POST', { title: title.value }, { keep: true })) title.value = '';
 });
 
+/**
+ * A build string cut to the version and seven characters of commit. A packaged
+ * build carries the commit twice ("1.2.41+190a243.190a2435b80b..."): the short
+ * form, then the full hash SourceLink appends. Matching only hex after the plus
+ * missed the dot, so the whole thing ran across the next two columns of the
+ * About facts.
+ */
+function shortBuild(build) {
+  return String(build || '').replace(/\+([0-9a-f]{7})[0-9a-f.]*$/i, '+$1');
+}
+
 /* ---------- StarStrings ---------- */
 
 /**
@@ -27013,11 +27032,15 @@ function renderLabelChanges() {
   body.textContent = '';
 
   for (const line of rows.slice(0, LABELS_CAP)) {
+    // Every kind, not only hauling titles: a contract name filed under
+    // another kind carries the same ~mission() slots, and the blueprint
+    // marks come wrapped in <EM4>, which the game draws as emphasis and this
+    // table printed as tags. The words inside are kept.
+    const shown = (text) => labelTitleText(text).replace(/<\/?EM\d*>/gi, '');
     const tr = el('tr');
-    const title = line.category === 'Hauling title';
-    tr.append(el('td', null, title ? labelTitleText(line.was) : line.was));
+    tr.append(el('td', null, shown(line.was)));
     tr.append(el('td', 'muted', tx(line.category)));
-    tr.append(el('td', null, title ? labelTitleText(line.becomes) : line.becomes));
+    tr.append(el('td', null, shown(line.becomes)));
     body.append(tr);
   }
 
@@ -28524,7 +28547,7 @@ function dataLogsCard(logs) {
   ].filter(Boolean).join(' · ');
 
   const wipe = logs.wipe && logs.wipe.hidden > 0
-    ? tx('{count} before your wipe of {date} are kept but not counted', { count: logs.wipe.hidden, date: dateOf(logs.wipe.at) })
+    ? tx('{count} before your wipe of {date} are kept but not counted', { count: logs.wipe.hidden, date: dayUtc(logs.wipe.at) })
     : null;
 
   return dataCard(tx('Your game logs'), { kind: 'game-log', label: tx('Game log') }, verdict, [
@@ -29931,7 +29954,12 @@ function renderFleetShips() {
 function relative(iso) {
   if (!iso) return tx('unknown');
 
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  // Calendar days on the reader's clock, not elapsed 24-hour stretches: a
+  // server left at 23:21 read "today" all the next day.
+  const then = new Date(iso);
+  const today = new Date();
+  const days = Math.round((Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
+    - Date.UTC(then.getFullYear(), then.getMonth(), then.getDate())) / 86400000);
   if (days <= 0) return tx('today');
   if (days === 1) return tx('yesterday');
   if (days < 30) return tx('{n} days ago', { n: days });
@@ -30586,7 +30614,7 @@ async function renderStash(stats) {
     const measured = place.microScu > 0 ? ` · ${volume(place.microScu)}` : '';
 
     card.append(el('div', 'sub',
-      `${tx('{count} item types', { count: place.itemCount })}${measured} · ${tx('last seen {date}', { date: dateOf(place.lastSeen) })}`));
+      `${txn(place.itemCount, '{count} item type', '{count} item types', { count: place.itemCount })}${measured} · ${tx('last seen {date}', { date: dateOf(place.lastSeen) })}`));
 
     for (const group of place.groups) {
       const head = el('div', 'stash-group');
@@ -39381,14 +39409,17 @@ async function boot() {
   // After the label, which the switcher hangs off.
   if (!isOverlay && !isSnapshot) startChannelWatch();
 
+  // Where this page was actually served from: the port is a setting, and a
+  // second instance or a Linux install is not on 31337.
+  if (location.host) $('#about-dashboard').textContent = location.host;
+
   try {
     const info = await getJson('/api/version');
 
-    // The build string carries the commit ("0.2.0+9c3cdf7..."); seven hash
-    // characters identify it and forty just wrap the layout.
-    const build = (info.build || info.version).replace(/\+([0-9a-f]{7})[0-9a-f]*$/i, '+$1');
+    const build = shortBuild(info.build || info.version);
 
     $('#about-version').textContent = build;
+    $('#about-version').title = info.build || info.version;
     $('#foot-version').textContent = `v${info.version}`;
     $('#foot-version').title = tx('Build {build}', { build });
   } catch {

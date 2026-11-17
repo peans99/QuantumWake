@@ -387,6 +387,20 @@ public class ServersPageTests
         Assert.Contains("1× you left", ending);
     }
 
+    /// <summary>Every visit ended the way the last one did: the breakdown would only say the label again.</summary>
+    [Fact]
+    public void A_shard_left_the_same_way_every_time_does_not_repeat_itself()
+    {
+        var page = new Page();
+
+        Assert.Equal("you left", page.Text(
+            "endingCell({ visits: 2, endings: { Left: 2 }, lastEnding: 'Left' }).textContent").Trim());
+
+        // Two ways out: the tally is the news.
+        Assert.Contains("1× idle kick", page.Text(
+            "endingCell({ visits: 2, endings: { Left: 1, Idle: 1 }, lastEnding: 'Left' }).textContent"));
+    }
+
     /// <summary>A note-only row has no visit; the pasted line must not invent one the way the table refuses to.</summary>
     [Fact]
     public void The_report_for_a_shard_never_joined_here_says_so()

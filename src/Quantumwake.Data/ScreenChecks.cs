@@ -389,6 +389,6 @@ public static class ScreenChecks
             return new ScreenCheck(subject, claim, $"{expected:N0} aUEC from the ledger", "agrees");
 
         return new ScreenCheck(subject, claim, $"{expected:N0} aUEC from the ledger", "differs",
-            $"{Math.Abs(drift):N0} aUEC {(drift > 0 ? "arrived" : "left")} without a line in the log since {last.At:d MMM HH:mm}");
+            $"{Math.Abs(drift):N0} aUEC {(drift > 0 ? "arrived" : "left")} without a line in the log since {last.At.ToLocalTime():d MMM HH:mm}");
     }
 }
