@@ -424,29 +424,6 @@ Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
 ### 1.2.62
 
-- **The About page reads properly again.** The version ran across the
-  Game install and Dashboard columns beside it on the Store build, the
-  Discord and privacy links were dark blue on the dark panel, and the
-  Dashboard address always said 31337 whatever port it was on.
-- **Links are readable everywhere.** Every plain link in the app - "Settings"
-  on Fleet and Loadout, "Fleet" on Hangar, the StarStrings page on Item
-  labels - was the browser's own blue or purple.
-- **Smaller fixes found going through every page.** Item labels kept two
-  of its three columns off screen behind one long contract title, and
-  showed the game's `<EM4>` and `~mission()` markup instead of the words.
-  The Armoury's Cheapest at column ran off the table; a magazine of 1000
-  had no separator, and a launcher showed 0 DPS rather than a dash. Search
-  boxes on Armoury, Controls and Mining cut their own hint mid-word, and
-  the names under neighbouring stick buttons on Controls ran together.
-  Servers said "today" for one left late last night and "you left · 2×
-  you left"; the wipe on What was read was a day early west of Greenwich;
-  Routes printed stock and demand with no thousands separators; contract
-  types read "Ato B" (now "A to B", after a one-time re-read of the game
-  files); the wallet check on Now gave its time in UTC; a stash with one
-  kind of item said "1 item types"; reputation cards said "at least 0
-  contracts"; and a shopping list's destination was cut to "Anywhere - no
-  particu".
-
 - **Plan trip on a shopping list picks nearest, cheapest or fewest stops.**
   The run used to send every line to its cheapest counter wherever it was;
   a uniform list wanted seven counters from Seraphim to Everus Harbor. A
@@ -494,6 +471,29 @@ Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
   copy of the whole screen. Off until you turn it on, at most 20, never of a
   real rock, and they stay on your PC. They can show whatever was on
   screen, chat included, so look before you share one.
+
+- **The About page reads properly again.** The version ran across the
+  Game install and Dashboard columns beside it on the Store build, the
+  Discord and privacy links were dark blue on the dark panel, and the
+  Dashboard address always said 31337 whatever port it was on.
+- **Links are readable everywhere.** Every plain link in the app - "Settings"
+  on Fleet and Loadout, "Fleet" on Hangar, the StarStrings page on Item
+  labels - was the browser's own blue or purple.
+- **Smaller fixes found going through every page.** Item labels kept two
+  of its three columns off screen behind one long contract title, and
+  showed the game's `<EM4>` and `~mission()` markup instead of the words.
+  The Armoury's Cheapest at column ran off the table; a magazine of 1000
+  had no separator, and a launcher showed 0 DPS rather than a dash. Search
+  boxes on Armoury, Controls and Mining cut their own hint mid-word, and
+  the names under neighbouring stick buttons on Controls ran together.
+  Servers said "today" for one left late last night and "you left · 2×
+  you left"; the wipe on What was read was a day early west of Greenwich;
+  Routes printed stock and demand with no thousands separators; contract
+  types read "Ato B" (now "A to B", after a one-time re-read of the game
+  files); the wallet check on Now gave its time in UTC; a stash with one
+  kind of item said "1 item types"; reputation cards said "at least 0
+  contracts"; and a shopping list's destination was cut to "Anywhere - no
+  particu".
 
 ### 1.2.57
 
