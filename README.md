@@ -422,7 +422,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.59
+### 1.2.60
+
+- **Mining callouts wait for mining.** "Rock cracked" was still said with
+  no rock about - twice in a Pisces at Lorville. The callouts now only
+  start while the game's logs have you in something that carries a mining
+  head (a Prospector, MOLE, Golem, ROC and the like; a ship too new for the
+  reference data still counts), and a crack is only called once the charge
+  has sat in the window, as it must on a real rock. Every false rock this
+  install had recorded fails that test, so the Sessions debrief stops
+  counting them. Hand mining on foot goes quiet with this.
 
 - **No more "Overcharge, back off" when you are not mining.** The same
   yellow box behind the phantom rocks could be read as a charge over the

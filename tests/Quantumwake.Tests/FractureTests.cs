@@ -255,10 +255,26 @@ public sealed class FractureTests
     public void A_window_that_ends_by_absence_is_still_recorded()
     {
         var watch = new MiningWatch();
-        for (var i = 0; i < 3; i++) watch.See(R("in", 0.3), T0.AddSeconds(i));
-        watch.See(null, T0.AddSeconds(3));
-        watch.See(null, T0.AddSeconds(4));
+        for (var i = 0; i < 5; i++) watch.See(R("in", 0.3), T0.AddSeconds(i));
+        watch.See(null, T0.AddSeconds(5));
+        watch.See(null, T0.AddSeconds(6));
 
         Assert.Single(watch.TakeEnded());
+    }
+
+    [Fact]
+    public void A_bar_full_from_the_start_and_never_in_the_window_is_no_crack()
+    {
+        // 2026-11-16 22:56, in a Pisces at Lorville: a bar 100% green from the
+        // first frame went away and "Rock cracked" was said.
+        var watch = new MiningWatch();
+        var said = new List<string>();
+        var i = 0;
+        foreach (var f in new ChargeReading?[] { R("below", 0, 1), R("below", 0, 1), R("below", 1, 1), R("below", 1, 1), null, null })
+            said.AddRange(watch.See(f, T0.AddSeconds(i++)).Select(c => c.Text));
+
+        Assert.Empty(said);
+        Assert.Empty(watch.TakeEnded());
+        Assert.False(Assert.Single(watch.TakeStrays()).Cracked);
     }
 }

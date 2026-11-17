@@ -742,6 +742,24 @@ A laser that jumps the whole window between two frames, a second or two
 apart, goes unsaid. No real overcharge has been seen by this reader yet,
 so that cost is a guess and this one false alarm is not.
 
+**Only in a mining hull, and only through the window (1.2.60).** On 16
+November at 22:56 and 22:57 local, in a Pisces at Lorville, "Rock cracked"
+was said twice: two windows 100% filled from their first frame and never a
+second in the window. With those, 35 windows were kept, and the only three
+that counted as worked - those two and the Fleet Manager's bar of the 14th
+- had no time in the window; the bar fills only while the charge is in it.
+So `MiningWatch` calls a crack only after an "in", and `RockLog.Worked`
+asks for time in the window and nothing else.
+
+The live loop also takes a bar up only while the logs put the pilot in a
+hull with a mining head (`MiningHulls.CanMine`). The changeable ports in
+`digest-ship-slots.json` name 11 such hulls of 323 but miss the ROC, whose
+arm is not marked changeable, so the Garage's loadout is asked too. On this
+install that gives yes for the Prospector, MOLE, Golem, ROC, ROC-DS, ATLS
+GEO and Hyun, no for the Pisces, Golem OX, Hornet, Fortune and Ironclad,
+and unknown for the Hermes and Arrastra, which are newer than the data and
+are let through. On foot is no, at the cost of hand mining's callouts.
+
 **Catching the box (1.2.58).** A switch on the Log page, off by default,
 pictures it: `StrayBarCatcher` cuts two PNGs from the frame a bar is taken
 up on - a third of the screen each way around it with the bar outlined in

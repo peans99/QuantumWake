@@ -131,14 +131,22 @@ public sealed class MiningWatch
             if (!_active) return now;
             if (++_absent < 2) return now;
 
-            // The bar has gone: cracked if it had filled, let go if not.
-            if (_maxFill >= CrackedAt)
+            // The bar has gone: cracked if it had filled while the charge sat
+            // in the window, let go if not. The window is required since
+            // 1.2.60: on 2026-11-16 at 22:56 and 22:57 local, in a Pisces at
+            // Lorville, a bar read 100% green from the first frame and never
+            // in the window was said and recorded as "Rock cracked", as the
+            // Fleet Manager's bar had been on the 14th. Those three were the
+            // only windows of 35 kept that counted as worked, and none of them
+            // spent a second in the window; a real crack fills only there.
+            var cracked = _maxFill >= CrackedAt && _wasIn;
+            if (cracked)
             {
                 _cracked++;
                 _lastCrack = at;
                 now.Add(Say(at, "cracked", "Rock cracked"));
             }
-            var ended = new FractureRecord(_since, _lastAt, _maxFill >= CrackedAt, _maxFill, _inFor, _overcharges);
+            var ended = new FractureRecord(_since, _lastAt, cracked, _maxFill, _inFor, _overcharges);
             if (RockLog.Worked(ended)) _ended.Add(ended);
             else _strays.Add(ended);
             _active = false;
