@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/peans99/QuantumWake/releases/latest"><img alt="Download for Windows" src="https://img.shields.io/badge/Download-Windows_10_%2F_11-0078D6?style=for-the-badge"></a>
+  <a href="https://apps.microsoft.com/detail/9NVQ4KN17KB8"><img alt="Get it from the Microsoft Store" src="https://img.shields.io/badge/Get_it_from-Microsoft_Store-0078D6?style=for-the-badge"></a>
   <a href="#linux"><img alt="Also on Linux" src="https://img.shields.io/badge/Also_on-Linux-46617a?style=for-the-badge"></a>
 </p>
 
@@ -131,6 +132,16 @@ An overlay over the game, pages for Cougar MFDs, a Stream Deck profile built fro
 
 > **Your game, your data.** Everything is read and kept on your PC. Online
 > extras such as current market prices are off until you turn them on.
+
+<details>
+<summary>Rather install from the Microsoft Store?</summary>
+
+**[Get Quantum Wake from the Microsoft Store](https://apps.microsoft.com/detail/9NVQ4KN17KB8).**
+The Store installs it, signs it and keeps it up to date, so there is no
+unknown-publisher warning. Each release reaches the Store after Microsoft
+certifies it, usually a day or two after it appears here. Then carry on from
+step 2 above.
+</details>
 
 <details>
 <summary>Rather have an installer?</summary>
@@ -421,6 +432,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 ## Release notes
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
+
+### 1.2.63
+
+- **Quantum Wake is on the Microsoft Store.** The page now links to
+  [the Store listing](https://apps.microsoft.com/detail/9NVQ4KN17KB8), for
+  anyone who would rather have the Store install and update it than download
+  the executable.
 
 ### 1.2.62
 
