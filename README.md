@@ -24,6 +24,13 @@
   <img src="docs/images/tour.gif" width="900" alt="A tour of the dashboard: Now, Map, the 3D view, the Command deck, the Itinerary, the fleet in 3D, the Market, armour in 3D and Contracts">
 </p>
 
+<table align="center">
+  <tr>
+    <td align="center" valign="top" width="50%"><a href="https://youtu.be/FVlt2f8WKXM"><img src="https://img.youtube.com/vi/FVlt2f8WKXM/maxresdefault.jpg" width="420" alt="Watch the Quantum Wake overview on YouTube"></a><br><b><a href="https://youtu.be/FVlt2f8WKXM">Overview</a></b> · 2 minutes</td>
+    <td align="center" valign="top" width="50%"><a href="https://youtu.be/crMjpOnyruI"><img src="https://img.youtube.com/vi/crMjpOnyruI/maxresdefault.jpg" width="420" alt="Watch every Quantum Wake feature on YouTube"></a><br><b><a href="https://youtu.be/crMjpOnyruI">Every feature</a></b> · 12 minutes</td>
+  </tr>
+</table>
+
 ## Pick up where you left off
 
 <table>
@@ -433,12 +440,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.63
+### 1.2.64
 
 - **Quantum Wake is on the Microsoft Store.** The page now links to
   [the Store listing](https://apps.microsoft.com/detail/9NVQ4KN17KB8), for
   anyone who would rather have the Store install and update it than download
   the executable.
+- **Two videos show it working:** a
+  [two-minute overview](https://youtu.be/FVlt2f8WKXM) and a
+  [twelve-minute tour of every feature](https://youtu.be/crMjpOnyruI), both
+  linked from the top of this page.
 
 ### 1.2.62
 
