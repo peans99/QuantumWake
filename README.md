@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/peans99/QuantumWake/releases/latest"><img alt="Download for Windows" src="https://img.shields.io/badge/Download-Windows_10_%2F_11-0078D6?style=for-the-badge"></a>
+  <a href="https://apps.microsoft.com/detail/9NVQ4KN17KB8"><img alt="Get it from the Microsoft Store" src="https://img.shields.io/badge/Get_it_from-Microsoft_Store-0078D6?style=for-the-badge"></a>
   <a href="#linux"><img alt="Also on Linux" src="https://img.shields.io/badge/Also_on-Linux-46617a?style=for-the-badge"></a>
 </p>
 
@@ -22,6 +23,13 @@
 <p align="center">
   <img src="docs/images/tour.gif" width="900" alt="A tour of the dashboard: Now, Map, the 3D view, the Command deck, the Itinerary, the fleet in 3D, the Market, armour in 3D and Contracts">
 </p>
+
+<table align="center">
+  <tr>
+    <td align="center" valign="top" width="50%"><a href="https://youtu.be/FVlt2f8WKXM"><img src="https://img.youtube.com/vi/FVlt2f8WKXM/maxresdefault.jpg" width="420" alt="Watch the Quantum Wake overview on YouTube"></a><br><b><a href="https://youtu.be/FVlt2f8WKXM">Overview</a></b> · 2 minutes</td>
+    <td align="center" valign="top" width="50%"><a href="https://youtu.be/crMjpOnyruI"><img src="https://img.youtube.com/vi/crMjpOnyruI/maxresdefault.jpg" width="420" alt="Watch every Quantum Wake feature on YouTube"></a><br><b><a href="https://youtu.be/crMjpOnyruI">Every feature</a></b> · 12 minutes</td>
+  </tr>
+</table>
 
 ## Pick up where you left off
 
@@ -131,6 +139,16 @@ An overlay over the game, pages for Cougar MFDs, a Stream Deck profile built fro
 
 > **Your game, your data.** Everything is read and kept on your PC. Online
 > extras such as current market prices are off until you turn them on.
+
+<details>
+<summary>Rather install from the Microsoft Store?</summary>
+
+**[Get Quantum Wake from the Microsoft Store](https://apps.microsoft.com/detail/9NVQ4KN17KB8).**
+The Store installs it, signs it and keeps it up to date, so there is no
+unknown-publisher warning. Each release reaches the Store after Microsoft
+certifies it, usually a day or two after it appears here. Then carry on from
+step 2 above.
+</details>
 
 <details>
 <summary>Rather have an installer?</summary>
@@ -421,6 +439,17 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 ## Release notes
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
+
+### 1.2.64
+
+- **Quantum Wake is on the Microsoft Store.** The page now links to
+  [the Store listing](https://apps.microsoft.com/detail/9NVQ4KN17KB8), for
+  anyone who would rather have the Store install and update it than download
+  the executable.
+- **Two videos show it working:** a
+  [two-minute overview](https://youtu.be/FVlt2f8WKXM) and a
+  [twelve-minute tour of every feature](https://youtu.be/crMjpOnyruI), both
+  linked from the top of this page.
 
 ### 1.2.62
 
