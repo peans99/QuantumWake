@@ -146,6 +146,69 @@ public class ShoppingChooserTests
         Assert.Equal("1 stop", page.Text("__dom.node('#test-card').byClass('chooser-foot')[0].children[0].textContent"));
     }
 
+    /// <summary>
+    /// The same two lines that group at ArcCorp 056, but Agricium's own store
+    /// is Endgame (1.2.65): the run lands there for it, whatever fewest stops
+    /// would rather, and Laranite - not sold at Endgame - goes where it would.
+    /// </summary>
+    private static void OpenWithStore(Page page, string store, string prefer = "")
+    {
+        page.Serve("/api/shopping/sellers?name=Agricium", """
+            {"name":"Agricium","kind":"commodity","sellers":[
+              {"kind":"commodity","terminal":"Endgame","placeId":"","security":"lawless","system":"Pyro","price":6840,"scu":67},
+              {"kind":"commodity","terminal":"ArcCorp 056","placeId":"","security":"unknown","price":7200,"scu":900}
+            ]}
+            """);
+        page.Do($$"""
+            const job = {
+              id: 'j1',
+              title: 'Restock',
+              items: [
+                { name: 'Laranite', needed: 10, unit: 'SCU', have: false, buyAt: 'ArcCorp 056', buyPrice: 7047 },
+                { name: 'Agricium', needed: 5, unit: 'SCU', have: false, buyAt: '{{store}}', store: '{{store}}' },
+              ],
+            };
+
+            await planShoppingTrip(job, __dom.node('#test-card'));
+            {{(prefer.Length > 0 ? $"__dom.node('#test-card').byClass('chooser-prefer')[0].children.find(b => b.textContent === {Page.Quote(prefer)}).fire('click');" : "")}}
+            """);
+    }
+
+    [Fact]
+    public void A_store_chosen_for_a_line_wins_over_fewest_stops()
+    {
+        var page = WithSellers();
+        OpenWithStore(page, "Endgame");
+
+        Assert.Equal("ArcCorp 056", page.Text($"{SelectIn(0)}.value"));
+        Assert.Equal("Endgame", page.Text($"{SelectIn(1)}.value"));
+        Assert.Equal("2 stops", page.Text("__dom.node('#test-card').byClass('chooser-foot')[0].children[0].textContent"));
+        Assert.Contains("store chosen on the list: Endgame", page.NodeText("#test-card"));
+    }
+
+    [Theory]
+    [InlineData("Nearest")]
+    [InlineData("Cheapest")]
+    public void A_store_chosen_for_a_line_holds_whatever_the_run_is_chosen_for(string prefer)
+    {
+        var page = WithSellers();
+        OpenWithStore(page, "ArcCorp 056", prefer);
+
+        // Endgame is the cheaper Agricium; the line's own store stands.
+        Assert.Equal("ArcCorp 056", page.Text($"{SelectIn(1)}.value"));
+    }
+
+    /// <summary>A store the feed lists nothing at is said, and the line falls back to the run.</summary>
+    [Fact]
+    public void A_store_with_no_known_seller_there_is_said_and_left_to_the_run()
+    {
+        var page = WithSellers();
+        OpenWithStore(page, "HUR-L5");
+
+        Assert.Contains("chosen on the list: HUR-L5, where no price is known for it", page.NodeText("#test-card"));
+        Assert.Equal("ArcCorp 056", page.Text($"{SelectIn(1)}.value"));
+    }
+
     [Fact]
     public void Something_with_no_seller_is_shown_rather_than_dropped()
     {

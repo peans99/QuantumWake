@@ -152,7 +152,8 @@ public static class McpPrompts
             .Append("much. Say which parts are fine as they are. A number no tool gave you is not known - do not supply one.\n");
 
         text.Append("5. ").Append(s.Writes
-            ? "Offer to put the parts on a shopping list with create_shopping_list. Make it only when I say yes."
+            ? "Offer to save the fit as a Garage build with save_garage_build, and to put the parts on a shopping "
+              + "list with create_shopping_list. Do either only when I say yes."
             : "Changes are not allowed in Quantum Wake, so finish with a plain list of what to buy and where.")
             .Append("\n\n").Append(Honesty);
         return text.ToString();

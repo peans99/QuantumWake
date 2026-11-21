@@ -16,7 +16,28 @@ namespace Quantumwake.Data;
 /// bought for this fit and not an older one. Without this a line the logs
 /// cannot prove stayed open until the whole list was marked done.
 /// </param>
-public sealed record JobItem(string Name, double Needed, string Unit = "", string? Note = null, bool Got = false);
+/// <param name="Store">
+/// The counter this one line is to be bought at, when someone chose one: a UEX
+/// terminal name, as the sellers lookup gives it. A list's destination is one
+/// place for everything, and a run is often two - the weapons at one station,
+/// a part only sold at another - so a line can name its own. Null means the
+/// line goes wherever the list's run puts it.
+/// </param>
+/// <param name="StoreId">The map's id for the store's place, so a plan can draw the stop.</param>
+public sealed record JobItem(
+    string Name,
+    double Needed,
+    string Unit = "",
+    string? Note = null,
+    bool Got = false,
+    string? Store = null,
+    string? StoreId = null)
+{
+    /// <summary>The line with its store tidied: blank reads as none, and no store has no id.</summary>
+    public JobItem Tidy() => string.IsNullOrWhiteSpace(Store)
+        ? this with { Store = null, StoreId = null }
+        : this with { Store = Store.Trim(), StoreId = string.IsNullOrWhiteSpace(StoreId) ? null : StoreId.Trim() };
+}
 
 /// <summary>
 /// A plan the player is working towards: a blueprint to craft, or a shopping
@@ -122,7 +143,7 @@ public sealed class JobStore
             source,
             DateTimeOffset.UtcNow,
             Done: false,
-            items,
+            [.. items.Select(i => i.Tidy())],
             Pinned: false,
             Destination: string.IsNullOrWhiteSpace(destination) ? null : destination.Trim(),
             DestinationId: string.IsNullOrWhiteSpace(destinationId) ? null : destinationId.Trim());
@@ -184,7 +205,9 @@ public sealed class JobStore
                 kept = existing.DestinationChosen && !string.IsNullOrWhiteSpace(existing.Destination);
                 _jobs[index] = existing with
                 {
-                    Items = [.. items],
+                    // A store chosen for a line is the pilot's, like a chosen
+                    // destination: the next proposal keeps it.
+                    Items = KeepStores(existing.Items, items),
                     Destination = kept ? existing.Destination : string.IsNullOrWhiteSpace(destination) ? null : destination.Trim(),
                     DestinationId = kept ? existing.DestinationId : string.IsNullOrWhiteSpace(destinationId) ? null : destinationId.Trim(),
                 };
@@ -251,6 +274,49 @@ public sealed class JobStore
     }
 
     /// <summary>
+    /// Says where one line is to be bought, or - with no store - hands it back
+    /// to the list's run. False when the list or the line is unknown.
+    /// </summary>
+    public bool SetStore(string id, string name, string? store, string? storeId)
+    {
+        lock (_gate)
+        {
+            var index = _jobs.FindIndex(j => j.Id == id);
+            if (index < 0)
+                return false;
+
+            var items = _jobs[index].Items.ToList();
+            var line = items.FindIndex(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (line < 0)
+                return false;
+
+            items[line] = (items[line] with { Store = store, StoreId = storeId }).Tidy();
+            _jobs[index] = _jobs[index] with { Items = items };
+            Save();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// The new lines, each keeping the store its namesake had when it brings
+    /// none of its own. Shared by a rewrite and a proposal: correcting an
+    /// amount, or a Garage fit changing one part, is no reason to forget where
+    /// the rest were to be bought.
+    /// </summary>
+    private static List<JobItem> KeepStores(IReadOnlyList<JobItem> before, IEnumerable<JobItem> after)
+    {
+        var stores = before
+            .Where(i => i.Store is not null)
+            .GroupBy(i => i.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        return [.. after.Select(i => i.Tidy()).Select(i =>
+            i.Store is null && stores.TryGetValue(i.Name.Trim(), out var was)
+                ? i with { Store = was.Store, StoreId = was.StoreId }
+                : i)];
+    }
+
+    /// <summary>
     /// Adds one thing to a list: the open one named, when the page asked the
     /// pilot which; else the list the player is filling - a pinned shopping
     /// list, the top one on Shopping when several are, which is the newest -
@@ -260,6 +326,7 @@ public sealed class JobStore
     /// </summary>
     public Job Collect(JobItem item, string? jobId = null)
     {
+        item = item.Tidy();
         lock (_gate)
         {
             var index = jobId is { Length: > 0 } ? _jobs.FindIndex(j => j.Id == jobId && !j.Done) : -1;
@@ -297,8 +364,15 @@ public sealed class JobStore
                 string.Equals(i.Name, item.Name, StringComparison.OrdinalIgnoreCase));
 
             // Wanting more of a thing reopens a line ticked for the smaller amount.
+            // Naming a store moves the line there; naming none leaves it where it was.
             if (existing >= 0)
-                items[existing] = items[existing] with { Needed = items[existing].Needed + item.Needed, Got = false };
+                items[existing] = items[existing] with
+                {
+                    Needed = items[existing].Needed + item.Needed,
+                    Got = false,
+                    Store = item.Store ?? items[existing].Store,
+                    StoreId = item.Store is null ? items[existing].StoreId : item.StoreId,
+                };
             else
                 items.Add(item);
 
@@ -331,7 +405,9 @@ public sealed class JobStore
     /// <summary>
     /// Rewrites a list the pilot is editing: its title and every line. A line
     /// that keeps its name keeps its tick, so correcting an amount does not
-    /// quietly reopen something already bought. False when the id is unknown.
+    /// quietly reopen something already bought, and keeps the store chosen for
+    /// it, since the card's text has nowhere to write one. False when the id is
+    /// unknown.
     /// </summary>
     public bool Edit(string id, string? title, IReadOnlyList<JobItem> items)
     {
@@ -347,9 +423,9 @@ public sealed class JobStore
             _jobs[index] = job with
             {
                 Title = string.IsNullOrWhiteSpace(title) ? job.Title : title.Trim(),
-                Items = [.. items
+                Items = KeepStores(job.Items, items
                     .Where(i => !string.IsNullOrWhiteSpace(i.Name))
-                    .Select(i => i with { Name = i.Name.Trim(), Got = i.Got || got.Contains(i.Name.Trim()) })],
+                    .Select(i => i with { Name = i.Name.Trim(), Got = i.Got || got.Contains(i.Name.Trim()) })),
             };
             Save();
             return true;

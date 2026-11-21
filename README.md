@@ -440,8 +440,33 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.64
+### 1.2.65
 
+- **Each line on a shopping list can name its own store.** A list's
+  destination is one place for everything, and a run is often two: the
+  weapons at one station, a part only sold at another. A line's store wins
+  over the destination, the card shows it as the place to buy with that
+  store's price, and **Plan trip** lands there for it whether the run is
+  chosen for nearest, cheapest or fewest stops, fitting the rest of the
+  list around it. Editing the list or a Garage fit updating it keeps the
+  stores already chosen.
+- **An AI assistant can set them.** Over the MCP connection a new list can
+  give each line a store, a line added later can say where, and the new
+  `choose_store` tool sets or clears one line's store on an existing list -
+  or, with no line, the whole list's destination, which a list made without
+  one could not be given afterwards. A store can be a counter or a place;
+  a place takes its cheapest counter for that line. One the price feed does
+  not list the line at is kept as asked and the assistant is told so.
+  The Shopping page itself has no control for a line's store yet.
+- **An assistant can save Garage builds and set your savings goal.** It
+  can list the builds you have saved, save a new fit for a ship under a
+  name, or change a saved one slot by slot - each part is checked against
+  what the slot takes, and a part that does not fit is refused - and it
+  says what the fit does to power, cooling, shields and guns. The build
+  appears among the ship's builds in the Garage; nothing is fitted in game.
+  It can also set or clear the goal Now counts towards. The "What should
+  I fit on this ship" prompt now offers to save its recommendation as a
+  build.
 - **Quantum Wake is on the Microsoft Store.** The page now links to
   [the Store listing](https://apps.microsoft.com/detail/9NVQ4KN17KB8), for
   anyone who would rather have the Store install and update it than download

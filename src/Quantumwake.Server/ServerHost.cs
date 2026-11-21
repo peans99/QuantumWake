@@ -3011,6 +3011,21 @@ public static partial class ServerHost
                         buyAt = uex.ItemMarket(uuid).MinBy(r => r.Buy)?.Terminal;
                     }
 
+                    // A store chosen for the line is where it will be bought,
+                    // so it is the counter and the price the card shows; the
+                    // cheapest is a click away in the chooser. No price when
+                    // the feed does not list it there - the store stands, as
+                    // it is the pilot's word, but the cheapest's price beside
+                    // it would read as that store's.
+                    if (item.Store is { } store)
+                    {
+                        bool There(string terminal) => string.Equals(terminal, store, StringComparison.OrdinalIgnoreCase);
+                        buyAt = store;
+                        buyPrice = uex.Market(item.Name).Where(r => r.Buy > 0 && There(r.Terminal)).Select(r => (decimal?)r.Buy).Min();
+                        if (buyPrice is null && MatchItem(lib, item.Name) is { Uuid: { } stocked })
+                            buyPrice = uex.ItemMarket(stocked).Where(r => r.Buy > 0 && There(r.Terminal)).Select(r => (decimal?)r.Buy).Min();
+                    }
+
                     return new
                     {
                         item.Name,
@@ -3025,7 +3040,9 @@ public static partial class ServerHost
                         inventoryUnconfirmed = inventorySighting && !item.Got && !proven,
                         alike,
                         buyPrice,
-                        buyAt
+                        buyAt,
+                        store = item.Store,
+                        storeId = item.StoreId,
                     };
                 }).ToList();
 
@@ -3281,9 +3298,16 @@ public static partial class ServerHost
             if (string.IsNullOrWhiteSpace(body.Name))
                 return Results.BadRequest(new { trouble = "nothing named to add" });
 
-            var job = jobs.Collect(new JobItem(body.Name.Trim(), body.Needed, body.Unit ?? ""), body.JobId);
+            var job = jobs.Collect(new JobItem(body.Name.Trim(), body.Needed, body.Unit ?? "", Store: body.Store, StoreId: body.StoreId), body.JobId);
             return Results.Ok(new { job.Id, job.Title });
         });
+
+        // Where one line is to be bought (1.2.65). Cleared by sending no
+        // store, which hands the line back to the list's run.
+        app.MapPost("/api/jobs/{id}/store", (string id, JobStore jobs, StoreRequest body) =>
+            body.Name is { Length: > 0 } name && jobs.SetStore(id, name, body.Store, body.StoreId)
+                ? Results.Ok(new { id, name, body.Store })
+                : Results.NotFound());
 
         app.MapPost("/api/jobs/{id}/toggle", (string id, JobStore jobs) =>
             jobs.Toggle(id) ? Results.Ok(new { id }) : Results.NotFound());
@@ -6962,7 +6986,10 @@ public sealed record JobLineRequest(string? Name);
 /// Body of POST /api/jobs/collect: one thing, and optionally the list to put
 /// it on. With no list named it goes where <see cref="JobStore.Collect"/> says.
 /// </summary>
-public sealed record CollectRequest(string Name, double Needed, string? Unit = null, string? JobId = null);
+public sealed record CollectRequest(string Name, double Needed, string? Unit = null, string? JobId = null, string? Store = null, string? StoreId = null);
+
+/// <summary>Body of POST /api/jobs/{id}/store: the line, by name, and its store; no store clears it.</summary>
+public sealed record StoreRequest(string? Name, string? Store, string? StoreId);
 
 /// <summary>Body of POST /api/jobs/{id}/destination. Both null clears it.</summary>
 public sealed record DestinationRequest(string? Place, string? PlaceId);

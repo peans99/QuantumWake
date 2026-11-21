@@ -157,4 +157,26 @@ public sealed class ShoppingListCardTests
         Assert.Equal("JS-400 2", page.Text("$('#job-items').value"));
         Assert.Contains("still here", page.NodeText("#jobs-alerts"));
     }
+
+    /// <summary>
+    /// A line's own store (1.2.65) arrives as its buyAt with that store's price,
+    /// so the card says it was chosen: the price may not be the cheapest.
+    /// </summary>
+    [Fact]
+    public void A_line_with_its_own_store_says_it_was_chosen()
+    {
+        var page = new Page();
+        page.Serve("/api/jobs", """
+            [{"id":"a","title":"MK5 kit","kind":"list","done":false,"pinned":false,"haveCount":0,"totalCount":2,
+              "items":[{"name":"Concord","needed":2,"unit":"","have":false,"got":false,"where":[],"buyPrice":60000,
+                        "buyAt":"Platinum HUR-L5","store":"Platinum HUR-L5"},
+                       {"name":"SolarFlare","needed":1,"unit":"","have":false,"got":false,"where":[],"buyPrice":1000,"buyAt":"Centermass"}]}]
+            """);
+        page.Serve("/api/shopping/catalogue", """{"commodities":[],"items":["Concord","SolarFlare"]}""");
+        page.Do("atlas = []; await loadJobList();");
+
+        var rows = $"{Cards}[0].querySelectorAll('tr')";
+        Assert.Contains("Platinum HUR-L5 · chosen", page.Text($"{rows}.find(r => r.textContent.includes('Concord')).textContent"));
+        Assert.DoesNotContain("chosen", page.Text($"{rows}.find(r => r.textContent.includes('SolarFlare')).textContent"));
+    }
 }

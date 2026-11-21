@@ -25466,6 +25466,13 @@ function jobLines(job, onGot = null) {
     } else if (item.buyAt) {
       whereCell.append(el('span', 'note-inline', `${tx('buy at')} `));
       whereCell.append(placeLink(item.buyAt));
+      // The server sends the chosen store as buyAt; say it was chosen, as the
+      // price beside it is that store's and may not be the cheapest (1.2.65).
+      if (item.store) {
+        const mark = el('span', 'note-inline', ` · ${tx('chosen')}`);
+        mark.title = tx('The store chosen for this line. Plan trip buys it there.');
+        whereCell.append(mark);
+      }
     } else {
       whereCell.textContent = '—';
     }
@@ -34900,12 +34907,34 @@ const shortStock = (seller, item) =>
  * order, else the cheapest.
  */
 const defaultSeller = (sellers, item, destination) => {
+  // A store chosen for the line itself is a narrower decision still (1.2.65).
+  const own = storeSeller(sellers, item);
+  if (own) return own;
+
   const there = destination && sellers.filter((seller) => atSameStop(seller, destination));
 
   if (there?.length)
     return there.find((seller) => !shortStock(seller, item)) ?? there[0];
 
   return sellers.find((seller) => !shortStock(seller, item)) ?? sellers[0];
+};
+
+/**
+ * The counter a line's own store names (1.2.65), or undefined.
+ *
+ * A list's destination is one place for everything; a run is often two, the
+ * weapons at one station and a part only sold at another, so a line can carry
+ * its own store. It is a terminal name as the sellers give it, or - when the
+ * feed listed nothing there - the place as written, which still finds its
+ * cheapest counter here if a later price update lists one.
+ */
+const storeSeller = (sellers, item) => {
+  if (!item?.store) return undefined;
+  const wanted = item.store.toLowerCase();
+
+  return sellers.find((seller) => seller.terminal.toLowerCase() === wanted)
+    ?? (item.storeId ? sellers.find((seller) => seller.placeId === item.storeId) : undefined)
+    ?? sellers.find((seller) => (seller.place || '').toLowerCase() === wanted);
 };
 
 /** Whether a seller stands at the place a list is pointed at. */
@@ -35065,6 +35094,15 @@ async function planShoppingTrip(job, card) {
     stops.length = 0;
     const left = new Set(options.filter((o) => o.sellers.length).map((o) => o.item.name));
 
+    // Stores chosen on the list are landings already decided (1.2.65), so they
+    // go in first and the rest of the list fills around them.
+    for (const { item, sellers } of options) {
+      const own = storeSeller(sellers, item);
+      if (!own) continue;
+      if (!stops.includes(own.terminal)) stops.push(own.terminal);
+      left.delete(item.name);
+    }
+
     while (left.size) {
       const best = [...new Map(options.flatMap(({ item, sellers }) => sellers.map((seller) => [seller.terminal, seller]))).values()]
         .map((seller) => ({
@@ -35110,6 +35148,10 @@ async function planShoppingTrip(job, card) {
         what.append(el('div', 'sub held-alike', tx('seen in your stash at {place}', { place: item.where[0] })));
       const alike = heldAlikeLine(item);
       if (alike) what.append(alike);
+      if (item.store)
+        what.append(el('div', 'sub', storeSeller(sellers, item)
+          ? tx('store chosen on the list: {place}', { place: item.store })
+          : tx('chosen on the list: {place}, where no price is known for it', { place: item.store })));
       row.append(what);
 
       if (!sellers.length) {
@@ -35267,6 +35309,13 @@ async function planShoppingTrip(job, card) {
   const assignFromStops = () => {
     for (const { item } of options) chosen.set(item.name, '');
 
+    // A line with its own store is bought there whatever else is ticked, as
+    // long as that stop is still on the run.
+    for (const { item, sellers } of options) {
+      const own = storeSeller(sellers, item);
+      if (own && stops.includes(own.terminal)) chosen.set(item.name, own.terminal);
+    }
+
     for (const terminal of stops)
       for (const { item, sellers } of options)
         if (!chosen.get(item.name) && suppliesAt(sellers, item, terminal))
@@ -35286,6 +35335,13 @@ async function planShoppingTrip(job, card) {
 
     stops.length = 0;
     for (const { item, sellers } of options) {
+      // Nearest and cheapest are for the lines nobody chose a store for.
+      const own = storeSeller(sellers, item);
+      if (own) {
+        chosen.set(item.name, own.terminal);
+        continue;
+      }
+
       const full = sellers.filter((seller) => !shortStock(seller, item));
       const pool = full.length ? full : sellers;
       const best = prefer === 'nearest'

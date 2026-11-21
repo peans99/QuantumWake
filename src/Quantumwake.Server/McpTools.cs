@@ -103,6 +103,7 @@ public static partial class McpTools
         ["my_items"] = Data.McpArea.Ships,
         ["garage"] = Data.McpArea.Ships,
         ["garage_options"] = Data.McpArea.Ships,
+        ["garage_builds"] = Data.McpArea.Ships,
         ["my_loadout"] = Data.McpArea.Ships,
 
         ["my_contracts"] = Data.McpArea.Work,
@@ -267,7 +268,8 @@ public static partial class McpTools
 
         new("create_shopping_list", "Make a shopping list",
             "Adds a new shopping list on the Shopping page, which then shows where each line is sold and what the "
-            + "pilot already holds. Lines are things to buy, with an amount if there is one.",
+            + "pilot already holds. Lines are things to buy, with an amount if there is one, and each can name its "
+            + "own store when the run is split between places; a destination is one place for the whole list.",
             new JsonObject
             {
                 ["type"] = "object",
@@ -287,11 +289,15 @@ public static partial class McpTools
                                 ["name"] = Text("The item or commodity, by its catalogue name."),
                                 ["needed"] = Number("How many, or how much; leave out for any amount."),
                                 ["unit"] = Text("'SCU' for cargo; leave out for a count."),
+                                ["store"] = Text("Where to buy this one line: a terminal as where_to_buy names it, or a "
+                                    + "place, which takes its cheapest counter for the line. Leave out to let the "
+                                    + "list's run choose."),
                             },
                             ["required"] = new JsonArray("name"),
                         },
                     },
-                    ["destination"] = Text("Where the pilot means to shop, as find_places names it; leave out for anywhere."),
+                    ["destination"] = Text("Where the pilot means to shop for the whole list, as find_places names it; "
+                        + "leave out for anywhere. A line's own store wins over it."),
                 },
                 ["required"] = new JsonArray("title", "items"),
             }, true, CreateShoppingList),
@@ -302,6 +308,8 @@ public static partial class McpTools
             Schema(("name", Text("The item or commodity."), true),
                    ("needed", Number("How many, or how much."), false),
                    ("unit", Text("'SCU' for cargo; leave out for a count."), false),
+                   ("store", Text("Where to buy it: a terminal as where_to_buy names it, or a place. Leave out to keep "
+                       + "the store the line already has, or none."), false),
                    ("list_id", Text("The list's id from my_plans."), false)), true,
             AddToShoppingList),
 
@@ -539,7 +547,7 @@ public static partial class McpTools
                 ["inHand"] = job["haveCount"]?.DeepClone(),
                 ["lines"] = job["totalCount"]?.DeepClone(),
                 ["items"] = new JsonArray([.. (job["items"] as JsonArray ?? []).OfType<JsonObject>()
-                    .Select(x => (JsonNode)Pick(x, ["name", "needed", "unit", "have", "buyAt", "buyPrice"]))]),
+                    .Select(x => (JsonNode)Pick(x, ["name", "needed", "unit", "have", "buyAt", "buyPrice", "store"]))]),
             });
 
         var checklists = new JsonArray();
@@ -722,40 +730,110 @@ public static partial class McpTools
         if (!a.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array || items.GetArrayLength() == 0)
             throw new McpToolException("A shopping list needs at least one line.");
 
-        var lines = items.EnumerateArray().Take(60)
-            .Select(x => new { name = Str(x, "name"), needed = Num(x, "needed") ?? 0, unit = Str(x, "unit") ?? "" })
+        var asked = items.EnumerateArray().Take(60)
+            .Select(x => (name: Str(x, "name"), needed: Num(x, "needed") ?? 0, unit: Str(x, "unit") ?? "", store: Str(x, "store")))
             .Where(x => x.name is not null)
             .ToList();
-        if (lines.Count == 0) throw new McpToolException("Every line needs a name.");
+        if (asked.Count == 0) throw new McpToolException("Every line needs a name.");
 
-        string? destination = null, destinationId = null;
-        if (Str(a, "destination") is { } wanted)
+        var places = new PlaceBook(api);
+        var stores = new JsonArray();
+        var lines = new List<object>();
+        foreach (var (name, needed, unit, wanted) in asked)
         {
-            var known = (await Places(api, t)).FirstOrDefault(n => string.Equals(n["name"]?.GetValue<string>(), wanted, StringComparison.OrdinalIgnoreCase));
-            destination = known?["name"]?.GetValue<string>() ?? wanted;
-            destinationId = known?["rawId"]?.GetValue<string>();
+            var store = wanted is null ? null : await ResolveStore(api, name!, wanted, places, t);
+            if (store is not null) stores.Add(store.Said(name!));
+            lines.Add(new { name, needed, unit, store = store?.Store, storeId = store?.StoreId });
         }
 
+        string? destination = null, destinationId = null;
+        if (Str(a, "destination") is { } place)
+            (destination, destinationId) = await places.Find(place, t);
+
         var job = await api.Post("/api/jobs", new { title, kind = "list", source = Source, items = lines, destination, destinationId }, t);
-        return new JsonObject
+        var answer = new JsonObject
         {
             ["id"] = job["id"]?.DeepClone(),
             ["title"] = job["title"]?.DeepClone(),
             ["lines"] = lines.Count,
+            ["destination"] = destination,
             ["note"] = "Added on the Shopping page, marked as from an AI assistant. The page shows where each line is sold and what the pilot already holds.",
         };
+        if (stores.Count > 0) answer["stores"] = stores;
+        return answer;
     }
 
     private static async Task<JsonNode> AddToShoppingList(JsonElement a, McpApi api, CancellationToken t)
     {
+        var name = Need(a, "name");
+        var store = Str(a, "store") is { } wanted ? await ResolveStore(api, name, wanted, new PlaceBook(api), t) : null;
         var landed = await api.Post("/api/jobs/collect", new
         {
-            name = Need(a, "name"),
+            name,
             needed = Num(a, "needed") ?? 1,
             unit = Str(a, "unit") ?? "",
             jobId = Str(a, "list_id"),
+            store = store?.Store,
+            storeId = store?.StoreId,
         }, t);
-        return new JsonObject { ["addedTo"] = landed["title"]?.DeepClone(), ["listId"] = landed["id"]?.DeepClone() };
+        var answer = new JsonObject { ["addedTo"] = landed["title"]?.DeepClone(), ["listId"] = landed["id"]?.DeepClone() };
+        if (store is not null) answer["store"] = store.Said(name);
+        return answer;
+    }
+
+    /// <summary>A store asked for one line, as the app will keep it.</summary>
+    /// <param name="Sold">Whether the price feed lists the line at that counter.</param>
+    private sealed record StoreChoice(string Store, string? StoreId, bool Sold)
+    {
+        public JsonObject Said(string line)
+        {
+            var said = new JsonObject { ["line"] = line, ["store"] = Store, ["soldThere"] = Sold };
+            if (!Sold)
+                said["note"] = "The price feed does not list this line there. Kept as asked, as the feed can be behind the "
+                    + "game; check with where_to_buy, and the run will not plan a stop for it until a seller there is known.";
+            return said;
+        }
+    }
+
+    /// <summary>
+    /// The counter a store means for one line. An assistant names a store the
+    /// way a pilot does - "Orison", "Cousin Crow's", a terminal by its full
+    /// name - and the app keeps the terminal, because that is what a price and
+    /// a stop hang on. A place takes its cheapest counter for the line (the
+    /// sellers come cheapest first). One the feed does not list is kept as
+    /// written and said so, rather than refused: the pilot may know better.
+    /// </summary>
+    private static async Task<StoreChoice> ResolveStore(McpApi api, string line, string wanted, PlaceBook places, CancellationToken t)
+    {
+        var found = await api.Get($"/api/shopping/sellers?name={Q(line)}", t);
+        var sellers = (found["sellers"] as JsonArray ?? []).OfType<JsonObject>().ToList();
+
+        static string Of(JsonObject row, string key) => row[key]?.GetValue<string>() ?? "";
+        bool Is(string text) => string.Equals(text.Trim(), wanted.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        var seller = sellers.FirstOrDefault(r => Is(Of(r, "terminal")))
+            ?? sellers.FirstOrDefault(r => Is(Of(r, "place")))
+            ?? sellers.FirstOrDefault(r => Of(r, "terminal").Contains(wanted.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        if (seller is not null)
+            return new StoreChoice(Of(seller, "terminal"), Of(seller, "placeId") is { Length: > 0 } id ? id : null, true);
+
+        var (place, placeId) = await places.Find(wanted, t);
+        return new StoreChoice(place, placeId, false);
+    }
+
+    /// <summary>The map's places, fetched once a call and only when a name has to be looked up.</summary>
+    private sealed class PlaceBook(McpApi api)
+    {
+        private List<JsonObject>? _places;
+
+        /// <summary>The map's own name and id for a place, or the name as given and no id.</summary>
+        public async Task<(string Name, string? Id)> Find(string wanted, CancellationToken t)
+        {
+            _places ??= await Places(api, t);
+            var known = _places.FirstOrDefault(n => string.Equals(n["name"]?.GetValue<string>(), wanted.Trim(), StringComparison.OrdinalIgnoreCase));
+            return (known?["name"]?.GetValue<string>() ?? wanted.Trim(), known?["rawId"]?.GetValue<string>());
+        }
     }
 
     private static async Task<JsonNode> CreateChecklist(JsonElement a, McpApi api, CancellationToken t)
