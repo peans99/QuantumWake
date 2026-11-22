@@ -54,6 +54,12 @@ public static partial class McpTools
                    ("slot", Text("The slot's portId from garage, or its hardpoint name."), true),
                    ("limit", Count("How many parts, 1-25.", 15), false)), false, GarageOptions),
 
+        new("garage_builds", "Saved builds",
+            "The fits the pilot has saved in the Garage, for one ship or for every ship: each build's id, name and "
+            + "note, and the slots it changes from stock with the part it puts there.",
+            Schema(("ship", Text("A ship's name or class; leave out for every saved build."), false)), false,
+            GarageBuilds),
+
         new("my_loadout", "What I'm carrying",
             "The pilot's own loadout as the logs last saw it - armour, weapons, tools, consumables - slot by slot.",
             Schema(), false, MyLoadout),
@@ -134,6 +140,57 @@ public static partial class McpTools
                    ("line", Text("The line's name or the task's words, as my_plans shows them."), true),
                    ("done", new JsonObject { ["type"] = "boolean", ["description"] = "true for in hand or done, false to undo; true when left out." }, false)), true,
             Tick),
+
+        new("choose_store", "Choose where to buy",
+            "Says where one line of an existing shopping list is to be bought, or - with no line - where the whole "
+            + "list is to be shopped. A line's store wins over the list's, so a run split between places is one store "
+            + "per line. Leave the store out to clear it. Use my_plans for the list's id and the line as written there.",
+            Schema(("list_id", Text("The list's id from my_plans."), true),
+                   ("line", Text("The line's name as my_plans shows it; leave out to set the whole list's destination."), false),
+                   ("store", Text("A terminal as where_to_buy names it, or a place (a line takes its cheapest counter "
+                       + "there; the list takes the place itself). Leave out to clear."), false)), true,
+            ChooseStore),
+
+        new("save_garage_build", "Save a Garage build",
+            "Saves a fit for a ship under a name, as the Garage's own save does, and answers with what it does to the "
+            + "ship's power, cooling, shields and guns. With build_id it changes that build instead: the slots named "
+            + "change and the rest stay. Use garage for the ship's slots and garage_options for what fits one; a part "
+            + "that does not fit its slot is refused.",
+            new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject
+                {
+                    ["ship"] = Text("The ship's name or class. Not needed with build_id."),
+                    ["name"] = Text("The build's name; needed for a new one."),
+                    ["note"] = Text("A note kept with the build, such as what it is for."),
+                    ["build_id"] = Text("An existing build's id from garage_builds, to change it rather than make a new one."),
+                    ["swaps"] = new JsonObject
+                    {
+                        ["type"] = "array",
+                        ["maxItems"] = 40,
+                        ["items"] = new JsonObject
+                        {
+                            ["type"] = "object",
+                            ["properties"] = new JsonObject
+                            {
+                                ["slot"] = Text("The slot's portId from garage, or its hardpoint name."),
+                                ["part"] = Text("The part's name or class as garage_options gives it; 'stock' for what the "
+                                    + "ship comes with, 'empty' to leave the slot empty."),
+                            },
+                            ["required"] = new JsonArray("slot", "part"),
+                        },
+                    },
+                },
+            }, true, SaveGarageBuild),
+
+        new("set_goal", "Set the savings goal",
+            "Sets what the pilot is saving towards - a ship or anything with a price - which Now shows with the hours "
+            + "of trading it is away; or, with nothing given, clears it. One goal at a time, so a new one replaces the "
+            + "last. my_earnings shows the current one; ship_details or where_to_buy give a price.",
+            Schema(("name", Text("What it is, such as a ship's name. Leave out with the target to clear the goal."), false),
+                   ("target", Number("What it costs, in aUEC."), false)), true,
+            SetGoal),
 
         new("add_stop", "Add a stop",
             "Adds one stop, with optional actions, to the end of an existing flight plan. Use my_plans for the "
@@ -281,6 +338,181 @@ public static partial class McpTools
 
         var options = await api.Get($"/api/garage/{Uri.EscapeDataString(cls)}/options?port={Uri.EscapeDataString(port)}", t);
         return Trim(options, Limit(a, 15));
+    }
+
+    private static async Task<JsonNode> GarageBuilds(JsonElement a, McpApi api, CancellationToken t)
+    {
+        string? cls = null;
+        if (Str(a, "ship") is { } wanted)
+            cls = await ShipClass((JsonObject)await api.Get("/api/garage", t), wanted)
+                ?? throw new McpToolException($"No ship called '{wanted}' in the Garage. Call garage with no ship for the list.");
+
+        var builds = await api.Get(cls is null ? "/api/garage/builds" : $"/api/garage/builds?ship={Q(cls)}", t) as JsonArray ?? [];
+        var shown = new JsonArray();
+        foreach (var build in builds.OfType<JsonObject>().Take(20))
+        {
+            // A build holds port ids and classes; the sheet says them as the
+            // Garage does - hardpoints and part names - and is recomputed from
+            // the reference, so it is what the build does today.
+            var shipClass = build["shipClass"]?.GetValue<string>() ?? "";
+            JsonObject? sheet = null;
+            try { sheet = await Sheet(api, shipClass, Swaps(build), t); }
+            catch (McpToolException) { /* a ship the reference no longer has: the build is still listed */ }
+
+            shown.Add(new JsonObject
+            {
+                ["id"] = build["id"]?.DeepClone(),
+                ["name"] = build["name"]?.DeepClone(),
+                ["note"] = build["note"]?.DeepClone(),
+                ["ship"] = sheet?["ship"]?["name"]?.DeepClone() ?? shipClass,
+                ["shipClass"] = shipClass,
+                ["updatedAt"] = build["updatedAt"]?.DeepClone(),
+                ["changes"] = sheet is null ? null : Changes(sheet),
+            });
+        }
+
+        var answer = new JsonObject { ["builds"] = shown, ["count"] = builds.Count };
+        if (builds.Count == 0) answer["note"] = "No saved builds. save_garage_build makes one.";
+        return answer;
+    }
+
+    private static async Task<JsonNode> SaveGarageBuild(JsonElement a, McpApi api, CancellationToken t)
+    {
+        JsonObject? existing = null;
+        if (Str(a, "build_id") is { } id)
+            existing = (await api.Get("/api/garage/builds", t) as JsonArray ?? []).OfType<JsonObject>()
+                .FirstOrDefault(b => b["id"]?.GetValue<string>() == id)
+                ?? throw new McpToolException($"No saved build with id '{id}'. Use garage_builds.");
+
+        var name = Str(a, "name");
+        if (existing is null && name is null)
+            throw new McpToolException("A new build needs a name.");
+
+        var cls = existing?["shipClass"]?.GetValue<string>()
+            ?? await ShipClass((JsonObject)await api.Get("/api/garage", t), Need(a, "ship"))
+            ?? throw new McpToolException($"No ship called '{Str(a, "ship")}' in the Garage. Call garage with no ship for the list.");
+
+        var ship = (JsonObject)await api.Get($"/api/garage/{Uri.EscapeDataString(cls)}", t);
+        var shipName = ship["ship"]?["name"]?.GetValue<string>() ?? cls;
+        var ports = (ship["ports"] as JsonArray ?? []).OfType<JsonObject>().ToList();
+
+        // Changing a build changes the slots named; the rest of it stands.
+        var swaps = existing is null ? new Dictionary<string, string?>(StringComparer.Ordinal) : Swaps(existing);
+
+        if (a.TryGetProperty("swaps", out var asked) && asked.ValueKind == JsonValueKind.Array)
+            foreach (var swap in asked.EnumerateArray().Take(40))
+            {
+                var slot = Str(swap, "slot") ?? throw new McpToolException("Every swap needs a slot.");
+                var part = Str(swap, "part") ?? throw new McpToolException($"The swap for '{slot}' needs a part.");
+                var port = ports.FirstOrDefault(p => string.Equals(p["portId"]?.GetValue<string>(), slot, StringComparison.OrdinalIgnoreCase))
+                    ?? ports.FirstOrDefault(p => string.Equals(p["hardpoint"]?.GetValue<string>(), slot, StringComparison.OrdinalIgnoreCase))
+                    ?? throw new McpToolException($"The {shipName} has no slot '{slot}'. Use garage for its portIds.");
+                var portId = port["portId"]!.GetValue<string>();
+
+                if (part.Equals("stock", StringComparison.OrdinalIgnoreCase)) swaps.Remove(portId);
+                else if (part.Equals("empty", StringComparison.OrdinalIgnoreCase) || part.Equals("none", StringComparison.OrdinalIgnoreCase)) swaps[portId] = null;
+                else swaps[portId] = await PartFor(api, cls, shipName, portId, slot, part, t);
+            }
+
+        var saved = existing is null
+            ? await api.Post("/api/garage/builds", new { shipClass = cls, name, swaps, note = Str(a, "note") }, t)
+            : await api.Put($"/api/garage/builds/{Uri.EscapeDataString(existing["id"]!.GetValue<string>())}",
+                new { name, swaps, note = Str(a, "note") }, t);
+
+        var sheet = await Sheet(api, cls, swaps, t);
+        var fit = sheet["sheet"] as JsonObject;
+        return new JsonObject
+        {
+            ["id"] = saved["id"]?.DeepClone(),
+            ["name"] = saved["name"]?.DeepClone(),
+            ["ship"] = shipName,
+            ["changed"] = existing is not null,
+            ["changes"] = Changes(sheet),
+            ["power"] = fit?["power"]?.DeepClone(),
+            ["cooling"] = fit?["cooling"]?.DeepClone(),
+            ["shield"] = fit?["shield"]?.DeepClone(),
+            ["weapons"] = fit?["weapons"]?.DeepClone(),
+            ["note"] = $"Saved in the Garage among the {shipName}'s builds. Nothing is fitted in game; the figures are what the fit would do.",
+        };
+    }
+
+    /// <summary>
+    /// The class of the part asked for one slot, from what the Garage offers
+    /// for that slot - so a part of the wrong kind or size is refused here,
+    /// with the reason, rather than saved as a build the bench cannot show.
+    /// </summary>
+    private static async Task<string> PartFor(McpApi api, string cls, string shipName, string portId, string slot, string part, CancellationToken t)
+    {
+        var offered = (JsonObject)await api.Get($"/api/garage/{Uri.EscapeDataString(cls)}/options?port={Uri.EscapeDataString(portId)}", t);
+        if (offered["fixedReason"]?.GetValue<string>() is { } why)
+            throw new McpToolException($"'{slot}' on the {shipName} cannot be changed: {why}");
+
+        var parts = (offered["options"] as JsonArray ?? []).OfType<JsonObject>()
+            .Select(o => o["part"] as JsonObject).OfType<JsonObject>()
+            .Select(p => (Class: p["class"]?.GetValue<string>() ?? "", Name: p["name"]?.GetValue<string>() ?? ""))
+            .ToList();
+
+        bool Is(string text) => string.Equals(text, part.Trim(), StringComparison.OrdinalIgnoreCase);
+        var matches = parts.Where(p => Is(p.Class) || Is(p.Name)).ToList();
+        if (matches.Count == 0)
+            matches = [.. parts.Where(p => p.Name.Contains(part.Trim(), StringComparison.OrdinalIgnoreCase))];
+
+        return matches.Select(m => m.Class).Distinct(StringComparer.OrdinalIgnoreCase).Count() switch
+        {
+            1 => matches[0].Class,
+            0 => throw new McpToolException($"'{part}' does not fit '{slot}' on the {shipName}. garage_options lists what does."),
+            _ => throw new McpToolException($"'{part}' matches {matches.Count} parts for '{slot}': "
+                + $"{string.Join(", ", matches.Take(6).Select(m => m.Name))}. Give the name as written."),
+        };
+    }
+
+    /// <summary>A saved build's swaps as the routes take them: port id to class, null for an empty port.</summary>
+    private static Dictionary<string, string?> Swaps(JsonObject build) =>
+        (build["swaps"] as JsonObject ?? []).ToDictionary(
+            kv => kv.Key,
+            kv => kv.Value is JsonValue v && v.TryGetValue<string>(out var s) ? s : null,
+            StringComparer.Ordinal);
+
+    /// <summary>The Garage's sheet for a ship with these parts fitted. Nothing is stored by asking.</summary>
+    private static async Task<JsonObject> Sheet(McpApi api, string cls, Dictionary<string, string?> swaps, CancellationToken t) =>
+        (JsonObject)await api.Post($"/api/garage/{Uri.EscapeDataString(cls)}/sheet", new { swaps }, t);
+
+    /// <summary>The slots a fit changes from stock, said the way the Garage says them.</summary>
+    private static JsonArray Changes(JsonObject sheet) =>
+        new([.. (sheet["ports"] as JsonArray ?? []).OfType<JsonObject>()
+            .Where(p => p["changed"]?.GetValue<bool>() == true)
+            .Select(p => (JsonNode)new JsonObject
+            {
+                ["portId"] = p["portId"]?.DeepClone(),
+                ["hardpoint"] = p["hardpoint"]?.DeepClone(),
+                ["part"] = p["name"]?.DeepClone() ?? "empty",
+                ["stock"] = p["stockName"]?.DeepClone(),
+            })]);
+
+    private static async Task<JsonNode> SetGoal(JsonElement a, McpApi api, CancellationToken t)
+    {
+        var name = Str(a, "name");
+        var target = Num(a, "target");
+
+        if (name is null && target is null)
+        {
+            await api.Post("/api/goal", null, t);
+            return new JsonObject { ["goal"] = null, ["note"] = "Cleared; Now no longer shows a goal." };
+        }
+
+        if (name is null) throw new McpToolException("A goal needs a name: what the pilot is saving for.");
+        if (target is not > 0) throw new McpToolException("A goal needs its price, in aUEC, above zero.");
+
+        await api.Post("/api/goal", new { name, target, setAt = DateTimeOffset.UtcNow }, t);
+        var earnings = await api.Get("/api/earnings?days=30", t);
+        return new JsonObject
+        {
+            ["goal"] = earnings["goal"]?.DeepClone(),
+            ["hoursToGoal"] = earnings["hoursToGoal"]?.DeepClone(),
+            ["basis"] = earnings["basis"]?.DeepClone(),
+            ["note"] = "Shown on Now. Hours are of trading at the pilot's recent rate, or their lifetime one when recent "
+                + "flying is too thin; there is none when the logs hold no trading to divide by.",
+        };
     }
 
     private static async Task<JsonNode> MyLoadout(JsonElement a, McpApi api, CancellationToken t)
@@ -587,6 +819,41 @@ public static partial class McpTools
             await api.Post($"/api/checklists/{Uri.EscapeDataString(id)}/items/{Uri.EscapeDataString(item["id"]!.GetValue<string>())}/toggle", new { }, t);
         }
         return new JsonObject { ["list"] = list["title"]?.DeepClone(), ["line"] = name, ["done"] = want };
+    }
+
+    private static async Task<JsonNode> ChooseStore(JsonElement a, McpApi api, CancellationToken t)
+    {
+        var id = Need(a, "list_id");
+        var wanted = Str(a, "store");
+        var lists = await api.Get("/api/jobs", t) as JsonArray ?? [];
+        var list = lists.OfType<JsonObject>().FirstOrDefault(l => l["id"]?.GetValue<string>() == id && l["imported"] is null)
+            ?? throw new McpToolException($"No shopping list with id '{id}'. Use my_plans.");
+        var path = $"/api/jobs/{Uri.EscapeDataString(id)}";
+
+        if (Str(a, "line") is not { } line)
+        {
+            var (place, placeId) = wanted is null ? (null, null) : await new PlaceBook(api).Find(wanted, t);
+            await api.Post($"{path}/destination", new { place, placeId }, t);
+            return new JsonObject { ["list"] = list["title"]?.DeepClone(), ["destination"] = place };
+        }
+
+        // The same matching as tick: as written, else the one line containing it.
+        var items = (list["items"] as JsonArray ?? []).OfType<JsonObject>().ToList();
+        var matches = items.Where(i => string.Equals(i["name"]?.GetValue<string>(), line, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (matches.Count == 0)
+            matches = [.. items.Where(i => (i["name"]?.GetValue<string>() ?? "").Contains(line, StringComparison.OrdinalIgnoreCase))];
+        if (matches.Count != 1)
+            throw new McpToolException(matches.Count == 0
+                ? $"'{list["title"]}' has no line '{line}'."
+                : $"'{line}' matches {matches.Count} lines on '{list["title"]}'; give the line as written.");
+
+        var name = matches[0]["name"]!.GetValue<string>();
+        var store = wanted is null ? null : await ResolveStore(api, name, wanted, new PlaceBook(api), t);
+        await api.Post($"{path}/store", new { name, store = store?.Store, storeId = store?.StoreId }, t);
+
+        var answer = store?.Said(name) ?? new JsonObject { ["line"] = name, ["store"] = null };
+        answer["list"] = list["title"]?.DeepClone();
+        return answer;
     }
 
     private static async Task<JsonNode> AddStop(JsonElement a, McpApi api, CancellationToken t)

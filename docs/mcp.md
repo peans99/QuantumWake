@@ -147,6 +147,7 @@ Added in 1.2.50, the rest of the pilot's own pages:
 | `my_earnings` | `/api/earnings` over a window |
 | `garage` | `/api/garage`: the pilot's ships, or one ship's 35-odd slots cut to what is fitted, its grade and maker, stock or changed, plus the sheet's weapons, shield, power, cooling and quantum (9 KB for a Super Hornet, from 43 KB) |
 | `garage_options` | `/api/garage/{ship}/options` for one slot, by portId or hardpoint |
+| `garage_builds` | `/api/garage/builds`, each with the slots it changes as the sheet names them (1.2.65) |
 | `my_loadout` | `/api/loadout`, slot by slot |
 | `armoury` | `/api/armoury` (1 MB), searched by name, family or maker, pictures and finishes dropped, shops cut to five |
 | `my_contracts` | `/api/contracts` (363 here, 180 KB), by outcome, contractor, system and days, with totals by outcome |
@@ -208,7 +209,7 @@ table, `McpTools.Areas`):
 | --- | --- | --- |
 | Sessions and history | `whats_happening`, `recent_sessions`, `logbook`, `deaths_and_medical` | visits and last visit on `find_places` (which then sorts by name, since visit order would tell what the field was cut to hide); "your logs" in `search` |
 | Money | `my_spending`, `my_ledger`, `my_earnings` | the week's earnings on `recent_sessions`; bought and sold lines in `logbook` |
-| Ships, gear and stashes | `my_ships`, `my_items`, `garage`, `garage_options`, `my_loadout` | `holding` on `item_details`; `flown` on `ship_details`; "have" and where on `wikelo`; loot in `logbook`; "your logs" in `search` |
+| Ships, gear and stashes | `my_ships`, `my_items`, `garage`, `garage_options`, `garage_builds`, `my_loadout` | `holding` on `item_details`; `flown` on `ship_details`; "have" and where on `wikelo`; loot in `logbook`; "your logs" in `search` |
 | Contracts, reputation and events | `my_contracts`, `my_reputation`, `events`, `refinery` | open contracts on `whats_happening`; taken and completed on `find_missions`; a blueprint held on `item_details` |
 | Plans and lists | `my_plans`, and every writing tool | "things you wrote" in `search`; a Wikelo trade's tracked list |
 | People you have played with | `my_crew` | the party on `whats_happening`; the `crew` handles on each `recent_sessions` row |
@@ -238,11 +239,14 @@ Writing (with changes allowed as well):
 | Tool | Does |
 | --- | --- |
 | `create_flight_plan` | A new plan with stops and run-sheet actions; becomes the tracked plan. Places are matched to the map by exact name, and any that are not are kept as written and reported back. |
-| `create_shopping_list` | A new list, its source "an AI assistant", so Shopping shows where it came from. |
-| `add_to_shopping_list` | One line on a named list, else the list being filled. |
+| `create_shopping_list` | A new list, its source "an AI assistant", so Shopping shows where it came from. A destination is one place for the whole list; each line can also name its own `store` (1.2.65). |
+| `add_to_shopping_list` | One line on a named list, else the list being filled, optionally with its `store` (1.2.65). |
 | `create_checklist` | A new checklist with its tasks. |
 | `pin_to_now` | A shopping list or checklist on Now, or off it (1.2.50). |
 | `tick` | A shopping line in hand or a checklist task done, or undone, by its words (1.2.50). |
+| `save_garage_build` | A fit saved among a ship's Garage builds, or a saved one changed slot by slot; each part checked against what the slot takes, and the answer carries the fit's power, cooling, shield and guns (1.2.65). |
+| `set_goal` | What Now counts towards, by name and price in aUEC; nothing given clears it (1.2.65). |
+| `choose_store` | Where one line of an existing list is bought, or with no line the whole list's destination; no store clears it (1.2.65). |
 | `add_stop` | One stop with actions at the end of an existing plan (1.2.50). |
 | `track_flight_plan` | The plan the map, Now and overlay follow, or none (1.2.50). |
 | `track_event` | An event kept on Now, or Now following play again (1.2.50). |

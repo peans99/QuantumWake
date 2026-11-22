@@ -197,4 +197,92 @@ public sealed class JobStoreTests : IDisposable
         Assert.Equal(2, line.Needed);
         Assert.False(line.Got);
     }
+
+    /// <summary>
+    /// A run split between places (1.2.65): the weapons at one station, a part
+    /// only sold at another. Each line keeps its own store, on disk.
+    /// </summary>
+    [Fact]
+    public void Each_line_keeps_its_own_store_across_a_reload()
+    {
+        var store = new JobStore(_root);
+        var job = store.Add("MK5 kit", "list", null,
+        [
+            new JobItem("Arrowhead", 1, Store: "Cousin Crow's, Orison", StoreId: "Stanton2_Orison"),
+            new JobItem("Concord", 2),
+        ]);
+
+        var reloaded = new JobStore(_root).All().Single(j => j.Id == job.Id);
+
+        Assert.Equal("Cousin Crow's, Orison", reloaded.Items[0].Store);
+        Assert.Equal("Stanton2_Orison", reloaded.Items[0].StoreId);
+        Assert.Null(reloaded.Items[1].Store);
+    }
+
+    [Fact]
+    public void A_store_is_set_on_one_line_and_cleared_by_sending_none()
+    {
+        var store = new JobStore(_root);
+        var job = store.Add("MK5 kit", "list", null, [new JobItem("Arrowhead", 1), new JobItem("Concord", 2)]);
+
+        Assert.True(store.SetStore(job.Id, "concord", " HUR-L5 ", "  "));
+        var set = store.All().Single().Items;
+        Assert.Null(set[0].Store);
+        Assert.Equal("HUR-L5", set[1].Store);
+        Assert.Null(set[1].StoreId);
+
+        Assert.True(store.SetStore(job.Id, "Concord", "", "ignored"));
+        var cleared = store.All().Single().Items[1];
+        Assert.Null(cleared.Store);
+        Assert.Null(cleared.StoreId);
+
+        Assert.False(store.SetStore(job.Id, "Nothing like it", "HUR-L5", null));
+        Assert.False(store.SetStore("nosuchid", "Concord", "HUR-L5", null));
+    }
+
+    /// <summary>The card's text has nowhere to write a store, so a rewrite must not drop it.</summary>
+    [Fact]
+    public void Editing_a_list_keeps_the_store_on_a_line_that_keeps_its_name()
+    {
+        var store = new JobStore(_root);
+        var job = store.Add("MK5 kit", "list", null, [new JobItem("Concord", 2, Store: "HUR-L5")]);
+
+        store.Edit(job.Id, null, [new JobItem("concord", 3), new JobItem("Arrowhead", 1)]);
+
+        var items = store.All().Single().Items;
+        Assert.Equal("HUR-L5", items[0].Store);
+        Assert.Equal(3, items[0].Needed);
+        Assert.Null(items[1].Store);
+    }
+
+    [Fact]
+    public void The_next_garage_proposal_keeps_a_chosen_store()
+    {
+        var store = new JobStore(_root);
+        var first = store.ReplaceOpenList("RSI Hermes fit", "garage:RSI_Hermes", [new JobItem("SolarFlare", 2)]);
+        store.SetStore(first.Job.Id, "SolarFlare", "Platinum Bay, Port Tressler", null);
+
+        store.ReplaceOpenList("RSI Hermes fit", "garage:RSI_Hermes", [new JobItem("SolarFlare", 2), new JobItem("JS-400", 1)]);
+
+        var items = store.All().Single().Items;
+        Assert.Equal("Platinum Bay, Port Tressler", items[0].Store);
+        Assert.Null(items[1].Store);
+    }
+
+    [Fact]
+    public void Collecting_with_a_store_moves_the_line_and_without_one_leaves_it()
+    {
+        var store = new JobStore(_root);
+        var job = store.Add("MK5 kit", "list", null, [new JobItem("Concord", 1, Store: "HUR-L5", StoreId: "L5")]);
+
+        store.Collect(new JobItem("Concord", 1), job.Id);
+        var kept = store.All().Single().Items.Single();
+        Assert.Equal(("HUR-L5", "L5"), (kept.Store, kept.StoreId));
+
+        store.Collect(new JobItem("Concord", 1, Store: "Orison"), job.Id);
+        var moved = store.All().Single().Items.Single();
+        Assert.Equal(3, moved.Needed);
+        Assert.Equal("Orison", moved.Store);
+        Assert.Null(moved.StoreId);
+    }
 }

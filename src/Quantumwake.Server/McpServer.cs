@@ -421,9 +421,17 @@ public sealed class McpApi(string root, McpSettings settings)
         return JsonNode.Parse(await response.Content.ReadAsStringAsync(token)) ?? new JsonObject();
     }
 
-    public async Task<JsonNode> Post(string path, object body, CancellationToken token)
+    public Task<JsonNode> Post(string path, object? body, CancellationToken token) =>
+        Send(HttpMethod.Post, path, body, token);
+
+    /// <summary>For the routes that change a record in place, such as a saved build (1.2.65).</summary>
+    public Task<JsonNode> Put(string path, object? body, CancellationToken token) =>
+        Send(HttpMethod.Put, path, body, token);
+
+    private async Task<JsonNode> Send(HttpMethod method, string path, object? body, CancellationToken token)
     {
-        using var response = await Client.PostAsJsonAsync(root + path, body, token);
+        using var request = new HttpRequestMessage(method, root + path) { Content = JsonContent.Create(body) };
+        using var response = await Client.SendAsync(request, token);
         var text = await response.Content.ReadAsStringAsync(token);
         if (!response.IsSuccessStatusCode)
             throw new McpToolException($"The app refused that: {McpEndpoints.Clip(Refusal(text), 300)}");

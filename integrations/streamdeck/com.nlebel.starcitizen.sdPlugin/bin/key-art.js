@@ -21,6 +21,7 @@
     missile: '<path d="M8 16C8 7 15 3 21 3c0 6-4 13-13 13Zm0 0-5 1 2-5m3 4-1 5 5-2M4 20l-2 2"/><circle cx="16" cy="8" r="2"/>',
     countermeasures: '<path d="m12 3 2 5-2 5-2-5Zm-7 8 2 4-2 4-2-4Zm14 0 2 4-2 4-2-4ZM12 16v6M1 6l4 2m18-2-4 2"/>',
     quantum: '<path d="m3 12 9-10 9 10-9 10Z"/><path d="m8 12 4-5 4 5-4 5ZM1 12h6m10 0h6"/>',
+    tractor: '<rect x="2" y="8" width="4" height="8" rx="1"/><path d="M6 10 22 4M6 14l16 6"/><rect x="13" y="9" width="6" height="6" rx="1"/><path d="m10 10-2 2 2 2"/>',
     scan: '<path d="M3 12a9 9 0 0 1 18 0M6 12a6 6 0 0 1 12 0M12 12l6-8M4 19h16"/><circle cx="12" cy="12" r="2"/>',
     lights: '<path d="M4 7q8 0 8 5t-8 5ZM15 5l6-2m-6 6 7-1m-7 5h7m-7 4 6 2"/>',
     door: '<path d="M4 22V3h16v19M9 22V7l11-4M13 14v3M2 22h20"/>',

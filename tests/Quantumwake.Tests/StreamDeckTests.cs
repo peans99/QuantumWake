@@ -17,9 +17,42 @@ public class StreamDeckTests
     [InlineData("preset/Salvage/salvage_fire_fracture", "Salvage", "Fire Fracture", "salvage")]
     [InlineData("spaceship_power/v_engineering_assignment_weapons_max", "Power", "Weapons MAX", "weapons")]
     [InlineData("spaceship_power/v_engineering_assignment_shields_max", "Power", "Shields MAX", "shield")]
+    [InlineData("preset/Scan/prev_contact", "Scan", "Prev Contact", "scan")]
+    [InlineData("preset/Tractor Beam/throw", "Tractor Beam", "Throw", "tractor")]
+    [InlineData("spaceship_salvage/tractor_beam_vehicle_increase_distance", "Vehicles - Salvage", "Tractor Beam Vehicle- Increase Distance", "tractor")]
+    [InlineData("preset/Combat/missile_mode", "Combat", "Missile Mode", "missile")]
     public void Function_icons_are_not_confused_by_category_names(string id, string group, string label, string icon)
     {
         Assert.Equal(icon, StreamDeckProfiles.Appearance(id, group, label).Icon);
+    }
+
+    /// <summary>
+    /// Scan and Tractor Beam are folders of their own (1.2.66), each with a
+    /// folder picture: a group whose icon has no PNG would fail every profile
+    /// build, since every page carries every group's picture.
+    /// </summary>
+    [Theory] [InlineData("Scan", "scan")] [InlineData("Tractor Beam", "tractor")] [InlineData("Vehicles - Scanning", "scan")]
+    public void Scan_and_tractor_beam_are_folders_with_their_own_picture(string group, string icon)
+    {
+        Assert.Equal(icon, StreamDeckProfiles.GroupAppearance(group).Icon);
+        Assert.NotNull(typeof(StreamDeckProfiles).Assembly.GetManifestResourceStream("streamdeck.icon." + icon));
+        var presets = StreamDeckProfiles.Commands(new ControlCatalogue([], []), null).Where(c => c.Preset).ToList();
+        if (!group.StartsWith("Vehicles")) Assert.Contains(presets, c => c.Group == group);
+    }
+
+    /// <summary>
+    /// 4.10.3 left the single-mode switches unbound and put M on the
+    /// industrial cycle, so the mining and salvage folders carry that key too:
+    /// otherwise a default install's folder has no mode key that works.
+    /// </summary>
+    [Fact] public void Mining_and_salvage_carry_the_industrial_cycle_that_default_bindings_reach()
+    {
+        var cycle = new ActionInfo("seat_general", "v_cycle_industrial_mode", "Cycle Industrial Operator Modes", "", "m", "", "", "", "press", "");
+        var mining = new ActionInfo("seat_general", "v_toggle_mining_mode", "Toggle Mining Operator Mode", "", "", "", "", "", "press", "");
+        var commands = StreamDeckProfiles.Commands(new ControlCatalogue([], [cycle, mining]), null);
+        foreach (var group in new[] { "Mining", "Salvage" })
+            Assert.Equal("m", commands.Single(c => c.Id == $"preset/{group}/next_mode").Key);
+        Assert.NotNull(commands.Single(c => c.Id == "preset/Mining/mining_mode").Problem);
     }
     private static ControlCatalogue Catalogue => new([new("ship", "Ship", "FLIGHT")], [new("ship", "gear", "Landing Gear", "", "n", "", "", "", "", "")]);
     [Fact] public void Rebound_keys_replace_defaults_and_explicitly_cleared_keys_stay_unbound()

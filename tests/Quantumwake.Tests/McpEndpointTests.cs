@@ -332,6 +332,7 @@ public class McpPilotToolTests : IClassFixture<ServerUnderTest>, IAsyncLifetime
     [InlineData("my_ledger")]
     [InlineData("my_earnings")]
     [InlineData("garage")]
+    [InlineData("garage_builds")]
     [InlineData("my_loadout")]
     [InlineData("my_contracts")]
     [InlineData("my_reputation")]
@@ -379,6 +380,158 @@ public class McpPilotToolTests : IClassFixture<ServerUnderTest>, IAsyncLifetime
         var line = (await _server.Get("/api/jobs")).EnumerateArray().Single(j => j.GetProperty("id").GetString() == id)
             .GetProperty("items")[0];
         Assert.True(line.GetProperty("got").GetBoolean());
+        await _server.Delete($"/api/jobs/{id}");
+    }
+
+    /// <summary>A string field, or null when the server left it out, as it does every null.</summary>
+    private static string? Field(JsonElement e, string key) =>
+        e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+    private async Task<JsonElement> Job(string? id) =>
+        (await _server.Get("/api/jobs")).EnumerateArray().Single(j => j.GetProperty("id").GetString() == id);
+
+    /// <summary>
+    /// A run split between places (1.2.65), which a destination - one place for
+    /// the whole list - could not say. The empty install has no price feed, so
+    /// each store is kept as asked and the answer says the feed lists nothing there.
+    /// </summary>
+    [Fact]
+    public async Task A_new_list_keeps_a_store_for_each_line()
+    {
+        var (error, text) = await Call("create_shopping_list", new
+        {
+            title = "MK5 kit",
+            items = new object[]
+            {
+                new { name = "Arrowhead", needed = 1, store = "Orison" },
+                new { name = "Concord", needed = 2, store = "HUR-L5" },
+                new { name = "MedGel", needed = 4 },
+            },
+        });
+        Assert.False(error, text);
+        var made = JsonDocument.Parse(text).RootElement;
+        var stores = made.GetProperty("stores").EnumerateArray().ToList();
+        Assert.Equal(["Arrowhead", "Concord"], stores.Select(s => s.GetProperty("line").GetString()));
+        Assert.All(stores, s => Assert.False(s.GetProperty("soldThere").GetBoolean()));
+
+        var items = (await Job(made.GetProperty("id").GetString())).GetProperty("items").EnumerateArray().ToList();
+        Assert.Equal("Orison", items[0].GetProperty("store").GetString());
+        Assert.Equal("HUR-L5", items[1].GetProperty("store").GetString());
+        Assert.Null(Field(items[2], "store"));
+
+        // The chosen store is where the card says to buy it, with no price the feed does not have.
+        Assert.Equal("HUR-L5", items[1].GetProperty("buyAt").GetString());
+        Assert.False(items[1].TryGetProperty("buyPrice", out var price) && price.ValueKind == JsonValueKind.Number);
+
+        await _server.Delete($"/api/jobs/{made.GetProperty("id").GetString()}");
+    }
+
+    [Fact]
+    public async Task Choosing_a_store_sets_one_line_twice_alike_and_clears_it()
+    {
+        var id = (await _server.Posted("/api/jobs", new
+        {
+            title = "MK5 kit",
+            kind = "list",
+            items = new[] { new { name = "Arrowhead", needed = 1.0 }, new { name = "Concord", needed = 2.0 } },
+        })).GetProperty("id").GetString();
+
+        var (error, text) = await Call("choose_store", new { list_id = id, line = "concord", store = "HUR-L5" });
+        Assert.False(error, text);
+        await Call("choose_store", new { list_id = id, line = "Concord", store = "HUR-L5" });
+
+        var items = (await Job(id)).GetProperty("items").EnumerateArray().ToList();
+        Assert.Null(Field(items[0], "store"));
+        Assert.Equal("HUR-L5", items[1].GetProperty("store").GetString());
+
+        await Call("choose_store", new { list_id = id, line = "Concord" });
+        Assert.Null(Field((await Job(id)).GetProperty("items")[1], "store"));
+
+        var (missing, why) = await Call("choose_store", new { list_id = id, line = "Gatling", store = "HUR-L5" });
+        Assert.True(missing);
+        Assert.Contains("no line 'Gatling'", why);
+
+        await _server.Delete($"/api/jobs/{id}");
+    }
+
+    /// <summary>
+    /// The test install has no ship reference, which is also what a build
+    /// saved for a ship since dropped from the game looks like: still listed,
+    /// with no changes it can say.
+    /// </summary>
+    [Fact]
+    public async Task A_saved_build_is_listed_even_when_its_ship_is_not_known()
+    {
+        var saved = await _server.Posted("/api/garage/builds", new
+        {
+            shipClass = "RSI_Hermes",
+            name = "Hermes shields",
+            note = "For cargo runs",
+            swaps = new Dictionary<string, string?> { ["loadout.23"] = "SHLD_ASAS_S02_Shroud_SCItem" },
+        });
+        var id = saved.GetProperty("id").GetString();
+
+        var (error, text) = await Call("garage_builds");
+        Assert.False(error, text);
+        var build = JsonDocument.Parse(text).RootElement.GetProperty("builds").EnumerateArray()
+            .Single(b => b.GetProperty("id").GetString() == id);
+        Assert.Equal("Hermes shields", build.GetProperty("name").GetString());
+        Assert.Equal("For cargo runs", build.GetProperty("note").GetString());
+        Assert.Equal("RSI_Hermes", build.GetProperty("ship").GetString());
+
+        await _server.Delete($"/api/garage/builds/{id}");
+    }
+
+    [Theory]
+    [InlineData("""{"ship":"RSI Hermes"}""", "needs a name")]
+    [InlineData("""{"build_id":"nosuchid"}""", "No saved build with id 'nosuchid'")]
+    [InlineData("""{"ship":"Nothing Like It","name":"x"}""", "No ship called 'Nothing Like It'")]
+    public async Task Saving_a_build_says_what_is_missing(string args, string said)
+    {
+        var (error, text) = await Call("save_garage_build", JsonDocument.Parse(args).RootElement);
+
+        Assert.True(error);
+        Assert.Contains(said, text);
+        Assert.Empty((await _server.Get("/api/garage/builds")).EnumerateArray());
+    }
+
+    [Fact]
+    public async Task A_goal_is_set_refused_without_a_price_and_cleared()
+    {
+        var (error, text) = await Call("set_goal", new { name = "Drake Caterpillar", target = 4500000 });
+        Assert.False(error, text);
+        var goal = (await _server.Get("/api/earnings")).GetProperty("goal");
+        Assert.Equal("Drake Caterpillar", goal.GetProperty("name").GetString());
+        Assert.Equal(4500000m, goal.GetProperty("target").GetDecimal());
+
+        var (refused, why) = await Call("set_goal", new { name = "Drake Caterpillar" });
+        Assert.True(refused);
+        Assert.Contains("price", why);
+        Assert.Equal("Drake Caterpillar", (await _server.Get("/api/earnings")).GetProperty("goal").GetProperty("name").GetString());
+
+        await Call("set_goal");
+        var cleared = await _server.Get("/api/earnings");
+        Assert.False(cleared.TryGetProperty("goal", out var left) && left.ValueKind == JsonValueKind.Object);
+    }
+
+    /// <summary>The list made with no destination could not be given one afterwards.</summary>
+    [Fact]
+    public async Task Choosing_a_store_with_no_line_points_the_whole_list()
+    {
+        var id = (await _server.Posted("/api/jobs", new
+        {
+            title = "MK5 kit",
+            kind = "list",
+            items = new[] { new { name = "Arrowhead", needed = 1.0 } },
+        })).GetProperty("id").GetString();
+
+        var (error, text) = await Call("choose_store", new { list_id = id, store = "Orison" });
+        Assert.False(error, text);
+        Assert.Equal("Orison", (await Job(id)).GetProperty("destination").GetString());
+
+        await Call("choose_store", new { list_id = id });
+        Assert.Null(Field(await Job(id), "destination"));
+
         await _server.Delete($"/api/jobs/{id}");
     }
 
