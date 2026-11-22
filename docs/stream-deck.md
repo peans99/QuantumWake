@@ -34,13 +34,14 @@ but one built yesterday does.
 - **Folders by category.** The home page holds one folder per category; Back
   sits top left on every page, and a category with more commands than fit gets
   More at the bottom right.
-- **97 preset commands in 8 categories:** Flight 9, Combat 11, Power 12,
-  Mining 14, Salvage 14, Ground Vehicle 14, Ship & Utilities 14, Extended 9.
-  They are transcribed from the original D:\streamdeck generator into
-  `integrations/streamdeck/presets.json`, each tied to one action-map id; all
-  97 resolve on this install. Extended is off by default, so a first profile has
-  88 commands in 7 folders. Any of the game's other actions can be added from
-  "All game commands".
+- **125 preset commands in 10 categories:** Flight 12, Combat 13, Power 12,
+  Mining 15, Salvage 15, Scan 11, Tractor Beam 10, Ground Vehicle 14,
+  Ship & Utilities 14, Extended 9. The first 97 were transcribed from the
+  original D:\streamdeck generator into `integrations/streamdeck/presets.json`,
+  each tied to one action-map id; all 125 name an action this install's game
+  defines. Extended is off by default, so a first profile offers 116 commands in
+  9 folders, less any your bindings cannot reach (below). Any of the game's
+  other actions can be added from "All game commands".
 - **The game as its application.** The profile names `Bin64\StarCitizen.exe`
   from the selected install, so Stream Deck switches to it when the game is in
   front.
@@ -48,6 +49,24 @@ but one built yesterday does.
 The two mining-power presets turn the mouse wheel the game uses for laser power
 into separate up and down pulses, and only while that axis is still bound to the
 wheel.
+
+## Operator and master modes
+
+Each mode key sits in the folder where it is used: NAV, SCM and Quantum in
+Flight, Guns and Missiles in Combat, Scan in Mining, Salvage and its own Scan
+folder. Mining and Salvage also carry **Next Mode**, the industrial cycle.
+
+4.10.3 left most of these without a key. On this install's bindings only four
+mode actions have one: the industrial cycle (M), Scan (V), the master-mode
+cycle (B, held) and Next Operator Mode (middle mouse). Mining Mode, Salvage
+Mode, NAV, SCM, Quantum, Guns and Missiles are all unbound, so the page shows
+those seven greyed with the reason until they are bound in game; that is why
+Next Mode is beside Mining Mode and Salvage Mode rather than instead of them.
+
+The Tractor Beam folder holds the hand tractor beam (pull in, push out,
+rotate, detach, throw) and the ship tractor's distance. Most of them are on the
+mouse wheel, so Pull In and Ship Beam In send the same wheel turn: which one
+it moves depends on what you are holding, as it would with the wheel itself.
 
 ## Holds and taps
 

@@ -3,6 +3,8 @@
   "groups": [
     {"icon":"mining","color":"#f4cd65","match":["mining"]},
     {"icon":"salvage","color":"#71d5b5","match":["salvage"]},
+    {"icon":"scan","color":"#8cb8ff","match":["scan"]},
+    {"icon":"tractor","color":"#f2a7d6","match":["tractor"]},
     {"icon":"combat","color":"#ffa08b","match":["combat","weapon","target","missile","countermeasure"]},
     {"icon":"power","color":"#e6bcff","match":["power","shield"]},
     {"icon":"ground","color":"#c4d98b","match":["ground","vehicle","on foot"]},
@@ -23,7 +25,8 @@
     {"icon":"target","match":["target","pin_","_pin","pinned","hostile","gimbal"]},
     {"icon":"weapons","match":["weapon","fire mode","firemode","reload","pip_wpn"]},
     {"icon":"mining","match":["mining"]},
-    {"icon":"salvage","match":["salvage","scrape","tractor"]},
+    {"icon":"tractor","match":["tractor"]},
+    {"icon":"salvage","match":["salvage","scrape"]},
     {"icon":"quantum","match":["quantum","qdrive"]},
     {"icon":"scan","match":["scan","radar","v_ping","_ping"," ping"]},
     {"icon":"lights","match":["v_lights","_lights","headlight","headlamp"," light","night_vision"]},

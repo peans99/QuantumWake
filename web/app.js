@@ -39572,8 +39572,31 @@ function deckTiming(command) {
    under a name. Kept by the app, so it is in the backup like a kit. */
 const DECK_LAST = 'Last used';
 let deckSetups = [], deckRestored = null, deckSaveTimer = 0, deckSavedJson = '';
+// The app version the commands came from, and the version of a choice just
+// restored, until the commands are there to widen it with.
+let deckVersion = null, deckRestoredFrom = null;
 function deckChoice() {
-  return { model: $('#deck-model')?.value || '15', source: $('#deck-source')?.value || 'current', actions: [...deckSelection] };
+  const choice = { model: $('#deck-model')?.value || '15', source: $('#deck-source')?.value || 'current', actions: [...deckSelection] };
+  if (deckVersion) choice.version = deckVersion;
+  return choice;
+}
+function deckVersionAfter(a, b) {
+  const x = String(a || '0').split('.').map(Number), y = String(b || '0').split('.').map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+  return false;
+}
+/**
+ * A remembered choice is the exact set ticked, so a folder added in a later
+ * version would stay unticked for everyone who had opened the page before:
+ * nothing tells "left out" from "not there yet". Presets newer than the
+ * choice are ticked as the defaults would be. A choice saved before 1.2.66
+ * carries no version and counts as older than every preset that has one.
+ */
+function addDeckPresetsSince() {
+  if (deckRestoredFrom === null || !deckCommands.length) return;
+  for (const c of deckCommands)
+    if (c.preset && c.since && c.group !== 'Extended' && !c.problem && deckVersionAfter(c.since, deckRestoredFrom)) deckSelection.add(c.id);
+  deckRestoredFrom = null;
 }
 async function loadDeckSetups() {
   try { deckSetups = await getJson('/api/setups?kind=deck'); } catch { deckSetups = []; }
@@ -39594,6 +39617,7 @@ function applyDeckChoice(data) {
   if ($('#deck-model') && ['15', 'xl'].includes(data.model)) $('#deck-model').value = data.model;
   if ($('#deck-source') && ['current', 'defaults'].includes(data.source)) $('#deck-source').value = data.source;
   deckSelection = new Set(Array.isArray(data.actions) ? data.actions : []);
+  deckRestoredFrom = typeof data.version === 'string' ? data.version : '0';
   deckInitialised = true;
 }
 /** Keeps the choice as "Last used", a moment after it stops changing, and only when it did. */
@@ -39632,6 +39656,8 @@ async function loadStreamDeck() {
   try {
     const data = await getJson('/api/streamdeck?defaults=' + ($('#deck-source').value === 'defaults'));
     deckCommands = data.commands || [];
+    deckVersion = data.version || deckVersion;
+    addDeckPresetsSince();
     deckGroups = new Map((data.groups || []).map(group => [group.name, group]));
     if (!deckInitialised && data.ready) { deckSelection = new Set(deckCommands.filter(c => c.preset && c.group !== 'Extended' && !c.problem).map(c => c.id)); deckInitialised = true; }
     deckSelection = new Set([...deckSelection].filter(id => deckCommands.some(c => c.id === id && !c.problem)));
@@ -39754,7 +39780,7 @@ $('#deck-saved')?.addEventListener('change', async () => {
   const sourceBefore = $('#deck-source')?.value;
   applyDeckChoice(setup.data);
   if ($('#deck-source')?.value !== sourceBefore) await loadStreamDeck();
-  else { deckSelection = new Set([...deckSelection].filter(id => deckCommands.some(c => c.id === id && !c.problem))); renderStreamDeck(); }
+  else { addDeckPresetsSince(); deckSelection = new Set([...deckSelection].filter(id => deckCommands.some(c => c.id === id && !c.problem))); renderStreamDeck(); }
 });
 $('#deck-save')?.addEventListener('click', () => saveDeckSetup().catch(() => {}));
 $('#deck-refresh')?.addEventListener('click', loadStreamDeck);

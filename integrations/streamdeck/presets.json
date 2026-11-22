@@ -32,6 +32,33 @@
     "tap": false
   },
   {
+    "id": "Flight/nav_mode",
+    "action": "spaceship_movement/v_master_mode_set_nav",
+    "group": "Flight",
+    "label": "NAV\nMode",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Flight/scm_mode",
+    "action": "spaceship_movement/v_master_mode_set_scm",
+    "group": "Flight",
+    "label": "SCM\nMode",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Flight/quantum_mode",
+    "action": "seat_general/v_toggle_quantum_mode",
+    "group": "Flight",
+    "label": "Quantum\nMode",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
     "id": "Flight/atc",
     "action": "spaceship_movement/v_atc_request",
     "group": "Flight",
@@ -102,6 +129,24 @@
     "label": "Guns /\nMissile",
     "hold": 0,
     "tap": false
+  },
+  {
+    "id": "Combat/guns_mode",
+    "action": "seat_general/v_set_guns_mode",
+    "group": "Combat",
+    "label": "Guns\nMode",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Combat/missile_mode",
+    "action": "seat_general/v_set_missile_mode",
+    "group": "Combat",
+    "label": "Missile\nMode",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
   },
   {
     "id": "Combat/target_subitem",
@@ -264,6 +309,15 @@
     "tap": false
   },
   {
+    "id": "Mining/next_mode",
+    "action": "seat_general/v_cycle_industrial_mode",
+    "group": "Mining",
+    "label": "Next\nMode",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
     "id": "Mining/mining_fire",
     "action": "spaceship_mining/v_toggle_mining_laser_fire",
     "group": "Mining",
@@ -378,6 +432,15 @@
     "tap": false
   },
   {
+    "id": "Salvage/next_mode",
+    "action": "seat_general/v_cycle_industrial_mode",
+    "group": "Salvage",
+    "label": "Next\nMode",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
     "id": "Salvage/salvage_fire_left",
     "action": "spaceship_salvage/v_salvage_toggle_fire_left",
     "group": "Salvage",
@@ -480,6 +543,195 @@
     "label": "Ping",
     "hold": 0,
     "tap": false
+  },
+  {
+    "id": "Scan/scan_mode",
+    "action": "seat_general/v_toggle_scan_mode",
+    "group": "Scan",
+    "label": "Scan\nMode",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Scan/ping",
+    "action": "spaceship_radar/v_invoke_ping",
+    "group": "Scan",
+    "label": "Ping",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Scan/scan",
+    "action": "spaceship_scanning/v_scanning_trigger_scan",
+    "group": "Scan",
+    "label": "Scan",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Scan/angle_down",
+    "action": "spaceship_scanning/v_dec_scan_focus_level",
+    "group": "Scan",
+    "label": "Angle\n−",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Scan/angle_up",
+    "action": "spaceship_scanning/v_inc_scan_focus_level",
+    "group": "Scan",
+    "label": "Angle\n+",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Scan/prev_tab",
+    "action": "spaceship_scanning/v_ui_prev_scan_tab",
+    "group": "Scan",
+    "label": "Prev\nTab",
+    "hold": 0,
+    "tap": true,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Scan/next_tab",
+    "action": "spaceship_scanning/v_ui_next_scan_tab",
+    "group": "Scan",
+    "label": "Next\nTab",
+    "hold": 0,
+    "tap": true,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Scan/prev_page",
+    "action": "spaceship_scanning/v_ui_prev_scan_page",
+    "group": "Scan",
+    "label": "Prev\nPage",
+    "hold": 0,
+    "tap": true,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Scan/next_page",
+    "action": "spaceship_scanning/v_ui_next_scan_page",
+    "group": "Scan",
+    "label": "Next\nPage",
+    "hold": 0,
+    "tap": true,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Scan/prev_contact",
+    "action": "spaceship_scanning/v_ui_prev_contact",
+    "group": "Scan",
+    "label": "Prev\nContact",
+    "hold": 0,
+    "tap": true,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Scan/next_contact",
+    "action": "spaceship_scanning/v_ui_next_contact",
+    "group": "Scan",
+    "label": "Next\nContact",
+    "hold": 0,
+    "tap": true,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Tractor Beam/distance_down",
+    "action": "tractor_beam/tractor_beam_decrease_distance",
+    "group": "Tractor Beam",
+    "label": "Pull\nIn",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Tractor Beam/distance_up",
+    "action": "tractor_beam/tractor_beam_increase_distance",
+    "group": "Tractor Beam",
+    "label": "Push\nOut",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Tractor Beam/rotate",
+    "action": "tractor_beam/tractor_beam_rotate",
+    "group": "Tractor Beam",
+    "label": "Rotate",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Tractor Beam/roll_down",
+    "action": "tractor_beam/tractor_beam_rotate_z_down",
+    "group": "Tractor Beam",
+    "label": "Rotate\nZ −",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Tractor Beam/roll_up",
+    "action": "tractor_beam/tractor_beam_rotate_z_up",
+    "group": "Tractor Beam",
+    "label": "Rotate\nZ +",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Tractor Beam/reset_rotation",
+    "action": "tractor_beam/tractor_beam_reset_rotation",
+    "group": "Tractor Beam",
+    "label": "Reset\nRotation",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Tractor Beam/detach",
+    "action": "tractor_beam/tractor_beam_detach",
+    "group": "Tractor Beam",
+    "label": "Detach",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Tractor Beam/throw",
+    "action": "tractor_beam/tractor_beam_throw",
+    "group": "Tractor Beam",
+    "label": "Throw",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Tractor Beam/ship_distance_down",
+    "action": "spaceship_salvage/tractor_beam_vehicle_decrease_distance",
+    "group": "Tractor Beam",
+    "label": "Ship Beam\nIn",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
+  },
+  {
+    "id": "Tractor Beam/ship_distance_up",
+    "action": "spaceship_salvage/tractor_beam_vehicle_increase_distance",
+    "group": "Tractor Beam",
+    "label": "Ship Beam\nOut",
+    "hold": 0,
+    "tap": false,
+    "since": "1.2.66"
   },
   {
     "id": "Ground Vehicle/gv_start",

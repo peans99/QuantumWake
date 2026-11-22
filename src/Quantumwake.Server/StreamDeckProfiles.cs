@@ -12,8 +12,9 @@ namespace Quantumwake.Server;
 /// <param name="Hold">Milliseconds the plugin keeps the key down at least, whatever the finger does.</param>
 /// <param name="HoldFor">Seconds the game wants the key held before the action fires; 0 when a touch does it.</param>
 /// <param name="TapOrHold">A tap fires the action and holding for <paramref name="HoldFor"/> fires its hold version.</param>
+/// <param name="Since">For a preset added after choices were remembered, the version that added it.</param>
 public sealed record DeckCommand(string Id, string Group, string Label, string Key, string Activation, string? Problem, bool Preset = false, int Hold = 0, bool? Tap = null,
-    double HoldFor = 0, bool TapOrHold = false)
+    double HoldFor = 0, bool TapOrHold = false, string? Since = null)
 {
     public DeckAppearance Appearance => StreamDeckProfiles.Appearance(Id, Group, Label);
 }
@@ -27,7 +28,7 @@ public static class StreamDeckProfiles
     /// Stream Deck installs the bundled copy when an older one is in place.
     /// A test holds it to the packed manifest.
     /// </summary>
-    public const string PluginVersion = "1.1.3.0";
+    public const string PluginVersion = "1.1.4.0";
 
     private sealed record AppearanceRule(string Icon, string? Color, string[] Match);
     private sealed record DeckPalette(DeckAppearance Fallback, AppearanceRule[] Groups, AppearanceRule[] Actions);
@@ -118,13 +119,13 @@ public static class StreamDeckProfiles
             // A preset that taps, or already holds past the threshold, fires the same
             // way whatever the finger does, so there is nothing left to tell.
             var settled = action is not null && (preset.Tap || preset.Hold >= action.HoldFor * 1000);
-            commands.Add(action is null ? new DeckCommand("preset/" + preset.Id, preset.Group, preset.Label, "", "", "This command could not be matched to a supported game action.", true)
+            commands.Add(action is null ? new DeckCommand("preset/" + preset.Id, preset.Group, preset.Label, "", "", "This command could not be matched to a supported game action.", true, Since: preset.Since)
                 : action with { Id = "preset/" + preset.Id, Group = preset.Group, Label = preset.Label, Preset = true, Hold = preset.Hold, Tap = preset.Tap,
-                    HoldFor = settled ? 0 : action.HoldFor, TapOrHold = !settled && action.TapOrHold });
+                    HoldFor = settled ? 0 : action.HoldFor, TapOrHold = !settled && action.TapOrHold, Since = preset.Since });
         }
         return commands;
     }
-    private sealed record PresetCommand(string Id, string Action, string Group, string Label, int Hold, bool Tap, int WheelDirection = 0);
+    private sealed record PresetCommand(string Id, string Action, string Group, string Label, int Hold, bool Tap, int WheelDirection = 0, string? Since = null);
 
     private static ControlProfile? Profile(GameInstall? install)
     {
@@ -143,7 +144,10 @@ public static class StreamDeckProfiles
             {
                 var profile = defaults == true ? null : Profile(install);
                 var commands = Commands(lib.GameCommodities.Controls.Catalogue, profile);
+                // The version goes back with a remembered choice, so presets added
+                // after it was saved can be ticked when it is restored (1.2.66).
                 return Results.Ok(new { ready = !lib.GameCommodities.Controls.Catalogue.IsEmpty, profileFound = profile is not null,
+                    version = typeof(StreamDeckProfiles).Assembly.GetName().Version?.ToString(3),
                     commands, groups = commands.Select(c => c.Group).Distinct().Select(name => new { name, title = FolderTitle(name), appearance = GroupAppearance(name) }) });
             }
             catch (Exception e) when (e is UnauthorizedAccessException or IOException or InvalidDataException or System.Xml.XmlException)

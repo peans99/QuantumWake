@@ -440,8 +440,23 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.65
+### 1.2.66
 
+- **Stream Deck: Scan and Tractor Beam folders, and mode keys where you
+  use them.** Scan has its own folder - scan mode, ping, scan, angle, and
+  the scan panel's tabs, pages and contacts - and Tractor Beam holds the
+  hand beam (pull in, push out, rotate, detach, throw) and the ship
+  tractor's distance. NAV, SCM and Quantum mode keys sit in Flight, Guns
+  and Missiles in Combat, and Mining and Salvage gain **Next Mode**: since
+  4.10.3 the game binds M to stepping through the industrial modes and
+  leaves Mining Mode and Salvage Mode with no key, so on a default setup
+  the old mode keys could not be sent. The direct mode keys need a key bound
+  in game first; until then the page shows them greyed with the reason.
+  On a 15-key deck, Mining and Salvage now spill one key onto a More page.
+  Your last choice of commands is kept, with the new keys ticked in it as a
+  first visit would tick them; what you had unticked stays off. Rebuild your
+  profile to get them; Open in Stream Deck updates the plugin for the new
+  tractor beam picture.
 - **Each line on a shopping list can name its own store.** A list's
   destination is one place for everything, and a run is often two: the
   weapons at one station, a part only sold at another. A line's store wins

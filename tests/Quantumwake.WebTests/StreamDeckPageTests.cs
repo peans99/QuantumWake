@@ -42,6 +42,32 @@ public class StreamDeckPageTests
         Assert.Contains("Flight",page.NodeText("#deck-categories"));
         Assert.Contains("Extended",page.NodeText("#deck-categories"));
     }
+    /// <summary>
+    /// A remembered choice is exactly what was ticked, so without this the Scan
+    /// and Tractor Beam folders (1.2.66) stayed unticked for everyone who had
+    /// opened the page before they existed. What the pilot unticked stays off.
+    /// </summary>
+    [Theory]
+    [InlineData("null", true)]        // saved before choices carried a version
+    [InlineData("'1.2.65'", true)]
+    [InlineData("'1.2.66'", false)]   // saved after the folder arrived: left out on purpose
+    public void A_restored_choice_takes_up_presets_added_since_it_was_saved(string version, bool ticked)
+    {
+        var page = new Page();
+        page.Serve("/api/streamdeck?defaults=false", """
+            {"ready":true,"profileFound":true,"version":"1.2.66","commands":[
+             {"id":"preset/gear","group":"Flight","label":"Gear","key":"n","preset":true},
+             {"id":"preset/pins","group":"Flight","label":"Pins","key":"p","preset":true},
+             {"id":"preset/scan","group":"Scan","label":"Scan","key":"v","preset":true,"since":"1.2.66"},
+             {"id":"preset/nav","group":"Flight","label":"NAV","key":"","preset":true,"since":"1.2.66","problem":"Unbound"},
+             {"id":"preset/extra","group":"Extended","label":"More","key":"x","preset":true,"since":"1.2.66"}]}
+            """);
+        page.Do($"applyDeckChoice({{model:'15',source:'current',actions:['preset/gear']{(version == "null" ? "" : ",version:" + version)}}}); await loadStreamDeck();");
+        Assert.Equal(ticked, page.Truth("deckSelection.has('preset/scan')"));
+        Assert.True(page.Truth("deckSelection.has('preset/gear') && !deckSelection.has('preset/pins')"));
+        Assert.True(page.Truth("!deckSelection.has('preset/nav') && !deckSelection.has('preset/extra')"));
+        Assert.Equal("1.2.66", page.Text("deckChoice().version"));
+    }
     [Fact] public void Search_matches_commands_and_unbound_actions_are_not_selected_for_export()
     {
         var page=new Page();
