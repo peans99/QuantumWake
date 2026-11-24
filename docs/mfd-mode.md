@@ -2,6 +2,33 @@
 
 Feature branch: `codex/cougar-mfd`, based on `dev0100`.
 
+## What it looks like
+
+Each Cougar frame gets its own page. The left one starts on Navigation, the right
+one on the mission, and Home gets you to the rest. The five captions along the
+top sit over the frame's top buttons, and BACK, UP, HOME and DOWN over the
+bottom ones.
+
+<table>
+  <tr>
+    <td width="33%" valign="top"><a href="images/mfd-home.png"><img src="images/mfd-home.png" alt="The MFD Home menu"></a><br><b>Home</b> · Flight, Operations, Resources, Pilot and Combat, one per top button</td>
+    <td width="33%" valign="top"><a href="images/mfd-nav.png"><img src="images/mfd-nav.png" alt="The MFD Navigation page"></a><br><b>Navigation</b> · the next stop, where you are and the server. The left frame's default</td>
+    <td width="33%" valign="top"><a href="images/mfd-task.png"><img src="images/mfd-task.png" alt="The MFD Mission page"></a><br><b>Mission</b> · the tracked plan's next stop and what to do there. The right frame's default</td>
+  </tr>
+  <tr>
+    <td valign="top"><a href="images/mfd-target.png"><img src="images/mfd-target.png" alt="The MFD Target page with a hostile Gladius"></a><br><b>Target</b> · the locked hull as the Garage pictures it, red while hostile, then stance, hull, motion and signature</td>
+    <td valign="top"><a href="images/mfd-charge.png"><img src="images/mfd-charge.png" alt="The MFD Fracture charge page"></a><br><b>Fracture charge</b> · the mining laser's charge against the window, the crack, and rocks cracked</td>
+    <td valign="top"><a href="images/mfd-callout.png"><img src="images/mfd-callout.png" alt="A callout card over the Mission page"></a><br><b>Callout</b> · what the voice just said, over the page for six seconds</td>
+  </tr>
+</table>
+
+Taken from the app's own pages at 600 × 600 against a copy of a real install;
+the plan, the location and the Garage picture are that install's. Target,
+Fracture charge and the callout need live screen reading in a running game, so
+those three were fed a staged lock, rock and voice line instead. The pages and
+layout are the app's; the readings are made up for the picture. On Target the
+readings start under the ship and carry on below it; DOWN scrolls to them.
+
 ## Plan
 
 - [x] Keep MFD mode optional and separate from the regular overlay.

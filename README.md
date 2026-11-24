@@ -74,6 +74,16 @@ Models come from your game's `Data.p4k`, so they match the patch you play. Nothi
 
 An overlay over the game, pages for Cougar MFDs, a Stream Deck profile built from your own keybindings, and voice commands. All optional, all Windows.
 
+<table>
+  <tr>
+    <td width="33%" valign="top"><a href="docs/images/mfd-nav.png"><img src="docs/images/mfd-nav.png" alt="The MFD Navigation page"></a><br><b>Navigation</b> · the next stop and where you are</td>
+    <td width="33%" valign="top"><a href="docs/images/mfd-target.png"><img src="docs/images/mfd-target.png" alt="The MFD Target page"></a><br><b>Target</b> · the ship you have locked, red while hostile</td>
+    <td width="33%" valign="top"><a href="docs/images/mfd-charge.png"><img src="docs/images/mfd-charge.png" alt="The MFD Fracture charge page"></a><br><b>Fracture charge</b> · the mining laser against its window</td>
+  </tr>
+</table>
+
+Each Cougar frame gets its own page, with captions over the frame's buttons. More pages in the [MFD guide](docs/mfd-mode.md#what-it-looks-like).
+
 ## Your play, counted
 
 <table>
@@ -439,6 +449,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 ## Release notes
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
+
+### 1.2.67
+
+- **Pictures of the Cougar MFD pages.** The [MFD guide](docs/mfd-mode.md#what-it-looks-like)
+  now opens with six of them: Home, Navigation, Mission, Target, Fracture
+  charge and a callout card. Three of them are also on the front page under
+  In the cockpit. Nothing in the app changed.
 
 ### 1.2.66
 
