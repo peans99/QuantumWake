@@ -55,7 +55,7 @@
     "group": "Flight",
     "label": "Quantum\nMode",
     "hold": 0,
-    "tap": false,
+    "tap": true,
     "since": "1.2.66"
   },
   {
@@ -306,7 +306,7 @@
     "group": "Mining",
     "label": "Mining\nMode",
     "hold": 0,
-    "tap": false
+    "tap": true
   },
   {
     "id": "Mining/next_mode",
@@ -314,7 +314,7 @@
     "group": "Mining",
     "label": "Next\nMode",
     "hold": 0,
-    "tap": false,
+    "tap": true,
     "since": "1.2.66"
   },
   {
@@ -339,7 +339,7 @@
     "group": "Mining",
     "label": "Scan\nMode",
     "hold": 0,
-    "tap": false
+    "tap": true
   },
   {
     "id": "Mining/mining_power_down",
@@ -429,7 +429,7 @@
     "group": "Salvage",
     "label": "Salvage\nMode",
     "hold": 0,
-    "tap": false
+    "tap": true
   },
   {
     "id": "Salvage/next_mode",
@@ -437,7 +437,7 @@
     "group": "Salvage",
     "label": "Next\nMode",
     "hold": 0,
-    "tap": false,
+    "tap": true,
     "since": "1.2.66"
   },
   {
@@ -534,7 +534,7 @@
     "group": "Salvage",
     "label": "Scan\nMode",
     "hold": 0,
-    "tap": false
+    "tap": true
   },
   {
     "id": "Salvage/ping",
@@ -550,7 +550,7 @@
     "group": "Scan",
     "label": "Scan\nMode",
     "hold": 0,
-    "tap": false,
+    "tap": true,
     "since": "1.2.66"
   },
   {

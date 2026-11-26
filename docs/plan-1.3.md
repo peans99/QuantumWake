@@ -117,6 +117,31 @@ Look in particular for guild rep lines, career-board contract titles, and
   `ControlCatalogue.Find` falls back by action name. Update the map named in
   `VoiceCommands.cs:125-126` so it does not read as stale. The nine operator-mode
   toggles go `press` -> `tap`: confirm a voice press still lands.
+**Checked 2026-11-26 (1.3.3):**
+
+- **Controls.** A diff of the two catalogues (`--keys=md`, 1,104 actions on LIVE, 1,096 on
+  the PTU) finds 9 actions that moved, all of them door, door-lock and port-lock actions,
+  from `spaceship_general` and `vehicle_general` to `seat_general`. 11 actions changed
+  from `press` to `tap`: the 9 operator-mode toggles, plus the door toggle and the
+  port-lock toggle. Nothing else moved or changed mode. One action is new:
+  `hmd_theater_screen_move`. Self destruct stays in `spaceship_general` on both. Voice
+  holds a key for 0.06 s, which is inside `tap`'s 0.25 s release window, and matches the
+  pilot's binding under either group. All 125 Stream Deck presets resolve on both
+  installs. Eight mode-key presets mirrored the finger, though, so a press longer than a
+  quarter second missed the window on 5.0. They now send a fixed tap.
+- **FTL.** The record is re-keyed, but the name ("FTL Courier") and the logo are
+  unchanged. Stored readings and the lone-tab reader go by the printed name, so nothing
+  breaks.
+- **Faction ladder: still open.** The ceiling goes from 95,251 to 238,000 with Elite at
+  95,250. Only `ReputationLadders.Place` reads the ceiling: at the top rank, the estimate
+  fills toward it. Whether the game's Elite bar does the same needs a PTU Rep app
+  screenshot at Elite.
+- **The guild ladder has the faction ladder's card names.** Both read Applicant, Jr.
+  Contractor ... Elite Contractor under the heading "Standing", with no perks. Their
+  thresholds differ (513 against 800 for Jr. Contractor), so `ReputationLadders.Match`
+  cannot tell a guild page from a faction page by its cards. Each guild's
+  `FactionReputation` record names `ReputationScope_Guild` in its `alliedParams.scope`,
+  so the organisation can settle it. That is B1's first step.
 - **Backpacks** now carry temperature (-5..50) and radiation (50) ratings, and
   lose their shop type, so the page falls back to the slot. The Climate tab skips
   backpacks on purpose. Leave that until there is evidence of how the game

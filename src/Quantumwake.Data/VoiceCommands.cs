@@ -122,6 +122,10 @@ public static class VoiceCommands
         new("powerdown", "less power", ["(less|decrease|reduce) [laser|mining] power", "(laser|mining) power down", "decrease [the] [laser|mining] throttle"], "spaceship_mining", "v_decrease_mining_throttle", "Less power"),
         // Throws the hold's ore away, so it waits for "confirm" like self destruct.
         new("jettison", "jettison cargo", ["(jettison|dump|eject|drop) [the|all|all the|our] cargo"], "spaceship_mining", "v_jettison_volatile_cargo", "Cargo jettisoned", Confirm: true, Prompt: "Confirm jettison?"),
+        // spaceship_general is LIVE 4.10's group for the doors; 5.0 moves all
+        // nine door and port-lock actions to seat_general. Find falls back by
+        // action name and the pilot's binding is matched under either group,
+        // so both versions press the same key - change this when 5.0 is LIVE.
         new("opendoors", "open all doors", ["open [all] [the] doors", "open all the doors"], "spaceship_general", "v_open_all_doors", "Doors open"),
         new("closedoors", "close all doors", ["(close|shut) [all] [the] doors", "(close|shut) all the doors"], "spaceship_general", "v_close_all_doors", "Doors closed"),
         new("atc", "request landing", ["request (landing|departure|takeoff|take off|clearance|landing clearance|permission to land)", "(call|contact|hail) [the] tower"], "spaceship_movement", "v_atc_request", "Requesting clearance"),

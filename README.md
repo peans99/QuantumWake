@@ -450,7 +450,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.3.2
+### 1.3.3
+
+- **Stream Deck mode keys keep working in 5.0.** 5.0 changes the operator-mode
+  switches (Quantum, Mining, Salvage, Scan and Next Mode) to fire only on a
+  quick tap: a key held a little too long now does nothing. Those keys now
+  always send a quick tap, which works on the live game too. Voice commands
+  already pressed them briefly, and the door commands still find their keys
+  after 5.0 moves them to another group in the keybindings.
 
 - **Event loot shows up on the Loot page.** The DCDelving armour boxes, the
   SOO weapon caches, and the Stormbreaker, Orbageddon, Rock Cracker,
