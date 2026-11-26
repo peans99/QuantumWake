@@ -208,6 +208,12 @@ Academy of Science and Sports have no logo in the files.
     (`GameRepOrganisation.Ladder`), used by `ReputationLadders.Match` only to break a
     tie.
 - **Seen rendered:** against the PTU catalogue, with a second server on scratch data.
+- **Emblems (1.3.6).** Three guilds have a logo in `ManufacturerLogos`. The Academy of
+  Science's record names `org_aos_icon_rgb_white.tif`, which the PTU archive does not
+  hold. Every guild record also names a `guildBanner`, and all four exist under
+  `Starchitect\Boards`. The Career board header shows "Authorized by" and the guild's
+  emblem, so each guild card shows that header, and the Academy gets its mark. Sports has
+  neither, and no board.
 
 ### B2. Mission boards
 

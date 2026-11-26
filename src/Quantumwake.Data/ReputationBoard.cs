@@ -82,6 +82,7 @@ public sealed record RepGuildMember(string Name, string? Logo, bool OnPage);
 /// <param name="PayLow">The least and most one of them pays it; null when none does.</param>
 /// <param name="Rank">The rank the newest Rep app screenshot of it showed, or null when none has.</param>
 /// <param name="Estimate">Its reputation on the ladder by that screenshot's bar, an estimate; null without one.</param>
+/// <param name="Banner">Where the page fetches its Career board's header, with the guild's emblem on it; null when the install has none.</param>
 public sealed record RepGuild(
     string Name,
     string? Logo,
@@ -92,7 +93,8 @@ public sealed record RepGuild(
     int? PayHigh,
     string? Rank,
     long? Estimate,
-    DateTimeOffset? Seen);
+    DateTimeOffset? Seen,
+    string? Banner = null);
 
 /// <param name="Unmeasured">Rep readings with no bars in them yet - taken before 0.18.22 and not yet read again.</param>
 public sealed record ReputationBoard(IReadOnlyList<RepOrganisation> Organisations, int Readings, int Unmeasured);
@@ -438,7 +440,8 @@ public static class ReputationBoards
                 pays.Count > 0 ? pays.Max() : null,
                 card?.Rank,
                 card?.Place?.Estimate,
-                card?.LastSeen);
+                card?.LastSeen,
+                guild.Banner is null ? null : $"/api/reputation/banner/{Uri.EscapeDataString(guild.Id)}");
         })];
     }
 
@@ -451,6 +454,10 @@ public static class ReputationBoards
             ? $"/api/reputation/logo/{Uri.EscapeDataString(found.Id)}"
             : null;
     }
+
+    /// <summary>The archive entry behind a guild banner address <see cref="Guilds"/> gave out.</summary>
+    public static string? BannerEntry(string id, GameReputationCatalogue catalogue) =>
+        catalogue.Guilds?.FirstOrDefault(g => string.Equals(g.Id, id, StringComparison.Ordinal))?.Banner;
 
     /// <summary>The archive entry behind a logo address <see cref="LogoOf"/> gave out.</summary>
     public static string? LogoEntry(string id, GameReputationCatalogue catalogue) =>

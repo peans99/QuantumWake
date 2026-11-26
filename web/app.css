@@ -7389,6 +7389,7 @@ body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-l
 .rep-guilds > h3, .rep-guilds > p { grid-column: 1 / -1; margin: 0; }
 .rep-guilds-heading { margin: 0; color: var(--dim); font: 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 .rep-guild-thresholds, .rep-guild-members { font-size: 11px; }
+.rep-guild-banner { display: block; width: 100%; max-width: 652px; height: auto; border-radius: 3px; margin-bottom: 8px; }
 .rep-trend-wrap { display: flex; flex-direction: column; gap: 4px; margin: 0; }
 .rep-trend-chart { display: grid; grid-template-columns: minmax(54px, max-content) minmax(0, 1fr); gap: 6px; align-items: stretch; }
 .rep-trend-axis { display: flex; flex-direction: column; justify-content: space-between; min-width: 0; padding: 2px 0; color: var(--dim); font: 10px/1.1 var(--mono); text-align: right; overflow: hidden; }

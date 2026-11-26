@@ -450,7 +450,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.3.5
+### 1.3.6
+
+- **Guild emblems.** Each guild on the Reputation page shows the header its
+  Career board carries in the game, with the guild's emblem on it. For the
+  Academy of Science that header is the only copy of its emblem in the 5.0
+  files: the logo the game names for it is missing from the build.
 
 - **Which board a contract is on (Star Citizen 5.0).** Reference → Missions
   says whether a contract is posted on a guild's Career board, and whose, or

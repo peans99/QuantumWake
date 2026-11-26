@@ -28,7 +28,8 @@ public class GuildLadderTests
     ])
     {
         Guilds = [new("FactionReputation_Guild_Industrial", "United Resource Workers", "ReputationScope_Guild",
-            ["FactionReputation_Lawful_ShubinInterstellar"])],
+            ["FactionReputation_Lawful_ShubinInterstellar"],
+            GameReputation.BannerFolder + "CareerBoard_URW_HeaderBanner.dds")],
         // CB_URW_S_Shubin_... pays both, URW on the guild ladder and Shubin on its own.
         Missions = new Dictionary<string, GameMissionPay>
         {
@@ -72,6 +73,17 @@ public class GuildLadderTests
         // The failure penalty is not pay.
         Assert.Equal((2, 100, 250), (guild.Contracts, guild.PayLow, guild.PayHigh));
         Assert.Null(guild.Rank);
+    }
+
+    [Fact]
+    public void A_guild_s_board_header_is_served_by_its_id_and_nothing_else_is()
+    {
+        var guild = Assert.Single(ReputationBoards.Guilds(Catalogue, []));
+
+        Assert.Equal("/api/reputation/banner/FactionReputation_Guild_Industrial", guild.Banner);
+        Assert.Equal(@"Data\UI\Textures\Starchitect\Boards\CareerBoard_URW_HeaderBanner.dds",
+            ReputationBoards.BannerEntry("FactionReputation_Guild_Industrial", Catalogue));
+        Assert.Null(ReputationBoards.BannerEntry(@"..\Data\Game2.dcb", Catalogue));
     }
 
     [Fact]

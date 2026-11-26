@@ -43,7 +43,12 @@ public sealed record GameRepOrganisation(string Id, string Name, string? Logo, s
 /// The organisations whose contracts its boards carry, in the order the boards
 /// list them - <c>FactionReputation_Lawful_ShubinInterstellar</c> first for URW.
 /// </param>
-public sealed record GameRepGuild(string Id, string Name, string? Ladder, IReadOnlyList<string> Members);
+/// <param name="Banner">
+/// The archive entry of the header its Career board shows - "Authorized by"
+/// and the guild's emblem - or null when the record names none or the archive
+/// does not hold it.
+/// </param>
+public sealed record GameRepGuild(string Id, string Name, string? Ladder, IReadOnlyList<string> Members, string? Banner = null);
 
 /// <summary>Every reputation ladder the install defines, and the organisations.</summary>
 /// <param name="Organisations">Null in a cache written before they were read.</param>
@@ -126,13 +131,18 @@ public static class GameReputation
     private const string ScopeStruct = "SReputationScopeParams";
     private const string OrganisationStruct = "FactionReputation";
 
+    /// <summary>Where the Career boards' headers live; <see cref="GameRepGuild.Banner"/>.</summary>
+    public const string BannerFolder = @"Data\UI\Textures\Starchitect\Boards\";
+
     /// <param name="logoEntries">
     /// The archive's listing of <see cref="GameMakerLogos.Folder"/>, where every
     /// organisation's mark lives beside the makers' - so a logo is offered only
     /// when the file is there to decode.
     /// </param>
+    /// <param name="bannerEntries">The archive's listing of <see cref="BannerFolder"/>, for the guilds' board headers.</param>
     public static GameReputationCatalogue Read(
-        DataCore core, IReadOnlyDictionary<string, string> text, IEnumerable<string>? logoEntries = null)
+        DataCore core, IReadOnlyDictionary<string, string> text, IEnumerable<string>? logoEntries = null,
+        IEnumerable<string>? bannerEntries = null)
     {
         var scopeStruct = core.StructIndexOf(ScopeStruct);
         if (scopeStruct < 0) return GameReputationCatalogue.Empty;
@@ -210,7 +220,7 @@ public static class GameReputation
 
         return new GameReputationCatalogue([.. read.OrderBy(s => s.Id, StringComparer.Ordinal)], orgs)
         {
-            Guilds = Guilds(core, byId, boards, orgs),
+            Guilds = Guilds(core, byId, boards, orgs, bannerEntries ?? []),
             Missions = missions,
             HaulTitles = GameMissions.HaulTitles(core, byId, text.Keys),
             TitleRewards = GameMissions.TitleRewards(core, byId, missions),
@@ -311,9 +321,18 @@ public static class GameReputation
     /// The Imperial Sports Federation and an unnamed <c>Guild_Criminal</c> have
     /// records and no board, and are left out.
     /// </remarks>
+    /// <para>
+    /// Each guild record names the header its boards show
+    /// (<c>guildBanner</c>, <c>CareerBoard_AOS_HeaderBanner.tif</c>), and the
+    /// guild's emblem is drawn on it. That is the only copy of the Academy of
+    /// Science's mark on the PTU: its <c>logo</c> names
+    /// <c>org_aos_icon_rgb_white.tif</c>, which the archive does not hold.
+    /// </para>
     private static List<GameRepGuild> Guilds(
-        DataCore core, Dictionary<Guid, DataRecord> byId, List<DataRecord> entities, List<GameRepOrganisation> orgs)
+        DataCore core, Dictionary<Guid, DataRecord> byId, List<DataRecord> entities, List<GameRepOrganisation> orgs,
+        IEnumerable<string> bannerEntries)
     {
+        var banners = new HashSet<string>(bannerEntries.Select(P4kArchive.EntryFileName), StringComparer.OrdinalIgnoreCase);
         var provider = core.StructIndexOf("EntityComponentMissionBoardUIProvider");
         if (provider < 0) return [];
 
@@ -341,9 +360,23 @@ public static class GameReputation
         }
 
         var byOrg = orgs.ToDictionary(o => o.Id, StringComparer.Ordinal);
+        var organisationStruct = core.StructIndexOf(OrganisationStruct);
+        var records = byId.Values.Where(r => r.StructIndex == organisationStruct)
+            .GroupBy(r => Bare(r.Name), StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        string? Banner(string id)
+        {
+            if (!records.TryGetValue(id, out var record)) return null;
+            var path = core.StringAt(core.InstanceAt(record, record.VariantIndex), record.StructIndex, "guildBanner");
+            if (path is not { Length: > 0 } || !path.Contains("Starchitect", StringComparison.OrdinalIgnoreCase)) return null;
+            var file = P4kArchive.EntryStem(path) + ".dds";
+            return banners.Contains(file) ? BannerFolder + file : null;
+        }
+
         return [.. order
             .Where(byOrg.ContainsKey)
-            .Select(id => new GameRepGuild(id, byOrg[id].Name, byOrg[id].Ladder, members[id]))];
+            .Select(id => new GameRepGuild(id, byOrg[id].Name, byOrg[id].Ladder, members[id], Banner(id)))];
     }
 
     /// <summary>

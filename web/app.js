@@ -14563,6 +14563,17 @@ function reputationGuildCard(guild) {
   const card = el('article', 'point-card rep-card rep-guild');
   card.dataset.guild = linkKey(guild.name);
 
+  // The header its Career board shows, with the guild's emblem on it - the
+  // only copy of the Academy of Science's mark the game files hold.
+  if (guild.banner) {
+    const banner = el('img', 'rep-guild-banner');
+    banner.src = guild.banner;
+    banner.alt = tx('{guild} Career board header', { guild: guild.name });
+    banner.loading = 'lazy';
+    banner.addEventListener?.('error', () => banner.remove());
+    card.append(banner);
+  }
+
   const head = el('div', 'wikelo-head');
   const title = el('div', 'rep-title');
   if (guild.logo) {

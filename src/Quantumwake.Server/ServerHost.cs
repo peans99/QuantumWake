@@ -2283,6 +2283,17 @@ public static partial class ServerHost
             return ArchivePicture(entry, "rep-logos");
         });
 
+        // A guild's Career board header, by the guild id the board handed the
+        // page; like the logos, only an id the catalogue knows is looked up.
+        app.MapGet("/api/reputation/banner/{id}", (string id, LogLibrary lib, HttpContext ctx) =>
+        {
+            if (ReputationBoards.BannerEntry(id, lib.GameCommodities.Reputation) is not { } entry)
+                return Results.NotFound();
+
+            ctx.Response.Headers.CacheControl = "private, max-age=86400";
+            return ArchivePicture(entry, "rep-banners");
+        });
+
         // Who the party channel has named. See LogLibrary.Wingmen for why these
         // are floors rather than totals.
         app.MapGet("/api/crew", (LogLibrary lib, int? days) => lib.Wingmen(days ?? 0));

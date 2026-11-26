@@ -31,7 +31,7 @@ public class ReputationGuildTests
                       {"name":"Adagio Holdings","logo":null,"onPage":false},
                       {"name":"Cornerstone Developments","logo":null,"onPage":false}],
            "contracts":113,"payLow":100,"payHigh":250,"rank":{{urwRank}},"estimate":{{urwEstimate}},"seen":null},
-          {"name":"Academy of Science","logo":null,"ladder":{{Ladder}},
+          {"name":"Academy of Science","logo":null,"banner":"/api/reputation/banner/FactionReputation_Guild_Science","ladder":{{Ladder}},
            "members":[{"name":"Rayari Incorporated","logo":null,"onPage":false}],
            "contracts":6,"payLow":100,"payHigh":100,"rank":null,"estimate":null,"seen":null}],
          "readings":0,"unmeasured":0,"unmeasurable":0,"canRead":true,"watching":true,"ladders":40}
@@ -76,6 +76,20 @@ public class ReputationGuildTests
     {
         Assert.Equal(0, Loaded(Board("[]")).Count("__dom.node('#reputation-list').byClass('org-link').length"));
         Assert.Equal(1, Loaded(Board("[]", shubinOnPage: true)).Count("__dom.node('#reputation-list').byClass('org-link').length"));
+    }
+
+    /// <summary>
+    /// The Academy of Science's own logo is not in the PTU's files; its board
+    /// header, with its emblem, is - so a guild with no logo still shows its mark.
+    /// </summary>
+    [Fact]
+    public void A_guild_shows_its_board_header_where_the_game_has_one()
+    {
+        var page = Loaded(Board("[]"));
+        const string banners = "__dom.node('#reputation-list').byClass('rep-guild-banner')";
+
+        Assert.Equal(1, page.Count($"{banners}.length"));
+        Assert.Equal("/api/reputation/banner/FactionReputation_Guild_Science", page.Text($"{banners}[0].src"));
     }
 
     [Fact]
