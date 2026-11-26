@@ -47,6 +47,7 @@ public static class GameVehicles
 
         var vehicleParams = core.StructIndexOf("VehicleComponentParams");
         var display = core.StructIndexOf("EntityUIDisplayParams");
+        var attach = core.StructIndexOf("SAttachableComponentParams");
         if (vehicleParams < 0) return vehicles;
 
         foreach (var record in core.Records())
@@ -78,7 +79,9 @@ public static class GameVehicles
             var bare = record.Name[(record.Name.LastIndexOf('.') + 1)..];
 
             var nameKey = core.StringAt(at, vehicleParams, "vehicleName");
-            var name = Localised(text, nameKey) ?? Localised(text, "vehicle_Name" + bare) ?? bare.Replace('_', ' ');
+            var attachKey = AttachNameKey(core, record, attach);
+            var name = Localised(text, NameKey(text, nameKey, attachKey))
+                ?? Localised(text, "vehicle_Name" + bare) ?? bare.Replace('_', ' ');
 
             string? icon = null;
             if (display >= 0)
@@ -100,6 +103,59 @@ public static class GameVehicles
         }
 
         return vehicles;
+    }
+
+    /// <summary>
+    /// Which of a vehicle's two name keys to show: <c>vehicleName</c>, or the
+    /// attach definition's <c>Localization.Name</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Neither is always the specific one. The 5.0 Wikelo specials point
+    /// <c>vehicleName</c> at the base hull (<c>vehicle_NameDRAK_Pitbull</c>) and
+    /// put "Wikelo Sneak Special" only on the attach name; the PYAM Exec ships run
+    /// the other way, a specific <c>vehicleName</c> over a generic attach name.
+    /// Preferring either field outright renames one family to its base hull.
+    /// </para>
+    /// <para>
+    /// What both families share is that the specific key extends the generic
+    /// one - <c>X_Collector_Stealth</c> over <c>X</c> - so the longer key wins
+    /// when it does and it has text. Anything else keeps <c>vehicleName</c>: the
+    /// derelicts and hijacked hulls whose two keys are unrelated read today as
+    /// the game shows them, and are not this rule's business.
+    /// </para>
+    /// </remarks>
+    public static string? NameKey(IReadOnlyDictionary<string, string> text, string? vehicleKey, string? attachKey)
+    {
+        if (attachKey is not { Length: > 0 }) return vehicleKey;
+        if (vehicleKey is not { Length: > 0 }) return attachKey;
+
+        var (shorterKey, longerKey) = vehicleKey.TrimStart('@').Length <= attachKey.TrimStart('@').Length
+            ? (vehicleKey, attachKey) : (attachKey, vehicleKey);
+        var shorter = shorterKey.TrimStart('@');
+        var longer = longerKey.TrimStart('@');
+
+        // Case-blind because the text table is: a key that only differs in case
+        // from the one it extends still names the same line.
+        var extends = longer.Length > shorter.Length
+            && longer.StartsWith(shorter, StringComparison.OrdinalIgnoreCase)
+            && longer[shorter.Length] == '_';
+
+        return extends && Localised(text, longer) is not null ? longerKey : vehicleKey;
+    }
+
+    private static string? AttachNameKey(DataCore core, DataRecord record, int attach)
+    {
+        if (attach < 0) return null;
+        foreach (var component in core.PointerArray(record, "Components"))
+        {
+            if (component.StructIndex != attach) continue;
+            var (def, field) = core.FieldAt(core.InstanceAt(component), attach, "AttachDef");
+            if (def < 0 || field is null) return null;
+            var (loc, locField) = core.FieldAt(def, field.StructIndex, "Localization");
+            return loc < 0 || locField is null ? null : core.StringAt(loc, locField.StructIndex, "Name");
+        }
+        return null;
     }
 
     private static string? Localised(IReadOnlyDictionary<string, string> text, string? key)

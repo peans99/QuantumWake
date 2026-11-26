@@ -450,7 +450,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.3.0
+### 1.3.1
+
+- **Wikelo specials go by their own names.** The RSI Polaris Wikelo Special
+  showed as a plain RSI Polaris, and in 5.0 the six new specials would have
+  done the same: the Pitbull and M80 Wikelo Sneak Specials, the Starlite and
+  Ironclad Wikelo Work Specials, and the Tiburon and Ironclad Assault Wikelo
+  War Specials. They now read as the game names them. No other ship's name
+  changed: all 1,097 on the live game and 1,105 on the 5.0 PTU were checked.
 
 - **Pictures of the Cougar MFD pages.** The [MFD guide](docs/mfd-mode.md#what-it-looks-like)
   now opens with six of them: Home, Navigation, Mission, Target, Fracture
