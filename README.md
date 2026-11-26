@@ -450,8 +450,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.3.8
+### 1.3.9
 
+- **Insurance claims from the game files, and 5.0's new claim rules.** A
+  ship's window shows its standard and expedited claim wait and its expedite
+  fee straight from your install, so they appear without the community feed
+  (they match it on 331 of its 332 ships). On Star Citizen 5.0 it adds the
+  claim group the hull is in, such as starter ships waiting and paying 0.8×,
+  and the new repeat-claim chain: up to 5 claims, each waiting 2.4× longer
+  and costing 1.75× more. These are shown as factors, not added up into
+  minutes, because no log records how long a claim took.
 - **Loot on Nyx I by whose land it is (Star Citizen 5.0).** 5.0's new
   settlements, camps and outposts on Nyx I each belong to a faction's land:
   Shubin, Rayari, Covalex, First Legion, Moraine, Shattered Blade, the

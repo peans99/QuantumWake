@@ -7052,6 +7052,48 @@ function refPartsTable(parts) {
   return wrap;
 }
 
+/**
+ * A hull's claim wait and fee. The install's own figures lead; the community
+ * dataset's expedite fee is the fallback for a ship the install has no block for.
+ */
+function shipClaimText(claim, community) {
+  if (claim?.standardMinutes > 0) {
+    const minutes = (m) => m >= 10 ? Math.round(m) : Math.round(m * 10) / 10;
+    return [
+      tx('~{minutes}m standard', { minutes: minutes(claim.standardMinutes) }),
+      claim.expeditedMinutes > 0 ? tx('~{minutes}m expedited', { minutes: minutes(claim.expeditedMinutes) }) : null,
+      claim.expediteFee > 0 ? tx('{fee} to expedite', { fee: money(claim.expediteFee) }) : null,
+    ].filter(Boolean).join(' · ');
+  }
+  return community?.expeditedCost > 0 ? tx('{fee} to expedite', { fee: money(community.expeditedCost) }) : null;
+}
+
+/**
+ * The claim factors the files put on this hull, said as factors. They are not
+ * folded into the minutes: no log records how long a claim took, so a
+ * combined figure could not be checked. A hull in two groups is said to be in
+ * two, since the files do not say which one wins.
+ */
+function shipClaimNote(claim) {
+  if (!claim) return null;
+  const times = (f) => `×${f}`;
+  const group = (g) => [
+    g.cooldown !== 1 ? tx('wait {f}', { f: times(g.cooldown) }) : null,
+    g.cost !== 1 ? tx('cost {f}', { f: times(g.cost) }) : null,
+    g.delivery !== 1 ? tx('delivery {f}', { f: times(g.delivery) }) : null,
+  ].filter(Boolean).join(', ');
+  const parts = [];
+  const groups = claim.groups || [];
+  if (groups.length === 1) parts.push(tx('Its claim group: {factors}.', { factors: group(groups[0]) }));
+  else if (groups.length > 1) parts.push(tx('It is listed in {n} claim groups ({groups}); the files do not say which applies.',
+    { n: groups.length, groups: groups.map(group).join('; ') }));
+  if (claim.repeat) parts.push(tx('Repeat claims chain up to {chain}: each step {wait} wait, {cost} cost, {delivery} delivery.', {
+    chain: claim.repeat.chain, wait: times(claim.repeat.cooldown), cost: times(claim.repeat.cost), delivery: times(claim.repeat.delivery) }));
+  if (!parts.length) return null;
+  parts.push(tx('From the game files. No log records a claim, so how these combine with the wait is not checked.'));
+  return parts.join(' ');
+}
+
 function renderShipDetail(body, data) {
   const c = data.community;
   $('#ref-modal-title').textContent = data.name;
@@ -7110,8 +7152,10 @@ function renderShipDetail(body, data) {
     [tx('Shields'), c?.shieldHp > 0 ? c.shieldHp.toLocaleString() : null, community],
     [tx('Hull'), c?.health > 0 ? c.health.toLocaleString() : null, community],
     [tx('Length × beam × height'), size, install],
-    [tx('Claim'), c?.expeditedCost > 0 ? tx('{fee} to expedite', { fee: money(c.expeditedCost) }) : null, community],
+    [tx('Claim'), shipClaimText(data.claim, c), data.claim?.standardMinutes > 0 ? install : community],
   ]));
+  const claimNote = shipClaimNote(data.claim);
+  if (claimNote) body.append(el('p', 'muted caption', claimNote));
 
   if (!data.npc) {
     const buy = refSection(tx('Where to buy it'));

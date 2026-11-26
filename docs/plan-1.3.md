@@ -297,6 +297,15 @@ them are used in `nyx1.socpak` and nowhere else.
 `ItemRecoveryRepairParams`. Values not read yet. Probably recovery and
 insurance timings worth showing next to a ship or an item.
 
+**Done in 1.3.9.** The ship window takes each hull's claim wait and expedite
+fee from the install; they match the community dataset on 331 of its 332
+ships. On 5.0 it also shows the hull's override-group factors and the new
+repeat-claim chain (5 steps, ×2.4 wait, ×1.75 cost, ×1.5 delivery). The
+price-based cooldown and delivery fields are not made into minutes because no
+log records a claim's length (`datacore.md`, Insurance claims). Open: a
+screenshot of an ASOP claim time on the PTU for a known hull, to test the
+formula.
+
 ### B6. Hauling: collect-only orders
 
 `HaulingOrder_CollectOnly` is a new order type; the 4.10.3 PTU had added

@@ -260,6 +260,10 @@ placement*. Two things looked at and left:
   install says about salvage instead - and why a hull's yield is not in it
   either - is `salvage.md`.
 - **Beacons** (76) — too sparse here to build on.
+- **Insurance claims** — `[Entitlement][Insurance]` lines are vehicle-list
+  fetches and failures only (`ProximityValidation`, `ItemOnCooldown`). No line
+  says a claim was filed or how long it took; the waits come from the install
+  instead (`datacore.md`, Insurance claims).
 - **Mining** (15) — essentially absent from this player's logs.
 
 ---

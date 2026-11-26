@@ -518,6 +518,16 @@ public sealed class DataCore
             : null;
     }
 
+    /// <summary>An unsigned integer field, or null - a ship's expedite fee is stored this way.</summary>
+    public long? UInt32At(long instance, int structIndex, string name)
+    {
+        var (at, field) = FieldAt(instance, structIndex, name);
+
+        return at >= 0 && field is { ConversionType: 0, DataType: 0x0008 } && at + 4 <= _data.LongLength
+            ? BitConverter.ToUInt32(_data, (int)at)
+            : null;
+    }
+
     /// <summary>A 64-bit integer field, or null - reputation thresholds are stored this wide.</summary>
     public long? Int64At(long instance, int structIndex, string name)
     {

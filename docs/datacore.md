@@ -609,3 +609,72 @@ NPC and low-detail copies, and capital-ship parts sharing a text nobody owns.
 
 Nothing here has been seen in game yet: whether the game renders a longer
 header block without clipping it is the thing to look at first.
+
+## Insurance claims (1.3.9, 2026-11-26)
+
+Two places hold claims, and both are read by `GameClaims`.
+
+**Each ship's own wait.** `SEntityInsuranceProperties` sits in a ship's
+`StaticEntityClassData`, not its `Components`. Its `shipInsuranceParams` holds
+`baseWaitTimeMinutes`, `mandatoryWaitTimeMinutes` and `baseExpeditingFee`, the
+fee as an unsigned integer (type `0x0008`, which needed `UInt32At`). Examples:
+the Cutlass Black is 9.99 / 3.33 / 6,251 and the Idris-P 199 / 49.75 / 118,580.
+
+The community dataset publishes these three numbers as `StandardClaimTime`,
+`ExpeditedClaimTime` and `ExpeditedCost`. Checked against its digest on LIVE
+4.10.3, **331 of its 332 ships agree on all three**; the other is not in the
+install. The values are the same on the 5.0 PTU (13284307). The ship window now
+takes them from the install, so they show without the community feed.
+
+**The global rules.** `ItemRecoveryConfigurationParams.GlobalItemRecovery` has
+an `economyParams` block, and 5.0 changed it in two ways the app shows:
+
+- **Repeat claims.** In `escalatingClaimsParams`, LIVE has a chain limit of 1
+  and every factor at 1, so nothing escalates. The PTU has a chain of 5, with
+  each step multiplying the wait by 2.4, the cost by 1.75 and the delivery
+  by 1.5.
+- **The seven override groups were re-weighted.** Factors are wait / cost /
+  delivery:
+
+  | Group (examples) | LIVE 4.10.3 | 5.0 PTU |
+  |---|---|---|
+  | Pisces, Mustangs, Aurora Mk II, 100 series, Reliants, Cutlass Black, Arrow, Nomad (27) | 1 / 1 / 1 | 0.8 / 0.8 / 0.8 |
+  | Carrack, Idris, Javelin, 890 Jump, Polaris (7) | 1 / 1 / 1 | 0.8 / 1 / 0.8 |
+  | Vanduul, Banu, Xi'an and Gatac hulls (9) | 0.7 / 0.7 / 0.7 | 0.7 / 0.7 / 0.7 |
+  | MPUV, SRV, Hull A-C, MOLE, Vulture, Prospector, Caterpillar (28-29) | 0.8 / 0.8 / 0.8 | 1 / 1 / 1 |
+  | 600i, 890 Jump, Constellation Phoenix, 350r (6) | 0.7 / 0.7 / 0.7 | 1 / 1 / 1 |
+  | Vanguard Hoplite, Valkyrie, Asgard, Terrapin, Prowler (9-10) | 0.7 / 0.7 / 0.7 | 1 / 1 / 1 |
+  | Starlifters, Perseus, Carrack, Reclaimer, Tiburon (7-8) | 0.6 / 0.6 / 0.6 | 0.6 / 1 / 0.6 |
+
+Three hulls are in two groups on the PTU: the Carrack (0.8 and 0.6), the 890
+Jump (0.8 and 1) and the Syulen (0.8 and 0.7). Nothing in the record says which
+one wins, so the ship window lists both. Two group entries are guids the
+install no longer defines; they are dropped.
+
+**What is not turned into minutes.** The PTU also moved the price-based fields
+into `cooldownParams` and `deliveryParams`:
+
+- `cooldownParams`: `aUECperSecond` 1,000,000, `defaultLoadoutMultiplier` 200.
+- `deliveryParams`: `baseTime` 120, `scalingPriceFloor` 12,000,
+  `aUECperSecond` 6,500, `defaultLoadoutMultiplier` 5,
+  `expeditedTimeMultiplier` 0.05.
+
+These suggest the wait now grows with what the ship is worth. But the formula
+would come from field names alone, and nothing can check it:
+
+- Game.log never records how long a claim took. Across LIVE's 320 backups, the
+  `[Entitlement][Insurance]` lines are vehicle-list fetches plus failures: 5 ×
+  `ProximityValidation`, 2 × `ClaimEntitlementRequestFailed` and 1 ×
+  `ItemOnCooldown`.
+- One published comparison does not fit either. An article measured a Galaxy
+  claim at 78,068 aUEC, but the Galaxy's expedite fee in the files is 25,000,
+  and the ship price that `claimCostMultiplier` 0.003 would need is not in the
+  install.
+
+So the factors are shown as factors, next to the ship's own wait, with a line
+saying they are not combined. A screenshot of the ASOP terminal's claim time
+for a known hull would settle it.
+
+The reported subscriber discount (10% Centurion, 15% Imperator) is not in the
+files. Searching the record names for subscriber, Centurion and Imperator finds
+only entitlement records and ships. It is presumably applied on the server.

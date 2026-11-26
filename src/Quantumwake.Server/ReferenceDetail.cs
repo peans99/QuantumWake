@@ -291,8 +291,10 @@ public static partial class ServerHost
                 crew = 0,
                 // Only a hull with grids says which folder it came from.
                 isSpaceship = lib.GameCommodities.CargoHulls.TryGetValue(v.Class, out var h) ? (bool?)h.Spaceship : null,
-                expeditedCost = (decimal?)null,
-                standardClaimTime = (double?)null,
+                // The ship's own entitlement block, which the community dataset
+                // republishes: the two agree on 331 of its 332 hulls.
+                expeditedCost = lib.GameCommodities.Claims.Waits.TryGetValue(v.Class, out var w) && w.ExpediteFee > 0 ? (decimal?)w.ExpediteFee : null,
+                standardClaimTime = w?.BaseMinutes,
                 cargoScu = hull?.CargoScu ?? 0,
                 scmSpeed = 0d,
                 maxSpeed = 0d,
@@ -380,6 +382,32 @@ public static partial class ServerHost
         };
     }
 
+    /// <summary>
+    /// A hull's claim as the install states it: its own wait and fee, the
+    /// override groups that list it, and the repeat-claim chain when there is one.
+    /// </summary>
+    /// <remarks>
+    /// Factors are handed over as factors. The 5.0 PTU also has price-based
+    /// cooldown and delivery fields, but no log records how long a claim took,
+    /// so turning them into minutes would be a formula nobody could check.
+    /// </remarks>
+    internal static object? Claim(GameClaimRules rules, string cls)
+    {
+        var wait = rules.Waits.GetValueOrDefault(cls);
+        var groups = rules.GroupsOf(cls);
+        var repeat = rules.Repeat is { Active: true } r ? r : null;
+        if (wait is null && groups.Count == 0 && repeat is null) return null;
+
+        return new
+        {
+            standardMinutes = wait?.BaseMinutes,
+            expeditedMinutes = wait?.ExpeditedMinutes,
+            expediteFee = wait is { ExpediteFee: > 0 } ? wait.ExpediteFee : (long?)null,
+            groups = groups.Select(g => new { cooldown = g.Cooldown, cost = g.Cost, delivery = g.Delivery }),
+            repeat = repeat is null ? null : new { chain = repeat.Chain, cooldown = repeat.Cooldown, cost = repeat.Cost, delivery = repeat.Delivery }
+        };
+    }
+
     static object? ShipDetail(string? id, LogLibrary lib, UexData uex, UexFeeds feeds)
     {
         if (string.IsNullOrWhiteSpace(id)) return null;
@@ -446,6 +474,7 @@ public static partial class ServerHost
             shops = npc ? [] : uex.VehicleShops(name),
             rentals = npc ? [] : feeds.RentalDesks(name),
             parts = loot.PartsOf(cls).Select(Part),
+            claim = npc ? null : Claim(lib.GameCommodities.Claims, cls),
             // The encounters an NPC version is spawned in, and what its hold carries there.
             encounters = npc ? EncountersOf(lib, uex, cls) : null,
             // Who flies one, and what theirs carries: the parts a disabled one has aboard.

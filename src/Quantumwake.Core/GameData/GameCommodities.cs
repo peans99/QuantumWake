@@ -31,7 +31,7 @@ namespace Quantumwake.Core.GameData;
 public sealed partial class GameCommodities
 {
     /// <summary>Bumped when the cached shape changes.</summary>
-    private const int CacheVersion = 81;
+    private const int CacheVersion = 82;
 
     private const string DataCoreEntry = @"Data\Game2.dcb";
     public const string LocalisationEntry = @"Data\Localization\english\global.ini";
@@ -57,6 +57,7 @@ public sealed partial class GameCommodities
     private readonly GameScenarioCatalogue _scenarios;
     private readonly GameReputationCatalogue _reputation;
     private readonly GameLootData _loot;
+    private readonly GameClaimRules _claims;
 
     private GameCommodities(
         Dictionary<string, string> byId,
@@ -77,8 +78,10 @@ public sealed partial class GameCommodities
         GameScenarioCatalogue? scenarios = null,
         GameReputationCatalogue? reputation = null,
         GameLootData? loot = null,
-        Dictionary<string, InstallCargoHull>? cargoHulls = null)
+        Dictionary<string, InstallCargoHull>? cargoHulls = null,
+        GameClaimRules? claims = null)
     {
+        _claims = claims ?? GameClaimRules.Empty;
         _reputation = reputation ?? GameReputationCatalogue.Empty;
         _loot = loot ?? GameLootData.Empty;
         _cargoHulls = cargoHulls ?? new Dictionary<string, InstallCargoHull>(StringComparer.OrdinalIgnoreCase);
@@ -176,6 +179,9 @@ public sealed partial class GameCommodities
     /// <summary>Every reputation ladder - Hauling, Standing, Barter &amp; Trade - with its ranks' thresholds.</summary>
     public GameReputationCatalogue Reputation => _reputation;
 
+    /// <summary>Each ship's claim wait and the install's claim rules: override groups, repeat claims.</summary>
+    public GameClaimRules Claims => _claims;
+
     /// <summary>Every loot table, container and NPC body, resolved to what each can roll.</summary>
     public GameLootData Loot => _loot;
 
@@ -267,16 +273,16 @@ public sealed partial class GameCommodities
 
         if (TryLoadCache(cachePath, stamp) is { } cached) return cached;
 
-        var (commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot, cargoHulls) = Read(archive);
+        var (commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot, cargoHulls, claims) = Read(archive);
         if (commodities.Count > 0 || items.Count > 0)
-            SaveCache(cachePath, stamp, commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot, cargoHulls);
+            SaveCache(cachePath, stamp, commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot, cargoHulls, claims);
 
-        return new GameCommodities(commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot, cargoHulls);
+        return new GameCommodities(commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot, cargoHulls, claims);
     }
 
     private static (Dictionary<string, string> Commodities, Dictionary<string, string> Items,
         Dictionary<string, GameItem> Facts, List<GameBlueprint> Blueprints,
-        List<GameSpawn> Spawns, Dictionary<string, GamePlace> Places, GameWikeloCatalogue Wikelo, Dictionary<string, GameVehicle> Vehicles, List<GamePaint> Paints, Dictionary<string, string> MakerLogos, GameMiningData Mining, GameArmouryData Armoury, List<CargoCrate> Crates, GameSalvageData Salvage, Quantumwake.Core.Controls.GameControlsData Controls, GameScenarioCatalogue Scenarios, GameReputationCatalogue Reputation, GameLootData Loot, Dictionary<string, InstallCargoHull> CargoHulls) Read(string archivePath)
+        List<GameSpawn> Spawns, Dictionary<string, GamePlace> Places, GameWikeloCatalogue Wikelo, Dictionary<string, GameVehicle> Vehicles, List<GamePaint> Paints, Dictionary<string, string> MakerLogos, GameMiningData Mining, GameArmouryData Armoury, List<CargoCrate> Crates, GameSalvageData Salvage, Quantumwake.Core.Controls.GameControlsData Controls, GameScenarioCatalogue Scenarios, GameReputationCatalogue Reputation, GameLootData Loot, Dictionary<string, InstallCargoHull> CargoHulls, GameClaimRules Claims) Read(string archivePath)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var itemUuids = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -297,6 +303,7 @@ public sealed partial class GameCommodities
         var reputation = GameReputationCatalogue.Empty;
         var loot = GameLootData.Empty;
         var cargoHulls = new Dictionary<string, InstallCargoHull>(StringComparer.OrdinalIgnoreCase);
+        var claims = GameClaimRules.Empty;
 
         try
         {
@@ -306,7 +313,7 @@ public sealed partial class GameCommodities
             var ini = p4k.TryRead(LocalisationEntry);
 
             if (blob is null || ini is null)
-                return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot, cargoHulls);
+                return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot, cargoHulls, claims);
 
             var text = EnglishText(Encoding.UTF8.GetString(ini));
 
@@ -366,15 +373,16 @@ public sealed partial class GameCommodities
             reputation = GameReputation.Read(core, text, p4k.List(GameMakerLogos.Folder).Select(e => e.Path),
                 p4k.List(GameReputation.BannerFolder).Select(e => e.Path));
             cargoHulls = GameCargoGrids.Read(core);
+            claims = GameClaims.Read(core);
             loot = GameLootData.Read(core, p4k, text, c => facts.TryGetValue(c, out var fact) ? fact.Type : null, result);
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {
             // A missing or unreadable archive degrades naming, never the app.
-            return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot, cargoHulls);
+            return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot, cargoHulls, claims);
         }
 
-        return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot, cargoHulls);
+        return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot, cargoHulls, claims);
     }
 
     /// <summary>
@@ -430,7 +438,8 @@ public sealed partial class GameCommodities
                 cache.Scenarios,
                 cache.Reputation,
                 cache.Loot,
-                cache.CargoHulls);
+                cache.CargoHulls,
+                cache.Claims);
         }
         catch (Exception e) when (e is IOException or JsonException)
         {
@@ -443,7 +452,7 @@ public sealed partial class GameCommodities
         Dictionary<string, string> items, Dictionary<string, GameItem> facts,
         List<GameBlueprint> blueprints, List<GameSpawn> spawns,
         Dictionary<string, GamePlace> places, GameWikeloCatalogue wikelo,
-        Dictionary<string, GameVehicle> vehicles, List<GamePaint> paints, Dictionary<string, string> makerLogos, GameMiningData mining, GameArmouryData armoury, List<CargoCrate> crates, GameSalvageData salvage, Quantumwake.Core.Controls.GameControlsData controls, GameScenarioCatalogue scenarios, GameReputationCatalogue reputation, GameLootData loot, Dictionary<string, InstallCargoHull> cargoHulls)
+        Dictionary<string, GameVehicle> vehicles, List<GamePaint> paints, Dictionary<string, string> makerLogos, GameMiningData mining, GameArmouryData armoury, List<CargoCrate> crates, GameSalvageData salvage, Quantumwake.Core.Controls.GameControlsData controls, GameScenarioCatalogue scenarios, GameReputationCatalogue reputation, GameLootData loot, Dictionary<string, InstallCargoHull> cargoHulls, GameClaimRules claims)
     {
         try
         {
@@ -454,7 +463,7 @@ public sealed partial class GameCommodities
                     {
                         Stamp = stamp, Commodities = names, Items = items,
                         Facts = facts, Blueprints = blueprints, Spawns = spawns, Places = places,
-                        Wikelo = wikelo, Vehicles = vehicles, Paints = paints, MakerLogos = makerLogos, Mining = mining, Armoury = armoury, Crates = crates, Salvage = salvage, Controls = controls, Scenarios = scenarios, Reputation = reputation, Loot = loot, CargoHulls = cargoHulls
+                        Wikelo = wikelo, Vehicles = vehicles, Paints = paints, MakerLogos = makerLogos, Mining = mining, Armoury = armoury, Crates = crates, Salvage = salvage, Controls = controls, Scenarios = scenarios, Reputation = reputation, Loot = loot, CargoHulls = cargoHulls, Claims = claims
                     },
                     Json));
         }
@@ -489,5 +498,6 @@ public sealed partial class GameCommodities
         public GameScenarioCatalogue? Scenarios { get; set; }
         public GameReputationCatalogue? Reputation { get; set; }
         public GameLootData? Loot { get; set; }
+        public GameClaimRules? Claims { get; set; }
     }
 }
