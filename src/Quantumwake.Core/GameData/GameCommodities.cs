@@ -31,7 +31,7 @@ namespace Quantumwake.Core.GameData;
 public sealed partial class GameCommodities
 {
     /// <summary>Bumped when the cached shape changes.</summary>
-    private const int CacheVersion = 79;
+    private const int CacheVersion = 80;
 
     private const string DataCoreEntry = @"Data\Game2.dcb";
     public const string LocalisationEntry = @"Data\Localization\english\global.ini";
@@ -346,6 +346,9 @@ public sealed partial class GameCommodities
             places = GamePlaces.Read(core, text);
             wikelo = GameWikelo.Read(core, text, facts);
             vehicles = GameVehicles.Read(core, text);
+            // 5.0's ship fabricators craft some categories faster; which ships
+            // carry one needs the vehicle names, so it comes after them.
+            blueprints = GameBlueprints.WithSpeedups(blueprints, GameCrafters.Read(core, p4k, vehicles));
             paints = GamePaints.Read(core, text);
             // The default liveries are files no record points at: only the
             // archive's own listing knows they exist.

@@ -450,7 +450,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.3.6
+### 1.3.7
+
+- **Ship fabricators craft armour faster (Star Citizen 5.0).** The
+  fabricators aboard the Anvil Carrack and Carrack Expedition, and the Drake
+  Clipper and Ironclad Assault, make armour in seven tenths of the time.
+  Every armour blueprint on the Crafting page now shows that time beside the
+  standard one, and its blueprint window names the ships. Everything else
+  takes the same time at any fabricator. Nothing changes on the live game.
 
 - **Guild emblems.** Each guild on the Reputation page shows the header its
   Career board carries in the game, with the guild's emblem on it. For the

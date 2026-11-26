@@ -2457,6 +2457,8 @@ public static partial class ServerHost
                         Grade = facts?.Grade ?? 0,
                         b.Kind,
                         b.CraftSeconds,
+                        // 5.0's ship fabricators: armour in 0.7 of the time.
+                        faster = b.Faster ?? [],
                         b.Materials,
                         // The crafting settings' starting whitelist: nine on 4.10.2.
                         @default = b.Default,

@@ -6946,6 +6946,11 @@ function renderBlueprintDetail(body, data) {
   if (data.shopPrice) makes.append(el('span', 'muted', ` · ${tx('or buy one for {price}', { price: money(data.shopPrice) })}`));
   body.append(makes);
 
+  // 5.0's ship fabricators make some categories faster than a standard one.
+  for (const faster of data.faster || []) {
+    body.append(el('p', 'ref-holding blueprint-faster', blueprintFasterLine(faster)));
+  }
+
   const recipe = refSection(tx('Recipe'));
   const list = el('ul', 'ref-materials');
   for (const material of data.materials || []) {
@@ -12353,6 +12358,15 @@ async function loadCraftingRef() {
 const CRAFTING_CAP = 500;
 
 /** "540 s" is nobody's unit; craft times read as minutes and hours. */
+/** "63s in a ship's fabricator (0.7× the time) — Anvil Carrack, Drake Clipper". */
+function blueprintFasterLine(faster) {
+  return tx("{time} in a ship's fabricator ({multiplier}× the time) — {ships}", {
+    time: craftTime(faster.craftSeconds),
+    multiplier: faster.multiplier,
+    ships: (faster.ships || []).join(', '),
+  });
+}
+
 function craftTime(seconds) {
   if (seconds <= 0) return '—';
   // Rounding a ten-second recipe to minutes printed "0m", which reads as a
@@ -12427,7 +12441,15 @@ function renderCraftingRef() {
     tr.append(makes);
     tr.append(el('td', 'muted', prettyType(bp.type)));
     tr.append(el('td', 'num', gradeLetter(bp.grade)));
-    tr.append(el('td', 'num muted', craftTime(bp.craftSeconds)));
+    const time = el('td', 'num muted', craftTime(bp.craftSeconds));
+    // The quickest a ship's fabricator does it, with the ships on hover.
+    const quickest = (bp.faster || [])[0];
+    if (quickest) {
+      const quick = el('div', 'blueprint-faster small', tx('{time} in a ship', { time: craftTime(quickest.craftSeconds) }));
+      quick.title = blueprintFasterLine(quickest);
+      time.append(quick);
+    }
+    tr.append(time);
     tr.append(el('td', 'muted materials', bp.materials.length ? bp.materials.map(serverText).join(', ') : '—'));
 
     // How you get the blueprint; the pool names ride the tooltip.

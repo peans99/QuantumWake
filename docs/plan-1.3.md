@@ -243,6 +243,26 @@ Contracts screen reader may meet a new board UI.
 
 ### B3. Crafting modifiers and location quality
 
+**Done in 1.3.7, and smaller than it looked.** Counts from the PTU:
+
+- **Crafters:** 5 `CrafterComponentParams` entities, every one with
+  `baseCraftingTime` 1. Only the two new ship fabricators carry a modifier:
+  `CraftingModifierType_Time` 0.7 when the category is `FPSArmours`.
+- **Ships:**
+  - The Carrack's fabricator is a loadout entry on the Carrack and the Carrack
+    Expedition.
+  - The Drake kit's fabricator is placed in the object containers
+    `Ships\DRAK\Clipper` and `Ships\DRAK\ironclad_assault`, and nothing in the
+    DataCore names it.
+  - The standard and Alliance Aid fabricators are placed nowhere in the map files, so
+    they are player-placed.
+- **Blueprints:** 942 of 1,691 are `FPSArmours` and show the faster time.
+- **Quality by place:** nothing new to read. `CraftingQualityResourceOverrideRecord` has
+  no records on the PTU. The per-place quality distributions
+  (`CraftingQualityLocationOverrideRecord`, 12 on both builds) are already read by
+  `GameQuality`.
+
+The original note, for reference:
 `CraftingModifierParams` with a time modifier, gated by blueprint category,
 whitelist or process type. `CraftingQualityResourceOverride` (records) and
 `LocationCraftingQualityContextData`: crafting quality now depends on where you

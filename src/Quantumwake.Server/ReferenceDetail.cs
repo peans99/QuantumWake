@@ -117,6 +117,7 @@ public static partial class ServerHost
             outputClass = blueprint.OutputClass,
             blueprint.Kind,
             blueprint.CraftSeconds,
+            faster = blueprint.Faster ?? [],
             blueprint.Materials,
             byDefault = blueprint.Default,
             owned = received is not null,

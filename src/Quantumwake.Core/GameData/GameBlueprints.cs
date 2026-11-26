@@ -15,6 +15,9 @@ namespace Quantumwake.Core.GameData;
 /// Beside each of <see cref="RewardPools"/>, this blueprint's share of that
 /// pool's weight: the chance a payout from the pool is this one.
 /// </param>
+/// <param name="Category">Its <c>BlueprintCategoryRecord</c>, bare - <c>FPSArmours</c> - or null when it names none.</param>
+/// <param name="Record">Its <c>CraftingBlueprintRecord</c>, bare, which is what a crafter's whitelist names.</param>
+/// <param name="Faster">The crafters that make it faster than the standard fabricator; null or empty when none do.</param>
 public sealed record GameBlueprint(
     string Output,
     string OutputClass,
@@ -23,7 +26,16 @@ public sealed record GameBlueprint(
     IReadOnlyList<string> Materials,
     IReadOnlyList<string> RewardPools,
     bool Default = false,
-    IReadOnlyList<double>? PoolShares = null);
+    IReadOnlyList<double>? PoolShares = null,
+    string? Category = null,
+    string? Record = null,
+    IReadOnlyList<GameBlueprintSpeedup>? Faster = null);
+
+/// <summary>A crafter that makes one blueprint faster.</summary>
+/// <param name="Multiplier">0.7 for 30% faster.</param>
+/// <param name="CraftSeconds">The first tier's time there: the blueprint's own, multiplied.</param>
+/// <param name="Ships">The ships whose fabricator it is.</param>
+public sealed record GameBlueprintSpeedup(double Multiplier, int CraftSeconds, IReadOnlyList<string> Ships);
 
 /// <summary>
 /// Crafting recipes read from the install rather than downloaded.
@@ -100,10 +112,38 @@ public static class GameBlueprints
                 materials,
                 [.. (pools.GetValueOrDefault(record.Hash) ?? []).Select(p => p.Name)],
                 defaults.Contains(record.Hash),
-                [.. (pools.GetValueOrDefault(record.Hash) ?? []).Select(p => p.Share)]));
+                [.. (pools.GetValueOrDefault(record.Hash) ?? []).Select(p => p.Share)],
+                core.ReferenceAt(blueprintAt, blueprint.StructIndex, "category") is { } category && byId.TryGetValue(category, out var c)
+                    ? Bare(c.Name) : null,
+                Bare(record.Name)));
         }
 
         return found;
+    }
+
+    /// <summary>
+    /// Each blueprint with the crafters that make it faster - by its category
+    /// or by name - and how long it takes there.
+    /// </summary>
+    public static List<GameBlueprint> WithSpeedups(List<GameBlueprint> blueprints, IReadOnlyList<GameCraftSpeedup> crafters)
+    {
+        if (crafters.Count == 0) return blueprints;
+
+        return [.. blueprints.Select(b =>
+        {
+            var faster = crafters
+                .Where(c => c.Ships.Count > 0 && c.TimeMultiplier < 1
+                    && ((b.Category is { } cat && c.Categories.Contains(cat, StringComparer.OrdinalIgnoreCase))
+                        || (b.Record is { } rec && c.Blueprints.Contains(rec, StringComparer.OrdinalIgnoreCase))))
+                .GroupBy(c => c.TimeMultiplier)
+                .OrderBy(g => g.Key)
+                .Select(g => new GameBlueprintSpeedup(
+                    g.Key,
+                    (int)Math.Round(b.CraftSeconds * g.Key),
+                    [.. g.SelectMany(c => c.Ships).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(n => n, StringComparer.OrdinalIgnoreCase)]))
+                .ToList();
+            return faster.Count == 0 ? b : b with { Faster = faster };
+        })];
     }
 
     /// <summary>
