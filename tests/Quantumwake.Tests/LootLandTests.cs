@@ -121,4 +121,17 @@ public class LootLandTests
     [InlineData("V3SlotPreset_Loot_Generic_HCD", "Loot · Generic · HCD")]
     public void A_land_is_named_beside_its_preset(string preset, string label) =>
         Assert.Equal(label, LootLabels.Preset(preset));
+
+    [Fact]
+    public void A_place_key_finds_its_land_encounter_and_a_plain_preset_none()
+    {
+        var digest = new GameLootData
+        {
+            LandEncounters = new(StringComparer.Ordinal) { ["Faction_HCD_Moraine"] = "CombatEasy" },
+        };
+
+        Assert.Equal("CombatEasy", digest.EncounterOf("V3SlotPreset_Loot_Generic_HCD@Faction_HCD_Moraine"));
+        Assert.Null(digest.EncounterOf("V3SlotPreset_Loot_Generic_HCD@Faction_HCD_Shubin"));
+        Assert.Null(digest.EncounterOf("V3SlotPreset_Loot_Generic_HCD"));
+    }
 }

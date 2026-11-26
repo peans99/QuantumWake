@@ -5864,6 +5864,7 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 .point-head .select { min-width: 0; }
 .point-belief .warn { color: var(--amber); }
 .point-facts .warn { color: var(--amber); }
+.loot-places-table .warn { color: var(--amber); }
 .point-card.shared::before { background: var(--dim); }
 .point-head.shared { grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; }
 .point-name-read { font-size: 14px; font-weight: 600; color: var(--text); }

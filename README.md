@@ -450,8 +450,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.3.9
+### 1.3.10
 
+- **Who you meet on Nyx I, beside where the loot is (Star Citizen 5.0).** In
+  an item's Places list, a place in a faction's land now says how the game
+  sets up meeting its people: combat encounters in Moraine, Shattered Blade,
+  First Legion and outlaw land (in amber), social ones in Shubin, Rayari,
+  Covalex, People's Alliance and settler land. The Nyx place names it lists,
+  such as "Battlefall Farm", turn out to be built from the game's own name
+  lists, so they are very likely what the game shows, though nobody has
+  checked one on screen yet.
 - **Insurance claims from the game files, and 5.0's new claim rules.** A
   ship's window shows its standard and expedited claim wait and its expedite
   fee straight from your install, so they appear without the community feed

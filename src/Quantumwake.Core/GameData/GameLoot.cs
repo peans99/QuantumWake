@@ -185,6 +185,42 @@ public sealed class GameLoot
     /// <c>V3SlotPreset_Loot_Generic_HCD</c>, carries neither, only the safety
     /// net and a rarity.
     /// </remarks>
+    /// <summary>
+    /// The encounter setting of a land's faction - <c>SocialEasy</c>,
+    /// <c>CombatEasy</c> - or null when the land names none.
+    /// </summary>
+    /// <param name="land">The land's preset record, short - <c>Faction_HCD_Shubin</c>.</param>
+    /// <remarks>
+    /// The land's <c>LocationFactionContextData</c> points at a
+    /// <c>FactionIdentity</c>, new in 5.0, whose <c>encounterPresetWeights</c>
+    /// list what meeting its people is set up as. On the 5.0 PTU (13284307)
+    /// every identity has exactly one: Social for the five lawful factions and
+    /// the generic lawful one, Combat for the outlaws. Where several are listed,
+    /// the heaviest is taken.
+    /// </remarks>
+    public string? LandEncounter(string land)
+    {
+        if (Named("HierarchicalContextualDataPresetRecord." + land) is not { } id || Record(id) is not { } record) return null;
+
+        foreach (var hcd in _core.PointerArrayAt(_core.InstanceAt(record, record.VariantIndex), record.StructIndex, "HCDs"))
+        {
+            if (_core.StructName(hcd.StructIndex) != "LocationFactionContextData") continue;
+            if (_core.ReferenceAt(_core.InstanceAt(hcd), hcd.StructIndex, "factionIdentity") is not { } identityId
+                || Record(identityId) is not { } identity) return null;
+
+            var at = _core.InstanceAt(identity, identity.VariantIndex);
+            return _core.ClassArrayAt(at, identity.StructIndex, "encounterPresetWeights")
+                .Select(w => (_core.EnumAt(_core.InstanceAt(w), w.StructIndex, "encounterPreset"),
+                    _core.SingleAt(_core.InstanceAt(w), w.StructIndex, "weight") ?? 0))
+                .Where(w => w.Item1 is { Length: > 0 })
+                .OrderByDescending(w => w.Item2)
+                .Select(w => w.Item1)
+                .FirstOrDefault();
+        }
+
+        return null;
+    }
+
     public IEnumerable<LootSource> OnLand(IEnumerable<LootSource> sources, string land, string key)
     {
         if (Named("HierarchicalContextualDataPresetRecord." + land) is not { } id || Record(id) is not { } record) return [];

@@ -321,6 +321,23 @@ collect-only leg looks like in a log (A3) before touching anything.
   Climate tab, if they change body temperature.
 - Starmap presets (`StarMapPreset*`), 1,299 new `Starchitect_Location` names.
 
+**Looked at in 1.3.10.**
+
+- **Weather: nothing to take.** `WeatherEffects_Atmosphere_PlanetRain` and
+  `_PlanetSnow` are structs with no records, holding only a
+  `spaceLoopEffect` particle. `PlanetWeatherParams` is wind and air density.
+  None of them carries a temperature or anything the suit reads, so the
+  Climate tab has nothing to add.
+- **Starchitect names: they are the Nyx place names' parts.** All 640 distinct
+  land-place names split into the new `Starchitect_*` text entries
+  (`loot.md`, Lands). This supports B4's names without a screenshot proving
+  them.
+- **NPC archetypes: the part that matters is taken.** `FactionIdentity` gives
+  each land an encounter setting, Social or Combat, now shown on the Places
+  table. `NPCArchetype` (27) and `NPCClassPool` (314) are the spawn lists
+  behind it. The Loot page already reads NPC outfits by faction, so they are
+  left until there is a question they answer.
+
 ## Part C - the local telemetry API
 
 5.0 opens a local game API that other tools are already building on. **CIG has

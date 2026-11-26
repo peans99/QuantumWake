@@ -49,6 +49,20 @@ public sealed class GameLootData
     /// </summary>
     public Dictionary<string, List<LootPlace>> Places { get; init; } = [];
 
+    /// <summary>
+    /// Each faction land's encounter setting, keyed by the land's short record
+    /// name - <c>Faction_HCD_Moraine</c> to <c>CombatEasy</c>. Only lands a
+    /// place was found in; empty before 5.0.
+    /// </summary>
+    public Dictionary<string, string> LandEncounters { get; init; } = new(StringComparer.Ordinal);
+
+    /// <summary>The encounter setting of the land a place key sits in, or null outside a land.</summary>
+    public string? EncounterOf(string preset)
+    {
+        var mark = preset.IndexOf(GameLootPlaces.LandMark);
+        return mark < 0 ? null : LandEncounters.GetValueOrDefault(preset[(mark + 1)..]);
+    }
+
     /// <summary>Whether the map files were read at all, so an empty answer can say which kind it is.</summary>
     public bool PlacesRead { get; init; }
 
@@ -266,6 +280,7 @@ public sealed class GameLootData
         // before the rolls, because a place in a faction's land rolls its
         // preset under that land's themes - rolls of their own.
         var places = new Dictionary<string, List<LootPlace>>(StringComparer.Ordinal);
+        var encounters = new Dictionary<string, string>(StringComparer.Ordinal);
         if (p4k is not null)
         {
             var bySlot = sources.Where(s => s.Kind == "slot").ToLookup(s => s.Preset, StringComparer.Ordinal);
@@ -279,9 +294,11 @@ public sealed class GameLootData
 
                 if (mark >= 0)
                 {
-                    var landed = loot.OnLand(bySlot[preset], key[(mark + 1)..], key).ToList();
+                    var land = key[(mark + 1)..];
+                    var landed = loot.OnLand(bySlot[preset], land, key).ToList();
                     if (landed.Count == 0) continue;
                     onLand.AddRange(landed);
+                    if (!encounters.ContainsKey(land) && loot.LandEncounter(land) is { } encounter) encounters[land] = encounter;
                 }
 
                 places[key] = list;
@@ -328,7 +345,7 @@ public sealed class GameLootData
         return new GameLootData
         {
             Items = items, Vias = vias, Rolls = rolls, Sources = sources,
-            Places = places, PlacesRead = p4k is not null,
+            Places = places, PlacesRead = p4k is not null, LandEncounters = encounters,
             Ships = npcShips,
             Stock = stock,
             Npcs = typeOf is null || p4k is null ? new(StringComparer.OrdinalIgnoreCase) : GameNpcOutfits.Read(p4k, core, typeOf),

@@ -6735,6 +6735,8 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
                 chance = p.Best.PerRoll * p.Best.Source.SlotChance,
                 perRoll = p.Best.PerRoll,
                 label = LootSourceLabel(p.Best.Source),
+                // A 5.0 faction land's encounter setting, Social or Combat.
+                encounter = loot.EncounterOf(p.Best.Source.Preset),
                 containerName = lib.ItemName(p.Best.Source.Container),
                 p.Best.Source.RespawnSeconds
             }),

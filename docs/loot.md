@@ -168,10 +168,41 @@ DRL-444)" reads "Shubin Settlement DRL-444". The number after "(Campsite)-046"
 is dropped, so the campsites share one row. The star map lists none of
 these places: all 1,227 nav points name one record, `03632929-…`, which no
 `StarMapObject` holds. The `LocationName` hash beside each is not a plain
-CRC32 of the bracketed name. So nothing in the files confirms that the game
-shows the same words. Named places on the PTU go from 529 to 1,169, and items
+CRC32 of the bracketed name. So nothing links a place to the words on
+screen directly.
+
+What the files do show (1.3.10) is that the names are built from the game's own
+name tables. The 5.0 text table adds 1,460 `Starchitect_*` keys: cluster
+prefixes and suffixes ("Happy", "Crest"), a prefix or suffix per faction
+(Shubin's "EBN-082" codes, "Rayari Alix", Shattered Blade's "Bladerun",
+Moraine's "of Attrition"), and place types by archetype ("Farm", "Habs",
+"Settlement", "Mine"). All 640 distinct names in the lands split fully into
+those entries. The commonest shapes are a settler prefix + a habitation type
+(61), and a Shubin prefix + an extraction type + a Shubin code (31). So these
+are generated names in the game's own words, not editor labels. Whether the
+game re-rolls them at run time is still open; a screenshot of one would settle
+it. Named places on the PTU go from 529 to 1,169, and items
 with a named place from 5,827 to 5,906. LIVE has no lands, and its loot dump is
 byte-identical.
+
+**Who you meet there.** Each land's `LocationFactionContextData` points at a
+`FactionIdentity`, a record type new in 5.0 (14 records, none on LIVE). Each
+identity has a faction, a security network and one `encounterPresetWeights`
+entry:
+
+- `SocialEasy`: Covalex, Rayari, Shubin, People's Alliance and Generic Lawful
+  lands, plus Foxwell.
+- `CombatEasy`: First Legion, Moraine, Shattered Blade and Generic Unlawful
+  lands, plus the Nine Tails and Salamanders identities, which no land uses.
+
+The Places table now writes this after the land, as "combat encounters,
+easy", in amber for combat. It keeps the game's two words rather than
+"hostile" or "friendly", because nobody has checked them against what the
+people there do.
+
+The lands also share one `densityLifetimeOverrideRef`, `Generic_LZ_Default`:
+ships, ground vehicles and cargo last 2 hours, debris 1 hour and corpses 10
+minutes. It is the same in every land, so it is not shown per place.
 
 Assumed and not checked:
 

@@ -5377,6 +5377,21 @@ function renderLootPlaces(panel, data, hasSlots) {
   panel.append(section);
 }
 
+/**
+ * A 5.0 land's encounter setting in words: CombatEasy reads "combat, easy".
+ * The game's own two words are kept rather than turned into "hostile" and
+ * "friendly", which nobody has checked against what the people there do.
+ */
+function landEncounter(preset) {
+  const m = /^([A-Z][a-z]+)(Easy|Medium|Hard)?$/.exec(preset || '');
+  if (!m) return null;
+  const kind = m[1].toLowerCase();
+  return {
+    combat: kind === 'combat',
+    text: m[2] ? tx('{kind} encounters, {level}', { kind, level: m[2].toLowerCase() }) : tx('{kind} encounters', { kind }),
+  };
+}
+
 function lootPlacesTable(rows) {
   const table = el('table', 'loot-where-table loot-places-table');
   const headRow = el('tr');
@@ -5405,7 +5420,15 @@ function lootPlacesTable(rows) {
     tr.append(el('td', 'num', lootPercent(place.chance)));
     tr.append(el('td', 'num muted', String(place.spots)));
     tr.append(el('td', 'muted', place.containerName || ''));
-    tr.append(el('td', 'muted', place.label));
+    const kind = el('td', 'muted', place.label);
+    const meet = landEncounter(place.encounter);
+    if (meet) {
+      kind.append(' · ');
+      const tag = el('span', meet.combat ? 'warn' : null, meet.text);
+      tag.title = tx('What the game files set up meeting people in this land as. Outlaw lands are set to combat, lawful ones to social. Not yet seen in game.');
+      kind.append(tag);
+    }
+    tr.append(kind);
     tr.append(el('td', 'num muted', lootRespawn(place.respawnSeconds)));
     body.append(tr);
   }
