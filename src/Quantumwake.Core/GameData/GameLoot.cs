@@ -38,12 +38,19 @@ public sealed record LootTable(string Name, IReadOnlyList<LootOdds> Items, IRead
 /// <param name="PoolFilter">The container's pool-filter record, or null.</param>
 /// <param name="SecondaryChoices">The container's secondary-choice record, or null.</param>
 /// <param name="ChanceToGenerate">The chance the container generates loot at all.</param>
+/// <param name="Themes">
+/// The 5.0 loot themes the container rolls under, short record names in the
+/// order they apply, joined by <c> + </c>; null on an install without themes.
+/// </param>
 public sealed record LootSource(
     string Kind, string Preset, string Group, string Container, double SlotChance, int? RespawnSeconds,
-    string Table, string? PoolFilter, string? SecondaryChoices, double ChanceToGenerate)
+    string Table, string? PoolFilter, string? SecondaryChoices, double ChanceToGenerate, string? Themes = null)
 {
     /// <summary>The table and constraints, which is what decides the odds.</summary>
-    public string RollKey => $"{Table}|{PoolFilter}|{SecondaryChoices}";
+    /// <remarks>Themes join the key only when there are any, so a 4.10 install keys exactly as it did.</remarks>
+    public string RollKey => Themes is null
+        ? $"{Table}|{PoolFilter}|{SecondaryChoices}"
+        : $"{Table}|{PoolFilter}|{SecondaryChoices}|{Themes}";
 }
 
 /// <summary>
@@ -75,6 +82,7 @@ public sealed class GameLoot
     private readonly Dictionary<Guid, string> _classByHash = [];
     private readonly List<LootCandidate> _entities = [];
     private readonly Dictionary<string, LootCandidate> _byClass = new(StringComparer.Ordinal);
+    private readonly List<Guid> _themeOrder = [];
 
     public GameLoot(DataCore core)
     {
@@ -84,6 +92,14 @@ public sealed class GameLoot
         foreach (var record in core.Records())
         {
             _byHash.TryAdd(record.Hash, record);
+
+            // The order themes apply in, by category: HCDSafetyNet, Event,
+            // Rarity, Faction, Flavour, ContentType on 5.0. Absent before it.
+            if (core.StructName(record.StructIndex) == "LootGenerationGlobalParams")
+            {
+                var (order, field) = core.FieldAt(core.InstanceAt(record, record.VariantIndex), record.StructIndex, "themeCategoryOrdering");
+                if (order >= 0 && field is not null) _themeOrder.AddRange(core.ReferenceArrayAt(order, field.StructIndex, "tags"));
+            }
 
             if (record.Name.StartsWith("Tag.", StringComparison.Ordinal))
             {
@@ -143,7 +159,10 @@ public sealed class GameLoot
 
         Guid? Named(string? name) => name is not null && _byName.TryGetValue(name, out var r) ? r.Hash : null;
 
-        return Resolve(table, Named(source.PoolFilter), Named(source.SecondaryChoices));
+        var themes = source.Themes is null ? []
+            : source.Themes.Split(" + ").Select(n => Named("LootThemeRecord." + n)).OfType<Guid>().ToList();
+
+        return Resolve(table, Named(source.PoolFilter), Named(source.SecondaryChoices), themes);
     }
 
     /// <summary>
@@ -168,13 +187,15 @@ public sealed class GameLoot
             {
                 var (config, field) = _core.FieldAt(at, record.StructIndex, "subConfig");
                 if (config >= 0 && field is not null)
-                    foreach (var s in SlotSources(Short(record.Name), "", config, field.StructIndex))
+                    foreach (var s in SlotSources(Short(record.Name), "", config, field.StructIndex, []))
                         yield return s;
             }
             else if (structName == "SubHarvestableMultiConfigRecord")
             {
                 var (multi, field) = _core.FieldAt(at, record.StructIndex, "multiConfig");
                 if (multi < 0 || field is null) continue;
+
+                var presetThemes = _core.ReferenceArrayAt(multi, field.StructIndex, "lootThemes");
 
                 foreach (var tagged in _core.ClassArrayAt(multi, field.StructIndex, "taggedConfigs"))
                 {
@@ -198,7 +219,7 @@ public sealed class GameLoot
                     }
 
                     if (config >= 0)
-                        foreach (var source in SlotSources(Short(record.Name), group, config, configStruct))
+                        foreach (var source in SlotSources(Short(record.Name), group, config, configStruct, presetThemes))
                             yield return source;
                 }
             }
@@ -214,14 +235,18 @@ public sealed class GameLoot
                     var name = Short(record.Name);
                     if (Roll(config, field.StructIndex) is { } roll)
                         yield return new LootSource("body", name, "", name, 1, null,
-                            roll.Table, roll.Filter, roll.Secondary, roll.Chance);
+                            roll.Table, roll.Filter, roll.Secondary, roll.Chance, ThemeNames(roll.Themes));
                 }
             }
         }
     }
 
-    private IEnumerable<LootSource> SlotSources(string preset, string group, long config, int configStruct)
+    private IEnumerable<LootSource> SlotSources(string preset, string group, long config, int configStruct, IReadOnlyList<Guid> outer)
     {
+        // A preset's themes, then the tagged config's, then the slot's own:
+        // V3SlotPreset_Loot_Generic_HCD carries the safety net, a tagged config
+        // a rarity, a slot its constraints' rarity.
+        IReadOnlyList<Guid> themes = [.. outer, .. _core.ReferenceArrayAt(config, configStruct, "lootThemes")];
         var initial = _core.SingleAt(config, configStruct, "initialSlotsProbability") ?? 1;
         var configRespawn = _core.SingleAt(config, configStruct, "configRespawnTimeMultiplier") ?? 1;
         var slots = _core.ClassArrayAt(config, configStruct, "subHarvestables");
@@ -264,7 +289,7 @@ public sealed class GameLoot
             yield return new LootSource(
                 "slot", preset, group, container ?? "?",
                 total > 0 ? initial * relative / total : 0,
-                respawn, roll.Table, roll.Filter, roll.Secondary, roll.Chance);
+                respawn, roll.Table, roll.Filter, roll.Secondary, roll.Chance, ThemeNames([.. themes, .. roll.Themes]));
         }
     }
 
@@ -272,7 +297,7 @@ public sealed class GameLoot
     /// What a <c>LootConfig</c> rolls: the V3 table when it names one, else the
     /// older one, and the constraints that go with it.
     /// </summary>
-    private (string Table, string? Filter, string? Secondary, double Chance)? Roll(long config, int configStruct)
+    private (string Table, string? Filter, string? Secondary, double Chance, IReadOnlyList<Guid> Themes)? Roll(long config, int configStruct)
     {
         var table = _core.ReferenceAt(config, configStruct, "lootTableV3") is { } v3 && Record(v3) is { } r3 ? r3
             : _core.ReferenceAt(config, configStruct, "lootTable") is { } old && Record(old) is { } r ? r
@@ -281,12 +306,14 @@ public sealed class GameLoot
 
         string? filter = null, secondary = null;
         var chance = 1.0;
+        IReadOnlyList<Guid> themes = [];
 
         var (constraints, field) = _core.FieldAt(config, configStruct, "lootConstraints");
         if (constraints >= 0 && field is not null)
         {
             var cs = field.StructIndex;
             chance = _core.SingleAt(constraints, cs, "chanceToGenerate") ?? 1;
+            themes = _core.ReferenceArrayAt(constraints, cs, "themes");
 
             if (_core.ReferenceAt(constraints, cs, "poolFilter") is { } f && Record(f) is { } fr)
                 filter = fr.Name;
@@ -300,16 +327,100 @@ public sealed class GameLoot
             }
         }
 
-        return (Short(table.Name), filter, secondary, chance);
+        return (Short(table.Name), filter, secondary, chance, themes);
+    }
+
+    /// <summary>
+    /// Themes from every level, each once, in the order the game applies them:
+    /// by category as <c>themeCategoryOrdering</c> lists them, outer levels
+    /// first within a category. Null when there are none, which is every
+    /// container before 5.0.
+    /// </summary>
+    private string? ThemeNames(IReadOnlyList<Guid> themes)
+    {
+        if (themes.Count == 0) return null;
+
+        var named = themes.Distinct()
+            .Select((id, i) => (Record: Record(id), At: i))
+            .Where(t => t.Record is not null)
+            .OrderBy(t => CategoryRank(t.Record!))
+            .ThenBy(t => t.At)
+            .Select(t => Short(t.Record!.Name))
+            .ToList();
+
+        return named.Count == 0 ? null : string.Join(" + ", named);
+    }
+
+    private int CategoryRank(DataRecord theme)
+    {
+        var rank = Category(theme) is { } c ? _themeOrder.IndexOf(c) : -1;
+        return rank < 0 ? int.MaxValue : rank;
+    }
+
+    /// <summary>A theme's category: the first tag on its <c>LootTheme_Manual</c>.</summary>
+    private Guid? Category(DataRecord theme)
+    {
+        if (ThemeBody(theme) is not { } body) return null;
+        var (list, field) = _core.FieldAt(_core.InstanceAt(body), body.StructIndex, "tags");
+        return list >= 0 && field is not null && _core.ReferenceArrayAt(list, field.StructIndex, "tags") is { Count: > 0 } tags
+            ? tags[0] : null;
+    }
+
+    /// <summary>
+    /// The written-out theme. Every one of the 51 on 5.0 PTU is a
+    /// <c>LootTheme_Manual</c>; <c>LootTheme_RecordRef</c> has no instance on
+    /// this build and is left unread rather than guessed at.
+    /// </summary>
+    private DataCore.Pointer? ThemeBody(DataRecord theme) =>
+        _core.PointerAt(_core.InstanceAt(theme, theme.VariantIndex), theme.StructIndex, "theme") is { } body
+        && _core.StructName(body.StructIndex) == "LootTheme_Manual" ? body : null;
+
+    /// <summary>A theme's filter steps and choice layers, its layers stamped with its category.</summary>
+    private (List<LootFilterStep> Steps, List<IReadOnlyList<LootBand>> Layers) Theme(Guid id)
+    {
+        if (Record(id) is not { } record || ThemeBody(record) is not { } body) return ([], []);
+        var at = _core.InstanceAt(body);
+        var category = Category(record);
+
+        var (filters, filtersField) = _core.FieldAt(at, body.StructIndex, "poolFilters");
+        var steps = filters >= 0 && filtersField is not null ? SequenceSteps(filters, filtersField.StructIndex, 0) : [];
+
+        var layers = new List<IReadOnlyList<LootBand>>();
+        foreach (var layer in _core.PointerArrayAt(at, body.StructIndex, "secondaryChoices"))
+        {
+            var l = _core.InstanceAt(layer);
+            switch (_core.StructName(layer.StructIndex))
+            {
+                case "LootV3SecondaryChoicesLayer":
+                    layers.Add(Bands(l, layer.StructIndex, category));
+                    break;
+                case "LootV3SecondaryChoiceLayer_RecordRef"
+                    when _core.ReferenceAt(l, layer.StructIndex, "singleLayerRecord") is { } single && Record(single) is { } sr:
+                    layers.Add(Bands(_core.InstanceAt(sr, sr.VariantIndex), sr.StructIndex, category));
+                    break;
+            }
+        }
+
+        return (steps, layers);
     }
 
     /// <summary>A table resolved to items, through a container's constraints when given.</summary>
-    public LootTable Resolve(DataRecord table, Guid? poolFilter = null, Guid? secondaryChoices = null)
+    public LootTable Resolve(DataRecord table, Guid? poolFilter = null, Guid? secondaryChoices = null, IReadOnlyList<Guid>? themes = null)
     {
-        var (odds, unfilled) = LootRoll.Resolve(
-            Entries(table),
-            poolFilter is { } f ? FilterTerms(f, 0) : [],
-            secondaryChoices is { } s ? Layers(s, 0) : []);
+        var steps = poolFilter is { } f ? FilterTerms(f, 0) : [];
+        var layers = secondaryChoices is { } s ? Layers(s, 0) : [];
+
+        // The container's own constraints first, then each theme in order.
+        // No 5.0 container names both, so which goes first is not tested by
+        // the files: 2,071 of 2,071 PTU constraints leave secondaryChoices null.
+        foreach (var theme in themes ?? [])
+        {
+            var (themeSteps, themeLayers) = Theme(theme);
+            steps.AddRange(themeSteps);
+            layers.AddRange(themeLayers);
+        }
+
+        var (odds, unfilled) = LootRoll.Filtered(Entries(table), steps, layers);
 
         return new LootTable(Short(table.Name), odds, unfilled);
     }
@@ -477,18 +588,20 @@ public sealed class GameLoot
     }
 
     /// <summary>
-    /// What a pool filter strikes out, as terms that match the struck item. A
-    /// filter's negative tags remove what carries them; a positive one keeps
-    /// only what carries it, so it removes what lacks it. Every sequence on
-    /// this install is Cumulative, which is the union of its parts.
+    /// A pool filter as ordered steps. A Cumulative filter's negative tags
+    /// strike what carries them; a positive one keeps only what carries it, so
+    /// it strikes what lacks it. Every sequence on 4.10 is Cumulative, which
+    /// is the union of its parts. 5.0 adds Additive, which puts back what
+    /// matches its term - written only on <c>PoolFilter_Tags</c>, 34 times
+    /// across the themes, so that is the only form read.
     /// </summary>
-    private List<LootTerm> FilterTerms(Guid recordId, int depth) =>
+    private List<LootFilterStep> FilterTerms(Guid recordId, int depth) =>
         depth <= 8 && Record(recordId) is { } record
         && _core.PointerAt(_core.InstanceAt(record, record.VariantIndex), record.StructIndex, "filter") is { } f
             ? FilterTerms(f, depth)
             : [];
 
-    private List<LootTerm> FilterTerms(DataCore.Pointer filter, int depth)
+    private List<LootFilterStep> FilterTerms(DataCore.Pointer filter, int depth)
     {
         var at = _core.InstanceAt(filter);
         var none = new HashSet<Guid>();
@@ -496,21 +609,43 @@ public sealed class GameLoot
         return _core.StructName(filter.StructIndex) switch
         {
             "PoolFilter_Tags" => TermAt(at, filter.StructIndex, "tagFilter") is var term
-                ? [.. term.Negative.Select(t => new LootTerm(new HashSet<Guid> { t }, none)),
-                   .. term.Positive.Select(t => new LootTerm(none, new HashSet<Guid> { t }))]
+                ? [.. term.Negative.Select(t => new LootFilterStep(new LootTerm(new HashSet<Guid> { t }, none))),
+                   .. term.Positive.Select(t => new LootFilterStep(new LootTerm(none, new HashSet<Guid> { t })))]
                 : [],
 
             "PoolFilter_RecordRef" => _core.ReferenceAt(at, filter.StructIndex, "filterRecord") is { } id
                 ? FilterTerms(id, depth + 1)
                 : [],
 
-            "PoolFilter_Sequence" => [.. _core.ClassArrayAt(at, filter.StructIndex, "filters")
-                .SelectMany(i => _core.PointerAt(_core.InstanceAt(i), i.StructIndex, "filter") is { } inner && depth < 8
-                    ? FilterTerms(inner, depth + 1)
-                    : [])],
+            "PoolFilter_Sequence" => SequenceSteps(at, filter.StructIndex, depth),
 
             _ => [],
         };
+    }
+
+    private List<LootFilterStep> SequenceSteps(long at, int structIndex, int depth)
+    {
+        var steps = new List<LootFilterStep>();
+        if (depth >= 8) return steps;
+
+        foreach (var instance in _core.ClassArrayAt(at, structIndex, "filters"))
+        {
+            var i = _core.InstanceAt(instance);
+            if (_core.PointerAt(i, instance.StructIndex, "filter") is not { } inner) continue;
+
+            if (_core.EnumAt(i, instance.StructIndex, "mode") == "Additive")
+            {
+                if (_core.StructName(inner.StructIndex) == "PoolFilter_Tags"
+                    && TermAt(_core.InstanceAt(inner), inner.StructIndex, "tagFilter") is { IsEmpty: false } back)
+                    steps.Add(new LootFilterStep(back, Restore: true));
+            }
+            else
+            {
+                steps.AddRange(FilterTerms(inner, depth + 1));
+            }
+        }
+
+        return steps;
     }
 
     private List<IReadOnlyList<LootBand>> Layers(Guid recordId, int depth)
@@ -522,19 +657,43 @@ public sealed class GameLoot
         {
             "LootV3SecondaryChoicesMultiLayerRecord" =>
                 [.. _core.ReferenceArrayAt(at, record.StructIndex, "layers").SelectMany(l => Layers(l, depth + 1))],
-            "LootV3SecondaryChoicesSingleLayerRecord" =>
-                [[.. _core.ClassArrayAt(at, record.StructIndex, "choices").Select(choice =>
-                {
-                    var c = _core.InstanceAt(choice);
-                    var selector = _core.PointerAt(c, choice.StructIndex, "selector");
-                    return new LootBand(
-                        _core.StringAt(c, choice.StructIndex, "name") ?? "",
-                        _core.SingleAt(c, choice.StructIndex, "weight") ?? 0,
-                        selector is { } s
-                            ? TermAt(_core.InstanceAt(s), s.StructIndex, "tags")
-                            : new LootTerm(new HashSet<Guid>(), new HashSet<Guid>()));
-                })]],
+            "LootV3SecondaryChoicesSingleLayerRecord" => [Bands(at, record.StructIndex, null)],
             _ => [],
         };
+    }
+
+    private List<LootBand> Bands(long at, int structIndex, Guid? category) =>
+        [.. _core.ClassArrayAt(at, structIndex, "choices").Select(choice =>
+        {
+            var c = _core.InstanceAt(choice);
+            var selector = _core.PointerAt(c, choice.StructIndex, "selector");
+            return new LootBand(
+                _core.StringAt(c, choice.StructIndex, "name") ?? "",
+                _core.SingleAt(c, choice.StructIndex, "weight") ?? 0,
+                selector is { } s
+                    ? TermAt(_core.InstanceAt(s), s.StructIndex, "tags")
+                    : new LootTerm(new HashSet<Guid>(), new HashSet<Guid>()),
+                category,
+                Ignores(c, choice.StructIndex));
+        })];
+
+    /// <summary>
+    /// The theme categories a band switches off: <c>LootSubThemeModifier_Ignore</c>,
+    /// whose selector is a tag DNF over theme categories - #Flavour on all 14 on 5.0 PTU.
+    /// </summary>
+    private HashSet<Guid>? Ignores(long choice, int choiceStruct)
+    {
+        if (_core.PointerAt(choice, choiceStruct, "subThemeModifier") is not { } m
+            || _core.StructName(m.StructIndex) != "LootSubThemeModifier_Ignore"
+            || _core.PointerAt(_core.InstanceAt(m), m.StructIndex, "themesToIgnore") is not { } selector)
+            return null;
+
+        var (dnf, field) = _core.FieldAt(_core.InstanceAt(selector), selector.StructIndex, "tags");
+        if (dnf < 0 || field is null) return null;
+
+        var tags = _core.ClassArrayAt(dnf, field.StructIndex, "terms")
+            .SelectMany(t => _core.ReferenceArrayAt(_core.InstanceAt(t), t.StructIndex, "positiveTags"))
+            .ToHashSet();
+        return tags.Count > 0 ? tags : null;
     }
 }

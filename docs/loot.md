@@ -48,6 +48,60 @@ strikes faction and special-event gear) and secondary choices that draw a band
 before an item - `V3SecondaryChoices_Rarity_Common` is Common 100, Uncommon 10,
 Rare 1, Epic 0.1; the Rare layer reverses it.
 
+**A pool filter is a sequence, not a set.** Each step is `Cumulative`, which
+strikes what it matches, or `Additive`, which puts back what it matches and an
+earlier step struck. LIVE 4.10.201 already writes the pair: every event filter
+(`V3PoolFilter_DCDelving`, `_SOO`, `_RockCracker` and the rest) strikes all
+faction and event gear and then adds back its own event. Read as one more
+exclusion, the add-back kept only that event's gear from a pool that had just
+lost it, and **79 of LIVE's 333 rolls came out empty**: the DCDelving armour
+boxes, the SOO weapon caches, every `V3LootTable_Event_*`. Read in order, all
+79 fill (the DCDelving large armour box: 2,034 items) and the other 254 are
+byte-identical.
+
+### Loot themes (5.0)
+
+5.0 moves most constraints off the container and into 51 `LootThemeRecord`s,
+each a `LootTheme_Manual` with a category tag, a pool-filter sequence and
+choice layers. Measured on the 5.0 PTU (5.0.202.46035):
+
+| level | field | uses | what it carries |
+| --- | --- | --- | --- |
+| slot preset | `SubHarvestableMultiConfig.lootThemes` | 23 | event, faction, tech, wealth, lawfulness - `V3SlotPreset_Loot_Generic_HCD` carries `Theme_HCDSafetyNet` (no event, no faction) |
+| tagged group | `SubHarvestableConfig.lootThemes` | 330 | a rarity |
+| slot | `LootConstraints.themes` | 1,418 | a rarity |
+| body | `LootConstraints.themes` | 324 | lawfulness + one weapon kind |
+| place | `LocationLootGenerationContextData.themes` | 11 | faction, tech, wealth, lawfulness |
+
+Of 2,071 container constraints on the PTU, 2,026 leave `poolFilter` null and
+all 2,071 leave `secondaryChoices` null: the theme is now the whole
+constraint. Read without themes, `Loot.Rolls` fell from 333 to 178 and 200
+rarity-split rolls collapsed into unfiltered ones. Read with them, the PTU has
+976 rolls, none empty.
+
+**Checked against LIVE.** Of the containers both installs have, the PTU's
+rarity theme matches the rarity LIVE gives the same slot for **1,212 of
+1,215** (LIVE's Legendary is 5.0's Unique), and `Theme_Rarity_Rare` carries
+the same band weights as LIVE's `V3SecondaryChoices_Rarity_Rare` - Common 1,
+Uncommon 10, Rare 100, Epic 10, Legendary 1. `V3LootTable_Generic_Large`
+under the safety net and Rare shares 2,286 items with LIVE's Generic + Rare
+roll (2,308 on LIVE, 2,410 on the PTU).
+
+How they combine, as read:
+
+- **All themes on a container apply,** each once, preset first, then tagged
+  group, then slot.
+- **In category order**, `LootGenerationGlobalParams.themeCategoryOrdering`:
+  HCDSafetyNet, Event, Rarity, Faction, Flavour, ContentType. Filters run in
+  that order, then layers draw in that order.
+- **A band can switch later themes off.** The 14 faction themes draw
+  "Faction" 0.25 against "Not specified faction" 1, and the faction band
+  carries `LootSubThemeModifier_Ignore` over `#Flavour`: faction gear is not
+  re-sorted by tech or wealth.
+- **Place themes are not applied.** A place's faction and flavour come from
+  the location it sits in, which the app does not know per crate. The odds
+  are the container's own themes only; `parentThemesToIgnore` is not read.
+
 ### Where tables are attached
 
 - **Slot presets** - `SubHarvestableConfigRecord` and
@@ -134,8 +188,8 @@ a place, each module once however many times the place repeats it.
 ## What is assumed
 
 The files hold weights, not the draw. `LootRoll` reads them as weighted picks
-at every level and a uniform pick at the bottom, and three choices follow -
-each the reading under which every table on this install sums to one:
+at every level and a uniform pick at the bottom, and four choices follow -
+the first two the reading under which every table on this install sums to one:
 
 1. **Anything with nothing to draw from is skipped** and its weight goes to the
    rest. The armour tables give 26 of 32 parts of weight to "Mission item"
@@ -146,7 +200,12 @@ each the reading under which every table on this install sums to one:
    visible: every pistol is tagged Common, so the Pistols choice gives the S-38
    1.755% a roll in a Rare, Uncommon and Common weapons box alike - the rarity
    layer only moves weight between bands that have members.
-3. **Per roll, not per crate.** How many draws a container makes depends on
+3. **Themes run filters first, then layers.** Each theme carries both, and
+   the files do not say whether a later theme's filter runs after an earlier
+   theme's band has been drawn. Filtering the whole pool first is the simpler
+   reading, and nothing in the files or a log checks it yet. Where a band switches a theme off
+   (assumption above), that theme's layers stop and its filter steps are kept.
+4. **Per roll, not per crate.** How many draws a container makes depends on
    its size and `fullnessFactorRange` (0.2-0.8 on outpost crates, 0.1-0.167
    and a limit of 5 on V3 weapon boxes). That is not modelled, and the page
    says the chance of finding it is higher than the number.

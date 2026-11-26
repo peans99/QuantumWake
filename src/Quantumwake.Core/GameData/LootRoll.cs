@@ -29,7 +29,27 @@ public sealed record LootEntry(
     IReadOnlyList<IReadOnlyList<LootBand>>? Layers = null);
 
 /// <summary>One band in a secondary-choice layer - "Rare", weight 1.</summary>
-public sealed record LootBand(string Name, double Weight, LootTerm Term);
+/// <param name="Category">
+/// The category tag of the loot theme the layer came from - Rarity, Faction,
+/// Flavour - or null for a layer the container names itself.
+/// </param>
+/// <param name="Ignores">
+/// Theme categories whose later layers stop applying once this band is drawn.
+/// 5.0's faction themes draw "Faction 0.25" against "Not specified faction 1",
+/// and the faction band switches off the Flavour themes after it: faction gear
+/// is not re-sorted by how wealthy the place is.
+/// </param>
+public sealed record LootBand(string Name, double Weight, LootTerm Term,
+    Guid? Category = null, IReadOnlySet<Guid>? Ignores = null);
+
+/// <summary>One step of a pool filter, in order.</summary>
+/// <param name="Restore">
+/// False strikes out what matches; true puts back what matches and an earlier
+/// step struck. 5.0's themes are written as pairs - remove every faction's
+/// gear, then add back the one this place belongs to - so a filter is no
+/// longer a set of exclusions but a sequence.
+/// </param>
+public sealed record LootFilterStep(LootTerm Term, bool Restore = false);
 
 /// <summary>
 /// The arithmetic of one roll, apart from reading the files so it can be
@@ -66,6 +86,16 @@ public static class LootRoll
     public static (IReadOnlyList<LootOdds> Odds, IReadOnlyList<string> Unfilled) Resolve(
         IReadOnlyList<LootEntry> entries,
         IReadOnlyList<LootTerm> excluded,
+        IReadOnlyList<IReadOnlyList<LootBand>> layers) =>
+        Filtered(entries, [.. excluded.Select(t => new LootFilterStep(t))], layers);
+
+    /// <summary>
+    /// Per-roll odds through a pool filter written as ordered steps, which is
+    /// how 5.0's loot themes write theirs.
+    /// </summary>
+    public static (IReadOnlyList<LootOdds> Odds, IReadOnlyList<string> Unfilled) Filtered(
+        IReadOnlyList<LootEntry> entries,
+        IReadOnlyList<LootFilterStep> steps,
         IReadOnlyList<IReadOnlyList<LootBand>> layers)
     {
         var unfilled = new List<string>();
@@ -80,7 +110,7 @@ public static class LootRoll
             {
                 if (choice.Weight <= 0) continue;
 
-                var pool = choice.Pool.Where(c => !excluded.Any(t => t.Matches(c.Tags))).ToList();
+                var pool = Filter(choice.Pool, steps);
                 if (pool.Count > 0)
                     choices.Add((choice, pool));
                 else
@@ -105,7 +135,7 @@ public static class LootRoll
             {
                 var share = entry.Weight / total * (choice.Weight / choiceTotal);
 
-                foreach (var (item, p) in Spread(pool, bands, 0))
+                foreach (var (item, p) in Spread(pool, bands, 0, null))
                 {
                     var key = (item, entry.Name, choice.Name);
                     odds[key] = odds.GetValueOrDefault(key) + share * p;
@@ -120,8 +150,21 @@ public static class LootRoll
             unfilled);
     }
 
+    private static List<LootCandidate> Filter(IReadOnlyList<LootCandidate> pool, IReadOnlyList<LootFilterStep> steps)
+    {
+        var kept = new bool[pool.Count];
+        Array.Fill(kept, true);
+
+        foreach (var step in steps)
+            for (var i = 0; i < pool.Count; i++)
+                if (kept[i] != step.Restore && step.Term.Matches(pool[i].Tags))
+                    kept[i] = step.Restore;
+
+        return [.. pool.Where((_, i) => kept[i])];
+    }
+
     private static IEnumerable<(string Item, double Share)> Spread(
-        List<LootCandidate> pool, IReadOnlyList<IReadOnlyList<LootBand>> layers, int depth)
+        List<LootCandidate> pool, IReadOnlyList<IReadOnlyList<LootBand>> layers, int depth, IReadOnlySet<Guid>? ignored)
     {
         if (depth == layers.Count)
         {
@@ -131,21 +174,29 @@ public static class LootRoll
             yield break;
         }
 
-        var bands = layers[depth]
+        var layer = layers[depth];
+        var switchedOff = ignored is not null && layer.Count > 0 && layer[0].Category is { } category && ignored.Contains(category);
+
+        var bands = switchedOff ? [] : layer
             .Where(b => b.Weight > 0)
-            .Select(b => (b.Weight, Members: pool.Where(p => b.Term.Matches(p.Tags)).ToList()))
+            .Select(b => (Band: b, Members: pool.Where(p => b.Term.Matches(p.Tags)).ToList()))
             .Where(b => b.Members.Count > 0)
             .ToList();
 
         if (bands.Count == 0)
         {
-            foreach (var x in Spread(pool, layers, depth + 1)) yield return x;
+            foreach (var x in Spread(pool, layers, depth + 1, ignored)) yield return x;
             yield break;
         }
 
-        var total = bands.Sum(b => b.Weight);
-        foreach (var (weight, members) in bands)
-            foreach (var (item, share) in Spread(members, layers, depth + 1))
-                yield return (item, weight / total * share);
+        var total = bands.Sum(b => b.Band.Weight);
+        foreach (var (band, members) in bands)
+        {
+            var next = band.Ignores is { Count: > 0 } more
+                ? (IReadOnlySet<Guid>)new HashSet<Guid>([.. ignored ?? new HashSet<Guid>(), .. more])
+                : ignored;
+            foreach (var (item, share) in Spread(members, layers, depth + 1, next))
+                yield return (item, band.Weight / total * share);
+        }
     }
 }

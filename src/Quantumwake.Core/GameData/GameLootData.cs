@@ -12,9 +12,12 @@ namespace Quantumwake.Core.GameData;
 /// </remarks>
 public sealed record GameLootRoll(
     string Table, string? PoolFilter, string? SecondaryChoices, IReadOnlyList<string> Unfilled,
-    int[] Item, float[] PerRoll, int[] Via)
+    int[] Item, float[] PerRoll, int[] Via, string? Themes = null)
 {
-    public string Key => $"{Table}|{PoolFilter}|{SecondaryChoices}";
+    /// <summary>Matches <see cref="LootSource.RollKey"/>.</summary>
+    public string Key => Themes is null
+        ? $"{Table}|{PoolFilter}|{SecondaryChoices}"
+        : $"{Table}|{PoolFilter}|{SecondaryChoices}|{Themes}";
 }
 
 /// <summary>Where one item can come from, for the page.</summary>
@@ -285,7 +288,8 @@ public sealed class GameLootData
                 [.. perItem.Select(p => Intern(items, itemIndex, p.Item))],
                 [.. perItem.Select(p => (float)p.PerRoll)],
                 [.. perItem.Select(p => Intern(vias, viaIndex,
-                    p.Top.Entry == p.Top.Choice ? p.Top.Entry : $"{p.Top.Entry} / {p.Top.Choice}"))]));
+                    p.Top.Entry == p.Top.Choice ? p.Top.Entry : $"{p.Top.Entry} / {p.Top.Choice}"))],
+                first.Themes));
         }
 
         // Only presets the page can show: the map files also place plants,

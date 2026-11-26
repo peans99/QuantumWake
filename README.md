@@ -450,7 +450,21 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.3.1
+### 1.3.2
+
+- **Event loot shows up on the Loot page.** The DCDelving armour boxes, the
+  SOO weapon caches, and the Stormbreaker, Orbageddon, Rock Cracker,
+  Welcome to Nyx and other event containers listed nothing, because the game writes
+  their filter as "take every event's gear out, then put this event's back"
+  and the app read only the first half. 79 containers on the live game now
+  list what they can roll; the other 254 are unchanged.
+- **Ready for 5.0's loot themes.** 5.0 moves rarity, faction and tech/wealth
+  flavour out of each crate and into shared themes. Read the old way, the
+  5.0 PTU's crates lost their rarity odds. They are back: of the crates both
+  versions have, 1,212 of 1,215 keep the rarity the live game gives them.
+  Faction crates keep their own faction's gear and no other faction's. A
+  place's own faction and flavour are not applied yet, because the app does
+  not know which location each crate sits in.
 
 - **Wikelo specials go by their own names.** The RSI Polaris Wikelo Special
   showed as a plain RSI Polaris, and in 5.0 the six new specials would have

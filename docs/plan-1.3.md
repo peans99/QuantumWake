@@ -55,6 +55,10 @@ Done when: the six read their "Wikelo ... Special" names, the 28 LIVE
 disagreements (PYAM Exec, `hud_wreckage` derelicts, hijacked Reclaimers) keep
 the names they have today, and a test covers both directions.
 
+**Done in 1.3.1.** Over LIVE's 1,097 vehicles and the PTU's 1,105, exactly
+eight names change: the six specials, and the RSI Polaris Wikelo Special on
+both installs, which LIVE was already showing as a plain Polaris.
+
 ### A2. Loot odds under loot themes
 
 5.0 adds a theme layer to loot generation: 51 `LootThemeRecord`s (Rarity
@@ -82,6 +86,15 @@ Work:
 
 Done when: PTU rolls carry their rarity split again, LIVE output is unchanged,
 `docs/loot.md` explains themes, and a fixture covers a themed container.
+
+**Done in 1.3.2**, with one correction to "LIVE output is unchanged". LIVE
+already writes `Additive` filter steps: every event filter strikes all event
+gear, then adds its own event back. Read as an exclusion, that add-back had
+left 79 of LIVE's 333 rolls empty. In order, those 79 fill and the other 254
+are byte-identical. On the PTU: 976 rolls, none empty, and 1,212 of 1,215
+shared containers keep LIVE's rarity. Themes from places
+(`LocationLootGenerationContextData`, 11 presets) are not applied: that waits
+on B4. `docs/loot.md` has the detail, and the assumptions it adds.
 
 ### A3. First 5.0 log
 
