@@ -98,9 +98,89 @@ How they combine, as read:
   "Faction" 0.25 against "Not specified faction" 1, and the faction band
   carries `LootSubThemeModifier_Ignore` over `#Flavour`: faction gear is not
   re-sorted by tech or wealth.
-- **Place themes are not applied.** A place's faction and flavour come from
-  the location it sits in, which the app does not know per crate. The odds
-  are the container's own themes only; `parentThemesToIgnore` is not read.
+- **A place's land adds its themes** (since 1.3.8). See "Lands" below. It
+  reaches one preset on 5.0 PTU, on Nyx I. Every other container rolls its
+  own themes only.
+
+### Lands (5.0)
+
+The 11 place theme sets are the eleven `HierarchicalContextualDataPresetRecord`s
+`Faction_HCD_*`: Covalex, First Legion, Foxwell, Generic Lawful, Generic
+Unlawful, Moraine, People's Alliance, Rayari, Shattered Blade, Shubin and a
+`TEMPLATE`. Each one's `LocationLootGenerationContextData` carries a faction
+theme and three flavours. The `TEMPLATE` carries flavours and no faction.
+
+| land | faction theme | wealth | tech | lawfulness |
+| --- | --- | --- | --- | --- |
+| Covalex, Rayari, Shubin | its own | mid | mid | mid |
+| Generic Lawful | Civilians | mid | mid | mid |
+| Foxwell | Foxwell | mid | mid | high |
+| First Legion | First Legion | mid | mid | low |
+| Moraine, Generic Unlawful | its own / GenericOutlaws | low | mid | low |
+| People's Alliance | People's Alliance | low | mid | mid |
+| Shattered Blade | Shattered Blade | low | low | low |
+
+**Where they are.** All 2,148 uses are in one file, `nyx1.socpak`. Each use is
+an `hcd/<guid>.xml` naming the preset, for the entity with that guid in
+`nyx1.xml`. That nests sectors, clusters, Starchitect places and tiles. A
+cluster's land is not its places' land. Happy Crest is Shubin's, and it holds a
+Moraine campsite and a People's Alliance dig site. 997 of the 2,140 nested uses
+differ from the land above them. Every preset names `parentThemesToIgnore` over
+`#Faction` and `#Flavour`, so the app reads the nearest land as the whole
+answer.
+
+**What rolls in them.** None of the 722 Starchitect tile containers sets a
+crate preset, and nothing below them does either. The only loot presets
+reached from `nyx1.xml` the old way are two cave presets, which roll minerals.
+The loot is on the places themselves. 1,230 `MissionLocationTemplate`
+entities carry `<HarvestableComponent SubConfigGUID>`, a spelling the crate
+reader did not look for. All 1,230 name `V3SlotPreset_Loot_Generic_HCD`, and
+all 1,230 carry their own land: Generic Lawful 306, Rayari 146, Shubin 127,
+First Legion 125, Generic Unlawful 123, Shattered Blade 104, People's Alliance
+103, Moraine 103, Covalex 93. Foxwell and the `TEMPLATE` hold none.
+
+That preset's themes are only the safety net and a rarity. Its 62 slot groups
+roll again in each land with the land's themes added, which gives 396 rolls of
+their own. The page lists each land as a kind of place of its own,
+"Loot · Generic · HCD · Shubin land".
+
+**What a land changes.** On "Armour Medium Common", against the safety net
+alone (1,993 items):
+
+| land | items added | none lost | e.g. |
+| --- | --- | --- | --- |
+| Shattered Blade | 66 | yes | Doomsday undersuits, `gys` jackets; top item `srvl_combat_medium_arms` 0.9% |
+| Moraine | 45 | yes | `cds` armour in its `_03_` colours |
+| First Legion | 30 | yes | `basl` heavy armour |
+| Generic Unlawful | 26 | yes | `slaver_armor_medium_core` becomes the top item, 3.5% |
+| Covalex 15, People's Alliance 13, Rayari 11, Shubin 10 | | yes | their own colours of the `cds` and `rrs` light kit |
+| Generic Lawful | 0 | yes | the Civilians theme adds nothing |
+
+A faction theme's filter puts its own gear back after the safety net strikes
+all faction gear. That matches the faction band read above. A video by a
+player (Qutatron, "HUNTING FOR NEW ARMOR SETS ON NYX 1", 5.0 PTU) says the
+Moraine wear "old assets, but new colors". That fits the Moraine row, but it
+is about NPCs, not crates.
+
+**The names are the map file's.** A place is named by the bracket on its
+entity name. "location_ht_a_habitation_s_003_high (Shubin Settlement
+DRL-444)" reads "Shubin Settlement DRL-444". The number after "(Campsite)-046"
+is dropped, so the campsites share one row. The star map lists none of
+these places: all 1,227 nav points name one record, `03632929-…`, which no
+`StarMapObject` holds. The `LocationName` hash beside each is not a plain
+CRC32 of the bracketed name. So nothing in the files confirms that the game
+shows the same words. Named places on the PTU go from 529 to 1,169, and items
+with a named place from 5,827 to 5,906. LIVE has no lands, and its loot dump is
+byte-identical.
+
+Assumed and not checked:
+
+- **A crate's own faction or flavour theme under a land** would be kept, and the
+  land's added beside it. No 5.0 container tests this: the one preset in a
+  land carries neither.
+- **The whole place rolls as one preset.** The files give the place a preset,
+  not each crate a slot. How many crates a place spawns, and where, is not in
+  the map file.
 
 ### Where tables are attached
 

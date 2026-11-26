@@ -450,7 +450,19 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.3.7
+### 1.3.8
+
+- **Loot on Nyx I by whose land it is (Star Citizen 5.0).** 5.0's new
+  settlements, camps and outposts on Nyx I each belong to a faction's land:
+  Shubin, Rayari, Covalex, First Legion, Moraine, Shattered Blade, the
+  People's Alliance, or outlaws or settlers. The land changes what their crates
+  roll. A Shattered Blade camp can give Doomsday gear that a Shubin settlement
+  never does, and outlaw land makes slaver armour the likeliest find. The
+  Loot page now shows each land as a kind of place of its own, with its own
+  odds, and lists 1,230 places on Nyx I by the names the map files give them.
+  The game's star map does not list these places, so the names are the
+  files' and may differ from the ones on screen. Nothing changes on the live
+  game.
 
 - **Ship fabricators craft armour faster (Star Citizen 5.0).** The
   fabricators aboard the Anvil Carrack and Carrack Expedition, and the Drake

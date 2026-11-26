@@ -22,9 +22,21 @@ public static partial class LootLabels
         "V3SubHarvestableConfig_", "SubHarvestableConfig_", "LootGeneration_", "LootArchetype_",
     ];
 
+    private const string LandPrefix = "Faction_HCD_";
+
     /// <summary>"Distribution Centres · High Security" from the preset record name.</summary>
     public static string Preset(string preset)
     {
+        // "Loot · Generic · HCD · Shubin land": a preset rolled in a 5.0
+        // faction's land, which changes what it rolls, so the land is named.
+        var mark = preset.IndexOf(GameLootPlaces.LandMark);
+        if (mark >= 0)
+        {
+            var land = preset[(mark + 1)..];
+            if (land.StartsWith(LandPrefix, StringComparison.Ordinal)) land = land[LandPrefix.Length..];
+            return $"{Preset(preset[..mark])} · {string.Join(" ", land.Split('_', StringSplitOptions.RemoveEmptyEntries).Select(Words))} land";
+        }
+
         var name = preset;
         foreach (var prefix in PresetPrefixes)
         {

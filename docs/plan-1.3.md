@@ -275,6 +275,22 @@ Builds on A2. Once themes are read, each location's themes (faction, wealth,
 tech, lawfulness, event) say what kind of loot a place rolls, which is the
 "named places" loot question `docs/loot.md` still has open.
 
+**Done in 1.3.8.** The 11 place presets are the factions' lands, and all of
+them are used in `nyx1.socpak` and nowhere else.
+
+- **How the loot gets there.** The loot was not where the crate reader looked.
+  The 1,230 Starchitect places carry `V3SlotPreset_Loot_Generic_HCD` on their
+  own entity, as `SubConfigGUID`, and each sits in its own land. That preset
+  now rolls once per land with the land's themes added: 396 rolls, 1,230
+  places in 9 lands.
+- **What changes.** Shattered Blade land adds 66 items to a medium armour
+  crate and Generic Lawful adds none. No land loses an item.
+- **Checks.** LIVE is byte-identical. Named places on the PTU go from 529 to
+  1,169. The detail and two assumptions are in `docs/loot.md` under "Lands".
+- **Open.** The place names come from the map file, and the game may show
+  others: the star map lists none of these places. A 5.0 log or a screenshot
+  of a Nyx I settlement's name would settle that.
+
 ### B5. Item recovery
 
 `ItemRecoveryCooldownParams`, `ItemRecoveryDeliveryTimeParams`,

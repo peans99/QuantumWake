@@ -152,17 +152,50 @@ public sealed class GameLoot
     /// <summary>A source's table resolved through its own constraints, or null when the table is gone.</summary>
     public LootTable? Resolve(LootSource source)
     {
-        _byName ??= _byHash.Values.GroupBy(r => r.Name, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
         _tables ??= Tables().GroupBy(t => Short(t.Name), StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
 
         if (!_tables.TryGetValue(source.Table, out var table)) return null;
 
-        Guid? Named(string? name) => name is not null && _byName.TryGetValue(name, out var r) ? r.Hash : null;
+        return Resolve(table, Named(source.PoolFilter), Named(source.SecondaryChoices), ThemeIds(source));
+    }
 
-        var themes = source.Themes is null ? []
-            : source.Themes.Split(" + ").Select(n => Named("LootThemeRecord." + n)).OfType<Guid>().ToList();
+    private Guid? Named(string? name)
+    {
+        _byName ??= _byHash.Values.GroupBy(r => r.Name, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        return name is not null && _byName.TryGetValue(name, out var r) ? r.Hash : null;
+    }
 
-        return Resolve(table, Named(source.PoolFilter), Named(source.SecondaryChoices), themes);
+    private List<Guid> ThemeIds(LootSource source) => source.Themes is null ? []
+        : [.. source.Themes.Split(" + ").Select(n => Named("LootThemeRecord." + n)).OfType<Guid>()];
+
+    /// <summary>
+    /// A preset's sources as they roll in one faction's land: each keeps its
+    /// own themes and takes the land's, under <paramref name="key"/> as its
+    /// preset so the places that land holds are its own.
+    /// </summary>
+    /// <param name="land">The land's preset record, short - <c>Faction_HCD_Shubin</c>.</param>
+    /// <remarks>
+    /// A land is a <c>HierarchicalContextualDataPresetRecord</c>, and the part
+    /// loot reads is its <c>LocationLootGenerationContextData</c>: a faction
+    /// theme and three flavours (wealth, tech, lawfulness). Its
+    /// <c>parentThemesToIgnore</c> names the Faction and Flavour categories,
+    /// which reads as the lands above it - <see cref="GameLootPlaces.LandOf"/>
+    /// takes the nearest. Whether it also strikes a crate's own faction or
+    /// flavour is untested: on 5.0 PTU the one preset placed in a land,
+    /// <c>V3SlotPreset_Loot_Generic_HCD</c>, carries neither, only the safety
+    /// net and a rarity.
+    /// </remarks>
+    public IEnumerable<LootSource> OnLand(IEnumerable<LootSource> sources, string land, string key)
+    {
+        if (Named("HierarchicalContextualDataPresetRecord." + land) is not { } id || Record(id) is not { } record) return [];
+
+        var themes = new List<Guid>();
+        foreach (var hcd in _core.PointerArrayAt(_core.InstanceAt(record, record.VariantIndex), record.StructIndex, "HCDs"))
+            if (_core.StructName(hcd.StructIndex) == "LocationLootGenerationContextData")
+                themes.AddRange(_core.ReferenceArrayAt(_core.InstanceAt(hcd), hcd.StructIndex, "themes"));
+
+        if (themes.Count == 0) return [];
+        return [.. sources.Select(s => s with { Preset = key, Themes = ThemeNames([.. ThemeIds(s), .. themes]) })];
     }
 
     /// <summary>

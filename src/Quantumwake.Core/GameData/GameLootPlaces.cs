@@ -60,11 +60,26 @@ public static class GameLootPlaces
     internal readonly record struct PlaceKey(Guid? Marker, string? BodyFile);
 
     /// <summary>What one container holds: where it is placed, and the presets set down in it.</summary>
-    private sealed record Scan(string Path, List<(string Child, Guid? Marker)> Children, Dictionary<Guid, int> Presets);
+    private sealed record Scan(
+        string Path, List<(string Child, Guid? Marker)> Children, Dictionary<Guid, int> Presets, List<LandSpot> Lands);
+
+    /// <summary>
+    /// A 5.0 Starchitect place that carries its own loot preset: the preset,
+    /// the faction preset whose land it is, and the name its map file gives it.
+    /// </summary>
+    internal readonly record struct LandSpot(Guid Preset, Guid? Land, string? Name);
+
+    /// <summary>
+    /// What joins a preset and a faction's land in a <see cref="Read"/> key:
+    /// <c>V3SlotPreset_Loot_Generic_HCD@Faction_HCD_Shubin</c>.
+    /// </summary>
+    public const char LandMark = '@';
 
     /// <summary>
     /// Every preset's places, keyed by the preset's record name without its
-    /// type prefix - the same key <see cref="LootSource.Preset"/> carries.
+    /// type prefix - the same key <see cref="LootSource.Preset"/> carries - or,
+    /// for a 5.0 place in a faction's land, that name, <see cref="LandMark"/>
+    /// and the land's preset.
     /// </summary>
     public static Dictionary<string, List<LootPlace>> Read(
         P4kArchive p4k, DataCore core, IReadOnlyDictionary<string, string> text)
@@ -108,6 +123,9 @@ public static class GameLootPlaces
 
         var children = new List<(string, Guid?)>();
         var presets = new Dictionary<Guid, int>();
+        var parents = new Dictionary<Guid, Guid>();
+        var lands = new Dictionary<Guid, Guid>();
+        var carriers = new List<(Guid Entity, Guid Preset, string? Name)>();
 
         foreach (var file in zip.Entries)
         {
@@ -118,7 +136,9 @@ public static class GameLootPlaces
                 && !name.EndsWith("_editor.xml", StringComparison.OrdinalIgnoreCase))
             {
                 using var stream = file.Open();
-                children.AddRange(Children(XDocument.Load(stream)));
+                var doc = XDocument.Load(stream);
+                children.AddRange(Children(doc));
+                foreach (var (child, parent) in Nesting(doc)) parents.TryAdd(child, parent);
             }
             else if (name.EndsWith(".entxml", StringComparison.OrdinalIgnoreCase)
                 && name.Contains("/entdata/", StringComparison.OrdinalIgnoreCase))
@@ -127,12 +147,94 @@ public static class GameLootPlaces
                 using var buffer = new MemoryStream();
                 stream.CopyTo(buffer);
 
-                foreach (var id in PresetsSet(buffer.ToArray()))
+                if (Parse(buffer.ToArray()) is not { } doc) continue;
+
+                foreach (var id in PresetsSet(doc))
                     presets[id] = presets.GetValueOrDefault(id) + 1;
+
+                if (OwnPreset(doc) is { } own) carriers.Add(own);
+            }
+            else if (name.Contains("/hcd/", StringComparison.OrdinalIgnoreCase)
+                && name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
+                && Guid.TryParse(System.IO.Path.GetFileNameWithoutExtension(name), out var owner))
+            {
+                using var stream = file.Open();
+                if (Guid.TryParse(XDocument.Load(stream).Root?.Attribute("preset")?.Value, out var land))
+                    lands[owner] = land;
             }
         }
 
-        return new Scan(Normalise(entry.Path), children, presets);
+        return new Scan(Normalise(entry.Path), children, presets,
+            [.. carriers.Select(c => new LandSpot(c.Preset, LandOf(c.Entity, lands, parents), c.Name))]);
+    }
+
+    /// <summary>
+    /// Every placed container's parent in one container's own XML, by the
+    /// guids they carry - the nesting a place's land is inherited down.
+    /// </summary>
+    internal static IEnumerable<(Guid Child, Guid Parent)> Nesting(XDocument doc)
+    {
+        foreach (var child in doc.Descendants("Child"))
+        {
+            if (!Guid.TryParse(child.Attribute("guid")?.Value, out var id)) continue;
+            if (child.Ancestors("Child").FirstOrDefault() is { } up && Guid.TryParse(up.Attribute("guid")?.Value, out var parent))
+                yield return (id, parent);
+        }
+    }
+
+    /// <summary>
+    /// The land a place is in: its own faction preset, or the nearest one
+    /// above it. Each of the eleven presets has its place ignore the faction
+    /// and flavour themes of the lands above it, so the nearest is the whole
+    /// answer; on 5.0 PTU every one of the 1,230 Nyx I places that carries a
+    /// preset also carries its own land.
+    /// </summary>
+    internal static Guid? LandOf(Guid entity, IReadOnlyDictionary<Guid, Guid> lands, IReadOnlyDictionary<Guid, Guid> parents)
+    {
+        var seen = new HashSet<Guid>();
+        for (Guid? at = entity; at is { } id && seen.Add(id); at = parents.TryGetValue(id, out var up) ? up : null)
+            if (lands.TryGetValue(id, out var land)) return land;
+        return null;
+    }
+
+    /// <summary>
+    /// The preset a 5.0 Starchitect place sets on itself -
+    /// <c>&lt;HarvestableComponent SubConfigGUID&gt;</c> on the place's own
+    /// entity, which <see cref="PresetsSet(XDocument)"/>'s crate spelling does
+    /// not cover - with its id and the name in brackets on its entity name.
+    /// </summary>
+    internal static (Guid Entity, Guid Preset, string? Name)? OwnPreset(XDocument doc)
+    {
+        var root = doc.Root;
+        if (root?.Element("HarvestableComponent")?.Attribute("SubConfigGUID")?.Value is not { } value
+            || !Guid.TryParse(value, out var preset) || preset == Guid.Empty
+            || !Guid.TryParse(root.Attribute("EntityCryGUID")?.Value, out var entity))
+            return null;
+
+        return (entity, preset, PlaceName(root.Attribute("Name")?.Value));
+    }
+
+    /// <summary>
+    /// "Shubin Settlement DRL-444" from
+    /// <c>location_ht_a_habitation_s_003_high (Shubin Settlement DRL-444)</c>,
+    /// and "Campsite" from <c>location_ht_a_campsite_s_001 (Campsite)-046</c>:
+    /// the dash and number after the bracket tell the editor's copies apart
+    /// and are not part of any name. Null when the entity name has no bracket.
+    /// </summary>
+    /// <remarks>
+    /// These are the map file's names. The star map does not list these
+    /// places - every one shares one nav-point record - and the name hash
+    /// beside each is not a plain CRC32 of the bracketed text, so nothing in
+    /// the files confirms the game shows the same words.
+    /// </remarks>
+    internal static string? PlaceName(string? entityName)
+    {
+        if (entityName is null) return null;
+        var open = entityName.IndexOf('(');
+        var close = entityName.LastIndexOf(')');
+        if (open < 0 || close <= open + 1) return null;
+        var name = entityName[(open + 1)..close].Trim();
+        return name.Length > 0 ? name : null;
     }
 
     /// <summary>
@@ -160,20 +262,27 @@ public static class GameLootPlaces
     }
 
     /// <summary>The loot presets one entity's instance data sets, if any.</summary>
-    internal static IEnumerable<Guid> PresetsSet(byte[] entxml)
+    internal static IEnumerable<Guid> PresetsSet(byte[] entxml) =>
+        Parse(entxml) is { } doc ? PresetsSet(doc) : [];
+
+    /// <summary>One entity's instance data, binary or text, or null when it cannot be read.</summary>
+    private static XDocument? Parse(byte[] entxml)
     {
-        XDocument doc;
         try
         {
-            doc = CryXml.IsBinary(entxml)
+            return CryXml.IsBinary(entxml)
                 ? CryXml.Parse(entxml)
                 : XDocument.Parse(System.Text.Encoding.UTF8.GetString(entxml));
         }
         catch (Exception e) when (e is InvalidDataException or System.Xml.XmlException or ArgumentException or IndexOutOfRangeException)
         {
-            yield break;
+            return null;
         }
+    }
 
+    /// <summary>The loot presets a crate's instance data sets.</summary>
+    internal static IEnumerable<Guid> PresetsSet(XDocument doc)
+    {
         foreach (var harvestable in doc.Descendants("HarvestableComponent"))
             foreach (var element in harvestable.DescendantsAndSelf())
                 foreach (var name in (string[])["subConfigRef", "multiConfigRef"])
@@ -278,6 +387,34 @@ public static class GameLootPlaces
 
             if (places.Count > 0) result[preset] = places;
         }
+
+        // 5.0's Starchitect places carry their preset on themselves and roll it
+        // under their land's themes, so each land is its own key: the same
+        // preset is Shubin gear at one settlement and Moraine gear at the next.
+        // They sit in their body's own container; the star map lists none.
+        var landed = new Dictionary<string, List<LootPlace>>(StringComparer.Ordinal);
+        foreach (var scan in scans)
+        {
+            if (scan.Lands.Count == 0) continue;
+
+            var stem = P4kArchive.EntryStem(scan.Path);
+            var body = bodies.TryGetValue(stem, out var b) ? markers[b] : default;
+
+            foreach (var spot in scan.Lands)
+            {
+                if (!byHash.TryGetValue(spot.Preset, out var record)) continue;
+                var preset = record.Name[(record.Name.IndexOf('.') + 1)..];
+                var key = spot.Land is { } land && byHash.TryGetValue(land, out var landRecord)
+                    ? preset + LandMark + landRecord.Name[(landRecord.Name.IndexOf('.') + 1)..]
+                    : preset;
+
+                if (!landed.TryGetValue(key, out var list)) landed[key] = list = [];
+                list.Add(new LootPlace(spot.Name, body.Name, 1, body.Id));
+            }
+        }
+
+        foreach (var (key, list) in landed)
+            result[key] = Merge(result.TryGetValue(key, out var known) ? [.. known, .. list] : list);
 
         return result;
     }

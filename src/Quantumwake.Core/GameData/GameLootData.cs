@@ -261,6 +261,35 @@ public sealed class GameLootData
         var loot = new GameLoot(core);
         var sources = loot.Sources().ToList();
 
+        // Only presets the page can show: the map files also place plants,
+        // minerals and rock-cracker nodes, which roll no loot table. Read
+        // before the rolls, because a place in a faction's land rolls its
+        // preset under that land's themes - rolls of their own.
+        var places = new Dictionary<string, List<LootPlace>>(StringComparer.Ordinal);
+        if (p4k is not null)
+        {
+            var bySlot = sources.Where(s => s.Kind == "slot").ToLookup(s => s.Preset, StringComparer.Ordinal);
+            var onLand = new List<LootSource>();
+
+            foreach (var (key, list) in GameLootPlaces.Read(p4k, core, text ?? new Dictionary<string, string>()))
+            {
+                var mark = key.IndexOf(GameLootPlaces.LandMark);
+                var preset = mark < 0 ? key : key[..mark];
+                if (!bySlot.Contains(preset)) continue;
+
+                if (mark >= 0)
+                {
+                    var landed = loot.OnLand(bySlot[preset], key[(mark + 1)..], key).ToList();
+                    if (landed.Count == 0) continue;
+                    onLand.AddRange(landed);
+                }
+
+                places[key] = list;
+            }
+
+            sources.AddRange(onLand);
+        }
+
         var items = new List<string>();
         var itemIndex = new Dictionary<string, int>(StringComparer.Ordinal);
         var vias = new List<string>();
@@ -290,16 +319,6 @@ public sealed class GameLootData
                 [.. perItem.Select(p => Intern(vias, viaIndex,
                     p.Top.Entry == p.Top.Choice ? p.Top.Entry : $"{p.Top.Entry} / {p.Top.Choice}"))],
                 first.Themes));
-        }
-
-        // Only presets the page can show: the map files also place plants,
-        // minerals and rock-cracker nodes, which roll no loot table.
-        var places = new Dictionary<string, List<LootPlace>>(StringComparer.Ordinal);
-        if (p4k is not null)
-        {
-            var shown = sources.Where(s => s.Kind == "slot").Select(s => s.Preset).ToHashSet(StringComparer.Ordinal);
-            foreach (var (preset, list) in GameLootPlaces.Read(p4k, core, text ?? new Dictionary<string, string>()))
-                if (shown.Contains(preset)) places[preset] = list;
         }
 
         var (npcShips, stock) = typeOf is null

@@ -980,7 +980,18 @@ if (args.Any(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)))
     Console.WriteLine($"  items with a named place: {reachable.Count(i => digest.PlacesFor(i).Any(p => p.Name is not null))} of {reachable.Count}; "
         + $"of the logged classes: {seen.Count(i => digest.PlacesFor(i).Any(p => p.Name is not null))} of {seen.Count}");
     foreach (var p in slotPresets.Where(p => !digest.Places.ContainsKey(p)).Order(StringComparer.Ordinal))
-        Console.WriteLine($"  set down in no map file: {p}");
+        Console.WriteLine($"  set down in no map file{(digest.Places.Keys.Any(k => k.StartsWith(p + GameLootPlaces.LandMark, StringComparison.Ordinal)) ? " on its own (see lands below)" : "")}: {p}");
+
+    // 5.0: a place in a faction's land rolls its preset under that land's
+    // themes, so each land is a preset of its own with rolls of its own.
+    var lands = digest.Places.Where(kv => kv.Key.Contains(GameLootPlaces.LandMark)).OrderByDescending(kv => kv.Value.Sum(p => p.Spots)).ToList();
+    if (lands.Count > 0)
+    {
+        var landRolls = digest.Sources.Where(s => s.Preset.Contains(GameLootPlaces.LandMark)).Select(s => s.RollKey).Distinct().Count();
+        Console.WriteLine($"\nPlaces in a faction's land: {lands.Sum(kv => kv.Value.Sum(p => p.Spots))} in {lands.Count} lands, {landRolls} rolls of their own");
+        foreach (var (key, list) in lands)
+            Console.WriteLine($"  {list.Sum(p => p.Spots),5} places, {list.Count,4} names  {LootLabels.Preset(key)}  e.g. {string.Join("; ", list.Where(p => p.Name is not null).Take(3).Select(p => $"{p.Name} ({p.Body})"))}");
+    }
 
     // A destination is the place itself, or somewhere on its body: an id
     // carries its body as a prefix - Stanton1_UGF_HDRSO-Olliff is on Stanton1 -
