@@ -14481,10 +14481,13 @@ function renderReputation() {
     list.append(el('p', 'muted', data.canRead === false
       ? tx('This copy cannot read screenshots — the overlay does that. Start Quantum Wake from its tray icon and the Rep app screenshots you take will be read.')
       : tx('No Rep app screenshots yet. In the game, open the mobiGlas Rep app, pick an organisation and press Print Screen — one screenshot starts its line here, and each one after adds a point.')));
-    return;
   }
 
   for (const org of orgs) list.append(reputationCard(org, orgs));
+
+  // The guilds come from the game files, so they are listed before any
+  // screenshot has shown one; empty before Star Citizen 5.0.
+  if (data.guilds?.length) list.append(reputationGuilds(data.guilds));
 
   // Landed from an organisation's name elsewhere: its card, lit and in view,
   // or a line saying no Rep screenshot has shown it yet.
@@ -14502,6 +14505,80 @@ function renderReputation() {
       toast('warn', tx('No Rep app screenshot has shown {org} yet. Open it in the mobiGlas Rep app and take a screenshot to start its card.', { org: said }));
     }
   }
+}
+
+/**
+ * Star Citizen 5.0's guilds: what raises each and who posts on its boards,
+ * out of the installed game, and the rank only where a Rep app screenshot
+ * showed it - a guild nobody photographed says so instead of showing zero.
+ */
+function reputationGuilds(guilds) {
+  const section = el('section', 'rep-guilds');
+  section.append(el('h3', 'rep-guilds-heading', tx('Guilds')));
+  section.append(el('p', 'muted', tx('From your installed game: each guild with a Career board, the organisations that post on it, and what its contracts pay in guild standing. Your rank comes only from a Rep app screenshot of the guild.')));
+  for (const guild of guilds) section.append(reputationGuildCard(guild));
+  return section;
+}
+
+function reputationGuildCard(guild) {
+  // data-guild rather than data-org, so landing on an organisation finds its
+  // screenshot card first.
+  const card = el('article', 'point-card rep-card rep-guild');
+  card.dataset.guild = linkKey(guild.name);
+
+  const head = el('div', 'wikelo-head');
+  const title = el('div', 'rep-title');
+  if (guild.logo) {
+    const logo = el('img', 'rep-logo');
+    logo.src = guild.logo;
+    logo.alt = '';
+    logo.loading = 'lazy';
+    logo.addEventListener?.('error', () => logo.remove());
+    title.append(logo);
+  }
+  title.append(el('div', 'point-name-read', guild.name));
+  head.append(title);
+  if (guild.seen) head.append(el('div', 'muted', tx('last seen {when}', { when: ago(guild.seen) })));
+  card.append(head);
+
+  const ladder = guild.ladder || [];
+  const held = guild.rank ? ladder.findIndex((r) => r.name.toLowerCase() === guild.rank.toLowerCase()) : -1;
+
+  if (guild.rank) {
+    const rank = held >= 0 ? ladder[held].name : guild.rank;
+    card.append(el('div', 'rep-guild-standing', guild.estimate != null
+      ? tx('{rank}, about {rep} rep — an estimate from your last Rep app screenshot', { rank, rep: guild.estimate.toLocaleString() })
+      : tx('{rank}, from your last Rep app screenshot', { rank })));
+  } else {
+    card.append(el('div', 'muted rep-unread', tx('Not read yet. Open {guild} in the mobiGlas Rep app and take a screenshot to see your rank.', { guild: guild.name })));
+  }
+
+  if (ladder.length) {
+    card.append(reputationLadder({ ladder, rank: guild.rank, place: { rankIndex: held } }));
+    card.append(el('div', 'muted rep-guild-thresholds',
+      ladder.map((r) => tx('{rank} {rep}', { rank: r.name, rep: r.minReputation.toLocaleString() })).join(' · ')));
+  }
+
+  card.append(el('div', 'rep-guild-pay', guild.contracts > 0
+    ? (guild.payLow === guild.payHigh
+      ? txn(guild.contracts, '{count} contract pays it {low} standing when finished.', '{count} contracts pay it {low} standing each when finished.',
+        { low: guild.payLow })
+      : txn(guild.contracts, '{count} contract pays it {low}–{high} standing when finished.', '{count} contracts pay it {low}–{high} standing each when finished.',
+        { low: guild.payLow, high: guild.payHigh }))
+    : tx('No contract in your installed game pays it standing yet.')));
+
+  if (guild.members?.length) {
+    const members = el('div', 'muted rep-guild-members');
+    members.append(tx('On its boards: '));
+    guild.members.forEach((member, i) => {
+      if (i) members.append(', ');
+      // A link only where a screenshot has given the organisation a card.
+      members.append(member.onPage ? orgLink(member.name) : document.createTextNode(member.name));
+    });
+    card.append(members);
+  }
+
+  return card;
 }
 
 /** What the page cannot do yet and why, or null when it is all there. */

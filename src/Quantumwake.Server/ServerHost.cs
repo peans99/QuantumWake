@@ -2259,6 +2259,9 @@ public static partial class ServerHost
             return new
             {
                 board.Organisations,
+                // 5.0's guilds, listed whether or not a screenshot has shown
+                // them: what raises each is in the game files, not the photos.
+                guilds = ReputationBoards.Guilds(lib.GameCommodities.Reputation, board.Organisations),
                 board.Readings,
                 unmeasured = waiting,
                 unmeasurable = Math.Max(0, board.Unmeasured - waiting),

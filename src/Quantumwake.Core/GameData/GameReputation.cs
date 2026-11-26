@@ -28,7 +28,22 @@ public sealed record GameRepScope(
 /// The archive entry of its logo, <c>Data\UI\SharedAssets\ManufacturerLogos\rep_ui_icon_logo_redwind.dds</c>,
 /// or null when the record names none or the archive does not hold it.
 /// </param>
-public sealed record GameRepOrganisation(string Id, string Name, string? Logo);
+/// <param name="Ladder">
+/// The scope its contracts pay into most, <c>ReputationScope_Hauling</c> for
+/// Red Wind; null when no contract pays it. What settles a Rep app page whose
+/// cards fit two ladders equally - see <c>ReputationLadders.Match</c>.
+/// </param>
+public sealed record GameRepOrganisation(string Id, string Name, string? Logo, string? Ladder = null);
+
+/// <summary>A 5.0 guild: the organisation behind a Career board, and who posts on it.</summary>
+/// <param name="Id">The guild's record, <c>FactionReputation_Guild_Industrial</c>.</param>
+/// <param name="Name">"United Resource Workers".</param>
+/// <param name="Ladder">The scope its standing is kept on, <c>ReputationScope_Guild</c>.</param>
+/// <param name="Members">
+/// The organisations whose contracts its boards carry, in the order the boards
+/// list them - <c>FactionReputation_Lawful_ShubinInterstellar</c> first for URW.
+/// </param>
+public sealed record GameRepGuild(string Id, string Name, string? Ladder, IReadOnlyList<string> Members);
 
 /// <summary>Every reputation ladder the install defines, and the organisations.</summary>
 /// <param name="Organisations">Null in a cache written before they were read.</param>
@@ -66,6 +81,12 @@ public sealed record GameReputationCatalogue(
     /// a cache written before they were read.
     /// </summary>
     public GameMissionCatalogue? Details { get; init; }
+
+    /// <summary>
+    /// The guilds with a Career board, by board order; empty before 5.0 and
+    /// null in a cache written before they were read.
+    /// </summary>
+    public IReadOnlyList<GameRepGuild>? Guilds { get; init; }
 
     /// <summary>What the install says a logged contract pays, or null when it does not know it.</summary>
     public GameMissionPay? Mission(string? definitionId) =>
@@ -120,12 +141,14 @@ public static class GameReputation
         var byId = new Dictionary<Guid, DataRecord>();
         var scopes = new List<DataRecord>();
         var organisations = new List<DataRecord>();
+        var boards = new List<DataRecord>();
 
         foreach (var record in core.Records())
         {
             byId.TryAdd(record.Hash, record);
             if (record.StructIndex == scopeStruct) scopes.Add(record);
             if (record.StructIndex == organisationStruct) organisations.Add(record);
+            if (record.Name.StartsWith("EntityClassDefinition.", StringComparison.Ordinal)) boards.Add(record);
         }
 
         var read = new List<GameRepScope>();
@@ -180,10 +203,14 @@ public static class GameReputation
         }
 
         var missions = GameMissions.Read(core, byId, standings);
-        return new GameReputationCatalogue(
-            [.. read.OrderBy(s => s.Id, StringComparer.Ordinal)],
-            Organisations(core, text, organisations, logoEntries ?? []))
+        var ladders = Ladders(missions);
+        var orgs = Organisations(core, text, organisations, logoEntries ?? [])
+            .Select(o => o with { Ladder = ladders.GetValueOrDefault(o.Id) })
+            .ToList();
+
+        return new GameReputationCatalogue([.. read.OrderBy(s => s.Id, StringComparer.Ordinal)], orgs)
         {
+            Guilds = Guilds(core, byId, boards, orgs),
             Missions = missions,
             HaulTitles = GameMissions.HaulTitles(core, byId, text.Keys),
             TitleRewards = GameMissions.TitleRewards(core, byId, missions),
@@ -236,6 +263,87 @@ public static class GameReputation
         }
 
         return [.. read.OrderBy(o => o.Name, StringComparer.OrdinalIgnoreCase)];
+    }
+
+    /// <summary>
+    /// The scope each organisation's contracts pay into most. A Rep app page
+    /// shows one organisation on one ladder, and where two ladders share every
+    /// card name this is the one that page is about: the 5.0 guild ladder and
+    /// the faction ladder both run Applicant to Elite Contractor under the
+    /// heading Standing, with no perks, and only the thresholds differ. On 5.0
+    /// PTU the four guilds with contracts pay 113 (URW), 109 (Mercenary), 76
+    /// (Transport) and 6 (Science) rewards into <c>ReputationScope_Guild</c> and
+    /// none into the faction scope, while FTL pays 145 into the faction scope
+    /// and 2 into Affinity.
+    /// </summary>
+    /// <remarks>
+    /// The organisation's own <c>alliedParams.scope</c> would have been simpler
+    /// and is wrong: on the PTU only the Mercenary Guild's names the guild
+    /// scope, and URW's, Transport's and Science's name the faction one.
+    /// </remarks>
+    private static Dictionary<string, string> Ladders(IReadOnlyDictionary<string, GameMissionPay> missions)
+    {
+        var counts = new Dictionary<(string Faction, string Scope), int>();
+        foreach (var pay in missions.Values)
+            foreach (var line in pay.Rep)
+                if (line.Amount > 0 && line.When.HasFlag(MissionOutcomes.Completed))
+                    counts[(line.Faction, line.Scope)] = counts.GetValueOrDefault((line.Faction, line.Scope)) + 1;
+
+        return counts
+            .GroupBy(c => c.Key.Faction, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(c => c.Value).ThenBy(c => c.Key.Scope, StringComparer.Ordinal).First().Key.Scope,
+                StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Every guild a Career board names, with the organisations it carries.
+    /// </summary>
+    /// <remarks>
+    /// A board is an entity whose <c>EntityComponentMissionBoardUIProvider</c>
+    /// has a <c>MissionBoardType_Career</c> naming a <c>guildFactionReputation</c>
+    /// and its <c>factions</c>. 20 on 5.0 PTU - each guild's console in four
+    /// placements - for four guilds: URW carries Shubin, Adagio and Cornerstone;
+    /// the Mercenary Guild Eckhart, Hockrow, Northrock and the Bounty Hunters
+    /// Guild; the Transport Guild FTL, Ling, Covalex and Red Wind; the Academy of
+    /// Science Rayari, and Adagio, Covalex and Red Wind on its HighTech boards.
+    /// The Imperial Sports Federation and an unnamed <c>Guild_Criminal</c> have
+    /// records and no board, and are left out.
+    /// </remarks>
+    private static List<GameRepGuild> Guilds(
+        DataCore core, Dictionary<Guid, DataRecord> byId, List<DataRecord> entities, List<GameRepOrganisation> orgs)
+    {
+        var provider = core.StructIndexOf("EntityComponentMissionBoardUIProvider");
+        if (provider < 0) return [];
+
+        var order = new List<string>();
+        var members = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+
+        foreach (var entity in entities)
+        {
+            foreach (var component in core.PointerArray(entity, "Components"))
+            {
+                if (component.StructIndex != provider) continue;
+                if (core.PointerAt(core.InstanceAt(component), provider, "boardType") is not { } board
+                    || core.StructName(board.StructIndex) != "MissionBoardType_Career") continue;
+
+                var at = core.InstanceAt(board);
+                if (core.ReferenceAt(at, board.StructIndex, "guildFactionReputation") is not { } guildId
+                    || !byId.TryGetValue(guildId, out var guild)) continue;
+
+                var id = Bare(guild.Name);
+                if (!members.TryGetValue(id, out var list)) { members[id] = list = []; order.Add(id); }
+
+                foreach (var faction in core.ReferenceArrayAt(at, board.StructIndex, "factions"))
+                    if (byId.TryGetValue(faction, out var f) && !list.Contains(Bare(f.Name))) list.Add(Bare(f.Name));
+            }
+        }
+
+        var byOrg = orgs.ToDictionary(o => o.Id, StringComparer.Ordinal);
+        return [.. order
+            .Where(byOrg.ContainsKey)
+            .Select(id => new GameRepGuild(id, byOrg[id].Name, byOrg[id].Ladder, members[id]))];
     }
 
     /// <summary>

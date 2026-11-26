@@ -185,6 +185,30 @@ Shubin 100). What is missing is a view. Guild standing on the Reputation page,
 which contracts raise which guild, and what each rank unlocks (`Gates`).
 Academy of Science and Sports have no logo in the files.
 
+**Done in 1.3.4.** Counts from the 5.0 PTU:
+
+- **Career boards:** 20 entities with `MissionBoardType_Career`, which is each guild's
+  console in 4 placements, for 4 guilds:
+  - URW (`Guild_Industrial`): Shubin, Adagio, Cornerstone.
+  - Mercenary: Eckhart, Hockrow, Northrock, Bounty Hunters Guild.
+  - Transport: FTL, Ling, Covalex, Red Wind.
+  - Science: Rayari, plus Adagio, Covalex and Red Wind on its HighTech boards.
+- **Guilds with no board:** Sports has a record and no board. `Guild_Criminal` has a
+  record and no name.
+- **Pay into `ReputationScope_Guild`:** URW 113 contracts (100-250), Mercenary 109
+  (100-300), Transport 76 (100-250), Science 6 (100).
+- **Gates:** no contract is gated on guild rank. Career-board contracts are gated by the
+  contractor's own faction rank, by Hauling, or by Bounty Hunters. The guild ranks name
+  no perks. So "what each rank unlocks" has no answer in the files yet.
+- **Telling guild pages from faction pages:** the guild ladder and the faction ladder
+  share every card name, the heading and the lack of perks.
+  - `alliedParams.scope` cannot settle it. Only the Mercenary Guild's names the guild
+    scope.
+  - What settles it is the scope an organisation's contracts pay into
+    (`GameRepOrganisation.Ladder`), used by `ReputationLadders.Match` only to break a
+    tie.
+- **Seen rendered:** against the PTU catalogue, with a second server on scratch data.
+
 ### B2. Mission boards
 
 `MissionBoardType_Career` / `_Notice`, `EntityComponentMissionBoardUIProvider`,

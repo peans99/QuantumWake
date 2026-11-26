@@ -7384,6 +7384,11 @@ body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-l
 .rep-rung.held .rep-rung-name { color: var(--text); }
 .rep-change { font-size: 12px; }
 .rep-foot { font-size: 11px; }
+/* The whole width of the list it sits in, with its own cards in the same grid. */
+.rep-guilds { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: var(--gap); align-items: start; margin-top: 18px; }
+.rep-guilds > h3, .rep-guilds > p { grid-column: 1 / -1; margin: 0; }
+.rep-guilds-heading { margin: 0; color: var(--dim); font: 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.rep-guild-thresholds, .rep-guild-members { font-size: 11px; }
 .rep-trend-wrap { display: flex; flex-direction: column; gap: 4px; margin: 0; }
 .rep-trend-chart { display: grid; grid-template-columns: minmax(54px, max-content) minmax(0, 1fr); gap: 6px; align-items: stretch; }
 .rep-trend-axis { display: flex; flex-direction: column; justify-content: space-between; min-width: 0; padding: 2px 0; color: var(--dim); font: 10px/1.1 var(--mono); text-align: right; overflow: hidden; }

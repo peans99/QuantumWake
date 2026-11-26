@@ -97,6 +97,14 @@ public static class ReputationLadders
         GameRepScope? best = null;
         var bestScore = 0.0;
 
+        // The ladder this organisation's contracts pay into, for the one case
+        // nothing on the page can settle: 5.0's guild ladder and the faction
+        // ladder share every card name, the heading and the absence of perks,
+        // and differ only in thresholds the page does not print.
+        var letters = reading.Organisation is { } org ? Letters(org) : null;
+        var theirs = letters is null ? null
+            : catalogue.Organisations?.FirstOrDefault(o => Letters(o.Name) == letters)?.Ladder;
+
         foreach (var scope in catalogue.Scopes)
         {
             if (scope.Ranks.Count < cards.Count) continue;
@@ -124,6 +132,9 @@ public static class ReputationLadders
             // A ladder with exactly the cards shown beats a longer one that
             // merely begins the same way.
             if (scope.Ranks.Count == cards.Count) score += 0.25;
+
+            // Smaller than any other signal, so it only ever breaks a tie.
+            if (theirs is not null && scope.Id == theirs) score += 0.1;
 
             if (score > bestScore)
             {

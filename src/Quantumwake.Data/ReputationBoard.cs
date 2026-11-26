@@ -71,6 +71,29 @@ public sealed record RepOrganisation(
     string? Logo = null,
     RepPay? Pay = null);
 
+/// <summary>An organisation that posts on a guild's board.</summary>
+/// <param name="OnPage">Whether a Rep app screenshot has put it on the page, so its name can link to its card.</param>
+public sealed record RepGuildMember(string Name, string? Logo, bool OnPage);
+
+/// <summary>A 5.0 guild as the page lists it, whether or not a screenshot has shown it.</summary>
+/// <param name="Ladder">The guild ladder's ranks and where each starts.</param>
+/// <param name="Members">Who posts contracts on its Career boards.</param>
+/// <param name="Contracts">How many contracts in the installed game pay this guild standing on completion.</param>
+/// <param name="PayLow">The least and most one of them pays it; null when none does.</param>
+/// <param name="Rank">The rank the newest Rep app screenshot of it showed, or null when none has.</param>
+/// <param name="Estimate">Its reputation on the ladder by that screenshot's bar, an estimate; null without one.</param>
+public sealed record RepGuild(
+    string Name,
+    string? Logo,
+    IReadOnlyList<RepLadderRank> Ladder,
+    IReadOnlyList<RepGuildMember> Members,
+    int Contracts,
+    int? PayLow,
+    int? PayHigh,
+    string? Rank,
+    long? Estimate,
+    DateTimeOffset? Seen);
+
 /// <param name="Unmeasured">Rep readings with no bars in them yet - taken before 0.18.22 and not yet read again.</param>
 public sealed record ReputationBoard(IReadOnlyList<RepOrganisation> Organisations, int Readings, int Unmeasured);
 
@@ -374,6 +397,51 @@ public static class ReputationBoards
     /// INTERSEC DEFENSE SOLUTIONS is the record's "InterSec Defense Solutions"
     /// letter for letter, as every one of the twelve on this install is.
     /// </summary>
+    /// <summary>
+    /// Every guild the installed game gives a Career board, with what is known
+    /// of the pilot's standing: none of it from the logs, which carry no
+    /// reputation, so a guild with no Rep app screenshot says so rather than
+    /// showing a zero. Empty before 5.0.
+    /// </summary>
+    public static IReadOnlyList<RepGuild> Guilds(GameReputationCatalogue catalogue, IReadOnlyList<RepOrganisation> organisations)
+    {
+        if (catalogue.Guilds is not { Count: > 0 } guilds) return [];
+
+        var names = (catalogue.Organisations ?? []).ToDictionary(o => o.Id, o => o.Name, StringComparer.Ordinal);
+        var onPage = organisations.Select(o => Letters(o.Name)).ToHashSet(StringComparer.Ordinal);
+
+        return [.. guilds.Select(guild =>
+        {
+            var scope = catalogue.Scopes.FirstOrDefault(s => s.Id == guild.Ladder);
+            var pays = (catalogue.Missions?.Values ?? [])
+                .Select(m => m.Rep.FirstOrDefault(r => r.Faction == guild.Id && r.Scope == guild.Ladder
+                    && r.Amount > 0 && r.When.HasFlag(MissionOutcomes.Completed)))
+                .OfType<GameRepLine>()
+                .Select(r => r.Amount)
+                .ToList();
+
+            // The guild's own card, when a Rep app screenshot has shown it.
+            var card = organisations
+                .Where(o => Letters(o.Name) == Letters(guild.Name))
+                .OrderByDescending(o => o.LastSeen)
+                .FirstOrDefault();
+
+            return new RepGuild(
+                guild.Name,
+                LogoOf(guild.Name, catalogue),
+                scope is null ? [] : [.. scope.Ranks.Select(r => new RepLadderRank(r.Name, r.Perk, r.MinReputation, null))],
+                [.. guild.Members
+                    .Where(names.ContainsKey)
+                    .Select(id => new RepGuildMember(names[id], LogoOf(names[id], catalogue), onPage.Contains(Letters(names[id]))))],
+                pays.Count,
+                pays.Count > 0 ? pays.Min() : null,
+                pays.Count > 0 ? pays.Max() : null,
+                card?.Rank,
+                card?.Place?.Estimate,
+                card?.LastSeen);
+        })];
+    }
+
     internal static string? LogoOf(string organisation, GameReputationCatalogue catalogue)
     {
         var letters = Letters(organisation);

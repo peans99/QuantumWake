@@ -450,7 +450,18 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.3.3
+### 1.3.4
+
+- **Guilds on the Reputation page (Star Citizen 5.0).** Each guild with a
+  Career board - United Resource Workers, the Mercenary Guild, the
+  Interstellar Transport Guild and the Academy of Science - is listed from
+  your installed game, before you have photographed it: its rank path with
+  the reputation each rank starts at, how many contracts pay it standing and
+  how much, and which companies post on its boards. Your rank appears once a
+  Rep app screenshot of the guild has been read. A guild's page and a
+  company's page show the same rank names, so a guild screenshot is now put
+  on the guild ladder rather than the company one, and its estimate uses the
+  guild's own thresholds. Nothing changes on the live game until 5.0.
 
 - **Stream Deck mode keys keep working in 5.0.** 5.0 changes the operator-mode
   switches (Quantum, Mining, Salvage, Scan and Next Mode) to fire only on a
