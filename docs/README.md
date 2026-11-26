@@ -26,6 +26,7 @@ Compiled 2026-08-20 against a real install: **SC 4.9.188.23497**, handle `nekron
 | [credits.md](credits.md) | Every external resource this app uses, and what was taken from each. |
 | [naming.md](naming.md) | Why the project is called Quantum Wake, and what the name had to survive. |
 | [landscape.md](landscape.md) | Who else builds on Game.log, what overlaps, and what is still ours. |
+| [plan-1.3.md](plan-1.3.md) | Plan, unbuilt: the 1.3 line for Star Citizen 5.0. Two fixes before 5.0 reaches LIVE (Wikelo special names, loot themes), the new systems the app does not read (guilds, mission boards, crafting quality, item recovery), and the local telemetry API to investigate. |
 | [org-network.md](org-network.md) | Plan, unbuilt: pooling blueprints, stashes and prices across an org. |
 | [player-market.md](player-market.md) | Plan, unbuilt: what a pilot will pay rather than what a shop pays, from UEX's marketplace feed. |
 | [precise-poi.md](precise-poi.md) | Marking a place by the coordinates the game hands over, and the line that keeps it out of macro territory. Written as a plan; built in 0.10.28-0.10.45 as the Points page under Flight, with distances from your last copied location and sharing. |

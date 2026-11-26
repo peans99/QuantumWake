@@ -450,7 +450,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.67
+### 1.3.0
 
 - **Pictures of the Cougar MFD pages.** The [MFD guide](docs/mfd-mode.md#what-it-looks-like)
   now opens with six of them: Home, Navigation, Mission, Target, Fracture
