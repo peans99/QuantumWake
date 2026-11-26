@@ -450,7 +450,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.3.4
+### 1.3.5
+
+- **Which board a contract is on (Star Citizen 5.0).** Reference → Missions
+  says whether a contract is posted on a guild's Career board, and whose, or
+  on a local Notice board: "Career board · United Resource Workers" beside
+  its type, and in the mission window. A new filter shows one board at a
+  time, or only the contracts offered through the mobiGlas. Where each board
+  physically stands is not shown yet. Nothing changes on the live game,
+  where every contract is offered through the mobiGlas.
 
 - **Guilds on the Reputation page (Star Citizen 5.0).** Each guild with a
   Career board - United Resource Workers, the Mercenary Guild, the

@@ -221,6 +221,20 @@ Notice-board and ICC contracts pay no rep. For the app that means Reference →
 Missions says which board a contract comes from and where that board is. The
 Contracts screen reader may meet a new board UI.
 
+**Which board: done in 1.3.5.**
+
+- **Where the board is recorded:** `ContractAvailability.missionBoardAvailability`
+  (None / Career / Notice). It sits on the generator handler's `defaultAvailability`:
+  339 availability blocks in all, 41 Career and 2 Notice.
+- **Contracts per board on the PTU:** of 5,634 contracts, 249 released ones are on Career
+  boards (248 `CB_`, plus one Rayari intro) and 63 on Notice boards (`NB_`). The 55 ICC
+  probe contracts are Career, but marked unreleased.
+- **Which guild:** read from who the contract pays guild standing to, else from the
+  guild whose boards carry the contractor. URW 97, Mercenary 85, Transport 61,
+  Science 6.
+- **Still open:** where each board physically stands. That needs the board entities'
+  placements from the map files, as `GameLootPlaces` reads crates.
+
 ### B3. Crafting modifiers and location quality
 
 `CraftingModifierParams` with a time modifier, gated by blueprint category,

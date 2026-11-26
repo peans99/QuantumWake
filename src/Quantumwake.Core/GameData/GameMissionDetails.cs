@@ -39,6 +39,11 @@ public sealed record GameMissionDifficulty(string? Mechanical, string? MentalLoa
 /// <param name="RetakeAfterFail">Can be taken again after failing it.</param>
 /// <param name="Illegal">The template marks it illegal work.</param>
 /// <param name="Unreleased">Marked not for release or work in progress, on it, its handler or its template.</param>
+/// <param name="Board">
+/// The 5.0 mission board it is posted on - <c>Career</c> or <c>Notice</c>, from
+/// <c>ContractAvailability.missionBoardAvailability</c> - or null for the
+/// mobiGlas alone, which is every contract before 5.0.
+/// </param>
 public sealed record GameMissionInfo(
     string Id, string Name, string Generator, string? Parent,
     string? Template, string? TypeKey, string? Faction,
@@ -49,7 +54,8 @@ public sealed record GameMissionInfo(
     double? Minutes, int? BuyIn, int? MaxPlayers,
     bool OnceOnly, bool? RetakeAfterAbandon, bool? RetakeAfterFail,
     bool Illegal, bool Unreleased,
-    GameMissionDifficulty? Difficulty = null);
+    GameMissionDifficulty? Difficulty = null,
+    string? Board = null);
 
 /// <summary>
 /// A <c>MissionLocality</c> as a pilot would say it. The record is a list of
@@ -134,7 +140,8 @@ public static partial class GameMissionDetails
         bool? RetakeAbandon, bool? RetakeFail, bool Unreleased,
         string? Template = null, bool Illegal = false, double? Minutes = null, int? BuyIn = null,
         GameMissionDifficulty? Difficulty = null,
-        Guid? Organization = null, string? TitleVariant = null, string? DescriptionVariant = null);
+        Guid? Organization = null, string? TitleVariant = null, string? DescriptionVariant = null,
+        string? Board = null);
 
     public static GameMissionCatalogue Read(
         DataCore core,
@@ -308,6 +315,9 @@ public static partial class GameMissionDetails
                 OnceOnly = core.BoolAt(availAt, si, "onceOnly") ?? layer.OnceOnly,
                 RetakeAbandon = core.BoolAt(availAt, si, "canReacceptAfterAbandoning") ?? layer.RetakeAbandon,
                 RetakeFail = core.BoolAt(availAt, si, "canReacceptAfterFailing") ?? layer.RetakeFail,
+                // "None" is the field's default, so it never takes a board away
+                // that an outer layer set.
+                Board = core.EnumAt(availAt, si, "missionBoardAvailability") is { } board and not "None" ? board : layer.Board,
             };
             return Prerequisites(layer, core.PointerArrayAt(availAt, si, "prerequisites"));
         }
@@ -433,7 +443,7 @@ public static partial class GameMissionDetails
                     layer.Systems, layer.Locations, layer.MinCrime, layer.MaxCrime,
                     gates, layer.Requires, layer.Minutes, layer.BuyIn, layer.MaxPlayers,
                     layer.OnceOnly, layer.RetakeAbandon, layer.RetakeFail, layer.Illegal, layer.Unreleased,
-                    layer.Difficulty));
+                    layer.Difficulty, layer.Board));
             }
 
             var subs = core.ClassArrayAt(at, si, "subContracts");

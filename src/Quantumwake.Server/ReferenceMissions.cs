@@ -102,6 +102,7 @@ public static partial class ServerHost
                     },
                     m.Illegal,
                     m.Unreleased,
+                    board = Board(rep, m, pay),
                     taken = runs.Count,
                     completed = runs.Count(r => r.Contract.Outcome == ContractOutcome.Completed),
                 };
@@ -109,6 +110,25 @@ public static partial class ServerHost
             .ToList();
 
         return new { ready = details.Missions.Count > 0, count = rows.Count, missions = rows };
+    }
+
+    /// <summary>
+    /// The 5.0 board a contract is posted on, and for a Career board the guild
+    /// whose board it is: the guild it pays standing to, else the guild whose
+    /// boards carry its contractor. Null for a contract on the mobiGlas alone.
+    /// </summary>
+    /// <remarks>
+    /// Pay first because organisations sit on more than one guild's boards -
+    /// Adagio posts on both URW's and the Academy of Science's.
+    /// </remarks>
+    static object? Board(GameReputationCatalogue rep, GameMissionInfo m, GameMissionPay? pay)
+    {
+        if (m.Board is null) return null;
+        var guilds = rep.Guilds ?? [];
+        var guild = m.Board != "Career" ? null
+            : guilds.FirstOrDefault(g => pay?.Rep.Any(r => r.Faction == g.Id && r.Amount > 0) == true)
+              ?? guilds.FirstOrDefault(g => m.Faction is not null && g.Members.Contains(m.Faction));
+        return new { kind = m.Board, guild = guild?.Name };
     }
 
     /// <summary>The newest title the logs show for a contract whose files name none, cleaned of mod tags.</summary>
@@ -208,6 +228,7 @@ public static partial class ServerHost
             m.RetakeAfterFail,
             m.Illegal,
             m.Unreleased,
+            board = Board(rep, m, pay),
             difficulty = m.Difficulty,
             pay = new
             {

@@ -7273,6 +7273,7 @@ function renderMissionDetail(body, data) {
     [tx('Offered by'), data.contractor ? orgLink(data.contractor) : null],
     [tx('Rep ladder of'), data.organisation && data.organisation !== data.contractor ? orgLink(data.organisation) : null],
     [tx('Type'), [data.type, data.illegal ? tx('illegal') : null].filter(Boolean).join(' · ')],
+    [tx('Posted on'), missionBoard(data.board, true)],
     [tx('Offered in'), linkList(data.areas, placeLink)],
     [tx('At'), linkList(data.locations, placeLink)],
     [tx('CrimeStat'), missionCrime(data.crime)],
@@ -7391,6 +7392,25 @@ function renderMissionDetail(body, data) {
 
 let missionCatalogue = null;
 
+/**
+ * Where 5.0 posts a contract: "Career board · United Resource Workers", or
+ * "Notice board"; null for one on the mobiGlas alone, which is every contract
+ * before 5.0. `long` words it for the mission window.
+ */
+function missionBoard(board, long = false) {
+  if (!board?.kind) return null;
+  if (board.kind === 'Career') {
+    return board.guild
+      ? (long ? tx('a {guild} Career board', { guild: board.guild }) : tx('Career board · {guild}', { guild: board.guild }))
+      : tx('a Career board');
+  }
+  if (board.kind === 'Notice') return long ? tx('a local Notice board') : tx('Notice board');
+  return board.kind;
+}
+
+/** The board filter's value for a contract: its board kind, or "mobiGlas" for none. */
+const missionBoardKey = (m) => m.board?.kind || 'mobiGlas';
+
 async function loadMissionsRef() {
   try {
     missionCatalogue = await getJson('/api/reference/missions');
@@ -7412,6 +7432,21 @@ async function loadMissionsRef() {
   fill('#missions-contractor', sorted(rows.map((m) => m.contractor)), tx('Every contractor'));
   fill('#missions-type', sorted(rows.map((m) => m.type)), tx('Every type'));
   fill('#missions-system', sorted(rows.flatMap((m) => m.systems || [])), tx('Every system'));
+
+  // Boards are 5.0's; before it every contract is on the mobiGlas and the
+  // filter would offer one choice, so it stays hidden.
+  const boardSelect = $('#missions-board');
+  if (boardSelect) {
+    const kinds = [...new Set(rows.map(missionBoardKey))];
+    boardSelect.hidden = kinds.length < 2;
+    const previous = boardSelect.value;
+    boardSelect.textContent = '';
+    boardSelect.append(new Option(tx('Every board'), ''));
+    for (const [value, label] of [['Career', tx('Career boards')], ['Notice', tx('Notice boards')], ['mobiGlas', tx('mobiGlas only')]]) {
+      if (kinds.includes(value)) boardSelect.append(new Option(label, value));
+    }
+    if (kinds.includes(previous)) boardSelect.value = previous;
+  }
   renderMissionsRef();
 }
 
@@ -7438,12 +7473,14 @@ function renderMissionsRef() {
   const contractor = $('#missions-contractor')?.value || '';
   const type = $('#missions-type')?.value || '';
   const system = $('#missions-system')?.value || '';
+  const board = $('#missions-board')?.value || '';
   const mine = $('#missions-flown')?.checked;
 
   const rows = missionCatalogue.missions.filter((m) =>
     (!contractor || m.contractor === contractor)
     && (!type || m.type === type)
     && (!system || (m.systems || []).includes(system))
+    && (!board || missionBoardKey(m) === board)
     && (!mine || m.taken > 0)
     && (!term || [missionTitle(m), m.name.replaceAll('_', ' '), m.contractor, m.type, ...(m.areas || [])]
       .filter(Boolean).join(' ').toLowerCase().includes(term)))
@@ -7464,7 +7501,7 @@ function renderMissionsRef() {
     name.append(el('div', 'armoury-kind', m.name.replaceAll('_', ' ')));
     tr.append(name);
     tr.append(tdOrg(m.contractor));
-    tr.append(el('td', 'muted', [m.type, m.illegal ? tx('illegal') : null].filter(Boolean).join(' · ') || '—'));
+    tr.append(el('td', 'muted', [m.type, m.illegal ? tx('illegal') : null, missionBoard(m.board)].filter(Boolean).join(' · ') || '—'));
     const areas = el('td', 'muted');
     if ((m.areas || []).length) areas.append(...linkList(m.areas, placeLink));
     else areas.textContent = '—';
@@ -7489,7 +7526,7 @@ function renderMissionsRef() {
 }
 
 onInput('#missions-search', renderMissionsRef);
-for (const id of ['#missions-contractor', '#missions-type', '#missions-system', '#missions-flown']) {
+for (const id of ['#missions-contractor', '#missions-type', '#missions-system', '#missions-board', '#missions-flown']) {
   $(id)?.addEventListener('change', renderMissionsRef);
 }
 
