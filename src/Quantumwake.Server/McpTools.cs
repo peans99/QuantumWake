@@ -161,9 +161,9 @@ public static partial class McpTools
             ShipDetails),
 
         new("where_to_buy", "Where to buy",
-            "The terminals and shops that sell a commodity or an item, cheapest first, with the stock seen and "
+            "The terminals and shops that sell a commodity, an item, or a ship or ground vehicle, cheapest first, with the stock seen and "
             + "when. Prices are the UEX community's last reports and need its feed on in the app.",
-            Schema(("name", Text("A commodity or item name, e.g. 'Laranite' or 'JS-400'."), true),
+            Schema(("name", Text("A commodity, item or ship name, e.g. 'Laranite', 'JS-400' or 'Drake Cutlass Black'."), true),
                    ("limit", Count("How many sellers, 1-25.", 10), false)), false,
             WhereToBuy),
 
@@ -286,7 +286,7 @@ public static partial class McpTools
                             ["type"] = "object",
                             ["properties"] = new JsonObject
                             {
-                                ["name"] = Text("The item or commodity, by its catalogue name."),
+                                ["name"] = Text("The item, commodity, ship or ground vehicle, by its catalogue name."),
                                 ["needed"] = Number("How many, or how much; leave out for any amount."),
                                 ["unit"] = Text("'SCU' for cargo; leave out for a count."),
                                 ["store"] = Text("Where to buy this one line: a terminal as where_to_buy names it, or a "
@@ -305,7 +305,7 @@ public static partial class McpTools
         new("add_to_shopping_list", "Add to a shopping list",
             "Adds one thing to a shopping list: the one named by id (from my_plans), else the list the pilot is "
             + "filling. Asking for something already on it adds to its amount.",
-            Schema(("name", Text("The item or commodity."), true),
+            Schema(("name", Text("The item, commodity, ship or ground vehicle."), true),
                    ("needed", Number("How many, or how much."), false),
                    ("unit", Text("'SCU' for cargo; leave out for a count."), false),
                    ("store", Text("Where to buy it: a terminal as where_to_buy names it, or a place. Leave out to keep "

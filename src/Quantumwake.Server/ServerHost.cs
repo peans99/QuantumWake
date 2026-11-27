@@ -2999,7 +2999,16 @@ public static partial class ServerHost
                     var buyPrice = commodity?.BestBuy > 0 ? commodity.BestBuy : (decimal?)null;
                     var buyAt = commodity?.BestBuy > 0 ? commodity.BestBuyTerminal : null;
 
-                    if (buyPrice is null && MatchItem(lib, item.Name) is { Uuid: { } uuid })
+                    // A ship or ground vehicle (1.2.69), asked before the items:
+                    // the item match is loose, and "Cutlass Black" would
+                    // otherwise find a paint named after it and price the livery.
+                    var vehicleShops = buyPrice is null ? uex.VehicleShops(item.Name) : [];
+                    if (vehicleShops.Count > 0)
+                    {
+                        buyPrice = vehicleShops[0].Price;
+                        buyAt = vehicleShops[0].Terminal;
+                    }
+                    else if (buyPrice is null && MatchItem(lib, item.Name) is { Uuid: { } uuid })
                     {
                         buyPrice = uex.ItemPrice(uuid);
 
@@ -3022,7 +3031,9 @@ public static partial class ServerHost
                         bool There(string terminal) => string.Equals(terminal, store, StringComparison.OrdinalIgnoreCase);
                         buyAt = store;
                         buyPrice = uex.Market(item.Name).Where(r => r.Buy > 0 && There(r.Terminal)).Select(r => (decimal?)r.Buy).Min();
-                        if (buyPrice is null && MatchItem(lib, item.Name) is { Uuid: { } stocked })
+                        if (vehicleShops.Count > 0)
+                            buyPrice = vehicleShops.Where(s => There(s.Terminal)).Select(s => (decimal?)s.Price).Min();
+                        else if (buyPrice is null && MatchItem(lib, item.Name) is { Uuid: { } stocked })
                             buyPrice = uex.ItemMarket(stocked).Where(r => r.Buy > 0 && There(r.Terminal)).Select(r => (decimal?)r.Buy).Min();
                     }
 
@@ -3041,6 +3052,8 @@ public static partial class ServerHost
                         alike,
                         buyPrice,
                         buyAt,
+                        // So the name opens the ship's card, not an item's.
+                        vehicle = vehicleShops.Count > 0,
                         store = item.Store,
                         storeId = item.StoreId,
                     };
@@ -5222,7 +5235,11 @@ public static partial class ServerHost
                 .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            return new { commodities, items };
+            // Ships and ground vehicles a shop sells (1.2.69), by their
+            // Reference names - see BuyableVehicles.
+            var vehicles = BuyableVehicles(lib, uex).Select(v => v.Name).ToList();
+
+            return new { commodities, items, vehicles };
         });
 
         /*
@@ -5255,6 +5272,9 @@ public static partial class ServerHost
                          .Distinct(StringComparer.OrdinalIgnoreCase))
                 things.Add(new BuyableThing(name!, "commodity",
                     [.. uex.Market(name!).Where(r => r.Buy > 0).Select(r => new SellerCounter(r.Terminal, r.Buy))]));
+
+            foreach (var (name, shops) in BuyableVehicles(lib, uex))
+                things.Add(new BuyableThing(name, "vehicle", [.. shops.Select(s => new SellerCounter(s.Terminal, s.Price))]));
 
             foreach (var item in lib.Community.Items.Values.Where(i => i.Name is { Length: > 0 } && uex.ItemPrice(i.Uuid) is > 0))
                 things.Add(new BuyableThing(item.Name!, "item",
@@ -5336,6 +5356,18 @@ public static partial class ServerHost
 
             // Items join on the game's entity uuid, which only the reference
             // data knows, so the written name has to find the item first.
+            // A ship or ground vehicle (1.2.69), before the loose item match -
+            // see the same order in /api/jobs.
+            var shipShops = uex.VehicleShops(name);
+            if (shipShops.Count > 0)
+                return new
+                {
+                    name,
+                    kind = "vehicle",
+                    sellers = (IReadOnlyList<object>)[.. shipShops.Select(s => Row("vehicle", s.Terminal, s.Price, 0, null))],
+                    from = measured,
+                };
+
             var item = MatchItem(lib, name);
 
             if (item is null)

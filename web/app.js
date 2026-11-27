@@ -25438,7 +25438,9 @@ function jobLines(job, onGot = null) {
     }
     tr.append(mark);
     const itemName = el('td');
-    itemName.append(goodsLink(item.name));
+    // A ship or ground vehicle opens its ship card (1.2.69); goodsLink only
+    // knows commodities and items, and would open an empty item card.
+    itemName.append(item.vehicle ? refLink('ship', item.name, item.name) : goodsLink(item.name));
     if (item.note) itemName.append(' ', el('span', 'note-inline', item.note));
     tr.append(itemName);
     tr.append(el('td', 'num muted', need));
@@ -25591,8 +25593,11 @@ function jobCost(job) {
   const missing = job.items.filter((i) => !i.have);
   if (!missing.length) { line.hidden = true; return line; }
 
-  const priced = missing.filter((i) => i.buyPrice > 0 && i.needed > 0);
-  const total = priced.reduce((sum, i) => sum + i.buyPrice * i.needed, 0);
+  // A ship written without an amount is one ship (1.2.69). Nobody writes
+  // "Cutlass Black 1"; a count of loose items left out is genuinely unknown.
+  const amount = (i) => i.needed > 0 ? i.needed : i.vehicle ? 1 : 0;
+  const priced = missing.filter((i) => i.buyPrice > 0 && amount(i) > 0);
+  const total = priced.reduce((sum, i) => sum + i.buyPrice * amount(i), 0);
   const left = missing.length - priced.length;
 
   if (!priced.length) {
@@ -25651,8 +25656,8 @@ async function editJob(job, card, lines) {
 
   // The catalogue keeps "Ship Ammunition - Size 3" whole; the list's own names
   // keep whatever this list already holds whole as well.
-  catalogue ??= await getJson('/api/shopping/catalogue').catch(() => ({ commodities: [], items: [] }));
-  const known = [...catalogue.commodities, ...catalogue.items, ...job.items.map((i) => i.name)];
+  catalogue ??= await getJson('/api/shopping/catalogue').catch(() => ({ commodities: [], items: [], vehicles: [] }));
+  const known = [...catalogueNames(catalogue), ...job.items.map((i) => i.name)];
 
   const form = el('form', 'job-form job-edit');
   const title = document.createElement('input');
@@ -25891,7 +25896,7 @@ async function loadJobList() {
  *
  * @param known Names to keep whole whatever they end in; the catalogue's.
  */
-function parseJobItems(text, known = catalogue ? [...catalogue.commodities, ...catalogue.items] : []) {
+function parseJobItems(text, known = catalogueNames(catalogue)) {
   const whole = new Set(known.map((name) => name.toLowerCase()));
 
   return text.split('\n')
@@ -25987,6 +25992,11 @@ const pickedPlace = (select) => {
  * plan can route.
  */
 let catalogue = null;
+
+/** Every name in it: commodities, items, and ships and ground vehicles (1.2.69). */
+function catalogueNames(c) {
+  return c ? [...(c.commodities || []), ...(c.items || []), ...(c.vehicles || [])] : [];
+}
 
 /**
  * Finding something to put on a list (1.2.60), each with the one counter worth
@@ -26156,6 +26166,10 @@ function openJobForm() {
   jobFind.answer = undefined;
   renderJobFind();
   loadJobFind();
+  // Fetched here too, not only by Edit and the checklist composer: saving a
+  // new list keeps catalogue names whole only when it has them, so a first
+  // list written before either had opened split "Ship Ammunition - Size 3".
+  if (!catalogue) getJson('/api/shopping/catalogue').then((c) => { catalogue ??= c; }).catch(() => {});
   if (!form.hidden) $('#job-title').focus();
 }
 
@@ -26527,7 +26541,7 @@ function fillChecklistReferenceOptions() {
     }
 
     catalogue = loaded;
-    for (const name of [...(catalogue.commodities || []), ...(catalogue.items || [])]) {
+    for (const name of catalogueNames(catalogue)) {
       const option = document.createElement('option');
       option.value = name;
       list.append(option);

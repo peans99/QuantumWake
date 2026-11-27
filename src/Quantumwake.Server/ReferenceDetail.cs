@@ -317,6 +317,34 @@ public static partial class ServerHost
     static bool IsShipForSale(string cls) =>
         !GameShipLoot.IsNpcShip(cls) && !NotAHull().IsMatch(cls) && !NotForSale().IsMatch(cls);
 
+    /// <summary>
+    /// Every ship and ground vehicle that can be bought in game, by the name the
+    /// Reference page gives it, with its shops cheapest first (1.2.69).
+    /// </summary>
+    /// <remarks>
+    /// The names are the Reference list's, not UEX's: UEX drops the maker
+    /// ("Cutlass Black") and squeezes the spaces out of its keys, and a list
+    /// line reading "Drake Cutlass Black" is the one that opens the ship's card.
+    /// Only hulls a shop sells are offered, for the reason the catalogue gives:
+    /// a pledge-only ship on the list is a line no plan can route.
+    /// </remarks>
+    internal static List<(string Name, IReadOnlyList<UexVehiclePrice> Shops)> BuyableVehicles(LogLibrary lib, UexData uex)
+    {
+        var names = lib.Community.Ships
+            .Where(s => IsShipForSale(s.Key))
+            .Select(s => s.Value.Name)
+            .Concat(lib.GameCommodities.Vehicles.Values
+                .Where(v => v.Name is { Length: > 0 } && !v.Name.StartsWith('@') && IsShipForSale(v.Class))
+                .Select(v => v.Name));
+
+        return [.. names
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(n => (Name: n, Shops: uex.VehicleShops(n)))
+            .Where(v => v.Shops.Count > 0)
+            .OrderBy(v => v.Name, StringComparer.OrdinalIgnoreCase)];
+    }
+
     /// <summary>A hull's display name: the install's text, then the community's, then the class.</summary>
     static string ShipName(LogLibrary lib, string cls) =>
         lib.GameCommodities.Vehicle(cls)?.Name is { Length: > 0 } n && !n.StartsWith('@') ? n
