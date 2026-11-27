@@ -450,8 +450,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.3.10
+### 1.3.11
 
+- **Shield faces on the Stream Deck.** A new Shields folder holds Front,
+  Back, Left, Right, Top and Bottom, and Reset. The game gives none of them a
+  key, so they show greyed until you bind them in game under Vehicles -
+  Shields and Countermeasures; build the profile again afterwards and they
+  work. If you had already picked your keys, the new folder is ticked for you.
 - **Who you meet on Nyx I, beside where the loot is (Star Citizen 5.0).** In
   an item's Places list, a place in a faction's land now says how the game
   sets up meeting its people: combat encounters in Moraine, Shattered Blade,

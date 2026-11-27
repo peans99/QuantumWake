@@ -301,6 +301,69 @@
     "tap": false
   },
   {
+    "id": "Shields/front",
+    "action": "spaceship_defensive/v_shield_raise_level_forward",
+    "group": "Shields",
+    "label": "Shield\nFront",
+    "hold": 0,
+    "tap": false,
+    "since": "1.3.11"
+  },
+  {
+    "id": "Shields/back",
+    "action": "spaceship_defensive/v_shield_raise_level_back",
+    "group": "Shields",
+    "label": "Shield\nBack",
+    "hold": 0,
+    "tap": false,
+    "since": "1.3.11"
+  },
+  {
+    "id": "Shields/left",
+    "action": "spaceship_defensive/v_shield_raise_level_left",
+    "group": "Shields",
+    "label": "Shield\nLeft",
+    "hold": 0,
+    "tap": false,
+    "since": "1.3.11"
+  },
+  {
+    "id": "Shields/right",
+    "action": "spaceship_defensive/v_shield_raise_level_right",
+    "group": "Shields",
+    "label": "Shield\nRight",
+    "hold": 0,
+    "tap": false,
+    "since": "1.3.11"
+  },
+  {
+    "id": "Shields/top",
+    "action": "spaceship_defensive/v_shield_raise_level_up",
+    "group": "Shields",
+    "label": "Shield\nTop",
+    "hold": 0,
+    "tap": false,
+    "since": "1.3.11"
+  },
+  {
+    "id": "Shields/bottom",
+    "action": "spaceship_defensive/v_shield_raise_level_down",
+    "group": "Shields",
+    "label": "Shield\nBottom",
+    "hold": 0,
+    "tap": false,
+    "since": "1.3.11"
+  },
+  {
+    "id": "Shields/reset",
+    "action": "spaceship_defensive/v_shield_reset_level",
+    "group": "Shields",
+    "label": "Shield\nReset",
+    "hold": 0,
+    "tap": false,
+    "since": "1.3.11"
+  },
+  {
     "id": "Mining/mining_mode",
     "action": "seat_general/v_toggle_mining_mode",
     "group": "Mining",
