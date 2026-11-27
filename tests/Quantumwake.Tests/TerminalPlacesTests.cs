@@ -39,6 +39,18 @@ public class TerminalPlacesTests
     }
 
     /// <summary>
+    /// Area18's ship showroom names no place, so it is told where it stands
+    /// (1.3.12) - and the alias still goes through the atlas, so a map with
+    /// only "Area 061" does not take it.
+    /// </summary>
+    [Fact]
+    public void The_ship_showroom_with_no_place_in_its_name_stands_in_Area18()
+    {
+        Assert.Equal("Stanton3_Area18", Atlas.IdFor("Astro Armada"));
+        Assert.Equal(string.Empty, new TerminalPlaces([Place("Stanton3b_ArcCorp_Area061", "Area 061")]).IdFor("Astro Armada"));
+    }
+
+    /// <summary>
     /// A code has to be a code: matching on a leading word would let "Port
     /// Tressler" claim every counter with "port" in its name.
     /// </summary>

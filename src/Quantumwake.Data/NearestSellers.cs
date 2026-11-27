@@ -4,7 +4,7 @@ namespace Quantumwake.Data;
 public sealed record SellerCounter(string Terminal, decimal Price);
 
 /// <summary>Something a shopping list can be written with, and every counter known to sell it.</summary>
-/// <param name="Kind">"commodity" (priced per SCU) or "item" (priced each).</param>
+/// <param name="Kind">"commodity" (priced per SCU), "item" or "vehicle" (priced each).</param>
 public sealed record BuyableThing(string Name, string Kind, IReadOnlyList<SellerCounter> Counters);
 
 /// <summary>A counter's place: the map's id, its name, and the body and system it is measured by.</summary>

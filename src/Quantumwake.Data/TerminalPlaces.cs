@@ -170,8 +170,27 @@ public sealed partial class TerminalPlaces
     /// "Seraphim Station" left off. Each pass insists on a single answer, so an
     /// ambiguous name resolves to nothing rather than to a guess.
     /// </remarks>
+    /// <summary>
+    /// Counters whose name carries no place at all, by the place they stand in.
+    /// </summary>
+    /// <remarks>
+    /// Kept to the ones a pilot is sent to. Astro Armada is Area18's ship
+    /// showroom and the only counter UEX lists 68 hulls at besides New Deal;
+    /// with nothing in its name to match, every ship bought there was a stop
+    /// the map could not draw once ships went on a shopping list (1.3.12). The
+    /// alias still has to resolve through the atlas, so an install whose map
+    /// lacks Area18 places it nowhere rather than somewhere wrong.
+    /// </remarks>
+    private static readonly Dictionary<string, string> Aliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Astro Armada"] = "Area18",
+    };
+
     private PlaceTotal? Match(string terminal)
     {
+        if (Aliases.TryGetValue(terminal.Trim(), out var alias))
+            terminal = alias;
+
         var haystack = Compact(terminal);
         if (haystack.Length < MinimumMatch)
             return null;

@@ -450,7 +450,19 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.3.11
+### 1.3.12
+
+- **Ships and ground vehicles on a shopping list.** The finder on Shopping
+  now offers every ship and ground vehicle a showroom sells in the game, 177
+  of them with today's prices, from the Aurora to the Caterpillar, Cyclones
+  and Ursas included. Each shows its nearest or cheapest showroom beside it,
+  like any item. On the list, a ship line says where to buy it and for how
+  much, opens the ship's window when clicked, and counts as one ship in the
+  list's total when no amount is written. The prices come from UEX, so UEX
+  prices have to be on in Settings. The list cannot tell whether you already
+  own the ship, so tick the line once you have it. Astro Armada, Area18's
+  showroom, is now placed at Area18 on the map and in a trip plan. Shops at
+  Levski, Orbituary and Ruin Station are still not on the map, as before.
 
 - **Shield faces on the Stream Deck.** A new Shields folder holds Front,
   Back, Left, Right, Top and Bottom, and Reset. The game gives none of them a
