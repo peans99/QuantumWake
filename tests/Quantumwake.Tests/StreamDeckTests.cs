@@ -27,12 +27,13 @@ public class StreamDeckTests
     }
 
     /// <summary>
-    /// Scan and Tractor Beam are folders of their own (1.2.66), each with a
+    /// Scan and Tractor Beam (1.2.66) and Shields (1.2.68) are folders of their own, each with a
     /// folder picture: a group whose icon has no PNG would fail every profile
     /// build, since every page carries every group's picture.
     /// </summary>
     [Theory] [InlineData("Scan", "scan")] [InlineData("Tractor Beam", "tractor")] [InlineData("Vehicles - Scanning", "scan")]
-    public void Scan_and_tractor_beam_are_folders_with_their_own_picture(string group, string icon)
+    [InlineData("Shields", "shield")] [InlineData("Vehicles - Shields and Countermeasures", "combat")]
+    public void Scan_tractor_beam_and_shields_are_folders_with_their_own_picture(string group, string icon)
     {
         Assert.Equal(icon, StreamDeckProfiles.GroupAppearance(group).Icon);
         Assert.NotNull(typeof(StreamDeckProfiles).Assembly.GetManifestResourceStream("streamdeck.icon." + icon));
@@ -53,6 +54,25 @@ public class StreamDeckTests
         foreach (var group in new[] { "Mining", "Salvage" })
             Assert.Equal("m", commands.Single(c => c.Id == $"preset/{group}/next_mode").Key);
         Assert.NotNull(commands.Single(c => c.Id == "preset/Mining/mining_mode").Problem);
+    }
+    /// <summary>
+    /// Shields is a folder of its own (1.2.68): the six faces and reset. The
+    /// game gives none of them a key, on 4.10.3 or the 5.0 PTU, so on default
+    /// bindings every one is greyed with the reason until it is bound, and a
+    /// face bound in game is sent with that key.
+    /// </summary>
+    [Fact] public void Shield_faces_are_their_own_folder_and_wait_for_a_binding()
+    {
+        string[] faces = ["forward", "back", "left", "right", "up", "down"];
+        var actions = faces.Select(f => new ActionInfo("spaceship_defensive", "v_shield_raise_level_" + f, "Shield raise level " + f, "", "", "", "", "", "press", ""))
+            .Append(new ActionInfo("spaceship_defensive", "v_shield_reset_level", "Shield reset levels", "", "", "", "", "", "press", "")).ToList();
+        var shields = StreamDeckProfiles.Commands(new ControlCatalogue([], actions), null).Where(c => c.Group == "Shields").ToList();
+        Assert.Equal(["Front", "Back", "Left", "Right", "Top", "Bottom", "Reset"], shields.Select(c => c.Label.Split('\n')[1]));
+        Assert.All(shields, c => { Assert.True(c.Preset); Assert.NotNull(c.Problem); Assert.Equal("1.2.68", c.Since); Assert.Equal("shield", c.Appearance.Icon); });
+        var bound = new ControlProfile("default", null, [], [new("spaceship_defensive", "v_shield_raise_level_forward", ControlInput.Parse("kb1_np_8"), null, null)]);
+        var front = StreamDeckProfiles.Commands(new ControlCatalogue([], actions), bound).Single(c => c.Id == "preset/Shields/front");
+        Assert.Null(front.Problem);
+        Assert.Equal("np_8", front.Key);
     }
     private static ControlCatalogue Catalogue => new([new("ship", "Ship", "FLIGHT")], [new("ship", "gear", "Landing Gear", "", "n", "", "", "", "", "")]);
     [Fact] public void Rebound_keys_replace_defaults_and_explicitly_cleared_keys_stay_unbound()

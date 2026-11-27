@@ -450,8 +450,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 Releases before 1.0 are in [docs/release-history.md](docs/release-history.md).
 
-### 1.2.67
+### 1.2.68
 
+- **Shield faces on the Stream Deck.** A new Shields folder holds Front,
+  Back, Left, Right, Top and Bottom, and Reset. The game gives none of them a
+  key, so they show greyed until you bind them in game under Vehicles -
+  Shields and Countermeasures; build the profile again afterwards and they
+  work. If you had already picked your keys, the new folder is ticked for you.
 - **Pictures of the Cougar MFD pages.** The [MFD guide](docs/mfd-mode.md#what-it-looks-like)
   now opens with six of them: Home, Navigation, Mission, Target, Fracture
   charge and a callout card. Three of them are also on the front page under

@@ -34,13 +34,13 @@ but one built yesterday does.
 - **Folders by category.** The home page holds one folder per category; Back
   sits top left on every page, and a category with more commands than fit gets
   More at the bottom right.
-- **125 preset commands in 10 categories:** Flight 12, Combat 13, Power 12,
-  Mining 15, Salvage 15, Scan 11, Tractor Beam 10, Ground Vehicle 14,
+- **132 preset commands in 11 categories:** Flight 12, Combat 13, Power 12,
+  Shields 7, Mining 15, Salvage 15, Scan 11, Tractor Beam 10, Ground Vehicle 14,
   Ship & Utilities 14, Extended 9. The first 97 were transcribed from the
   original D:\streamdeck generator into `integrations/streamdeck/presets.json`,
-  each tied to one action-map id; all 125 name an action this install's game
-  defines. Extended is off by default, so a first profile offers 116 commands in
-  9 folders, less any your bindings cannot reach (below). Any of the game's
+  each tied to one action-map id; all 132 name an action this install's game
+  defines. Extended is off by default, so a first profile offers 123 commands in
+  10 folders, less any your bindings cannot reach (below). Any of the game's
   other actions can be added from "All game commands".
 - **The game as its application.** The profile names `Bin64\StarCitizen.exe`
   from the selected install, so Stream Deck switches to it when the game is in
@@ -67,6 +67,22 @@ The Tractor Beam folder holds the hand tractor beam (pull in, push out,
 rotate, detach, throw) and the ship tractor's distance. Most of them are on the
 mouse wheel, so Pull In and Ship Beam In send the same wheel turn: which one
 it moves depends on what you are holding, as it would with the wheel itself.
+
+## Shields
+
+The Shields folder (1.2.68) holds the six shield faces, Front, Back, Left,
+Right, Top and Bottom, and Reset: the game's "Shield raise level" actions under
+Vehicles - Shields and Countermeasures. They sit beside Power rather than inside
+it, because Power's keys are the engineering pips (SHD +/−/MAX), which move
+power into the shield, not round it.
+
+Neither 4.10.3 nor the 5.0 PTU gives any of the seven a default key, and this
+install's own bindings leave them unbound too, so the page shows all seven
+greyed with the reason until they are bound in game (Options → Keybindings →
+Vehicles - Shields and Countermeasures). The key appears on the deck the next
+time the profile is built. What a face press does to a given shield generator
+has not been seen in a log or on screen here; the folder sends the key and
+nothing more.
 
 ## Holds and taps
 
